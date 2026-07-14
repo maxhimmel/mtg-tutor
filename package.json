@@ -20,10 +20,12 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@clack/prompts": "^0.7.0",
     "better-sqlite3": "^11.3.0",
     "cli-table3": "^0.6.5",
-    "picocolors": "^1.1.0"
+    "picocolors": "^1.1.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
