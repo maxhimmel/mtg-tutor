@@ -41,3 +41,13 @@ export const RARITY_BASELINE: Record<string, number> = {
 };
 
 export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Claude-powered pick coaching. `enabled` gates the feature so a draft still
+// runs (with deterministic feedback) when no API key is present. The SDK reads
+// ANTHROPIC_API_KEY from the environment on its own.
+export const ANTHROPIC = {
+  model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
+  maxTokens: 400, // short, snappy per-pick coaching
+  effort: "low" as const, // output_config.effort — fast per pick; tunable
+  enabled: !!process.env.ANTHROPIC_API_KEY,
+};
