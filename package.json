@@ -1,0 +1,35 @@
+{
+  "name": "mtg-tutor",
+  "version": "0.1.0",
+  "description": "Interactive MTG draft trainer CLI with 17Lands-based scoring",
+  "type": "module",
+  "bin": {
+    "mtg-tutor": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "draft": "tsx src/services/draft/main.ts",
+    "stats": "tsx src/services/stats/main.ts",
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify-data": "tsx scripts/verify-data.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "better-sqlite3": "^11.3.0",
+    "cli-table3": "^0.6.5",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
