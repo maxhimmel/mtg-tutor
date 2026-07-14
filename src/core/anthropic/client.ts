@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { env } from "../env.js";
 
 // The ONLY place (besides tutor.ts) that touches the Anthropic SDK. Keeping the
 // surface this small means a future web frontend can swap in a different client
@@ -7,11 +8,11 @@ import Anthropic from "@anthropic-ai/sdk";
 let client: Anthropic | undefined;
 
 export function getClient(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!env.ANTHROPIC_API_KEY) {
     throw new Error(
       "ANTHROPIC_API_KEY is not set — add it to your environment or a .env file to enable AI pick coaching.",
     );
   }
-  if (!client) client = new Anthropic(); // reads ANTHROPIC_API_KEY from env
+  if (!client) client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   return client;
 }

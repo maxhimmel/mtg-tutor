@@ -1,3 +1,5 @@
+import { env } from "./env.js";
+
 export const HTTP = {
   userAgent:
     "mtg-tutor/0.1 (draft-trainer; https://github.com/local/mtg-tutor) contact:local",
@@ -43,11 +45,10 @@ export const RARITY_BASELINE: Record<string, number> = {
 export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Claude-powered pick coaching. `enabled` gates the feature so a draft still
-// runs (with deterministic feedback) when no API key is present. The SDK reads
-// ANTHROPIC_API_KEY from the environment on its own.
+// runs (with deterministic feedback) when no API key is present.
 export const ANTHROPIC = {
-  model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
+  model: env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
   maxTokens: 400, // short, snappy per-pick coaching
   effort: "low" as const, // output_config.effort — fast per pick; tunable
-  enabled: !!process.env.ANTHROPIC_API_KEY,
+  enabled: !!env.ANTHROPIC_API_KEY,
 };
