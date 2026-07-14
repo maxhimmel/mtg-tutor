@@ -1,8 +1,14 @@
 # Issues:
 
-1. P1P1 pick-rater tells me I'm off my committed colors ... I have no colors yet so that's erroneous.
-2. It feels like the pick-rater doesn't have a good grasp of what I've drafted when it gives me feedback.
-3. The suggested decks have incorrect spell counts when including the Evolving Wilds/multi-colored lands. Those 2 card types should detract from the 17-lands count.
+1. I'm getting this in the console after I've made like 6 picks or so:
+
+```
+(node:44277) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 uncaughtExceptionMonitor listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:44277) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 unhandledRejection listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:44277) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 exit listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+```
+
+2. The suggested decks have incorrect spell counts when including the Evolving Wilds/multi-colored lands. Those 2 card types should detract from the 17-lands count.
 
 # Ideas:
 
