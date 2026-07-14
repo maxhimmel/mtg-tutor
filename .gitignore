@@ -5,3 +5,5 @@ dist/
 .mtg-tutor/
 scratch/
 .omc/
+.env
+.env.local
