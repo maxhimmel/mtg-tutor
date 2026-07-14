@@ -17,15 +17,17 @@
     "verify-data": "tsx scripts/verify-data.ts"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@clack/prompts": "^0.7.0",
+    "@t3-oss/env-core": "^0.13.11",
     "better-sqlite3": "^11.3.0",
     "cli-table3": "^0.6.5",
     "picocolors": "^1.1.0",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
