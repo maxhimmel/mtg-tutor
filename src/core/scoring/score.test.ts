@@ -52,6 +52,12 @@ describe("scorePick", () => {
     expect(r.rankInPack).toBe(2);
   });
 
+  it("is never off-color before any colors are committed (P1P1)", () => {
+    const red = card("Red Thing", { colors: ["R"], gihWinRate: 0.5, gihGames: 5000 });
+    const r = scorePick([strong, red], red, []);
+    expect(r.onColor).toBe(true);
+  });
+
   it("gives on-color partial credit within committed colors", () => {
     const pool = [card("p1", { colors: ["U"] }), card("p2", { colors: ["U"] })];
     const offBest = card("OffBest", { colors: ["R"], gihWinRate: 0.58, gihGames: 5000 });

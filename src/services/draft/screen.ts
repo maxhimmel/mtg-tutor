@@ -1,11 +1,14 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import type { SetData } from "../../core/model/card.js";
+import type { Card, SetData } from "../../core/model/card.js";
 import { DraftEngine, type RecordedPick } from "./engine.js";
 import { cardValue } from "../../core/scoring/value.js";
 import { gradeColor, pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { explainPick } from "../../core/scoring/explain.js";
+import { ANTHROPIC } from "../../core/config.js";
+import { streamGroundedReply } from "../../core/tutor/tutor.js";
+import { buildPickContext } from "../../core/tutor/pickCoach.js";
 import { suggestDeck } from "./deck.js";
 import { saveDraft } from "../../core/db/db.js";
 
@@ -26,18 +29,60 @@ export async function runDraft(set: SetData, format: string) {
     }
 
     const rec = engine.humanPick(picked);
-    showPickFeedback(rec);
+    await showPickFeedback(rec, engine.humanPool);
   }
 
   await showResults(engine.history, engine, set, format);
 }
 
-function showPickFeedback(rec: RecordedPick) {
+async function showPickFeedback(rec: RecordedPick, pool: Card[]) {
   const { score } = rec;
-  const head = `${gradeColor(score.grade)} ${pc.bold(String(score.score))}/100` + (score.isBest ? pc.green("  ✓ best pick") : pc.dim(`  (rank ${score.rankInPack})`));
+  const head =
+    `${gradeColor(score.grade)} ${pc.bold(String(score.score))}/100` +
+    (score.isBest ? pc.green("  ✓ best pick") : pc.dim(`  (rank ${score.rankInPack})`));
+
+  // Preferred path: grounded AI coaching, streamed live. Falls back to the
+  // deterministic explanation if it's disabled or the API call fails outright.
+  if (ANTHROPIC.enabled && (await streamCoaching(rec, pool, head))) return;
+
   const lines = explainPick(score);
   if (rec.signal) lines.push(pc.cyan(rec.signal));
   p.note(lines.join("\n"), head);
+}
+
+// Streams the coach's reply to stdout under the numeric grade. Returns true if
+// it printed something (so the caller skips the deterministic fallback), false
+// if it produced nothing or failed before any output.
+async function streamCoaching(rec: RecordedPick, pool: Card[], head: string): Promise<boolean> {
+  const spin = p.spinner();
+  spin.start("Coach is reading the board");
+  let started = false;
+  try {
+    for await (const chunk of streamGroundedReply(buildPickContext(rec, pool))) {
+      if (!started) {
+        spin.stop(head);
+        process.stdout.write(pc.dim("  Coach: "));
+        started = true;
+      }
+      process.stdout.write(chunk);
+    }
+  } catch (e) {
+    if (started) {
+      process.stdout.write("\n");
+      return true; // partial coaching already shown — don't double up with the fallback
+    }
+    spin.stop(head);
+    p.log.warn(`AI coaching unavailable (${e instanceof Error ? e.message : String(e)}).`);
+    return false;
+  }
+
+  if (!started) {
+    spin.stop(head);
+    return false;
+  }
+  process.stdout.write("\n");
+  if (rec.signal) p.log.info(pc.cyan(rec.signal));
+  return true;
 }
 
 async function showResults(history: RecordedPick[], engine: DraftEngine, set: SetData, format: string) {

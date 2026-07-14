@@ -40,8 +40,13 @@ export function scorePick(pack: Card[], picked: Card, pool: Card[]): PickScore {
   const rankInPack = ranked.findIndex((c) => c.name === picked.name) + 1;
 
   const committed = committedColors(pool);
+  // You can't be "off-color" before committing to any colors — early picks are
+  // expendable and staying open is correct. Fixes the bogus P1P1 "off your
+  // colors" warning (notes.md #1); partial credit below stays gated on committed.
   const onColor =
-    picked.colors.length === 0 || picked.colors.some((c) => committed.has(c));
+    committed.size === 0 ||
+    picked.colors.length === 0 ||
+    picked.colors.some((c) => committed.has(c));
 
   let score: number;
   if (picked.name === best.name) {
