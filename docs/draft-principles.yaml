@@ -1,0 +1,290 @@
+# MTG Limited draft & deckbuilding principles — CANONICAL machine-readable source.
+#
+# This YAML is what the AI coach loads (see src/core/tutor/principles.ts).
+# draft-principles.md is the human-readable companion; if the two diverge,
+# THIS file wins. Each principle has a stable `id` so the coach can cite it
+# (e.g. "[EVAL-02]") and you can trace/fact-check the claim.
+
+meta:
+  title: "MTG Limited: Draft & Deckbuilding Principles"
+  note: "Set-agnostic, evergreen grounding for card evaluation and deck construction."
+  sources: "./draft-principles-sources.md"
+
+principles:
+  # Reading Signals & Staying Open
+  - id: SIG-01
+    category: signals
+    text: "Do not commit to a color or archetype at the start of the draft; your first pick does not need to end up in your final deck."
+    tags: [staying-open, early-draft]
+  - id: SIG-02
+    category: signals
+    text: "Take the best card in the pack for roughly your first five picks, then evaluate and commit to a two-color pair."
+    tags: [staying-open, commitment]
+  - id: SIG-03
+    category: signals
+    text: "A signal is a passed card that indicates a color is open; you cannot read signals without a foundation of card evaluation."
+    tags: [signals]
+  - id: SIG-04
+    category: signals
+    text: "Read signals by noticing what is absent — when strong cards are missing from a pack, upstream drafters are taking that color."
+    tags: [signals]
+  - id: SIG-05
+    category: signals
+    text: "A premium/bomb-quality card that shows up much later than expected (e.g. a stone-cold bomb at pick 4) means the players ahead of you are not in that color — it is open."
+    tags: [signals, open-lane]
+  - id: SIG-06
+    category: signals
+    text: "Take a strong late-passed card even if it conflicts with your current plan; the late pick itself is the signal that the lane is open."
+    tags: [signals, open-lane]
+  - id: SIG-07
+    category: signals
+    text: "Abandon an early-picked color if strong cards in it stop coming; even first picks are expendable, and top players commonly drop at least one of their first three picks."
+    tags: [staying-open, pivoting]
+  - id: SIG-08
+    category: signals
+    text: "No single signal should be weighted heavily — a signal is a probabilistic hint, never proof, and some packs inevitably send misleading messages."
+    tags: [signals, uncertainty]
+  - id: SIG-09
+    category: signals
+    text: "Signals work because adjacent drafters implicitly cooperate: cards passed between neighbors let both end up with stronger decks by moving into open colors."
+    tags: [signals, theory]
+  - id: SIG-10
+    category: signals
+    text: "Waiting to accumulate enough signals before committing is a trap — by the time signals give a confident read, the window to switch colors has usually already closed."
+    tags: [signals, commitment]
+  - id: SIG-11
+    category: signals
+    text: "Have your deck plan mostly settled by around the middle of pack 2, while still reassessing the strength of your second color."
+    tags: [commitment, mid-draft]
+  - id: SIG-12
+    category: signals
+    text: "Almost never switch colors in pack 2 unless you open or are passed an exceptional rare."
+    tags: [commitment, pivoting]
+  - id: SIG-13
+    category: signals
+    text: "Effective signal reading depends on format knowledge: themes, the top commons/uncommons, and archetype signpost cards that pull you in a direction."
+    tags: [signals, format-knowledge]
+  - id: SIG-14
+    category: signals
+    text: "One way to stay open is to evaluate each pick in a vacuum on absolute power, so you correctly identify the strongest cards regardless of what you already have."
+    tags: [staying-open, evaluation]
+  - id: SIG-15
+    category: signals
+    text: "An alternative is to navigate pack 1 so you end up mostly in a single color, leaving you free to take any bomb opened at the start of pack 2."
+    tags: [staying-open, strategy]
+  - id: SIG-16
+    category: signals
+    text: "Cards you have already drafted should influence later picks and serve as tiebreakers between otherwise-equal options."
+    tags: [pool-awareness, tiebreaker]
+
+  # Card Evaluation Fundamentals
+  - id: EVAL-01
+    category: card-evaluation
+    text: "BREAD is the classic pick-priority framework: Bombs, Removal, Evasion, Aggro (aggressive/advantage cards), Duds — ranked in descending draft priority."
+    tags: [framework, pick-order]
+  - id: EVAL-02
+    category: card-evaluation
+    text: "A bomb is a high-power card that, with reasonable certainty, wins the game on its own; an unanswered bomb usually wins, which is why bombs are the top priority."
+    tags: [bombs, pick-order]
+  - id: EVAL-03
+    category: card-evaluation
+    text: "Removal is premium because you must be able to eliminate opposing threats and disrupt the opponent's plan; more removal generally improves a deck."
+    tags: [removal, pick-order]
+  - id: EVAL-04
+    category: card-evaluation
+    text: "Evasion (flying, menace, trample, can't-be-blocked) is valued because it lets creatures bypass blockers and deal damage directly to the player."
+    tags: [evasion]
+  - id: EVAL-05
+    category: card-evaluation
+    text: "Aggressive/cheap cards are potent specifically because Limited has fewer removal options than Constructed, so fast early damage is hard to answer."
+    tags: [aggro, tempo]
+  - id: EVAL-06
+    category: card-evaluation
+    text: "Duds are unplayable cards (too expensive or too little impact) that belong in the sideboard."
+    tags: [duds]
+  - id: EVAL-07
+    category: card-evaluation
+    text: "Prioritize cards that affect the board state — creatures, removal, combat tricks — over effects like raw card draw that don't directly impact the physical board."
+    tags: [board-impact]
+  - id: EVAL-08
+    category: card-evaluation
+    text: "Modern critique of BREAD: it can overvalue removal and evasion and undervalue board presence, since most Limited games are won on the board. One reframing is CABS (Cards Affecting Board State), roughly creatures > removal > combat tricks."
+    tags: [framework, board-impact, critique]
+  - id: EVAL-09
+    category: card-evaluation
+    text: "High-quality common creatures in modern sets often outclass mediocre removal, so don't blindly take removal over a great creature."
+    tags: [removal, creatures, critique]
+  - id: EVAL-10
+    category: card-evaluation
+    text: "Use a tier system rather than absolute rankings: when two cards are of comparable power, pick the one that best fits your developing deck."
+    tags: [evaluation, deck-fit]
+  - id: EVAL-11
+    category: card-evaluation
+    text: "Favor consistency over ceiling — cards that are reliably good beat cards that are sometimes great but sometimes dead."
+    tags: [consistency]
+
+  # Archetypes
+  - id: ARCH-01
+    category: archetypes
+    text: "Aggro aims to end the game as fast as possible with a critical mass of cheap creatures; it runs a low curve, a lower land count (~16), and minimal expensive cards or removal."
+    tags: [aggro]
+  - id: ARCH-02
+    category: archetypes
+    text: "Control uses cheap interaction and removal to prolong the game and win late through card advantage; it runs a higher curve and fewer creatures."
+    tags: [control]
+  - id: ARCH-03
+    category: archetypes
+    text: "Midrange blends aggro and control — efficient threats plus interaction — and is the most common Limited archetype."
+    tags: [midrange]
+  - id: ARCH-04
+    category: archetypes
+    text: "Tempo (aggro-control) pairs cheap instant-speed interaction with efficient creatures; it rewards careful sequencing to balance mana between threats and reactive spells."
+    tags: [tempo]
+  - id: ARCH-05
+    category: archetypes
+    text: "Ramp sacrifices early turns to build a superior mana position that enables high-cost threats."
+    tags: [ramp]
+  - id: ARCH-06
+    category: archetypes
+    text: "True combo decks are almost never viable in Limited; do not overvalue synergy at the expense of overall card quality."
+    tags: [combo, synergy]
+  - id: ARCH-07
+    category: archetypes
+    text: "A cohesive synergistic deck built from commons can beat a disorganized deck holding two bombs — don't marry your first pick."
+    tags: [synergy, deck-cohesion]
+
+  # Deck Construction
+  - id: DECK-01
+    category: deck-construction
+    text: "The standard 40-card Limited deck is 17 lands and 23 spells, with roughly 15-17 of the spells being creatures."
+    tags: [deckbuilding, baseline]
+  - id: DECK-02
+    category: deck-construction
+    text: "17 lands is mathematically sound: typical decks need their first three land drops and want their fourth, but don't need a fifth by turn five."
+    tags: [lands, mana]
+  - id: DECK-03
+    category: deck-construction
+    text: "Adjust land count by curve: run 16 lands with a low/aggressive curve, 18 lands with a high curve or a deck that can't function missing its fourth land drop, and 19+ only with an exceptionally top-heavy curve."
+    tags: [lands, curve]
+  - id: DECK-04
+    category: deck-construction
+    text: "A common rule of thumb: 16 lands if 3 or fewer cards cost 5+ mana, 17 lands if 4 or more cost 5+."
+    tags: [lands, rule-of-thumb]
+  - id: DECK-05
+    category: deck-construction
+    text: "If you lack enough quality spells, run an extra land rather than force a weak nonland card into the deck."
+    tags: [lands, deckbuilding]
+  - id: DECK-06
+    category: deck-construction
+    text: "Most decks want roughly 15-18 creatures (about 13-18 is the workable range), with the large majority running 15 or more."
+    tags: [creatures, counts]
+  - id: DECK-07
+    category: deck-construction
+    text: "Decks typically run 6-9 non-creature spells — usually fewer than 10."
+    tags: [spells, counts]
+  - id: DECK-08
+    category: deck-construction
+    text: "A common baseline framework: ~16-18 creatures, 3-4 removal spells, and 2-3 combat tricks."
+    tags: [baseline, counts]
+  - id: DECK-09
+    category: deck-construction
+    text: "A platonic curve for a 17-land deck is roughly 2 one-drops, 7 two-drops, 6 three-drops, 4 four-drops, 3 five-drops, 1 six-drop."
+    tags: [curve, baseline]
+
+  # Mana Curve
+  - id: CURVE-01
+    category: mana-curve
+    text: "Weight the curve toward cheap cards: aim for roughly 7-12 cards at 1-2 mana, with a median around 7 two-drops."
+    tags: [curve, cheap-cards]
+  - id: CURVE-02
+    category: mana-curve
+    text: "Most cards should cost 2-3 mana, tapering off from there; lacking early plays makes you fall behind on tempo."
+    tags: [curve, tempo]
+  - id: CURVE-03
+    category: mana-curve
+    text: "Keep the top end light — about 85% of decks run 5 or fewer cards at 5+ mana; too many expensive cards gets you out-tempoed."
+    tags: [curve, top-end]
+  - id: CURVE-04
+    category: mana-curve
+    text: "You want to be able to cast a creature nearly every turn, which requires creatures spread across mana costs — missing drops loses tempo."
+    tags: [curve, tempo, creatures]
+  - id: CURVE-05
+    category: mana-curve
+    text: "An aggressive curve wants ~6-9 creatures under 3 mana, 5-10 at 3-4 mana, and only 2-3 cards above 4 mana."
+    tags: [curve, aggro]
+  - id: CURVE-06
+    category: mana-curve
+    text: "Lands are excluded from the mana curve — the curve reflects only the mana values of your spells."
+    tags: [curve, definition]
+  - id: CURVE-07
+    category: mana-curve
+    text: "As a tiebreaker between otherwise-equal cards, take the cheaper one (the Martin Juza rule) to keep the curve low."
+    tags: [curve, tiebreaker]
+
+  # Mana Base, Fixing & Splashing
+  - id: MANA-01
+    category: mana-base
+    text: "Run at least 8 sources of each primary color to reliably cast your colored cards (~82% chance to have a source in your opening hand); this drives a typical 9/8 land split favoring the color with more or cheaper cards."
+    tags: [mana-base, color-sources]
+  - id: MANA-02
+    category: mana-base
+    text: "Never run fewer than eight lands producing your main color."
+    tags: [mana-base, color-sources]
+  - id: MANA-03
+    category: mana-base
+    text: "Mana-fixing lands (dual lands, Evolving Wilds, etc.) count toward your land total, not as spells. Dual lands count once toward the land total but contribute a color source to both their colors simultaneously."
+    tags: [fixing, lands]
+  - id: MANA-04
+    category: mana-base
+    text: "A splash means adding just a card or two outside your main colors."
+    tags: [splashing, definition]
+  - id: MANA-05
+    category: mana-base
+    text: "A splash needs at least three sources of the splashed color (the Rule of Three); if you can't reach three sources, don't run the splash."
+    tags: [splashing, color-sources]
+  - id: MANA-06
+    category: mana-base
+    text: "Splash sources scale with splash cards: ~3 sources for one splash card, ~4 for two — using a baseline of about three lands per off-color mana symbol."
+    tags: [splashing, color-sources]
+  - id: MANA-07
+    category: mana-base
+    text: "Single-pip cards (many bombs and removal spells) are easy to splash; cards with two off-color pips are much harder."
+    tags: [splashing]
+  - id: MANA-08
+    category: mana-base
+    text: "Situational, synergy-dependent, or curve-reliant cards make poor splash targets — they lose value when cut off from their supporting pieces."
+    tags: [splashing]
+  - id: MANA-09
+    category: mana-base
+    text: "Splashing is safer in Sealed than in Draft, because Sealed games run slower and punish an uncastable splash card less."
+    tags: [splashing, sealed]
+
+  # Common Mistakes
+  - id: MISTAKE-01
+    category: common-mistakes
+    text: "Committing to and sticking with early picks instead of pivoting on what the table is passing is the most common draft-ruining mistake."
+    tags: [pivoting, staying-open]
+  - id: MISTAKE-02
+    category: common-mistakes
+    text: "Forcing a predetermined archetype or color before the draft (forcing) — read signals and stay open instead."
+    tags: [forcing, staying-open]
+  - id: MISTAKE-03
+    category: common-mistakes
+    text: "Playing too many colors and building a greedy mana base; a boring, consistent two-color deck that reliably casts its cards usually beats a greedy one."
+    tags: [consistency, mana-base]
+  - id: MISTAKE-04
+    category: common-mistakes
+    text: "A fully functional deck (cards work together, good curve) beats a pile of individually more powerful cards — functional decks can 3-0 a pod while trainwreck piles struggle."
+    tags: [deck-cohesion, consistency]
+  - id: MISTAKE-05
+    category: common-mistakes
+    text: "Consistency (guaranteed lands and castable cards on turns 2-5) beats raw power (one bomb rare) over a large sample of games."
+    tags: [consistency]
+  - id: MISTAKE-06
+    category: common-mistakes
+    text: "Overloading on expensive spells and neglecting the early curve — you must survive the early game to cast your big spells."
+    tags: [curve, tempo]
+  - id: MISTAKE-07
+    category: common-mistakes
+    text: "Drafting good cards instead of a good deck; prioritize shoring up your weak slots and overall deck power over squeezing extra value from your best cards."
+    tags: [deckbuilding, deck-cohesion]
