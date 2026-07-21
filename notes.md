@@ -4,6 +4,20 @@
 
 2. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
+3. **17Lands `card_ratings` returns empty stats for rotated sets** (found 2026-07-21).
+   The endpoint still returns the full card list, but every entry has
+   `seen_count: 0`, `game_count: 0`, `ever_drawn_win_rate: null` — so `loadSetData`
+   silently falls back to `RARITY_BASELINE` for every card and scoring is
+   rarity-only. Evidence from `~/.mtg-tutor/cache/` by fetch date: BLB (Jul 2) and
+   MH3 (Jul 6) have real data; WOE (Jul 8), MKM, TDM, FDN, DSK all have zero. MSH
+   (a currently-running set) still returns data. So this looks like a 17Lands-side
+   change around Jul 7-8 that stopped serving historical aggregates for sets no
+   longer in rotation — not a date-range bug (tested no-params, the set's own
+   release window, and 2019->today; all return zeros).
+   Impact: practicing a *current* set still works; practicing older sets does not.
+   Options to explore: 17Lands' public data downloads, a different endpoint/param,
+   or caching a good snapshot per set before it rotates out.
+
 # Ideas:
 
 1. A quiz on what card a certain mono-colored card could/should belong to.
