@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "tsx src/cli.ts",
     "draft": "tsx src/services/draft/main.ts",
+    "review": "tsx src/services/review/main.ts",
     "stats": "tsx src/services/stats/main.ts",
     "build": "tsc",
     "start": "node dist/cli.js",

@@ -11,9 +11,11 @@ import { streamGroundedReply } from "../../core/tutor/tutor.js";
 import { buildPickContext } from "../../core/tutor/pickCoach.js";
 import { suggestDeck } from "./deck.js";
 import { saveDraft } from "../../core/db/db.js";
+import { mulberry32, newSeed } from "../../core/util/rng.js";
 
 export async function runDraft(set: SetData, format: string) {
-  const engine = new DraftEngine(set);
+  const seed = newSeed();
+  const engine = new DraftEngine(set, mulberry32(seed));
   p.intro(pc.bgCyan(pc.black(` Draft: ${set.code.toUpperCase()} — ${format} `)));
 
   while (!engine.isComplete()) {
@@ -32,7 +34,7 @@ export async function runDraft(set: SetData, format: string) {
     await showPickFeedback(rec, engine.humanPool);
   }
 
-  await showResults(engine.history, engine, set, format);
+  await showResults(engine.history, engine, set, format, seed);
 }
 
 async function showPickFeedback(rec: RecordedPick, pool: Card[]) {
@@ -85,7 +87,7 @@ async function streamCoaching(rec: RecordedPick, pool: Card[], head: string): Pr
   return true;
 }
 
-async function showResults(history: RecordedPick[], engine: DraftEngine, set: SetData, format: string) {
+async function showResults(history: RecordedPick[], engine: DraftEngine, set: SetData, format: string, seed: number) {
   const avg = history.reduce((s, h) => s + h.score.score, 0) / history.length;
   const acc = (history.filter((h) => h.score.isBest).length / history.length) * 100;
 
@@ -120,7 +122,7 @@ async function showResults(history: RecordedPick[], engine: DraftEngine, set: Se
 
   const save = await p.confirm({ message: "Save this draft to your stats?" });
   if (!p.isCancel(save) && save) {
-    const { id, summary } = saveDraft(set.code, format, history, engine.humanPool, new Date().toISOString());
+    const { id, summary } = saveDraft(set.code, format, history, engine.humanPool, new Date().toISOString(), seed);
     p.outro(pc.green(`Saved draft #${id} (${summary.colorPair || "—"}). Run "mtg-tutor stats" to track progress.`));
   } else {
     p.outro("Not saved.");

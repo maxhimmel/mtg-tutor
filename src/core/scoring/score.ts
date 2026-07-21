@@ -32,6 +32,23 @@ export function committedColors(pool: Card[]): Set<string> {
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
 }
 
+// A pick worth quizzing: the pack still has enough cards that the choice is real
+// (late forced picks of 2-3 cards teach nothing). Threshold is configurable.
+export function isDecisionPick(pack: Card[], minCards: number): boolean {
+  return pack.length >= minCards;
+}
+
+// Lenient grading for the review quiz: the guess is "right" if it matches either
+// the raw-power best (data) or the AI's context-best (deck fit). The lesson lives
+// in the divergence between those two, not in a single "correct" answer.
+export function isCorrectGuess(
+  guessName: string,
+  rawBestName: string,
+  contextBestName: string,
+): boolean {
+  return guessName === rawBestName || guessName === contextBestName;
+}
+
 export function scorePick(pack: Card[], picked: Card, pool: Card[]): PickScore {
   const ranked = [...pack].sort((a, b) => cardValue(b) - cardValue(a));
   const best = ranked[0];

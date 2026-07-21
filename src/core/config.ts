@@ -42,6 +42,13 @@ export const RARITY_BASELINE: Record<string, number> = {
   bonus: 0.52,
 };
 
+// Post-draft review. Only "decision" picks (packs with at least this many cards
+// left) get quizzed; the rest flash by as a passive summary. A future frontend
+// can expose this as a slider.
+export const REVIEW = {
+  decisionPickMinCards: 5,
+};
+
 export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 // Claude-powered pick coaching. `enabled` gates the feature so a draft still

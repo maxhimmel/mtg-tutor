@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Card } from "../model/card.js";
-import { scorePick, gradeFor, committedColors } from "./score.js";
+import { scorePick, gradeFor, committedColors, isDecisionPick, isCorrectGuess } from "./score.js";
 import { cardValue } from "./value.js";
 
 function card(name: string, over: Partial<Card> = {}): Card {
@@ -73,6 +73,30 @@ describe("gradeFor", () => {
     expect(gradeFor(100)).toBe("A+");
     expect(gradeFor(78)).toBe("B");
     expect(gradeFor(10)).toBe("F");
+  });
+});
+
+describe("isDecisionPick", () => {
+  const pack = (n: number) => Array.from({ length: n }, (_, i) => card(`c${i}`));
+  it("is a decision when the pack still has enough cards", () => {
+    expect(isDecisionPick(pack(8), 5)).toBe(true);
+    expect(isDecisionPick(pack(5), 5)).toBe(true);
+  });
+  it("is trivial once the pack is picked down past the threshold", () => {
+    expect(isDecisionPick(pack(4), 5)).toBe(false);
+    expect(isDecisionPick(pack(1), 5)).toBe(false);
+  });
+});
+
+describe("isCorrectGuess", () => {
+  it("accepts the raw-power best", () => {
+    expect(isCorrectGuess("Raw", "Raw", "Context")).toBe(true);
+  });
+  it("accepts the context best (lenient)", () => {
+    expect(isCorrectGuess("Context", "Raw", "Context")).toBe(true);
+  });
+  it("rejects a card that is neither", () => {
+    expect(isCorrectGuess("Other", "Raw", "Context")).toBe(false);
   });
 });
 
