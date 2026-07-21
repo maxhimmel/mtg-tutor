@@ -1,5 +1,5 @@
-import type { Card, SetData } from "../../core/model/card.js";
-import { PACK } from "../../core/config.js";
+import type { Card, SetData } from "../model/card.js";
+import { PACK } from "../config.js";
 
 function sampleUnique(pool: Card[], n: number, rng: () => number): Card[] {
   if (pool.length <= n) return [...pool];

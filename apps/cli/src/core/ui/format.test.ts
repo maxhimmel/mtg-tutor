@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import pc from "picocolors";
-import type { Card } from "../model/card.js";
+import type { Card } from "@mtg-tutor/core";
 import { renderManaCost, ptLine, wrapText, cardDetail } from "./format.js";
 
 // Strip ANSI so assertions are about content, not color codes.

@@ -1,0 +1,32 @@
+{
+  "name": "@mtg-tutor/core",
+  "version": "0.1.0",
+  "description": "Pure MTG draft domain logic: engine, bots, scoring, deck building, coach prompts",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate": "tsx scripts/generate-principles.ts",
+    "build": "pnpm run generate && tsc",
+    "test": "pnpm run check:purity && vitest run",
+    "test:watch": "vitest",
+    "check:purity": "tsx scripts/check-purity.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "yaml": "^2.9.0"
+  }
+}

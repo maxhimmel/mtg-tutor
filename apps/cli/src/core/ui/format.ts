@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { Card } from "../model/card.js";
+import type { Card } from "@mtg-tutor/core";
 
 export const pct = (v?: number | null) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
 

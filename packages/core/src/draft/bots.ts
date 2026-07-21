@@ -1,5 +1,5 @@
-import type { Card } from "../../core/model/card.js";
-import { cardValue } from "../../core/scoring/value.js";
+import type { Card } from "../model/card.js";
+import { cardValue } from "../scoring/value.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
 // and biases future picks toward its strongest colors, producing readable

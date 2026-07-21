@@ -1,6 +1,6 @@
 import { SelectPrompt, isCancel } from "@clack/core";
 import pc from "picocolors";
-import type { Card } from "../model/card.js";
+import type { Card } from "@mtg-tutor/core";
 import { cardDetail, colorSwatch, ptLine, pct, rarityTag } from "./format.js";
 
 interface PickOption {

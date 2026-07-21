@@ -1,18 +1,13 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import type { Card, SetData } from "../../core/model/card.js";
-import { DraftEngine, type RecordedPick } from "./engine.js";
-import { cardValue } from "../../core/scoring/value.js";
+import { buildPickContext, cardValue, DraftEngine, explainPick, mulberry32, newSeed, suggestDeck } from "@mtg-tutor/core";
+import type { Card, RecordedPick, SetData } from "@mtg-tutor/core";
 import { gradeColor, pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
-import { explainPick } from "../../core/scoring/explain.js";
 import { ANTHROPIC } from "../../core/config.js";
 import { streamGroundedReply } from "../../core/tutor/tutor.js";
-import { buildPickContext } from "../../core/tutor/pickCoach.js";
-import { suggestDeck } from "./deck.js";
 import { saveDraft } from "../../core/db/db.js";
-import { mulberry32, newSeed } from "../../core/util/rng.js";
 
 export async function runDraft(set: SetData, format: string) {
   const seed = newSeed();

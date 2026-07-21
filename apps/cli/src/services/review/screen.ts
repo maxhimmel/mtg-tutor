@@ -1,13 +1,11 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import type { Card } from "../../core/model/card.js";
-import type { ReviewVerdict, StoredDraft, StoredPick } from "../../core/model/review.js";
-import { isCorrectGuess, isDecisionPick } from "../../core/scoring/score.js";
-import { REVIEW, ANTHROPIC } from "../../core/config.js";
+import { buildDraftFrame, buildReviewContext, isCorrectGuess, isDecisionPick, REVIEW } from "@mtg-tutor/core";
+import type { Card, ReviewVerdict, StoredDraft, StoredPick } from "@mtg-tutor/core";
+import { ANTHROPIC } from "../../core/config.js";
 import { pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
-import { buildDraftFrame, buildReviewContext } from "../../core/tutor/reviewPrompt.js";
 import { draftFrame, reviewPick } from "../../core/tutor/reviewTutor.js";
 import { saveVerdict } from "../../core/db/db.js";
 

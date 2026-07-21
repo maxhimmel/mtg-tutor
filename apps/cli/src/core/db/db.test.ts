@@ -2,9 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rmSync } from "node:fs";
-import type { Card } from "../model/card.js";
-import type { RecordedPick } from "../model/pick.js";
-import { scorePick } from "../scoring/score.js";
+import { scorePick } from "@mtg-tutor/core";
+import type { Card, RecordedPick } from "@mtg-tutor/core";
 
 // Point the DB at a throwaway temp file BEFORE importing db.js (getDb memoizes a
 // singleton on first call). Dynamic import inside beforeAll guarantees ordering.

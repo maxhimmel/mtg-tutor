@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import type { Card, Rarity, SetData, ColorCode } from "../../core/model/card.js";
-import { normalizeName } from "../../core/model/card.js";
+import type { Card, Rarity, SetData, ColorCode } from "../model/card.js";
+import { normalizeName } from "../model/card.js";
 import { makePack } from "./pack.js";
 import { Bot } from "./bots.js";
 import { DraftEngine } from "./engine.js";
-import { PACK, packSize } from "../../core/config.js";
+import { PACK, packSize } from "../config.js";
 
 function mkCard(name: string, rarity: Rarity, colors: ColorCode[], gih: number): Card {
   return {

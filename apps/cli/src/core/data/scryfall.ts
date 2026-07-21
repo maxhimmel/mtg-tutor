@@ -1,6 +1,6 @@
 import { HTTP } from "../config.js";
 import { cached } from "./cache.js";
-import type { ColorCode, Rarity } from "../model/card.js";
+import type { ColorCode, Rarity } from "@mtg-tutor/core";
 
 export interface ScryfallFace {
   name?: string;

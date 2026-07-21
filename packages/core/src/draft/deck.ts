@@ -1,5 +1,5 @@
-import type { Card } from "../../core/model/card.js";
-import { cardValue } from "../../core/scoring/value.js";
+import type { Card } from "../model/card.js";
+import { cardValue } from "../scoring/value.js";
 
 export interface DeckSuggestion {
   colors: string[];

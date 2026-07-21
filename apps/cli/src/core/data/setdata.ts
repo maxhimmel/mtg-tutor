@@ -5,7 +5,7 @@ import {
   type SetData,
   isBasicLand,
   normalizeName,
-} from "../model/card.js";
+} from "@mtg-tutor/core";
 import { fetchSetCards, type ScryfallCard } from "./scryfall.js";
 import { fetchCardRatings, fetchColorRatings } from "./seventeenlands.js";
 
