@@ -10,6 +10,8 @@
 
 2. The suggested decks have incorrect spell counts when including the Evolving Wilds/multi-colored lands. Those 2 card types should detract from the 17-lands count.
 
+3. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
+
 # Ideas:
 
 1. A quiz on what card a certain mono-colored card could/should belong to.
