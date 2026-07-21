@@ -6,6 +6,7 @@ import { isCorrectGuess, isDecisionPick } from "../../core/scoring/score.js";
 import { REVIEW, ANTHROPIC } from "../../core/config.js";
 import { pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
+import { spinner } from "../../core/ui/spinner.js";
 import { buildDraftFrame, buildReviewContext } from "../../core/tutor/reviewPrompt.js";
 import { draftFrame, reviewPick } from "../../core/tutor/reviewTutor.js";
 import { saveVerdict } from "../../core/db/db.js";
@@ -99,7 +100,7 @@ async function runReport(draft: StoredDraft, finalPool: Card[], colorPairWinRate
 
   const verdicts = new Map<number, ReviewVerdict | undefined>();
   if (ANTHROPIC.enabled) {
-    const spin = p.spinner();
+    const spin = spinner();
     spin.start(`Analyzing ${decisionIdx.length} decision picks`);
     let done = 0;
     await mapLimit(decisionIdx, 5, async ({ pk, i }) => {
@@ -152,7 +153,7 @@ async function fetchVerdict(pick: StoredPick, poolBefore: Card[]): Promise<Revie
 // Interactive wrapper: shows a per-pick spinner around fetchVerdict.
 async function resolveVerdictInteractive(pick: StoredPick, poolBefore: Card[]): Promise<ReviewVerdict | undefined> {
   if (pick.verdict || !ANTHROPIC.enabled) return pick.verdict;
-  const spin = p.spinner();
+  const spin = spinner();
   spin.start("Coach is reviewing the pick");
   const verdict = await fetchVerdict(pick, poolBefore);
   spin.stop(verdict ? "" : pc.yellow("AI verdict unavailable — showing data only"));
@@ -216,7 +217,7 @@ async function showFrame(
   colorPairWinRates: Map<string, number>,
 ) {
   if (!ANTHROPIC.enabled) return;
-  const spin = p.spinner();
+  const spin = spinner();
   spin.start(phase === "open" ? "Coach is sizing up the draft" : "Coach is writing the recap");
   try {
     const text = await draftFrame(buildDraftFrame(phase, pool, colorPairWinRates));

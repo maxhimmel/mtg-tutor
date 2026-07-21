@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { listDrafts, loadDraftForReview } from "../../core/db/db.js";
 import { loadSetData } from "../../core/data/setdata.js";
 import { pct } from "../../core/ui/format.js";
+import { spinner } from "../../core/ui/spinner.js";
 import { runReview } from "./screen.js";
 
 // Review service entrypoint. `argv` is [draftId?] with an optional `--passive`
@@ -47,7 +48,7 @@ export async function run(argv: string[]): Promise<void> {
   // Archetype win rates come from the set's 17Lands color ratings; best-effort so
   // review still runs offline (the AI can frame archetypes from its own knowledge).
   let colorPairWinRates = new Map<string, number>();
-  const s = p.spinner();
+  const s = spinner();
   s.start(`Loading ${draft.setCode.toUpperCase()} archetype data`);
   try {
     const set = await loadSetData(draft.setCode, draft.format);

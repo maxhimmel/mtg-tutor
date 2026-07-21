@@ -5,6 +5,7 @@ import { DraftEngine, type RecordedPick } from "./engine.js";
 import { cardValue } from "../../core/scoring/value.js";
 import { gradeColor, pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
+import { spinner } from "../../core/ui/spinner.js";
 import { explainPick } from "../../core/scoring/explain.js";
 import { ANTHROPIC } from "../../core/config.js";
 import { streamGroundedReply } from "../../core/tutor/tutor.js";
@@ -56,7 +57,7 @@ async function showPickFeedback(rec: RecordedPick, pool: Card[]) {
 // it printed something (so the caller skips the deterministic fallback), false
 // if it produced nothing or failed before any output.
 async function streamCoaching(rec: RecordedPick, pool: Card[], head: string): Promise<boolean> {
-  const spin = p.spinner();
+  const spin = spinner();
   spin.start("Coach is reading the board");
   let started = false;
   try {

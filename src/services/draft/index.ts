@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { loadSetData, ratedCardCount } from "../../core/data/setdata.js";
 import { fetchSetCatalog } from "../../core/data/sets.js";
 import { pickSet } from "../../core/ui/setPicker.js";
+import { spinner } from "../../core/ui/spinner.js";
 import { runDraft } from "./screen.js";
 
 // Draft service entrypoint. `argv` is [setCode?, format?]; with no set code we
@@ -13,7 +14,7 @@ export async function run(argv: string[]): Promise<void> {
   let setCode = setArg;
 
   if (!setCode) {
-    const cat = p.spinner();
+    const cat = spinner();
     cat.start("Loading set list");
     let catalog;
     try {
@@ -33,7 +34,7 @@ export async function run(argv: string[]): Promise<void> {
     setCode = chosen.code;
   }
 
-  const s = p.spinner();
+  const s = spinner();
   s.start(`Loading ${setCode.toUpperCase()} card + 17Lands data`);
   let set;
   try {
