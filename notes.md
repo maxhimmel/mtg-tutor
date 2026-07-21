@@ -1,16 +1,8 @@
 # Issues:
 
-1. I'm getting this in the console after I've made like 6 picks or so:
+1. The suggested decks have incorrect spell counts when including the Evolving Wilds/multi-colored lands. Those 2 card types should detract from the 17-lands count.
 
-```
-(node:44277) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 uncaughtExceptionMonitor listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
-(node:44277) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 unhandledRejection listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
-(node:44277) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 exit listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
-```
-
-2. The suggested decks have incorrect spell counts when including the Evolving Wilds/multi-colored lands. Those 2 card types should detract from the 17-lands count.
-
-3. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
+2. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
 # Ideas:
 
