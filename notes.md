@@ -17,6 +17,17 @@
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
 - The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
 
-2. Can you parse the web for 10 - 30 credible blog posts about how to draft good and best practices in deck construction and what archetypes are supposed to do (agnostic of the set). THEN, can you consolidate that info into 30 - 75 concise bullet points.
+# Deferred (from Draft Review grilling, 2026-07-21):
 
-- I wanna use this bullet-pointed list to be the foundation/fact-check-center for an AI chatbot that can think more dynamically about card evaluation/judgments.
+Out-of-scope for the Draft Review MVP, noted so we don't lose them:
+
+1. Deep multi-ply permutation re-simulation (chess.com-style alternate lines —
+   replay the whole draft down a different branch). The MVP stores the RNG seed
+   specifically to keep this possible later without a retrofit.
+2. Longitudinal review-quiz trend tracking (persist each quiz outcome + add stats
+   panels showing judgment improvement over time). Natural 2nd iteration once the
+   review loop feels right; MVP only shows a session score.
+3. Standalone archetype quiz — see Ideas #1 above. Separate command / data model,
+   not part of reviewing a draft.
+4. Keep review logic UI-agnostic in `core/` for an eventual React frontend (e.g.
+   expose the decision-pick threshold as a slider to the user).
