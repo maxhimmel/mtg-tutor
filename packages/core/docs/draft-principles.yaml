@@ -1,6 +1,8 @@
 # MTG Limited draft & deckbuilding principles — CANONICAL machine-readable source.
 #
-# This YAML is what the AI coach loads (see src/core/tutor/principles.ts).
+# This YAML is the source the AI coach loads. It is compiled into
+# src/tutor/principles.generated.ts by scripts/generate-principles.ts, so edit
+# this file and re-run `pnpm --filter @mtg-tutor/core generate`.
 # draft-principles.md is the human-readable companion; if the two diverge,
 # THIS file wins. Each principle has a stable `id` so the coach can cite it
 # (e.g. "[EVAL-02]") and you can trace/fact-check the claim.

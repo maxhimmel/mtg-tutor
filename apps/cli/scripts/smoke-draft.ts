@@ -1,8 +1,6 @@
 import { loadSetData, ratedCardCount } from "../src/core/data/setdata.js";
-import { DraftEngine } from "../src/services/draft/engine.js";
-import { cardValue } from "../src/core/scoring/value.js";
+import { cardValue, DraftEngine, normalizeName } from "@mtg-tutor/core";
 import { fetchCardRatings } from "../src/core/data/seventeenlands.js";
-import { normalizeName } from "../src/core/model/card.js";
 
 const set = process.argv[2] ?? "fdn";
 

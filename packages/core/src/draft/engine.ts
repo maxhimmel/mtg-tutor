@@ -1,10 +1,10 @@
-import type { Card, SetData } from "../../core/model/card.js";
-import { DRAFT, PACK, packSize } from "../../core/config.js";
+import type { Card, SetData } from "../model/card.js";
+import { DRAFT, PACK, packSize } from "../config.js";
 import { makePacks } from "./pack.js";
 import { Bot } from "./bots.js";
-import { scorePick } from "../../core/scoring/score.js";
-import { readSignals } from "../../core/scoring/explain.js";
-import type { RecordedPick } from "../../core/model/pick.js";
+import { scorePick } from "../scoring/score.js";
+import { readSignals } from "../scoring/explain.js";
+import type { RecordedPick } from "../model/pick.js";
 
 export type { RecordedPick };
 

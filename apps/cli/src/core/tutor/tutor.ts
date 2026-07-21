@@ -1,7 +1,6 @@
 import { getClient } from "../anthropic/client.js";
 import { ANTHROPIC } from "../config.js";
-import { loadPrinciples } from "./principles.js";
-import { buildSystemPrompt } from "./prompt.js";
+import { buildSystemPrompt, loadPrinciples } from "@mtg-tutor/core";
 
 // The reusable "grounded tutor" brain. Feature-agnostic: hand it a user message,
 // get a stream of text back. The chat/quiz features (later) call the same thing.

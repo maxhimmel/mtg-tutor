@@ -1,8 +1,7 @@
 import { getClient } from "../anthropic/client.js";
 import { ANTHROPIC } from "../config.js";
-import { loadPrinciples } from "./principles.js";
-import { buildReviewSystemPrompt } from "./prompt.js";
-import type { ReviewVerdict } from "../model/review.js";
+import { buildReviewSystemPrompt, loadPrinciples } from "@mtg-tutor/core";
+import type { ReviewVerdict } from "@mtg-tutor/core";
 
 // The review "brain". Shares the client + principles corpus with the live coach
 // but frames the draft reflectively and returns a STRUCTURED verdict (via forced

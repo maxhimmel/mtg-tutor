@@ -23,6 +23,7 @@
     "node": ">=20.12"
   },
   "dependencies": {
+    "@mtg-tutor/core": "workspace:*",
     "@anthropic-ai/sdk": "^0.111.0",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "^0.7.0",

@@ -16,29 +16,29 @@ Reading pick guides is passive. Improvement comes from **reps with objective fee
 ## Install
 
 ```bash
-npm install
+pnpm install
 ```
 
-Requires Node 20+.
+Requires Node 20+ and pnpm 10+.
 
 ## Usage
 
-Each capability is a **service** you run by name with `npm run <service>`:
+Each capability is a **service** you run by name with `pnpm <service>` from the repo root:
 
 ```bash
 # Draft a set (set code, e.g. dsk, blb, otj, fdn)
-npm run draft dsk
+pnpm draft dsk
 
 # Specify a format (defaults to PremierDraft)
-npm run draft dsk PremierDraft
+pnpm draft dsk PremierDraft
 
 # See your progress, trends, and biggest recurring mistakes
-npm run stats
+pnpm stats
 ```
 
-The unified `mtg-tutor` CLI dispatches to the same services (`npm run dev -- draft dsk`, or the built binary below).
+The unified `mtg-tutor` CLI dispatches to the same services (`pnpm dev draft dsk`, or the built binary below).
 
-After building (`npm run build`), the `mtg-tutor` binary works directly:
+After building (`pnpm build`), the `mtg-tutor` binary works directly:
 
 ```bash
 mtg-tutor draft dsk
@@ -52,38 +52,55 @@ During a draft, arrow-key through the pack (cards are pre-sorted by win rate wit
 ## Development
 
 ```bash
-npm test              # run the unit suite (vitest)
-npm run verify-data   # sanity-check the live 17Lands + Scryfall response shapes
-npx tsx scripts/smoke-draft.ts fdn   # headless full-draft smoke test
+pnpm test              # unit suites for every package (vitest, via turbo)
+pnpm build             # build every package in dependency order
+pnpm verify-data       # sanity-check the live 17Lands + Scryfall response shapes
+pnpm smoke-draft fdn   # headless full-draft smoke test
 ```
 
 ## Architecture
 
-Code is split into a shared **`core/`** layer and independently runnable **`services/`**. A service owns its own flow and UI and depends on `core/`; `core/` never depends on a service.
+A pnpm + Turborepo monorepo. Domain logic lives in a **pure** package that any client can import; each app owns only its own transport and UI.
 
 ```
-src/
-  cli.ts                       thin dispatcher -> services/*/run() (feeds the mtg-tutor bin)
-  core/                        shared; must not import from services/
-    config.ts                  pack structure, scoring constants, cache TTL
-    model/                     unified Card model, name normalization, RecordedPick contract
-    data/                      cache, Scryfall + 17Lands fetchers, merge layer
-    scoring/                   card value, pick scoring, explanations
-    db/                        SQLite persistence
-    ui/                        reusable @clack primitives (card/set pickers, formatting)
-  services/
-    draft/                     pack generation, bots, engine, deck builder, draft screen
-      index.ts  -> run(argv)   the service's entrypoint export
-      main.ts                  npm-run shim: run(process.argv.slice(2))
-    stats/                     reporting queries + stats screen (index.ts / main.ts)
+packages/
+  core/                        @mtg-tutor/core -- ZERO runtime dependencies
+    src/
+      config.ts                pack structure, scoring constants, review thresholds
+      model/                   unified Card model, name normalization, RecordedPick
+      scoring/                 card value, pick scoring, explanations
+      draft/                   pack generation, bots, engine, deck builder
+      tutor/                   principles corpus + prompt builders
+      util/rng.ts              seedable, serializable PRNG
+    docs/                      principles corpus (YAML source + human companion)
+    scripts/                   YAML -> TS codegen, purity check
+apps/
+  cli/                         @mtg-tutor/cli -- the terminal client
+    src/
+      cli.ts                   thin dispatcher -> services/*/run() (feeds the mtg-tutor bin)
+      core/                    CLI-only concerns
+        config.ts              runtime config (HTTP, cache TTL, Anthropic)
+        env.ts                 the single boundary that reads process.env
+        data/                  cache, Scryfall + 17Lands fetchers, merge layer
+        db/                    SQLite persistence
+        tutor/                 Anthropic-backed coach + review streaming
+        ui/                    reusable @clack primitives (card/set pickers, formatting)
+      services/
+        draft/                 draft screen + entrypoint
+        review/                review walkthrough + entrypoint
+        stats/                 reporting queries + stats screen
 ```
 
-**The service convention.** Each service exports `async function run(argv)` from its `index.ts`; a one-line `main.ts` is the `npm run <service>` target, and `cli.ts` imports the same `run()` so the bin and `npm run` share one code path. Exporting `run()` (rather than running on import) also lets a future web app call the service directly.
+**Core must stay pure.** `@mtg-tutor/core` has no dependencies and imports no `node:*` builtins, so the exact same code runs in Node, in a server runtime, and in the browser. `pnpm --filter @mtg-tutor/core test` enforces this — `scripts/check-purity.ts` fails the build on any non-relative import.
+
+**The principles corpus is generated, not read.** `docs/draft-principles.yaml` is the authored source; `scripts/generate-principles.ts` compiles it into `src/tutor/principles.generated.ts` so loading it needs no filesystem and no YAML parser at runtime. Edit the YAML, then run `pnpm --filter @mtg-tutor/core generate`.
+
+**The service convention.** Each service exports `async function run(argv)` from its `index.ts`; a one-line `main.ts` is the `pnpm <service>` target, and `cli.ts` imports the same `run()` so the bin and `pnpm run` share one code path.
 
 **Adding a service:**
-1. `src/services/<name>/index.ts` exporting `async function run(argv: string[])`, plus a `main.ts` shim.
-2. Add `"<name>": "tsx src/services/<name>/main.ts"` to `package.json` scripts.
+1. `apps/cli/src/services/<name>/index.ts` exporting `async function run(argv: string[])`, plus a `main.ts` shim.
+2. Add `"<name>": "tsx src/services/<name>/main.ts"` to `apps/cli/package.json`, and a root-level passthrough script.
 3. Optionally add a `case "<name>"` in `cli.ts` for the unified bin.
-4. Reuse `core/*`; promote anything shared by 2+ services into `core/`, never the reverse.
+4. Put anything UI-agnostic in `packages/core`, never the reverse — `core` must not import from an app.
 
 Scoring, bots, and the deck builder all share one `cardValue()` function (`core/scoring`), so tuning card evaluation is a single-file change.

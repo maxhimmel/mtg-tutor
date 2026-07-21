@@ -2,9 +2,7 @@ import Database from "better-sqlite3";
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { mkdirSync } from "node:fs";
-import type { RecordedPick } from "../model/pick.js";
-import type { Card } from "../model/card.js";
-import type { DraftListItem, ReviewVerdict, StoredDraft, StoredPick } from "../model/review.js";
+import type { Card, DraftListItem, RecordedPick, ReviewVerdict, StoredDraft, StoredPick } from "@mtg-tutor/core";
 
 // Overridable so tests (and users who relocate their data) don't write to the
 // real ~/.mtg-tutor/stats.db.
