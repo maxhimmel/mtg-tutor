@@ -1,35 +1,8 @@
 import { HTTP } from "../config.js";
 import { cached } from "./cache.js";
-import type { ColorCode, Rarity } from "@mtg-tutor/core";
+import type { ScryfallCard } from "@mtg-tutor/core";
 
-export interface ScryfallFace {
-  name?: string;
-  mana_cost?: string;
-  type_line?: string;
-  oracle_text?: string;
-  power?: string;
-  toughness?: string;
-  loyalty?: string;
-  image_uris?: { normal?: string };
-}
-
-export interface ScryfallCard {
-  name: string;
-  rarity: Rarity;
-  colors?: ColorCode[];
-  color_identity?: ColorCode[];
-  mana_cost?: string;
-  cmc?: number;
-  type_line: string;
-  oracle_text?: string;
-  power?: string;
-  toughness?: string;
-  loyalty?: string;
-  image_uris?: { normal?: string; small?: string };
-  card_faces?: ScryfallFace[];
-  collector_number: string;
-  booster: boolean;
-}
+export type { ScryfallCard, ScryfallFace } from "@mtg-tutor/core";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

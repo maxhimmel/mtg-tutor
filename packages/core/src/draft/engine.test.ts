@@ -1,61 +1,11 @@
 import { describe, it, expect } from "vitest";
-import type { Card, Rarity, SetData, ColorCode } from "../model/card.js";
-import { normalizeName } from "../model/card.js";
+import type { ColorCode } from "../model/card.js";
 import { makePack } from "./pack.js";
 import { Bot } from "./bots.js";
 import { DraftEngine } from "./engine.js";
 import { PACK, packSize } from "../config.js";
-
-function mkCard(name: string, rarity: Rarity, colors: ColorCode[], gih: number): Card {
-  return {
-    name,
-    rarity,
-    colors,
-    colorIdentity: colors,
-    manaCost: "",
-    cmc: 2,
-    typeLine: "Creature",
-    oracleText: "",
-    collectorNumber: name,
-    gihWinRate: gih,
-    gihGames: 5000,
-    alsa: 8,
-  };
-}
-
-// Build a synthetic set with enough cards in every rarity pool.
-function fakeSet(): SetData {
-  const cards: Card[] = [];
-  const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
-  for (let i = 0; i < 60; i++) cards.push(mkCard(`C${i}`, "common", [colors[i % 5]], 0.48 + (i % 10) * 0.005));
-  for (let i = 0; i < 30; i++) cards.push(mkCard(`U${i}`, "uncommon", [colors[i % 5]], 0.5 + (i % 10) * 0.005));
-  for (let i = 0; i < 20; i++) cards.push(mkCard(`R${i}`, "rare", [colors[i % 5]], 0.55));
-  for (let i = 0; i < 10; i++) cards.push(mkCard(`M${i}`, "mythic", [colors[i % 5]], 0.58));
-  const byName = new Map(cards.map((c) => [normalizeName(c.name), c]));
-  return {
-    code: "tst",
-    cards,
-    byName,
-    pools: {
-      common: cards.filter((c) => c.rarity === "common"),
-      uncommon: cards.filter((c) => c.rarity === "uncommon"),
-      rare: cards.filter((c) => c.rarity === "rare"),
-      mythic: cards.filter((c) => c.rarity === "mythic"),
-    },
-    colorPairWinRates: new Map(),
-  };
-}
-
-// Deterministic PRNG (mulberry32) for reproducible tests.
-function rng(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { fakeSet, mkCard } from "../testing/fakeSet.js";
+import { mulberry32 as rng } from "../util/rng.js";
 
 describe("makePack", () => {
   it("has the configured size and no duplicate names", () => {
