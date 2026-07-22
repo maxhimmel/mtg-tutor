@@ -58,6 +58,48 @@ pnpm verify-data       # sanity-check the live 17Lands + Scryfall response shape
 pnpm smoke-draft fdn   # headless full-draft smoke test
 ```
 
+Never run `next build` while `next dev` is running — they share `apps/web/.next`, and the build overwrites the dev server's bundle with one compiled under different env. The symptom is a page stuck on "Loading sets" with no error anywhere. Use `pnpm --filter @mtg-tutor/web typecheck` instead.
+
+## Deployment
+
+Vercel hosts the web app; Convex hosts the backend. The Vercel build deploys
+both — `apps/web/vercel.json` runs `convex deploy` first and hands the resulting
+deployment URL to `next build`, so the client can never be built against a stale
+backend URL.
+
+One-time setup, all of it in dashboards:
+
+1. **WorkOS** — create a Production environment. Copy its Client ID and API key.
+2. **Convex** — in the project's Settings, generate a **Production** deploy key.
+3. **Vercel** — new project from this repo, **Root Directory `apps/web`**. It
+   picks up `vercel.json`, so leave the build command alone. Set:
+
+   | Variable | Value |
+   |---|---|
+   | `CONVEX_DEPLOY_KEY` | the production deploy key from step 2 |
+   | `WORKOS_CLIENT_ID` | production client id from step 1 |
+   | `WORKOS_API_KEY` | production API key from step 1 |
+   | `WORKOS_COOKIE_PASSWORD` | `openssl rand -base64 32` |
+   | `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | `https://<your-domain>/callback` |
+
+   `NEXT_PUBLIC_CONVEX_URL` is set by the build. Do not set it by hand.
+
+4. **After the first deploy**, on the *production* Convex deployment:
+
+   ```bash
+   pnpm --filter @mtg-tutor/backend exec convex env set ANTHROPIC_API_KEY <key> --prod
+   pnpm --filter @mtg-tutor/backend exec convex run sets:ingest '{"setCode":"fdn"}' --prod
+   ```
+
+   Coaching returns 503 until the key is set, and the set list is empty until a
+   set is ingested — production has its own database, nothing carries over
+   from dev.
+
+The redirect URI, homepage URL, and CORS origins are registered with WorkOS
+automatically from the `prod` block in `packages/backend/convex.json`, which
+reads Vercel's `VERCEL_PROJECT_PRODUCTION_URL` at build time. The four variables
+above still have to be set by hand: Convex only auto-provisions AuthKit for dev.
+
 ## Architecture
 
 A pnpm + Turborepo monorepo. Domain logic lives in a **pure** package that any client can import; each app owns only its own transport and UI.
@@ -89,7 +131,26 @@ apps/
         draft/                 draft screen + entrypoint
         review/                review walkthrough + entrypoint
         stats/                 reporting queries + stats screen
+  web/                         @mtg-tutor/web -- the Next.js client, the one with card art
+    app/
+      page.tsx                 set picker
+      draft/[sessionId]/       the draft board
+      callback|sign-in|sign-up WorkOS AuthKit route handlers
+      providers.tsx            AuthKit session -> Convex identity bridge
+    middleware.ts              redirects unauthenticated visitors to WorkOS
+packages/
+  backend/                     @mtg-tutor/backend -- Convex: the shared session store
+    convex/
+      schema.ts                sets, draftSessions, reviewVerdicts
+      sets.ts                  Scryfall + 17Lands ingestion
+      draft.ts                 start / state / pick / results / save
+      http.ts                  the streaming coach endpoint
+      auth.config.ts           validates WorkOS RS256 JWTs
 ```
+
+**A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished 45-pick draft replays in 0.16ms, which is noise next to the round trip that asked for it.
+
+**Every session read and write goes through `loadBoard`.** It requires an identity and refuses sessions belonging to someone else, so ownership is enforced in one place rather than six. A new function that queries `draftSessions` directly is how that regresses.
 
 **Core must stay pure.** `@mtg-tutor/core` has no dependencies and imports no `node:*` builtins, so the exact same code runs in Node, in a server runtime, and in the browser. `pnpm --filter @mtg-tutor/core test` enforces this — `scripts/check-purity.ts` fails the build on any non-relative import.
 
