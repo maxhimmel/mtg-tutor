@@ -1,11 +1,41 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "convex/react";
+import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
+import { AuthButton } from "./components/AuthButton";
 
 export default function Home() {
+  return (
+    <main className="shell">
+      <div className="topbar">
+        <div className="brand">
+          mtg<span>-</span>tutor
+        </div>
+        <AuthButton />
+      </div>
+
+      <Unauthenticated>
+        <h1 style={{ fontSize: "1.3rem", margin: "0 0 1rem" }}>
+          Practice drafting with 17Lands-based scoring
+        </h1>
+        <p className="muted" style={{ marginBottom: "1rem" }}>
+          Drafts are saved to your account, so sign in to start one.
+        </p>
+        <a className="authLink" href="/sign-in">
+          Sign in
+        </a>
+      </Unauthenticated>
+
+      <Authenticated>
+        <SetPicker />
+      </Authenticated>
+    </main>
+  );
+}
+
+function SetPicker() {
   const sets = useQuery(api.sets.list);
   const startDraft = useMutation(api.draft.start);
   const router = useRouter();
@@ -23,14 +53,7 @@ export default function Home() {
   }
 
   return (
-    <main className="shell">
-      <div className="topbar">
-        <div className="brand">
-          mtg<span>-</span>tutor
-        </div>
-        <div className="counter">practice drafting with 17Lands-based scoring</div>
-      </div>
-
+    <>
       <h1 style={{ fontSize: "1.3rem", margin: "0 0 1rem" }}>Pick a set to draft</h1>
 
       {sets === undefined && <p className="muted">Loading sets…</p>}
@@ -71,6 +94,6 @@ export default function Home() {
           Grades will be much less meaningful.
         </div>
       )}
-    </main>
+    </>
   );
 }

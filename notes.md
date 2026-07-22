@@ -74,6 +74,16 @@ Decisions worth not re-litigating:
 5. **`packages/core` must stay dependency-free** — no `node:*`, no runtime deps —
    so the same code runs in Node, Convex's V8 runtime, and the browser. Enforced
    by `scripts/check-purity.ts` in the package's test script.
+6. **No Convex auth component and no `users` table.** WorkOS AuthKit issues
+   RS256 JWTs that Convex validates directly against WorkOS' JWKS
+   (`convex/auth.config.ts`). `draft.ts` only ever needs an opaque owner key and
+   `identity.tokenIdentifier` already is one, so a user row would be dead weight
+   and a sync webhook would be a second thing to keep correct.
+7. **The ownership check lives in `loadBoard`, not in each function.** Every
+   session read and write funnels through it, so one check covers `state`,
+   `pick`, `results`, `save`, and `coachContext`. Adding a function that reaches
+   into `draftSessions` without going through `loadBoard` is the way this
+   regresses.
 
 Open / unfinished:
 
@@ -94,7 +104,24 @@ Open / unfinished:
    response ~3.2s.
 3. CLI still runs on local SQLite and its own file cache; the cutover to Convex
    is a later phase. After it, any CLI use needs `convex dev` running or a
-   deployed backend — real friction, accepted deliberately.
+   deployed backend — real friction, accepted deliberately. **The CLI's WorkOS
+   device flow is the other half of this** — until it exists the CLI has no way
+   to obtain an identity, and the Convex draft functions now require one.
+6. **Headless runs need a token now.** `smoke-draft.mjs` can no longer talk to
+   the draft functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via
+   the WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
+   deployment's own `WORKOS_CLIENT_ID`/`WORKOS_API_KEY`. That password grant
+   only works if the WorkOS environment has password auth enabled; once the CLI
+   device flow lands this should just read the CLI's stored token instead.
+7. **WorkOS env vars are duplicated between `packages/backend/.env.local` and
+   `apps/web/.env.local`.** `convex dev` provisions AuthKit and writes them next
+   to the Convex project, but Next only reads its own `.env.local`, so they are
+   mirrored by hand. `WORKOS_COOKIE_PASSWORD` exists only on the web side.
+   Anything that re-provisions has to update both.
+8. **Draft sessions created before auth have `userId: undefined` and are now
+   unreachable.** The schema still allows the field to be absent so those rows
+   validate; nothing can read them. Only dev data, but it is why the field is
+   optional rather than required.
 4. `mulberry32.state()` was added to support a resumable-session design that the
    0.16ms replay measurement then retired. It's tested and harmless as PRNG API,
    but nothing currently uses it. Delete it if it's still unused after Phase 4.

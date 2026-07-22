@@ -19,7 +19,7 @@
     "dev": "convex dev",
     "build": "node scripts/codegen.mjs",
     "deploy": "convex deploy",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "smoke-draft": "node scripts/smoke-draft.mjs"
   },
   "dependencies": {
