@@ -26,30 +26,6 @@ describe("mulberry32", () => {
   });
 });
 
-describe("mulberry32 state", () => {
-  it("resuming from state() continues the identical sequence", () => {
-    const live = mulberry32(42);
-    for (let i = 0; i < 17; i++) live();
-
-    // Snapshot mid-stream, then draw from both and compare.
-    const resumed = mulberry32(live.state());
-    const fromLive = Array.from({ length: 20 }, () => live());
-    const fromResumed = Array.from({ length: 20 }, () => resumed());
-
-    expect(fromResumed).toEqual(fromLive);
-  });
-
-  it("state() is a serializable 32-bit unsigned integer", () => {
-    const r = mulberry32(0xdeadbeef);
-    for (let i = 0; i < 5; i++) r();
-    const s = r.state();
-    expect(Number.isInteger(s)).toBe(true);
-    expect(s).toBeGreaterThanOrEqual(0);
-    expect(s).toBeLessThanOrEqual(0xffffffff);
-    expect(JSON.parse(JSON.stringify({ s })).s).toBe(s);
-  });
-});
-
 describe("newSeed", () => {
   it("returns a 32-bit unsigned integer", () => {
     const s = newSeed();

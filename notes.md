@@ -111,9 +111,11 @@ Open / unfinished:
    local tutor modules are deleted; the CLI now holds no database, no API key and
    no set data. It needs `convex dev` running or a deployed backend — real
    friction, accepted deliberately.
-4. `mulberry32.state()` was added to support a resumable-session design that the
-   0.16ms replay measurement then retired. Phase 4 is now done and still nothing
-   uses it — it is tested and harmless as PRNG API, but it should be deleted.
+4. ~~`mulberry32.state()` is unused~~ — deleted. It existed to persist live RNG
+   position on the session doc, for a derived-cache design the 0.16ms replay
+   measurement retired before it shipped. `mulberry32` now returns a plain
+   `() => number`; the `Rng` interface existed only to carry that method. The
+   seed itself is untouched and remains the basis of the whole session model.
 5. Review and stats remain CLI-only *surfaces*, but their logic is now backend
    functions (`convex/review.ts`, `convex/stats.ts`), so a web version is a UI
    job rather than a port. The review quiz has no web equivalent yet.
