@@ -11,8 +11,9 @@ import { AuthButton } from "../../components/AuthButton";
 import { CardTile } from "../../components/CardTile";
 import { Results } from "../../components/Results";
 import { COLOR_NAMES, gradeColor, pct } from "../../lib/format";
+import { convexSiteUrl } from "../../lib/convexSite";
 
-const SITE = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+const SITE = convexSiteUrl;
 
 interface LastPick {
   score: PickScore;
