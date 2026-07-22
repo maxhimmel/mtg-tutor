@@ -1,0 +1,22 @@
+{
+  "name": "@mtg-tutor/backend",
+  "version": "0.1.0",
+  "description": "Convex backend: set ingestion, draft sessions, coaching stream",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "convex dev",
+    "build": "node scripts/codegen.mjs",
+    "deploy": "convex deploy",
+    "typecheck": "tsc --noEmit",
+    "smoke-draft": "node scripts/smoke-draft.mjs"
+  },
+  "dependencies": {
+    "@mtg-tutor/core": "workspace:*",
+    "convex": "^1.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "typescript": "^5.6.0"
+  }
+}

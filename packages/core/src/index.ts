@@ -4,6 +4,10 @@
 export * from "./config.js";
 
 export * from "./model/card.js";
+export * from "./model/setData.js";
+
+export * from "./data/sources.js";
+export * from "./data/mapping.js";
 export * from "./model/pick.js";
 export * from "./model/review.js";
 
@@ -19,6 +23,8 @@ export * from "./tutor/pickCoach.js";
 export * from "./tutor/reviewPrompt.js";
 
 export * from "./draft/engine.js";
+export * from "./draft/replay.js";
+export * from "./draft/summary.js";
 export * from "./draft/bots.js";
 export * from "./draft/pack.js";
 export * from "./draft/deck.js";
