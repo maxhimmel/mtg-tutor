@@ -8,7 +8,18 @@ import {
 } from "@mtg-tutor/core";
 import { action, internalMutation, query } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
+import type { Id } from "./_generated/dataModel.js";
 import { card } from "./validators.js";
+
+// `ingest` calls `internal.sets.store`, which lives in this same module, so its
+// return type would be inferred from a type that depends on itself. Declaring
+// the shape explicitly breaks that cycle (TS7022/TS7023 otherwise).
+export interface IngestResult {
+  setId: Id<"sets">;
+  cardCount: number;
+  ratedCardCount: number;
+  keptExistingSnapshot: boolean;
+}
 
 const USER_AGENT =
   "mtg-tutor/0.1 (draft-trainer; https://github.com/maxhimmel/mtg-tutor)";
@@ -61,7 +72,7 @@ async function fetchScryfallSet(setCode: string): Promise<ScryfallCard[]> {
 // rotation guard in `store`.
 export const ingest = action({
   args: { setCode: v.string(), format: v.optional(v.string()) },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<IngestResult> => {
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
     const exp = setCode.toUpperCase();
@@ -117,7 +128,7 @@ export const store = internalMutation({
     const rated = args.cards.filter((c) => c.gihWinRate != null).length;
     const existing = await ctx.db
       .query("sets")
-      .withIndex("by_code_format", (q) => q.eq("code", args.code).eq("format", args.format))
+      .withIndex("by_code_and_format", (q) => q.eq("code", args.code).eq("format", args.format))
       .unique();
 
     // 17Lands stops serving aggregates once a set leaves rotation: the card list
@@ -159,7 +170,7 @@ export const get = query({
   handler: async (ctx, args) =>
     await ctx.db
       .query("sets")
-      .withIndex("by_code_format", (q) =>
+      .withIndex("by_code_and_format", (q) =>
         q.eq("code", args.setCode.toLowerCase()).eq("format", args.format ?? "PremierDraft"),
       )
       .unique(),

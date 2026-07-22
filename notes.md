@@ -71,12 +71,21 @@ Decisions worth not re-litigating:
 
 Open / unfinished:
 
-1. Convex backend is written but **has never run** — `convex codegen` needs an
-   interactive login, so the functions are untypechecked and unverified.
-   Branch `convex-backend` is deliberately unmerged until that happens.
-2. The streaming coach HTTP action isn't built yet. Open question flagged during
-   planning: whether `@anthropic-ai/sdk` streams correctly inside Convex's V8
-   runtime, or whether it needs raw `fetch` + SSE parsing.
+1. ~~Convex backend has never run~~ — done. A full 45-pick draft now runs through
+   the deployed functions (`pnpm --filter @mtg-tutor/backend smoke-draft`), art
+   URLs survive the round trip, and re-reading a session replays to an identical
+   pool. ~128ms per pick round trip against the dev deployment.
+2. **`@anthropic-ai/sdk` does not work in Convex's V8 runtime** — it imports
+   `node:fs` in its credential loader, and `convex/http.ts` can't opt into
+   `"use node"` because HTTP actions are V8-only. The coach endpoint therefore
+   calls the Messages API with raw `fetch` and parses the SSE `text_delta`
+   events itself. If an action ever *does* need the SDK, it has to live in a
+   separate `"use node"` file and can't be an HTTP action.
+   Gotcha found while building it: a `ReadableStream` that drains the upstream
+   body from `pull()` delivers the whole body but **never terminates** — the
+   client hangs with the response already in hand. Pumping to completion inside
+   `start()` closes it properly. Verified end to end: first byte ~1.1s, full
+   response ~3.2s.
 3. CLI still runs on local SQLite and its own file cache; the cutover to Convex
    is a later phase. After it, any CLI use needs `convex dev` running or a
    deployed backend — real friction, accepted deliberately.

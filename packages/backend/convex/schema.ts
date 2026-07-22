@@ -16,7 +16,7 @@ export default defineSchema({
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
-  }).index("by_code_format", ["code", "format"]),
+  }).index("by_code_and_format", ["code", "format"]),
 
   // A draft is fully determined by its seed plus the ordered names the human
   // picked, so that pair IS the session -- no board state is persisted. See
@@ -35,7 +35,7 @@ export default defineSchema({
     summary: v.optional(draftSummary),
   })
     .index("by_user", ["userId"])
-    .index("by_user_saved", ["userId", "saved"]),
+    .index("by_user_and_saved", ["userId", "saved"]),
 
   // Frozen on first review so re-reviews are stable. Keyed by position in the
   // session's pick list rather than by a pick row, since picks aren't stored.
@@ -43,5 +43,5 @@ export default defineSchema({
     sessionId: v.id("draftSessions"),
     pickIndex: v.number(),
     verdict: reviewVerdict,
-  }).index("by_session_pick", ["sessionId", "pickIndex"]),
+  }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
 });

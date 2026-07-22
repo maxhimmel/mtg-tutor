@@ -1,14 +1,23 @@
 import { v } from "convex/values";
 import {
   type DraftEngine,
+  buildPickContext,
   newSeed,
   replayDraft,
   suggestDeck,
   summarizeDraft,
 } from "@mtg-tutor/core";
-import { mutation, query, type QueryCtx } from "./_generated/server.js";
+import { internalQuery, mutation, query, type QueryCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
 import { toSetData } from "./setData.js";
+
+// Ownership is always derived server-side, never taken as an argument. Returns
+// undefined until auth is wired up, which is also what unauthenticated local
+// use looks like -- so those drafts group together under "no owner".
+async function currentUserId(ctx: QueryCtx): Promise<string | undefined> {
+  const identity = await ctx.auth.getUserIdentity();
+  return identity?.tokenIdentifier;
+}
 
 // Rebuilds the live board for a session. The session stores only the seed and
 // the picked names, so every read replays -- ~0.16ms for a finished draft,
@@ -19,7 +28,7 @@ async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
 
   const setDoc = await ctx.db
     .query("sets")
-    .withIndex("by_code_format", (q) =>
+    .withIndex("by_code_and_format", (q) =>
       q.eq("code", session.setCode).eq("format", session.format),
     )
     .unique();
@@ -52,7 +61,7 @@ export const start = mutation({
 
     const setDoc = await ctx.db
       .query("sets")
-      .withIndex("by_code_format", (q) => q.eq("code", setCode).eq("format", format))
+      .withIndex("by_code_and_format", (q) => q.eq("code", setCode).eq("format", format))
       .unique();
 
     if (!setDoc) {
@@ -60,6 +69,7 @@ export const start = mutation({
     }
 
     return await ctx.db.insert("draftSessions", {
+      userId: await currentUserId(ctx),
       setCode,
       format,
       seed: newSeed(),
@@ -172,12 +182,40 @@ export const save = mutation({
   },
 });
 
-export const listSaved = query({
-  args: { userId: v.optional(v.string()), limit: v.optional(v.number()) },
+// The grounded prompt for one pick, rebuilt by replay. Internal: it exists only
+// so the coach HTTP action can fetch what it needs in a single transaction.
+export const coachContext = internalQuery({
+  args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
+    const { session, engine } = await loadBoard(ctx, args.sessionId);
+
+    const record = engine.history[args.pickIndex];
+    if (!record) {
+      throw new Error(
+        `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
+      );
+    }
+
+    // The pool as it stood just after this pick, not the final pool.
+    const poolAtPick = engine.humanPool.slice(0, args.pickIndex + 1);
+
+    return {
+      userContent: buildPickContext(record, poolAtPick),
+      setCode: session.setCode,
+      packNo: record.packNo,
+      pickNo: record.pickNo,
+    };
+  },
+});
+
+export const listSaved = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const userId = await currentUserId(ctx);
+
     const sessions = await ctx.db
       .query("draftSessions")
-      .withIndex("by_user_saved", (q) => q.eq("userId", args.userId).eq("saved", true))
+      .withIndex("by_user_and_saved", (q) => q.eq("userId", userId).eq("saved", true))
       .order("desc")
       .take(args.limit ?? 25);
 
