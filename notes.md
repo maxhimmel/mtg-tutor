@@ -15,6 +15,12 @@
    longer in rotation — not a date-range bug (tested no-params, the set's own
    release window, and 2019->today; all return zeros).
    Impact: practicing a *current* set still works; practicing older sets does not.
+   Worse than "no feedback" — the feedback actively misleads. A real FDN draft
+   scored **97.1/100 overall with 24% best-pick accuracy and zero missed picks
+   listed**, despite 34 of 45 picks not being the top card: rarity-only values
+   sit so close together that a wrong pick costs almost nothing, and the
+   missed-picks list needs win rates to explain a miss so it stays empty. The
+   web results view now says this outright instead of implying a good draft.
    Options to explore: 17Lands' public data downloads, a different endpoint/param,
    or caching a good snapshot per set before it rotates out.
 

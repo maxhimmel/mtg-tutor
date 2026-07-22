@@ -25,8 +25,10 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
             {deck.spells.length} spells + {deck.lands} lands
           </p>
           <div className="deck">
-            {deck.spells.map((c) => (
-              <div key={c.name} className="deckRow">
+            {/* Keyed by position, not name: drafting two copies of the same
+                card is normal, so names are not unique in a pool. */}
+            {deck.spells.map((c, i) => (
+              <div key={`${c.name}-${i}`} className="deckRow">
                 <span>{c.name}</span>
                 <span className="muted">{pct(c.gihWinRate)}</span>
               </div>
@@ -57,6 +59,18 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
       </div>
 
       <aside>
+        {results.ratedCardCount === 0 && (
+          <div className="warn">
+            <strong>This set has no 17Lands data.</strong> Cards were valued by rarity
+            alone, so the score is inflated — when every card is worth about the same, a
+            &ldquo;wrong&rdquo; pick barely costs anything. The missed-picks list is
+            empty for the same reason: explaining a miss needs win rates. You still took
+            something other than the top-valued card on{" "}
+            {Math.round((1 - summary.accuracy) * summary.pickCount)} of{" "}
+            {summary.pickCount} picks.
+          </div>
+        )}
+
         <div className="panel">
           <h2>Result</h2>
           <div className="stat">
