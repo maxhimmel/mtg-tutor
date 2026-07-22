@@ -2,20 +2,14 @@ import { env } from "./env.js";
 
 // Runtime config for the CLI process. Anything that reads the environment or
 // configures I/O lives here; pure domain constants live in @mtg-tutor/core.
+//
+// Small, now that the CLI fetches nothing and holds no API key: Scryfall and
+// 17Lands are the deployment's job, and so is Anthropic.
 
-export const HTTP = {
-  userAgent:
-    "mtg-tutor/0.1 (draft-trainer; https://github.com/local/mtg-tutor) contact:local",
-  scryfallDelayMs: 90,
-};
-
-export const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-// Claude-powered pick coaching. `enabled` gates the feature so a draft still
-// runs (with deterministic feedback) when no API key is present.
-export const ANTHROPIC = {
-  model: env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
-  maxTokens: 400, // short, snappy per-pick coaching
-  effort: "low" as const, // output_config.effort — fast per pick; tunable
-  enabled: !!env.ANTHROPIC_API_KEY,
-};
+// HTTP actions (the coach stream) live on the .convex.site host; queries and
+// mutations on .convex.cloud. Same deployment, different origin -- derived so
+// there is no second variable to drift.
+export const CONVEX_SITE_URL = env.CONVEX_URL.replace(
+  /\.convex\.cloud(\/|$)/,
+  ".convex.site$1",
+);

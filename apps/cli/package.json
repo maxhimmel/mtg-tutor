@@ -17,25 +17,23 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify-data": "tsx scripts/verify-data.ts",
-    "smoke-draft": "tsx scripts/smoke-draft.ts"
+    "login": "tsx src/cli.ts login"
   },
   "engines": {
     "node": ">=20.12"
   },
   "dependencies": {
-    "@mtg-tutor/core": "workspace:*",
-    "@anthropic-ai/sdk": "^0.111.0",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "^0.7.0",
+    "@mtg-tutor/backend": "workspace:^",
+    "@mtg-tutor/core": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
-    "better-sqlite3": "^11.3.0",
     "cli-table3": "^0.6.5",
+    "convex": "^1.17.0",
     "picocolors": "^1.1.0",
-    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

@@ -11,7 +11,8 @@ export interface ReviewVerdict {
 // A pick rehydrated from the DB for review: the full pack the human saw plus the
 // deterministic scoring fields and any cached AI verdict.
 export interface StoredPick {
-  id: number;
+  /** Position in the session's pick list -- picks are replayed, not stored. */
+  pickIndex: number;
   packNo: number;
   pickNo: number;
   pack: Card[];
@@ -24,7 +25,7 @@ export interface StoredPick {
 }
 
 export interface StoredDraft {
-  id: number;
+  id: string;
   setCode: string;
   format: string;
   seed: string;
@@ -34,7 +35,7 @@ export interface StoredDraft {
 }
 
 export interface DraftListItem {
-  id: number;
+  id: string;
   setCode: string;
   format: string;
   createdAt: string;

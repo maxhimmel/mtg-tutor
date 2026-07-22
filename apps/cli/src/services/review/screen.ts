@@ -1,13 +1,13 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { buildDraftFrame, buildReviewContext, isCorrectGuess, isDecisionPick, REVIEW } from "@mtg-tutor/core";
+import { isCorrectGuess, isDecisionPick, REVIEW } from "@mtg-tutor/core";
 import type { Card, ReviewVerdict, StoredDraft, StoredPick } from "@mtg-tutor/core";
-import { ANTHROPIC } from "../../core/config.js";
+import type { ConvexHttpClient } from "convex/browser";
+import { api } from "@mtg-tutor/backend";
+import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
-import { draftFrame, reviewPick } from "../../core/tutor/reviewTutor.js";
-import { saveVerdict } from "../../core/db/db.js";
 
 // quiz: guess each decision pick, then reveal. passive: reveal each pick in
 // sequence, no guessing. report: resolve everything up front and print the whole
@@ -19,20 +19,22 @@ interface ReviewOpts {
 }
 
 export async function runReview(
+  convex: ConvexHttpClient,
   draft: StoredDraft,
   colorPairWinRates: Map<string, number>,
   opts: ReviewOpts,
 ) {
-  p.intro(pc.bgCyan(pc.black(` Review: draft #${draft.id} — ${draft.setCode.toUpperCase()} `)));
+  p.intro(pc.bgCyan(pc.black(` Review: ${draft.setCode.toUpperCase()} — ${draft.createdAt.slice(0, 10)} `)));
 
+  const sessionId = draft.id as Id<"draftSessions">;
   const finalPool = draft.picks.map((pk) => pk.picked);
 
   if (opts.mode === "report") {
-    await runReport(draft, finalPool, colorPairWinRates);
+    await runReport(convex, sessionId, draft, finalPool);
     return;
   }
 
-  await showFrame("open", finalPool, colorPairWinRates);
+  await showFrame(convex, sessionId, "open");
 
   const poolBefore: Card[] = [];
   let decisions = 0;
@@ -59,7 +61,7 @@ export async function runReview(
       }
     }
 
-    const verdict = await resolveVerdictInteractive(pick, poolBefore);
+    const verdict = await resolveVerdictInteractive(convex, sessionId, pick);
     const contextBest = verdict?.contextBestName ?? pick.bestName;
 
     let ok: boolean | null = null;
@@ -73,7 +75,7 @@ export async function runReview(
     poolBefore.push(pick.picked);
   }
 
-  await showFrame("close", finalPool, colorPairWinRates);
+  await showFrame(convex, sessionId, "close");
 
   if (decisions > 0) {
     p.note(
@@ -87,26 +89,27 @@ export async function runReview(
 
 // Batch "just give me the answers" mode: resolve every decision pick's verdict up
 // front (concurrently), then print the whole diagnostic in one pass.
-async function runReport(draft: StoredDraft, finalPool: Card[], colorPairWinRates: Map<string, number>) {
-  await showFrame("open", finalPool, colorPairWinRates);
+async function runReport(
+  convex: ConvexHttpClient,
+  sessionId: Id<"draftSessions">,
+  draft: StoredDraft,
+  finalPool: Card[],
+) {
+  await showFrame(convex, sessionId, "open");
 
-  // Each pick's context is the pool as it stood BEFORE that pick.
-  const poolBefore = draft.picks.map((_, i) => draft.picks.slice(0, i).map((pk) => pk.picked));
   const decisionIdx = draft.picks
     .map((pk, i) => ({ pk, i }))
     .filter(({ pk }) => isDecisionPick(pk.pack, REVIEW.decisionPickMinCards));
 
   const verdicts = new Map<number, ReviewVerdict | undefined>();
-  if (ANTHROPIC.enabled) {
-    const spin = spinner();
-    spin.start(`Analyzing ${decisionIdx.length} decision picks`);
-    let done = 0;
-    await mapLimit(decisionIdx, 5, async ({ pk, i }) => {
-      verdicts.set(i, await fetchVerdict(pk, poolBefore[i]));
-      spin.message(`Analyzing decision picks (${++done}/${decisionIdx.length})`);
-    });
-    spin.stop(`Analyzed ${decisionIdx.length} decision picks`);
-  }
+  const spin = spinner();
+  spin.start(`Analyzing ${decisionIdx.length} decision picks`);
+  let done = 0;
+  await mapLimit(decisionIdx, 5, async ({ pk, i }) => {
+    verdicts.set(i, await fetchVerdict(convex, sessionId, pk));
+    spin.message(`Analyzing decision picks (${++done}/${decisionIdx.length})`);
+  });
+  spin.stop(`Analyzed ${decisionIdx.length} decision picks`);
 
   draft.picks.forEach((pick, i) => {
     if (!isDecisionPick(pick.pack, REVIEW.decisionPickMinCards)) {
@@ -117,7 +120,7 @@ async function runReport(draft: StoredDraft, finalPool: Card[], colorPairWinRate
     renderReveal(pick, verdict, verdict?.contextBestName ?? pick.bestName, null, null);
   });
 
-  await showFrame("close", finalPool, colorPairWinRates);
+  await showFrame(convex, sessionId, "close");
   p.outro(pc.green("Report complete."));
 }
 
@@ -134,26 +137,32 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
   await Promise.all(workers);
 }
 
-// Cached verdict wins; otherwise ask the AI once and freeze it. No UI — callers
-// own the spinner. Returns undefined if AI is disabled or the call fails.
-async function fetchVerdict(pick: StoredPick, poolBefore: Card[]): Promise<ReviewVerdict | undefined> {
+// The verdict already frozen on the session wins; otherwise the backend action
+// asks the model once and stores it. Returns undefined when the deployment has
+// no Anthropic key or the call fails -- callers show the data-only reveal.
+async function fetchVerdict(
+  convex: ConvexHttpClient,
+  sessionId: Id<"draftSessions">,
+  pick: StoredPick,
+): Promise<ReviewVerdict | undefined> {
   if (pick.verdict) return pick.verdict;
-  if (!ANTHROPIC.enabled) return undefined;
   try {
-    const verdict = await reviewPick(buildReviewContext(pick, poolBefore));
-    saveVerdict(pick.id, verdict);
-    return verdict;
+    return (await convex.action(api.review.verdict, { sessionId, pickIndex: pick.pickIndex })) ?? undefined;
   } catch {
     return undefined;
   }
 }
 
 // Interactive wrapper: shows a per-pick spinner around fetchVerdict.
-async function resolveVerdictInteractive(pick: StoredPick, poolBefore: Card[]): Promise<ReviewVerdict | undefined> {
-  if (pick.verdict || !ANTHROPIC.enabled) return pick.verdict;
+async function resolveVerdictInteractive(
+  convex: ConvexHttpClient,
+  sessionId: Id<"draftSessions">,
+  pick: StoredPick,
+): Promise<ReviewVerdict | undefined> {
+  if (pick.verdict) return pick.verdict;
   const spin = spinner();
   spin.start("Coach is reviewing the pick");
-  const verdict = await fetchVerdict(pick, poolBefore);
+  const verdict = await fetchVerdict(convex, sessionId, pick);
   spin.stop(verdict ? "" : pc.yellow("AI verdict unavailable — showing data only"));
   return verdict;
 }
@@ -210,15 +219,14 @@ function renderTrivial(pick: StoredPick) {
 }
 
 async function showFrame(
+  convex: ConvexHttpClient,
+  sessionId: Id<"draftSessions">,
   phase: "open" | "close",
-  pool: Card[],
-  colorPairWinRates: Map<string, number>,
 ) {
-  if (!ANTHROPIC.enabled) return;
   const spin = spinner();
   spin.start(phase === "open" ? "Coach is sizing up the draft" : "Coach is writing the recap");
   try {
-    const text = await draftFrame(buildDraftFrame(phase, pool, colorPairWinRates));
+    const text = await convex.action(api.review.frame, { sessionId, phase });
     spin.stop("");
     if (text) p.note(text, phase === "open" ? "Draft overview" : "Signal-reading recap");
   } catch (e) {

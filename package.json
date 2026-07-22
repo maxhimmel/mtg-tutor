@@ -16,7 +16,8 @@
     "review": "pnpm --filter @mtg-tutor/cli review",
     "stats": "pnpm --filter @mtg-tutor/cli stats",
     "verify-data": "pnpm --filter @mtg-tutor/cli verify-data",
-    "smoke-draft": "pnpm --filter @mtg-tutor/cli smoke-draft"
+    "smoke-draft": "pnpm --filter @mtg-tutor/backend smoke-draft",
+    "login": "pnpm --filter @mtg-tutor/cli login"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
