@@ -1,6 +1,8 @@
 "use client";
 
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { useCallback } from "react";
+import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
+import { AuthKitProvider, useAccessToken, useAuth } from "@workos-inc/authkit-nextjs/components";
 
 // Built lazily rather than thrown at module scope: .env.local is gitignored, so
 // a fresh clone (or CI) has no URL, and a module-level throw would fail the
@@ -8,8 +10,28 @@ import { ConvexProvider, ConvexReactClient } from "convex/react";
 const url = process.env.NEXT_PUBLIC_CONVEX_URL;
 const convex = url ? new ConvexReactClient(url) : null;
 
-// Plain ConvexProvider for now. When WorkOS lands this becomes
-// ConvexProviderWithAuth -- the draft functions already scope by identity.
+// Bridges AuthKit's session into the shape Convex wants. The access token is a
+// WorkOS-issued RS256 JWT that convex/auth.config.ts validates against WorkOS'
+// JWKS, so no token is minted or stored on our side.
+function useAuthFromAuthKit() {
+  const { user, loading: isLoading } = useAuth();
+  const { getAccessToken, refresh } = useAccessToken();
+
+  const fetchAccessToken = useCallback(
+    async ({ forceRefreshToken }: { forceRefreshToken?: boolean } = {}) => {
+      if (!user) return null;
+      try {
+        return (forceRefreshToken ? await refresh() : await getAccessToken()) ?? null;
+      } catch {
+        return null;
+      }
+    },
+    [user, refresh, getAccessToken],
+  );
+
+  return { isLoading, isAuthenticated: !!user, fetchAccessToken };
+}
+
 export function ConvexClientProvider({ children }: { children: React.ReactNode }) {
   if (!convex) {
     return (
@@ -23,5 +45,11 @@ export function ConvexClientProvider({ children }: { children: React.ReactNode }
     );
   }
 
-  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
+  return (
+    <AuthKitProvider>
+      <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
+        {children}
+      </ConvexProviderWithAuth>
+    </AuthKitProvider>
+  );
 }

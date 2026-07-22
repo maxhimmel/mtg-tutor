@@ -10,3 +10,4 @@ scratch/
 .turbo/
 .env
 .env.local
+*.tsbuildinfo

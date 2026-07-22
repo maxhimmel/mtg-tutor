@@ -96,6 +96,13 @@ http.route({
   path: "/coach",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // This endpoint spends the deployment's Anthropic key, so it is checked
+    // before anything else. draft.coachContext re-checks ownership of the
+    // specific session; identity propagates through ctx.runQuery.
+    if (!(await ctx.auth.getUserIdentity())) {
+      return new Response("not authenticated", { status: 401, headers: cors });
+    }
+
     const body: unknown = await request.json();
     if (typeof body !== "object" || body === null) {
       return new Response("expected a JSON object", { status: 400, headers: cors });

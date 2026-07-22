@@ -3,9 +3,11 @@
 import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
+import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { type Card, type PickScore, explainPick } from "@mtg-tutor/core";
+import { AuthButton } from "../../components/AuthButton";
 import { CardTile } from "../../components/CardTile";
 import { Results } from "../../components/Results";
 import { COLOR_NAMES, gradeColor, pct } from "../../lib/format";
@@ -22,6 +24,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const id = sessionId as Id<"draftSessions">;
   const state = useQuery(api.draft.state, { sessionId: id });
   const pickCard = useMutation(api.draft.pick);
+  const { getAccessToken } = useAccessToken();
 
   const [last, setLast] = useState<LastPick | null>(null);
   const [coach, setCoach] = useState("");
@@ -42,14 +45,22 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       if (!SITE) return fallback();
 
       try {
+        // /coach spends the deployment's Anthropic key, so it rejects anonymous
+        // callers. This is a plain fetch rather than a Convex call, so the token
+        // the ConvexReactClient already holds has to be attached by hand.
+        const token = await getAccessToken();
+
         const res = await fetch(`${SITE}/coach`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({ sessionId, pickIndex }),
         });
 
-        // 503 when no API key is configured; fall back to the deterministic
-        // explanation rather than leaving the panel empty.
+        // 401 unauthenticated, 503 when no API key is configured; fall back to
+        // the deterministic explanation rather than leaving the panel empty.
         if (!res.ok || !res.body) return fallback();
 
         const reader = res.body.getReader();
@@ -70,7 +81,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         fallback();
       }
     },
-    [sessionId],
+    [sessionId, getAccessToken],
   );
 
   async function onPick(card: Card) {
@@ -122,6 +133,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             </>
           )}
         </div>
+        <AuthButton />
       </div>
 
       {state.complete ? (

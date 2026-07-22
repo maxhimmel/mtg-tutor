@@ -15,6 +15,42 @@ if (!url) throw new Error("CONVEX_URL missing -- run `pnpm exec convex dev --onc
 
 const setCode = process.argv[2] ?? "fdn";
 const client = new ConvexHttpClient(url);
+client.setAuth(await accessToken());
+
+// The draft functions require an identity, so a headless run needs a real
+// WorkOS access token. Either paste one in, or let the script mint one with the
+// password grant using the deployment's own WorkOS credentials. Once the CLI
+// device flow lands this collapses into reading the CLI's stored token.
+async function accessToken() {
+  if (process.env.MTG_TUTOR_TOKEN) return process.env.MTG_TUTOR_TOKEN;
+
+  const { SMOKE_EMAIL, SMOKE_PASSWORD, WORKOS_CLIENT_ID, WORKOS_API_KEY } = process.env;
+  if (!SMOKE_EMAIL || !SMOKE_PASSWORD || !WORKOS_CLIENT_ID || !WORKOS_API_KEY) {
+    throw new Error(
+      "This draft needs an authenticated user. Set MTG_TUTOR_TOKEN to a WorkOS " +
+        "access token, or set SMOKE_EMAIL and SMOKE_PASSWORD for a test user in " +
+        "your WorkOS environment (WORKOS_CLIENT_ID and WORKOS_API_KEY come from " +
+        "packages/backend/.env.local).",
+    );
+  }
+
+  const res = await fetch("https://api.workos.com/user_management/authenticate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "password",
+      client_id: WORKOS_CLIENT_ID,
+      client_secret: WORKOS_API_KEY,
+      email: SMOKE_EMAIL,
+      password: SMOKE_PASSWORD,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`WorkOS password grant failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()).access_token;
+}
 
 const stored = await client.query(api.sets.get, { setCode });
 if (!stored) {

@@ -11,20 +11,28 @@ import { internalQuery, mutation, query, type QueryCtx } from "./_generated/serv
 import type { Id } from "./_generated/dataModel.js";
 import { toSetData } from "./setData.js";
 
-// Ownership is always derived server-side, never taken as an argument. Returns
-// undefined until auth is wired up, which is also what unauthenticated local
-// use looks like -- so those drafts group together under "no owner".
-async function currentUserId(ctx: QueryCtx): Promise<string | undefined> {
+// Ownership is always derived server-side, never taken as an argument.
+async function requireUserId(ctx: QueryCtx): Promise<string> {
   const identity = await ctx.auth.getUserIdentity();
-  return identity?.tokenIdentifier;
+  if (!identity) throw new Error("Not authenticated.");
+  return identity.tokenIdentifier;
 }
 
 // Rebuilds the live board for a session. The session stores only the seed and
 // the picked names, so every read replays -- ~0.16ms for a finished draft,
 // which is nothing next to the round trip that got us here.
+//
+// This is the single choke point every session read and write goes through, so
+// the ownership check lives here rather than being repeated in each function.
 async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
+  const userId = await requireUserId(ctx);
   const session = await ctx.db.get(sessionId);
   if (!session) throw new Error(`No draft session ${sessionId}.`);
+
+  // Sessions created before auth existed have no owner and are unreachable now.
+  if (session.userId !== userId) {
+    throw new Error(`Draft session ${sessionId} does not belong to you.`);
+  }
 
   const setDoc = await ctx.db
     .query("sets")
@@ -56,6 +64,7 @@ const boardView = (engine: DraftEngine) => ({
 export const start = mutation({
   args: { setCode: v.string(), format: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
 
@@ -69,7 +78,7 @@ export const start = mutation({
     }
 
     return await ctx.db.insert("draftSessions", {
-      userId: await currentUserId(ctx),
+      userId,
       setCode,
       format,
       seed: newSeed(),
@@ -215,7 +224,7 @@ export const coachContext = internalQuery({
 export const listSaved = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const userId = await currentUserId(ctx);
+    const userId = await requireUserId(ctx);
 
     const sessions = await ctx.db
       .query("draftSessions")
