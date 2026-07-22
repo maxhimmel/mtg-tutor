@@ -2,6 +2,7 @@ import pc from "picocolors";
 import { run as runDraft } from "./services/draft/index.js";
 import { run as runStats } from "./services/stats/index.js";
 import { run as runReview } from "./services/review/index.js";
+import { runLogin, runLogout } from "./services/auth/index.js";
 
 const HELP = `${pc.bold("mtg-tutor")} — practice MTG draft with 17Lands-based scoring
 
@@ -12,6 +13,8 @@ Usage:
   mtg-tutor review [id] --passive  Step through without the guessing prompts
   mtg-tutor review [id] --report   Print the whole diagnostic at once (no stepping)
   mtg-tutor stats                  Show your progress and biggest mistakes
+  mtg-tutor login                  Sign in (drafts are stored against your account)
+  mtg-tutor logout                 Forget the stored session
   mtg-tutor help                   Show this help
 
 Examples:
@@ -32,6 +35,12 @@ async function main() {
       break;
     case "stats":
       await runStats(rest);
+      break;
+    case "login":
+      await runLogin();
+      break;
+    case "logout":
+      await runLogout();
       break;
     case undefined:
     case "help":
