@@ -7,8 +7,9 @@ import { runLogin, runLogout } from "./services/auth/index.js";
 const HELP = `${pc.bold("mtg-tutor")} — practice MTG draft with 17Lands-based scoring
 
 Usage:
-  mtg-tutor draft                  Browse & pick a set from a searchable list
-  mtg-tutor draft <set> [format]   Draft a set directly by code (e.g. dsk, blb)
+  mtg-tutor draft                  Browse & pick a set from those already ingested
+  mtg-tutor draft <set> [format]   Draft a set by code (ingests it if it's new)
+  mtg-tutor draft --resume <id>    Pick an abandoned draft back up
   mtg-tutor review [id]            Review a past draft pick-by-pick (quiz yourself)
   mtg-tutor review [id] --passive  Step through without the guessing prompts
   mtg-tutor review [id] --report   Print the whole diagnostic at once (no stepping)

@@ -11,15 +11,20 @@ Reading pick guides is passive. Improvement comes from **reps with objective fee
 - **Ground truth = 17Lands.** Card quality comes from `ever_drawn_win_rate` (GIH WR) and `avg_seen` (ALSA), pulled live per set. Cards without enough data fall back to a rarity-based baseline.
 - **Card pool = Scryfall.** The set's cards, types, mana costs, and rarities come from Scryfall; packs are generated from the rarity pools (1 rare/mythic, 3 uncommons, 11 commons per 15-card pack).
 - **Bots draft against you.** Each of the 7 bots commits to colors as it picks, so signals flow and packs wheel realistically.
-- **Everything is cached** under `~/.mtg-tutor/cache/` (24h TTL); stats are saved to a SQLite DB at `~/.mtg-tutor/stats.db`.
+- **Everything lives in Convex.** Set data is ingested once per set and shared across devices; drafts are stored against your account. The CLI and the web app are peer clients of the same backend — draft in the terminal, review it in the browser with card art.
 
 ## Install
 
 ```bash
 pnpm install
+pnpm login      # WorkOS device flow; opens a browser
 ```
 
-Requires Node 20+ and pnpm 10+.
+Requires Node 20+ and pnpm 10+, plus a reachable Convex deployment: set
+`CONVEX_URL` in `apps/cli/.env` (see `apps/cli/.env.example`). Because the CLI is
+a peer client rather than a standalone tool, it needs `convex dev` running or a
+deployed backend — deliberate, so a feature cannot ship to the web app and skip
+the terminal.
 
 ## Usage
 
@@ -47,7 +52,7 @@ mtg-tutor stats
 
 During a draft, arrow-key through the pack (cards are pre-sorted by win rate with hints), press Enter to pick, and read the grade + reasoning after each pick. At the end you get an overall score, best-pick accuracy, a suggested 40-card deck, and your biggest missed picks — then choose whether to save the draft.
 
-> **Note on set coverage:** scoring quality depends on how much 17Lands Premier Draft data a set has. Recent, heavily-played sets score best. If a set has little data, the CLI warns you and leans on rarity fallbacks.
+> **Note on set coverage:** scoring quality depends on how much 17Lands Premier Draft data a set has. Recent, heavily-played sets score best. 17Lands stops serving win rates once a set leaves rotation, and a set with none is scored on rarity baselines alone — which makes grades close to meaningless. Both clients say so rather than implying a good draft.
 
 ## Development
 
@@ -55,7 +60,8 @@ During a draft, arrow-key through the pack (cards are pre-sorted by win rate wit
 pnpm test              # unit suites for every package (vitest, via turbo)
 pnpm build             # build every package in dependency order
 pnpm verify-data       # sanity-check the live 17Lands + Scryfall response shapes
-pnpm smoke-draft fdn   # headless full-draft smoke test
+pnpm smoke-draft fdn   # headless full-draft smoke test, against Convex
+pnpm login             # sign in; the CLI needs a session to reach the backend
 ```
 
 Never run `next build` while `next dev` is running — they share `apps/web/.next`, and the build overwrites the dev server's bundle with one compiled under different env. The symptom is a page stuck on "Loading sets" with no error anywhere. Use `pnpm --filter @mtg-tutor/web typecheck` instead.
@@ -134,16 +140,16 @@ apps/
     src/
       cli.ts                   thin dispatcher -> services/*/run() (feeds the mtg-tutor bin)
       core/                    CLI-only concerns
-        config.ts              runtime config (HTTP, cache TTL, Anthropic)
+        config.ts              derives the .convex.site host
         env.ts                 the single boundary that reads process.env
-        data/                  cache, Scryfall + 17Lands fetchers, merge layer
-        db/                    SQLite persistence
-        tutor/                 Anthropic-backed coach + review streaming
-        ui/                    reusable @clack primitives (card/set pickers, formatting)
+        auth/                  WorkOS device flow, token store, authed Convex client
+        tutor/coach.ts         consumes the deployment's /coach stream
+        ui/                    reusable @clack primitives (card picker, formatting)
       services/
+        auth/                  login / logout
         draft/                 draft screen + entrypoint
         review/                review walkthrough + entrypoint
-        stats/                 reporting queries + stats screen
+        stats/                 stats screen
   web/                         @mtg-tutor/web -- the Next.js client, the one with card art
     app/
       page.tsx                 set picker
@@ -160,6 +166,11 @@ packages/
       http.ts                  the streaming coach endpoint
       auth.config.ts           validates WorkOS RS256 JWTs
 ```
+
+**Both clients are peers; neither owns the domain.** The CLI holds no database, no API
+key and no set data — it authenticates with a WorkOS device flow (`mtg-tutor login`) and
+drives the same Convex functions the web app does. A feature therefore cannot ship to one
+client and silently skip the other, which is the whole reason the CLI still exists.
 
 **A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished 45-pick draft replays in 0.16ms, which is noise next to the round trip that asked for it.
 

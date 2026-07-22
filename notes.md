@@ -6,9 +6,9 @@
 
 3. **17Lands `card_ratings` returns empty stats for rotated sets** (found 2026-07-21).
    The endpoint still returns the full card list, but every entry has
-   `seen_count: 0`, `game_count: 0`, `ever_drawn_win_rate: null` — so `loadSetData`
+   `seen_count: 0`, `game_count: 0`, `ever_drawn_win_rate: null` — so ingestion
    silently falls back to `RARITY_BASELINE` for every card and scoring is
-   rarity-only. Evidence from `~/.mtg-tutor/cache/` by fetch date: BLB (Jul 2) and
+   rarity-only. Evidence from the old per-machine cache, by fetch date: BLB (Jul 2) and
    MH3 (Jul 6) have real data; WOE (Jul 8), MKM, TDM, FDN, DSK all have zero. MSH
    (a currently-running set) still returns data. So this looks like a 17Lands-side
    change around Jul 7-8 that stopped serving historical aggregates for sets no
@@ -25,9 +25,11 @@
    or caching a good snapshot per set before it rotates out.
 
 4. **17Lands and Scryfall disagree on some set codes.** `MSH` is a valid 17Lands
-   expansion but not a Scryfall set code, so `loadSetData("msh")` throws
+   expansion but not a Scryfall set code, so `sets:ingest` for it throws
    `No Scryfall cards found`. Any set where the two services differ is
-   undraftable. Probably wants a small code-mapping table at the data layer.
+   undraftable — which is most of the sting of Issue #3, since a *currently
+   rotating* set is exactly the one with usable win rates. Wants a small
+   code-mapping table in `convex/sets.ts`.
 
 # Ideas:
 
@@ -53,7 +55,7 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    decision-pick threshold (`REVIEW.decisionPickMinCards`) lives there and is
    still not user-adjustable; exposing it as a slider is the remaining half.
 
-# Web platform (in progress, branch `web-platform`, started 2026-07-21):
+# Web platform (done, 2026-07-21 to 2026-07-22, deployed):
 
 Decisions worth not re-litigating:
 
@@ -102,17 +104,25 @@ Open / unfinished:
    client hangs with the response already in hand. Pumping to completion inside
    `start()` closes it properly. Verified end to end: first byte ~1.1s, full
    response ~3.2s.
-3. CLI still runs on local SQLite and its own file cache; the cutover to Convex
-   is a later phase. After it, any CLI use needs `convex dev` running or a
-   deployed backend — real friction, accepted deliberately. **The CLI's WorkOS
-   device flow is the other half of this** — until it exists the CLI has no way
-   to obtain an identity, and the Convex draft functions now require one.
-6. **Headless runs need a token now.** `smoke-draft.mjs` can no longer talk to
-   the draft functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via
-   the WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
-   deployment's own `WORKOS_CLIENT_ID`/`WORKOS_API_KEY`. That password grant
-   only works if the WorkOS environment has password auth enabled; once the CLI
-   device flow lands this should just read the CLI's stored token instead.
+3. ~~CLI still runs on local SQLite and its own file cache~~ — done. The CLI
+   authenticates with the WorkOS device authorization grant (`mtg-tutor login`,
+   tokens in `~/.mtg-tutor/credentials.json` at mode 0600) and drives Convex for
+   draft, review and stats. `db.ts`, `data/`, the local Anthropic client and both
+   local tutor modules are deleted; the CLI now holds no database, no API key and
+   no set data. It needs `convex dev` running or a deployed backend — real
+   friction, accepted deliberately.
+4. `mulberry32.state()` was added to support a resumable-session design that the
+   0.16ms replay measurement then retired. Phase 4 is now done and still nothing
+   uses it — it is tested and harmless as PRNG API, but it should be deleted.
+5. Review and stats remain CLI-only *surfaces*, but their logic is now backend
+   functions (`convex/review.ts`, `convex/stats.ts`), so a web version is a UI
+   job rather than a port. The review quiz has no web equivalent yet.
+6. **Headless runs need a token.** `smoke-draft.mjs` cannot talk to the draft
+   functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via the
+   WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
+   deployment's `WORKOS_CLIENT_ID`/`WORKOS_API_KEY` — which only works if the
+   environment has password auth enabled. Now that the device flow exists it
+   could instead read `~/.mtg-tutor/credentials.json`.
 7. **Three WorkOS values are copied by hand from `packages/backend/.env.local`
    into `apps/web/.env.local`, and that is as good as it gets.** Convex's own
    schema (`convex/schemas/convex.schema.json`) documents `localEnvVars` as
@@ -137,8 +147,3 @@ Open / unfinished:
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
-4. `mulberry32.state()` was added to support a resumable-session design that the
-   0.16ms replay measurement then retired. It's tested and harmless as PRNG API,
-   but nothing currently uses it. Delete it if it's still unused after Phase 4.
-5. Review and stats remain CLI-only. Only the draft flow is planned for the web
-   UI's first version.

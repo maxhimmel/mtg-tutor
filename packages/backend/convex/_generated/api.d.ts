@@ -8,11 +8,15 @@
  * @module
  */
 
+import type * as anthropic from "../anthropic.js";
 import type * as auth from "../auth.js";
 import type * as draft from "../draft.js";
 import type * as http from "../http.js";
+import type * as review from "../review.js";
+import type * as sessions from "../sessions.js";
 import type * as setData from "../setData.js";
 import type * as sets from "../sets.js";
+import type * as stats from "../stats.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -22,11 +26,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  anthropic: typeof anthropic;
   auth: typeof auth;
   draft: typeof draft;
   http: typeof http;
+  review: typeof review;
+  sessions: typeof sessions;
   setData: typeof setData;
   sets: typeof sets;
+  stats: typeof stats;
   validators: typeof validators;
 }>;
 

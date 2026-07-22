@@ -63,6 +63,9 @@ export async function convexClient(): Promise<ConvexHttpClient> {
   return client;
 }
 
+/** For the coach stream, which is a plain fetch and has to carry the token itself. */
+export const accessToken = validAccessToken;
+
 export interface LoginPrompt {
   authorization: DeviceAuthorization;
   /** Resolves once the browser side finishes. */

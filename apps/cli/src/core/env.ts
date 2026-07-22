@@ -16,9 +16,6 @@ export const env = createEnv({
     // pointing it at production writes production data and spends the
     // production Anthropic key on every test run.
     CONVEX_URL: z.string().url(),
-
-    ANTHROPIC_API_KEY: z.string().min(1).optional(),
-    ANTHROPIC_MODEL: z.string().min(1).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
