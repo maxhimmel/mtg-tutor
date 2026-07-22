@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd ../../packages/backend && pnpm exec convex deploy --cmd 'cd ../../apps/web && pnpm build' --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL",
+  "buildCommand": "cd ../../packages/backend && pnpm exec convex deploy --cmd 'cd ../.. && pnpm turbo run build --filter=@mtg-tutor/web' --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL",
   "framework": "nextjs"
 }

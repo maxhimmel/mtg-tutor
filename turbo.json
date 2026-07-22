@@ -3,7 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_*", "WORKOS_*", "CONVEX_*", "ANTHROPIC_*"]
+    },
+    "@mtg-tutor/backend#build": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "env": ["CONVEX_*"]
     },
     "test": {
       "dependsOn": ["^build"]
