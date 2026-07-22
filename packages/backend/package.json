@@ -4,6 +4,17 @@
   "description": "Convex backend: set ingestion, draft sessions, coaching stream",
   "private": true,
   "type": "module",
+  "main": "./convex/_generated/api.js",
+  "types": "./convex/_generated/api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./convex/_generated/api.d.ts",
+      "default": "./convex/_generated/api.js"
+    },
+    "./dataModel": {
+      "types": "./convex/_generated/dataModel.d.ts"
+    }
+  },
   "scripts": {
     "dev": "convex dev",
     "build": "node scripts/codegen.mjs",
