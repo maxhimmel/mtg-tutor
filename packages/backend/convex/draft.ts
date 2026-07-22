@@ -41,7 +41,7 @@ async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
   }
 
   const engine = replayDraft(toSetData(setDoc), session.seed, session.pickedNames);
-  return { session, engine };
+  return { session, engine, setDoc };
 }
 
 const boardView = (engine: DraftEngine) => ({
@@ -140,7 +140,7 @@ export const pick = mutation({
 export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
 
     const mistakes = engine.history
       .filter(
@@ -162,6 +162,10 @@ export const results = query({
       mistakes,
       status: session.status,
       saved: session.saved,
+      // Without 17Lands data every card scores off its rarity baseline, so a
+      // pick can rarely be "wrong" and the score is close to meaningless.
+      // Surfaced so the UI can say that rather than imply a perfect draft.
+      ratedCardCount: setDoc.ratedCardCount,
     };
   },
 });

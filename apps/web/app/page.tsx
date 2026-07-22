@@ -1,0 +1,76 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@mtg-tutor/backend";
+import { useState } from "react";
+
+export default function Home() {
+  const sets = useQuery(api.sets.list);
+  const startDraft = useMutation(api.draft.start);
+  const router = useRouter();
+  const [starting, setStarting] = useState<string | null>(null);
+
+  async function start(setCode: string) {
+    setStarting(setCode);
+    try {
+      const sessionId = await startDraft({ setCode });
+      router.push(`/draft/${sessionId}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+      setStarting(null);
+    }
+  }
+
+  return (
+    <main className="shell">
+      <div className="topbar">
+        <div className="brand">
+          mtg<span>-</span>tutor
+        </div>
+        <div className="counter">practice drafting with 17Lands-based scoring</div>
+      </div>
+
+      <h1 style={{ fontSize: "1.3rem", margin: "0 0 1rem" }}>Pick a set to draft</h1>
+
+      {sets === undefined && <p className="muted">Loading sets…</p>}
+
+      {sets?.length === 0 && (
+        <div className="warn">
+          No sets ingested yet. Run{" "}
+          <code>
+            pnpm --filter @mtg-tutor/backend exec convex run sets:ingest
+            {' \'{"setCode":"fdn"}\''}
+          </code>{" "}
+          to pull one in.
+        </div>
+      )}
+
+      <div className="sets">
+        {sets?.map((s) => (
+          <button
+            key={`${s.code}-${s.format}`}
+            className="setCard"
+            onClick={() => start(s.code)}
+            disabled={starting !== null}
+          >
+            <span className="code">{s.code.toUpperCase()}</span>
+            <span className="meta">
+              {s.cardCount} cards · {s.ratedCardCount} with 17Lands data
+            </span>
+            <span className="meta">{s.format}</span>
+            {starting === s.code && <span className="meta">Starting…</span>}
+          </button>
+        ))}
+      </div>
+
+      {sets?.some((s) => s.ratedCardCount === 0) && (
+        <div className="warn">
+          Sets showing <strong>0 with 17Lands data</strong> will be scored on rarity
+          baselines alone — 17Lands stops serving win rates once a set leaves rotation.
+          Grades will be much less meaningful.
+        </div>
+      )}
+    </main>
+  );
+}
