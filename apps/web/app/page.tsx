@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
-import Link from "next/link";
 import { AuthButton } from "./components/AuthButton";
 
 export default function Home() {
@@ -24,9 +23,9 @@ export default function Home() {
         <p className="muted" style={{ marginBottom: "1rem" }}>
           Drafts are saved to your account, so sign in to start one.
         </p>
-        <Link className="authLink" href="/sign-in">
+        <a className="authLink" href="/sign-in">
           Sign in
-        </Link>
+        </a>
       </Unauthenticated>
 
       <Authenticated>
