@@ -69,8 +69,17 @@ backend URL.
 
 One-time setup, all of it in dashboards:
 
-1. **WorkOS** — create a Production environment. Copy its Client ID and API key.
-2. **Convex** — in the project's Settings, generate a **Production** deploy key.
+1. **AuthKit for production** — in the **Convex** dashboard, on the *production*
+   deployment (not dev): **Settings → Integrations → WorkOS Authentication →
+   create an AuthKit environment**. Copy the Client ID and API key it shows.
+
+   Not in the WorkOS dashboard. Convex provisions AuthKit environments into a
+   WorkOS team it manages, which your own WorkOS account cannot see — going to
+   dashboard.workos.com instead lands you in your personal team, whose default
+   Production environment has nothing to do with this project and cannot be
+   selected for it.
+2. **Convex** — on the same production deployment, generate a **Production**
+   deploy key.
 3. **Vercel** — new project from this repo, **Root Directory `apps/web`**. It
    picks up `vercel.json`, so leave the build command alone. Set:
 
