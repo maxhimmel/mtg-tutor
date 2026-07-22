@@ -113,12 +113,24 @@ Open / unfinished:
    deployment's own `WORKOS_CLIENT_ID`/`WORKOS_API_KEY`. That password grant
    only works if the WorkOS environment has password auth enabled; once the CLI
    device flow lands this should just read the CLI's stored token instead.
-7. **WorkOS env vars are duplicated between `packages/backend/.env.local` and
-   `apps/web/.env.local`.** `convex dev` provisions AuthKit and writes them next
-   to the Convex project, but Next only reads its own `.env.local`, so they are
-   mirrored by hand. `WORKOS_COOKIE_PASSWORD` exists only on the web side.
-   Anything that re-provisions has to update both.
-8. **Draft sessions created before auth have `userId: undefined` and are now
+7. ~~WorkOS env vars are duplicated between `packages/backend/.env.local` and
+   `apps/web/.env.local`~~ — fixed. `apps/web/loadBackendEnv.ts` folds the
+   backend's file in for anything Next has not already loaded, so `convex dev`
+   provisions once and both read it. `apps/web/.env.local` still wins on
+   conflict, and only `WORKOS_COOKIE_PASSWORD` has to live there (nothing
+   provisions it).
+8. **Env vars cross four boundaries and three of them fail silently** — Vercel
+   project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
+   all drop what they were not told about, and only Convex's deployment env
+   errors loudly. Three deploys broke on this. The countermeasures now in place:
+   `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
+   `globalEnv` rather than per-task (a task-level `env` *replaces* the general
+   list — verified with `turbo run build --dry=json`). Do not add a task-level
+   `env` key; put it in `globalEnv`.
+9. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
+   traces from the project directory by default, and under pnpm 652 of the 653
+   files in `next-server.js.nft.json` resolve outside `apps/web`.
+10. **Draft sessions created before auth have `userId: undefined` and are now
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.

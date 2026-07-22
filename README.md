@@ -93,6 +93,10 @@ One-time setup, all of it in dashboards:
 
    `NEXT_PUBLIC_CONVEX_URL` is set by the build. Do not set it by hand.
 
+   All of these are validated in `apps/web/app/env.ts`, so a missing one fails
+   the build and names itself. Omitting `NEXT_PUBLIC_WORKOS_REDIRECT_URI` used
+   to produce a green build and a 500 on every route.
+
 4. **After the first deploy**, on the *production* Convex deployment:
 
    ```bash
@@ -160,6 +164,18 @@ packages/
 **A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished 45-pick draft replays in 0.16ms, which is noise next to the round trip that asked for it.
 
 **Every session read and write goes through `loadBoard`.** It requires an identity and refuses sessions belonging to someone else, so ownership is enforced in one place rather than six. A new function that queries `draftSessions` directly is how that regresses.
+
+**Environment variables have exactly one boundary per app.** `apps/cli/src/core/env.ts`
+and `apps/web/app/env.ts` both use `@t3-oss/env-core` to validate the environment
+against a schema; nothing else reads `process.env` directly. This matters more than it
+looks: most of the variables the web app depends on are read *inside*
+`@workos-inc/authkit-nextjs`, not in our code, so nothing in this repo reveals that they
+are required and nothing fails at the point one goes missing. `apps/web/next.config.ts`
+imports the schema so validation runs at the start of every build.
+
+Turborepo runs builds in strict env mode, so anything a build reads must also be declared
+in `turbo.json` — in **`globalEnv`**, deliberately, because a task-level `env` key
+*replaces* rather than merges and has already silently dropped a variable once.
 
 **Core must stay pure.** `@mtg-tutor/core` has no dependencies and imports no `node:*` builtins, so the exact same code runs in Node, in a server runtime, and in the browser. `pnpm --filter @mtg-tutor/core test` enforces this — `scripts/check-purity.ts` fails the build on any non-relative import.
 

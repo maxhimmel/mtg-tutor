@@ -1,3 +1,5 @@
+import { env } from "../env";
+
 // HTTP actions (the coach stream) live on the .convex.site host, queries and
 // mutations on .convex.cloud -- same deployment, different origin.
 //
@@ -7,10 +9,6 @@
 // NEXT_PUBLIC_CONVEX_SITE_URL still points at the dev deployment after a
 // production build -- which would fail as a 404 on someone else's session
 // rather than as anything that looks like misconfiguration.
-//
-// Both reads are static so Next can inline them.
-const explicit = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-const cloud = process.env.NEXT_PUBLIC_CONVEX_URL;
-
 export const convexSiteUrl =
-  explicit || cloud?.replace(/\.convex\.cloud(\/|$)/, ".convex.site$1");
+  env.NEXT_PUBLIC_CONVEX_SITE_URL ??
+  env.NEXT_PUBLIC_CONVEX_URL.replace(/\.convex\.cloud(\/|$)/, ".convex.site$1");

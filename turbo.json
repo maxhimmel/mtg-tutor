@@ -1,15 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NEXT_PUBLIC_*", "WORKOS_*", "CONVEX_*", "ANTHROPIC_*"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_*", "WORKOS_*", "CONVEX_*", "ANTHROPIC_*"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "@mtg-tutor/backend#build": {
       "dependsOn": ["^build"],
-      "outputs": [],
-      "env": ["CONVEX_*"]
+      "outputs": []
     },
     "test": {
       "dependsOn": ["^build"]
