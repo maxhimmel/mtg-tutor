@@ -170,12 +170,23 @@ and `apps/web/app/env.ts` both use `@t3-oss/env-core` to validate the environmen
 against a schema; nothing else reads `process.env` directly. This matters more than it
 looks: most of the variables the web app depends on are read *inside*
 `@workos-inc/authkit-nextjs`, not in our code, so nothing in this repo reveals that they
-are required and nothing fails at the point one goes missing. `apps/web/next.config.ts`
-imports the schema so validation runs at the start of every build.
+are required and nothing fails at the point one goes missing. An unset
+`NEXT_PUBLIC_WORKOS_REDIRECT_URI` once produced a green build and a 500 on every route.
+`apps/web/next.config.ts` imports the schema so validation runs at the start of every
+build.
 
 Turborepo runs builds in strict env mode, so anything a build reads must also be declared
 in `turbo.json` — in **`globalEnv`**, deliberately, because a task-level `env` key
 *replaces* rather than merges and has already silently dropped a variable once.
+
+**Some variables are set in two places, unavoidably.** `convex dev` provisions the WorkOS
+credentials into `packages/backend/.env.local`; Convex's schema documents `localEnvVars`
+as writing "to the local `.env` file" with no way to target another directory, and Next
+only reads its own. So three values get copied into `apps/web/.env.local` once. In
+production it is manual by design — the same schema permits only `localEnvVars: false`
+for prod deployments: *"Prod deployments must configure environment variables directly in
+the deployment platform."* Turborepo adds none of these; the list matches Convex's own
+non-monorepo Next.js quickstart.
 
 **Core must stay pure.** `@mtg-tutor/core` has no dependencies and imports no `node:*` builtins, so the exact same code runs in Node, in a server runtime, and in the browser. `pnpm --filter @mtg-tutor/core test` enforces this — `scripts/check-purity.ts` fails the build on any non-relative import.
 

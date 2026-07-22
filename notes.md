@@ -113,12 +113,15 @@ Open / unfinished:
    deployment's own `WORKOS_CLIENT_ID`/`WORKOS_API_KEY`. That password grant
    only works if the WorkOS environment has password auth enabled; once the CLI
    device flow lands this should just read the CLI's stored token instead.
-7. ~~WorkOS env vars are duplicated between `packages/backend/.env.local` and
-   `apps/web/.env.local`~~ — fixed. `apps/web/loadBackendEnv.ts` folds the
-   backend's file in for anything Next has not already loaded, so `convex dev`
-   provisions once and both read it. `apps/web/.env.local` still wins on
-   conflict, and only `WORKOS_COOKIE_PASSWORD` has to live there (nothing
-   provisions it).
+7. **Three WorkOS values are copied by hand from `packages/backend/.env.local`
+   into `apps/web/.env.local`, and that is as good as it gets.** Convex's own
+   schema (`convex/schemas/convex.schema.json`) documents `localEnvVars` as
+   *"writes the given mapping to the local `.env` file"* with **no path option**,
+   so `convex dev` cannot populate the Next app's file. A `next.config.ts` that
+   read the backend's `.env.local` was tried and reverted: shipped code reaching
+   into a sibling package's gitignored file, to save three lines set once, is a
+   worse trade than the duplication. Re-provisioning AuthKit means updating both
+   files.
 8. **Env vars cross four boundaries and three of them fail silently** — Vercel
    project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
    all drop what they were not told about, and only Convex's deployment env
