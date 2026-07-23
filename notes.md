@@ -4,32 +4,54 @@
 
 2. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
-3. **17Lands `card_ratings` returns empty stats for rotated sets** (found 2026-07-21).
-   The endpoint still returns the full card list, but every entry has
-   `seen_count: 0`, `game_count: 0`, `ever_drawn_win_rate: null` — so ingestion
-   silently falls back to `RARITY_BASELINE` for every card and scoring is
-   rarity-only. Evidence from the old per-machine cache, by fetch date: BLB (Jul 2) and
-   MH3 (Jul 6) have real data; WOE (Jul 8), MKM, TDM, FDN, DSK all have zero. MSH
-   (a currently-running set) still returns data. So this looks like a 17Lands-side
-   change around Jul 7-8 that stopped serving historical aggregates for sets no
-   longer in rotation — not a date-range bug (tested no-params, the set's own
-   release window, and 2019->today; all return zeros).
-   Impact: practicing a *current* set still works; practicing older sets does not.
-   Worse than "no feedback" — the feedback actively misleads. A real FDN draft
-   scored **97.1/100 overall with 24% best-pick accuracy and zero missed picks
-   listed**, despite 34 of 45 picks not being the top card: rarity-only values
-   sit so close together that a wrong pick costs almost nothing, and the
-   missed-picks list needs win rates to explain a miss so it stays empty. The
-   web results view now says this outright instead of implying a good draft.
-   Options to explore: 17Lands' public data downloads, a different endpoint/param,
-   or caching a good snapshot per set before it rotates out.
+3. ~~**17Lands `card_ratings` returns empty stats for rotated sets**~~ — **fixed
+   2026-07-23. The original diagnosis was wrong.** Rotation had nothing to do with
+   it: we were calling a legacy endpoint with a legacy parameter name.
+
+   | | was | now |
+   |---|---|---|
+   | endpoint | `/card_ratings/data` | `/api/card_data` |
+   | format param | `format=` | `event_type=` |
+   | response | bare array | `{copyright, notes, data:[…]}` |
+
+   ```
+   /card_ratings/data?expansion=SOS&format=TradDraft  -> 341 cards,   0 rated
+   /api/card_data?expansion=SOS&event_type=TradDraft  -> 341 cards, 297 rated, 4.3M games
+   ```
+
+   Every set works, back to 2020 — STX returns 332/338 rated, ZNR 253, DSK 272,
+   FIN 348. The legacy endpoint only appeared to work for live queues because it
+   suppresses any card under `ever_drawn_game_count >= 500`, and the live slice is
+   small; DSK's 5 rated cards were n=526/579/585/546/506 against top-unrated
+   489/475/470/464.
+
+   Two things hid this for two days. `sets.ts` was already **half-migrated** — the
+   neighbouring `color_ratings` call used `event_type=` correctly, so the file
+   looked current. And both fetches ended in `.catch(() => [])`, turning a wrong
+   URL into "this set has no ratings" instead of an error. The ratings fetch now
+   throws, and `verify-data` fails when a set returns cards but zero rated cards.
+
+   Also confirmed inert: `start_date`/`end_date` do nothing on these endpoints
+   (MSH restricted to 2020 returns byte-identical totals to no-dates). The real
+   params, per 17Lands' own JS bundle, are `start`/`end`/`time_period`. That is why
+   the earlier "tested 2019->today, all zeros" check came back clean and misled us.
+
+   The impact statement stands and is why this mattered: a real FDN draft scored
+   **97.1/100 with 24% best-pick accuracy and zero missed picks**, because
+   rarity-only values sit too close together for a wrong pick to cost anything.
+
+   Bonus found on the working endpoint: `user_group=top|middle|bottom` segments
+   ratings by player skill, and the payload carries IWD, OH WR, GD WR, GND WR,
+   `play_rate` and `pool_count` — none of which the `Card` model reads yet.
 
 4. **17Lands and Scryfall disagree on some set codes.** `MSH` is a valid 17Lands
    expansion but not a Scryfall set code, so `sets:ingest` for it throws
    `No Scryfall cards found`. Any set where the two services differ is
-   undraftable — which is most of the sting of Issue #3, since a *currently
-   rotating* set is exactly the one with usable win rates. Wants a small
-   code-mapping table in `convex/sets.ts`.
+   undraftable. Wants a small code-mapping table in `convex/sets.ts`.
+   (This used to be described as "most of the sting of Issue #3, since a
+   currently rotating set is the only one with usable win rates" — no longer
+   true now that #3 is fixed and every set returns ratings. It is just an
+   isolated set-code gap.)
 
 # Ideas:
 

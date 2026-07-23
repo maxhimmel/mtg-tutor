@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import {
+  type CardDataResponse,
   type ColorRating,
   type ScryfallCard,
-  type SeventeenLandsCard,
   colorPairWinRates,
   mergeCards,
 } from "@mtg-tutor/core";
@@ -24,9 +24,6 @@ export interface IngestResult {
 const USER_AGENT =
   "mtg-tutor/0.1 (draft-trainer; https://github.com/maxhimmel/mtg-tutor)";
 const SCRYFALL_DELAY_MS = 90;
-
-// 17Lands returns empty stats without an explicit range; span its whole history.
-const RATINGS_START = "2019-01-01";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
@@ -69,25 +66,31 @@ async function fetchScryfallSet(setCode: string): Promise<ScryfallCard[]> {
 }
 
 // Pulls Scryfall + 17Lands and stores the merged set. Safe to re-run: see the
-// rotation guard in `store`.
+// unrated-snapshot guard in `store`.
 export const ingest = action({
   args: { setCode: v.string(), format: v.optional(v.string()) },
   handler: async (ctx, args): Promise<IngestResult> => {
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
     const exp = setCode.toUpperCase();
-    const today = new Date().toISOString().slice(0, 10);
-    const range = `start_date=${RATINGS_START}&end_date=${today}`;
 
+    // `/api/card_data` with `event_type` serves every set back to 2020. The
+    // legacy `/card_ratings/data?format=` this used to call still responds, but
+    // suppresses any card under 500 games-in-hand, so only currently-live queues
+    // came back rated and every other set silently scored on RARITY_BASELINE.
+    // Date params are inert on both endpoints (the real ones are start/end).
     const [scryfall, ratings, colorRatings] = await Promise.all([
       fetchScryfallSet(setCode),
-      getJson<SeventeenLandsCard[]>(
-        `https://www.17lands.com/card_ratings/data?expansion=${exp}&format=${format}&${range}`,
-      ).catch(() => [] as SeventeenLandsCard[]),
+      getJson<CardDataResponse>(
+        `https://www.17lands.com/api/card_data?expansion=${exp}&event_type=${format}`,
+      ).then((r) => r.data ?? []),
       getJson<ColorRating[]>(
         `https://www.17lands.com/color_ratings/data?expansion=${exp}&event_type=${format}` +
-          `&${range}&combine_splash=false`,
-      ).catch(() => [] as ColorRating[]),
+          `&combine_splash=false`,
+      ).catch((e) => {
+        console.warn(`color_ratings failed for ${exp}/${format}: ${String(e)}`);
+        return [] as ColorRating[];
+      }),
     ]);
 
     if (scryfall.length === 0) {
@@ -131,9 +134,10 @@ export const store = internalMutation({
       .withIndex("by_code_and_format", (q) => q.eq("code", args.code).eq("format", args.format))
       .unique();
 
-    // 17Lands stops serving aggregates once a set leaves rotation: the card list
-    // still comes back, but every win rate is null. Re-ingesting then would
-    // destroy a good snapshot, so keep whatever we captured while it was live.
+    // A set can come back with the full card list and every win rate null --
+    // a brand new set with no games yet, or an upstream hiccup. Re-ingesting
+    // then would destroy a good snapshot, so keep the one we already have.
+    // (This is not about rotation: /api/card_data serves every set back to 2020.)
     if (existing && rated === 0 && existing.ratedCardCount > 0) {
       return {
         setId: existing._id,
