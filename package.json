@@ -20,6 +20,7 @@
     "login": "pnpm --filter @mtg-tutor/cli login",
     "build-set-stats": "pnpm --filter @mtg-tutor/backend build-set-stats",
     "seed-set-stats": "pnpm --filter @mtg-tutor/backend seed-set-stats",
+    "ingest-sets": "pnpm --filter @mtg-tutor/backend ingest-sets",
     "check-availability": "pnpm --filter @mtg-tutor/backend check-availability",
     "validate-set-stats": "pnpm --filter @mtg-tutor/backend validate-set-stats"
   },

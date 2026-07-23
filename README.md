@@ -103,16 +103,22 @@ One-time setup, all of it in dashboards:
    the build and names itself. Omitting `NEXT_PUBLIC_WORKOS_REDIRECT_URI` used
    to produce a green build and a 500 on every route.
 
-4. **After the first deploy**, on the *production* Convex deployment:
+4. **After the first deploy**, on the *production* Convex deployment, set the
+   coaching key (coaching returns 503 until it is):
 
    ```bash
    pnpm --filter @mtg-tutor/backend exec convex env set ANTHROPIC_API_KEY <key> --prod
-   pnpm --filter @mtg-tutor/backend exec convex run sets:ingest '{"setCode":"fdn"}' --prod
    ```
 
-   Coaching returns 503 until the key is set, and the set list is empty until a
-   set is ingested — production has its own database, nothing carries over
-   from dev.
+The set list is populated by the build itself. After `convex deploy`, the build
+runs `seed-set-stats` then `ingest-sets`, which upload every committed stats
+artifact under `packages/backend/data/` into the deployment and rebuild the
+`sets` docs the app lists — production has its own database, nothing carries over
+from dev, so this runs on every deploy. The set list is therefore exactly the
+artifacts committed there (currently `sos`, `tdm`); commit a new
+`<set>.<Format>.json` and the next deploy picks it up. To seed a deployment by
+hand — e.g. before the first build — run `pnpm seed-set-stats` then
+`pnpm ingest-sets` (add `--prod` to target production).
 
 The redirect URI, homepage URL, and CORS origins are registered with WorkOS
 automatically from the `prod` block in `packages/backend/convex.json`, which
