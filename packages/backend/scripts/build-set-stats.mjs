@@ -3,6 +3,11 @@
 //
 //   node scripts/build-set-stats.mjs SOS TradDraft
 //   node scripts/build-set-stats.mjs SOS TradDraft --draft ~/d.csv --game ~/g.csv
+//   node scripts/build-set-stats.mjs SOS TradDraft --force   # skip availability gate
+//
+// Refuses a set whose full public dataset (draft, game, replay) is not published
+// for the format -- see lib/datasets.mjs. The gate is skipped when both datasets
+// it reads are given as local files, or with --force.
 //
 // The public datasets are the source 17Lands sanctions for outside use, and they
 // carry things no API exposes: real pack contents, per-game decklists, and every
@@ -18,23 +23,29 @@ import { createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkAvailability, availabilityNote } from "./lib/datasets.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const UA = "mtg-tutor/0.1 (draft-trainer)";
 const log = (...a) => console.error(...a);
 
+const BOOLEAN_FLAGS = new Set(["force"]);
 const argv = process.argv.slice(2);
 const flags = {};
 const positional = [];
 for (let i = 0; i < argv.length; i++) {
-  if (argv[i].startsWith("--")) flags[argv[i].slice(2)] = argv[++i];
-  else positional.push(argv[i]);
+  if (argv[i].startsWith("--")) {
+    const name = argv[i].slice(2);
+    flags[name] = BOOLEAN_FLAGS.has(name) ? true : argv[++i];
+  } else positional.push(argv[i]);
 }
 const flag = (name) => flags[name];
 const setCode = (positional[0] ?? "").toLowerCase();
 const format = positional[1] ?? "PremierDraft";
 if (!setCode) {
-  console.error("usage: build-set-stats.mjs <setCode> <format> [--draft path] [--game path] [--out path]");
+  console.error(
+    "usage: build-set-stats.mjs <setCode> <format> [--draft path] [--game path] [--out path] [--force]",
+  );
   process.exit(1);
 }
 
@@ -333,6 +344,17 @@ function packComposition(shapes, packs) {
 }
 
 log(`building ${setCode.toUpperCase()} / ${format}`);
+
+// Availability gate. We only ingest a set whose full public dataset exists for
+// the format. Skipped when both datasets we read are supplied locally, since a
+// local file is the caller asserting the data is in hand. `--force` overrides.
+const allLocal = flag("draft") && flag("game");
+if (!allLocal && !flag("force")) {
+  const report = await checkAvailability(setCode, format);
+  log(await availabilityNote(setCode, format, report));
+  if (!report.available) process.exit(1);
+}
+
 const t0 = Date.now();
 
 const slots = await slotIndex(setCode);
