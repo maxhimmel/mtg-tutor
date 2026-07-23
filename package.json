@@ -17,7 +17,9 @@
     "stats": "pnpm --filter @mtg-tutor/cli stats",
     "verify-data": "pnpm --filter @mtg-tutor/cli verify-data",
     "smoke-draft": "pnpm --filter @mtg-tutor/backend smoke-draft",
-    "login": "pnpm --filter @mtg-tutor/cli login"
+    "login": "pnpm --filter @mtg-tutor/cli login",
+    "build-set-stats": "pnpm --filter @mtg-tutor/backend build-set-stats",
+    "seed-set-stats": "pnpm --filter @mtg-tutor/backend seed-set-stats"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

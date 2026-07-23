@@ -70,6 +70,38 @@
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
 - The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
 
+2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
+   publishes three public datasets per set/format; the stats pipeline pulls only
+   **draft** and **game**. Replay is the third and by far the largest (431MB
+   gzipped for FIN, vs 90-206MB draft and 26-62MB game), and nothing we compute
+   today needs it, so downloading it would triple the pipeline's cost for zero
+   current gain.
+
+   It is one row per game — the same 63,987 games as the game dataset, joinable
+   1:1 — carrying turn-by-turn board state for 30 turns: cards drawn/discarded,
+   lands played, creatures cast, attacks and blocks, damage, mana spent, and
+   end-of-turn hand/board/life for both players.
+
+   What it would unlock, none of which is derivable from draft or game data:
+
+   - **A mulligan/keep trainer.** `candidate_hand_1..7` plus `opening_hand` and
+     `won` is a labelled dataset of real keep-or-mull decisions and their
+     outcomes. Draft tutors rarely teach this, and it is a distinct skill from
+     drafting — so it is a new practice surface, not an improvement to an
+     existing one, which is why it sits behind everything else.
+   - **Format speed.** Life totals and board state per turn say when games are
+     actually decided. That is real pick advice: in a fast format a six-drop is
+     worse than its raw GIH WR implies, and right now nothing in scoring knows
+     how fast a format is.
+   - **Curve and land-count truth.** End-of-turn lands in play vs winning,
+     measured rather than assumed. Relevant to Issue #1 above.
+   - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
+     *draft* tutor; per-turn play coaching is a different product, and the data
+     existing is not a reason to build it.
+
+   If we do pick this up: the pipeline already streams gzip and never keeps raw
+   files, so adding replay is a new derivation pass, not new infrastructure.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:

@@ -9,11 +9,12 @@ import {
   isBasicLand,
   mergeCards,
   normalizeName,
+  observedRarityBaselines,
 } from "@mtg-tutor/core";
 import { action, internalMutation, mutation, query } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
-import { card, packComposition } from "./validators.js";
+import { card, cardStats, packComposition } from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
 // return type would be inferred from a type that depends on itself. Declaring
@@ -157,7 +158,19 @@ export const ingest = action({
     // that drops promos, art cards and Alchemy rebalances the searches pull in,
     // and keeps the bonus sheet. Basics are the one omission (they are not
     // rated) and the Play Booster land slot needs them.
-    const cards = pickDraftable(mergeCards(scryfall, ratings), ratings);
+    const draftable = pickDraftable(mergeCards(scryfall, ratings), ratings);
+
+    // Measure what an unrated card of each rarity is worth in THIS set, from the
+    // set's own rated cards, and stamp it on every card. Without it, unrated
+    // cards are scored against a fixed guess that no format actually sits on --
+    // ~7 points low for SOS, and 41 of its 49 unrated cards are rares/mythics.
+    // See the note on Card.rarityBaseline for why it is denormalised.
+    const baselines = observedRarityBaselines(draftable);
+    const cards = draftable.map((c) => {
+      const rarityBaseline = baselines.get(c.rarity);
+      return rarityBaseline != null ? { ...c, rarityBaseline } : c;
+    });
+
     const pairs = [...colorPairWinRates(colorRatings)].map(([pair, winRate]) => ({
       pair,
       winRate,
@@ -265,6 +278,66 @@ export const storePackComposition = mutation({
       shapeCount: args.composition.shapes.length,
     };
   },
+});
+
+// Upserts the artifact produced by scripts/build-set-stats.mjs. Kept separate
+// from `ingest` because it cannot be derived from any API -- it comes from
+// streaming ~1.2GB of public dataset, which no server action should attempt.
+export const storeSetStats = mutation({
+  args: {
+    code: v.string(),
+    format: v.string(),
+    games: v.number(),
+    baseWinRate: v.number(),
+    cards: v.array(cardStats),
+    archetypes: v.array(
+      v.object({ name: v.string(), colors: v.string(), n: v.number(), wr: v.number() }),
+    ),
+    synergies: v.array(
+      v.object({
+        name: v.string(),
+        partners: v.array(
+          v.object({ partner: v.string(), lift: v.number(), n: v.number() }),
+        ),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const bytes = JSON.stringify(args).length;
+    if (bytes > MAX_SET_BYTES) {
+      throw new Error(
+        `Stats for ${args.code} serialize to ${bytes} bytes, over the ${MAX_SET_BYTES} guard. ` +
+          `Lower SYNERGY_PER_CARD or raise the sample floors in build-set-stats.mjs.`,
+      );
+    }
+    if (args.baseWinRate <= 0 || args.baseWinRate >= 1) {
+      throw new Error(`baseWinRate ${args.baseWinRate} is not a rate; recentering would corrupt scoring.`);
+    }
+
+    const code = args.code.toLowerCase();
+    const doc = { ...args, code, builtAt: new Date().toISOString() };
+    const existing = await ctx.db
+      .query("setStats")
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", args.format))
+      .unique();
+
+    const id = existing
+      ? (await ctx.db.replace(existing._id, doc), existing._id)
+      : await ctx.db.insert("setStats", doc);
+
+    return { id, cards: args.cards.length, bytes, baseWinRate: args.baseWinRate };
+  },
+});
+
+export const getStats = query({
+  args: { setCode: v.string(), format: v.optional(v.string()) },
+  handler: async (ctx, args) =>
+    await ctx.db
+      .query("setStats")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", args.setCode.toLowerCase()).eq("format", args.format ?? "PremierDraft"),
+      )
+      .unique(),
 });
 
 export const get = query({
