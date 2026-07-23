@@ -44,6 +44,15 @@ export interface SeventeenLandsCard {
   win_rate: number | null;
 }
 
+// `/api/card_data` wraps the card list in an envelope carrying 17Lands' own
+// copyright and usage notice. The legacy `/card_ratings/data` returned a bare
+// array; it still responds, but only ever with data for currently-live queues.
+export interface CardDataResponse {
+  copyright: string;
+  notes: string;
+  data: SeventeenLandsCard[];
+}
+
 export interface ColorRating {
   is_summary: boolean;
   color_name: string; // e.g. "Azorius (WU)"
