@@ -44,14 +44,24 @@
    ratings by player skill, and the payload carries IWD, OH WR, GD WR, GND WR,
    `play_rate` and `pool_count` — none of which the `Card` model reads yet.
 
-4. **17Lands and Scryfall disagree on some set codes.** `MSH` is a valid 17Lands
-   expansion but not a Scryfall set code, so `sets:ingest` for it throws
-   `No Scryfall cards found`. Any set where the two services differ is
-   undraftable. Wants a small code-mapping table in `convex/sets.ts`.
-   (This used to be described as "most of the sting of Issue #3, since a
-   currently rotating set is the only one with usable win rates" — no longer
-   true now that #3 is fixed and every set returns ratings. It is just an
-   isolated set-code gap.)
+4. ~~**17Lands and Scryfall disagree on some set codes.**~~ — **mostly fixed
+   2026-07-23, and again the diagnosis was wrong.** The blocker was not set
+   codes: it was the `is:booster` filter on the Scryfall query. Scryfall does not
+   set that flag for Play Booster sets, so `set:sos is:booster` 404s while
+   `set:sos` returns 271 cards. Dropping the filter makes SOS ingest.
+
+   Fixing it properly meant modelling what is actually in a booster. SOS packs
+   draw from three sets — `sos` (271) + `soa` Mystical Archive (65) + `spg`
+   Special Guests (10) = the 346 cards 17Lands tracks. `spg` is shared across
+   sets and is **not** a Scryfall child of `sos`, so no parent/child mapping
+   finds it; ingestion searches the set plus everything Arena-legal released on
+   the set's release date, then keeps only what 17Lands lists (plus basics).
+   Verified: `sets:ingest` for SOS returns exactly 346 cards, 297 rated.
+
+   **No code-mapping table is needed.** `MSH` was the original example of "a
+   valid 17Lands expansion but not a Scryfall set code"; it ingests fine once
+   `is:booster` is gone — 339 cards, 285 rated. The two services never disagreed
+   about the code.
 
 # Ideas:
 

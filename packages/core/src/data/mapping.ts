@@ -72,6 +72,7 @@ export function mergeCards(
       loyalty: combat.loyalty,
       imageUrl: imageOf(sc),
       collectorNumber: sc.collector_number,
+      setCode: sc.set,
       gihWinRate: r?.ever_drawn_win_rate ?? undefined,
       gihGames: r?.ever_drawn_game_count ?? undefined,
       alsa: r?.avg_seen ?? undefined,

@@ -28,6 +28,7 @@ export interface ScryfallCard {
   card_faces?: ScryfallFace[];
   collector_number: string;
   booster: boolean;
+  set: string; // Scryfall set code; a bonus-sheet card's differs from the set drafted.
 }
 
 export interface SeventeenLandsCard {

@@ -39,9 +39,29 @@ export const card = v.object({
   alsa: v.optional(v.number()),
   avgPick: v.optional(v.number()),
   winRate: v.optional(v.number()),
+  setCode: v.optional(v.string()),
 });
 
 export type StoredCard = Infer<typeof card>;
+
+// Observed booster shapes for a set. Optional throughout: a set we have no
+// draft data for keeps the fixed PACK constants.
+export const packComposition = v.object({
+  size: v.number(),
+  shapes: v.array(
+    v.object({
+      slots: v.object({
+        common: v.optional(v.number()),
+        uncommon: v.optional(v.number()),
+        rare: v.optional(v.number()),
+        mythic: v.optional(v.number()),
+        bonus: v.optional(v.number()),
+        land: v.optional(v.number()),
+      }),
+      weight: v.number(),
+    }),
+  ),
+});
 
 // Compile-time guard: if the stored shape ever drifts from core's Card, this
 // stops type-checking rather than failing at runtime on a replayed draft.
