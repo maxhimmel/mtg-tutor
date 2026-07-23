@@ -6,9 +6,10 @@ const UA = "mtg-tutor/0.1 (draft-trainer)";
 // The three public datasets 17Lands publishes per (set, format).
 export const KINDS = ["draft", "game", "replay"];
 
-// What the stats pipeline actually reads. Replay is published but unused today
-// (see notes.md Ideas #2); it still counts toward availability below, because a
-// set that is missing any dataset is a set with incomplete public coverage.
+// What the stats pipeline actually reads, and therefore what gates ingestion: a
+// set is ingestable when draft and game exist. Replay is published but unused
+// today (see notes.md Ideas #2), so its absence does not block -- it is still
+// probed and reported, so the day we consume it we can see which sets have it.
 export const USED_KINDS = ["draft", "game"];
 
 export function datasetUrl(kind, setCode, format) {
@@ -18,12 +19,14 @@ export function datasetUrl(kind, setCode, format) {
   );
 }
 
-// HEAD each dataset -- no body downloaded -- so a set can be gated in well under
-// a second. A set is "available" only when every KIND exists for the format;
-// 17Lands serves 403/404 for a key it does not have, so `res.ok` is the signal.
-export async function checkAvailability(setCode, format, kinds = KINDS) {
+// HEAD every dataset -- no body downloaded -- so a set can be gated in well under
+// a second. 17Lands serves 403/404 for a key it does not have, so `res.ok` is
+// the signal. Availability is judged only on `required` (the datasets we read);
+// the rest are probed for reporting, so `optionalMissing` can flag e.g. a set
+// that has draft+game but no replay.
+export async function checkAvailability(setCode, format, required = USED_KINDS) {
   const results = await Promise.all(
-    kinds.map(async (kind) => {
+    KINDS.map(async (kind) => {
       const url = datasetUrl(kind, setCode, format);
       try {
         const res = await fetch(url, { method: "HEAD", headers: { "User-Agent": UA } });
@@ -33,10 +36,12 @@ export async function checkAvailability(setCode, format, kinds = KINDS) {
       }
     }),
   );
+  const isRequired = (r) => required.includes(r.kind);
   return {
-    available: results.every((r) => r.ok),
+    available: results.filter(isRequired).every((r) => r.ok),
     present: results.filter((r) => r.ok),
-    missing: results.filter((r) => !r.ok).map((r) => r.kind),
+    missing: results.filter((r) => !r.ok && isRequired(r)).map((r) => r.kind),
+    optionalMissing: results.filter((r) => !r.ok && !isRequired(r)).map((r) => r.kind),
     results,
   };
 }
@@ -62,13 +67,19 @@ const mb = (bytes) => `${(bytes / 1048576).toFixed(0)}MB`;
 // can print it directly.
 export async function availabilityNote(setCode, format, report) {
   const name = (await scryfallSetName(setCode)) ?? setCode.toUpperCase();
+  const id = `${name} (${setCode.toUpperCase()})`;
+  const plural = (kinds) => `dataset${kinds.length > 1 ? "s" : ""}`;
+
   if (report.available) {
     const sizes = report.present.map((r) => `${r.kind} ${mb(r.bytes)}`).join(", ");
-    return `${name} (${setCode.toUpperCase()}) is available for ${format}: ${sizes}`;
+    const note = report.optionalMissing?.length
+      ? ` (no ${report.optionalMissing.join(", ")} ${plural(report.optionalMissing)}, which we don't read yet)`
+      : "";
+    return `${id} is available for ${format}: ${sizes}${note}`;
   }
   return (
-    `${name} (${setCode.toUpperCase()}) isn't available for ${format} — ` +
-    `missing ${report.missing.join(", ")} dataset${report.missing.length > 1 ? "s" : ""}. ` +
-    `A set is only ingested when 17Lands publishes all of ${KINDS.join(", ")}.`
+    `${id} isn't available for ${format} — ` +
+    `missing ${report.missing.join(", ")} ${plural(report.missing)}. ` +
+    `A set is ingested when 17Lands publishes ${USED_KINDS.join(" and ")} for it.`
   );
 }

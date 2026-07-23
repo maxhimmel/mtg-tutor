@@ -5,9 +5,9 @@
 //   node scripts/build-set-stats.mjs SOS TradDraft --draft ~/d.csv --game ~/g.csv
 //   node scripts/build-set-stats.mjs SOS TradDraft --force   # skip availability gate
 //
-// Refuses a set whose full public dataset (draft, game, replay) is not published
-// for the format -- see lib/datasets.mjs. The gate is skipped when both datasets
-// it reads are given as local files, or with --force.
+// Refuses a set whose draft and game datasets are not both published for the
+// format -- see lib/datasets.mjs. The gate is skipped when both are given as
+// local files, or with --force.
 //
 // The public datasets are the source 17Lands sanctions for outside use, and they
 // carry things no API exposes: real pack contents, per-game decklists, and every
