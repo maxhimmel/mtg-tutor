@@ -1,8 +1,10 @@
 // Pure domain constants. No environment access, no I/O — everything here is
 // safe to import from the CLI, a Convex function, or the browser.
 
-// Draftable cards per pack (basic-land slot is replaced by an extra common so a
-// 3-pack draft yields the canonical 45 picks). Tunable per set later.
+// Fallback pack shape, for sets we have no observed draft data for: 15 cards,
+// no bonus sheet, no land slot, so a 3-pack draft is 45 picks. Sets that carry
+// a `packComposition` ignore all of this and deal their real shape instead --
+// modern Play Boosters are 14 cards and 42 picks. See makePack.
 export const PACK = {
   rareOrMythic: 1,
   uncommon: 3,

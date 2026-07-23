@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { card, draftSummary, reviewVerdict } from "./validators.js";
+import { card, draftSummary, packComposition, reviewVerdict } from "./validators.js";
 
 export default defineSchema({
   // One document per (set, format). A whole set of cards measures 126-164KB
@@ -16,6 +16,9 @@ export default defineSchema({
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
+    // Derived from 17Lands draft data, which ingestion cannot reach; written
+    // separately by `sets:storePackComposition`. Survives re-ingestion.
+    packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
 
   // A draft is fully determined by its seed plus the ordered names the human

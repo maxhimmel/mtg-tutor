@@ -4,7 +4,7 @@ An interactive CLI that helps you get better at drafting Magic: The Gathering. S
 
 ## Why
 
-Reading pick guides is passive. Improvement comes from **reps with objective feedback**. `mtg-tutor` gives you the reps (a full 45-pick draft), the objective feedback (each pick scored 0–100 vs the statistically best card still in the pack), the reasoning (why the better card was better — removal, win-rate gap, whether it wheels), and the long-term view (are your early picks strong but your late picks sloppy? do you commit to colors too slowly?).
+Reading pick guides is passive. Improvement comes from **reps with objective feedback**. `mtg-tutor` gives you the reps (a full draft — 42 picks for a modern Play Booster set), the objective feedback (each pick scored 0–100 vs the statistically best card still in the pack), the reasoning (why the better card was better — removal, win-rate gap, whether it wheels), and the long-term view (are your early picks strong but your late picks sloppy? do you commit to colors too slowly?).
 
 ## How it works
 
@@ -172,7 +172,7 @@ key and no set data — it authenticates with a WorkOS device flow (`mtg-tutor l
 drives the same Convex functions the web app does. A feature therefore cannot ship to one
 client and silently skip the other, which is the whole reason the CLI still exists.
 
-**A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished 45-pick draft replays in 0.16ms, which is noise next to the round trip that asked for it.
+**A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished draft replays in 0.16ms, which is noise next to the round trip that asked for it.
 
 **Every session read and write goes through `loadBoard`.** It requires an identity and refuses sessions belonging to someone else, so ownership is enforced in one place rather than six. A new function that queries `draftSessions` directly is how that regresses.
 
@@ -212,3 +212,16 @@ non-monorepo Next.js quickstart.
 4. Put anything UI-agnostic in `packages/core`, never the reverse — `core` must not import from an app.
 
 Scoring, bots, and the deck builder all share one `cardValue()` function (`core/scoring`), so tuning card evaluation is a single-file change.
+
+**Packs are dealt from observed shapes, not a formula.** A modern Play Booster has a wildcard slot, so a set has no fixed rarity mix — real SOS boosters span **66 distinct shapes** (5–9 commons, 0–3 rares) and every one of them contains a bonus-sheet card. `makePack` samples that observed distribution, so a Mystical Archive or Special Guest card shows up exactly as often as it does in the real format. Sets with no observed data fall back to the fixed 15-card `PACK` constants and stay playable.
+
+The shapes come from a 17Lands draft dataset, which ingestion cannot reach:
+
+```bash
+node packages/backend/scripts/extract-pack-composition.mjs <draft_data.csv> sos > comp.json
+# then hand it to sets:storePackComposition
+```
+
+**A set's card pool is bigger than the set.** Bonus sheets (Mystical Archive, `soa`) and Special Guests (`spg`) print into a set's boosters under their own set codes, so ingestion searches the set *plus everything Arena-legal released the same day* — Special Guests is shared across sets and is not a Scryfall child of any of them, so no mapping table can find it. **17Lands' card list then decides what stays**, which drops promos, art cards and Alchemy rebalances while keeping the bonus sheet. Basic lands are added back because they are not rated and the land slot needs them. For SOS this yields exactly 346 cards: 271 `sos` + 65 `soa` + 10 `spg`.
+
+Do not reintroduce `is:booster` to that Scryfall query. It is not set on Play Booster sets, so `set:sos is:booster` returns a 404 and made the set undraftable.

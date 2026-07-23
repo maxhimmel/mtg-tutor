@@ -1,6 +1,6 @@
 import type { Card, SetData } from "../model/card.js";
-import { DRAFT, PACK, packSize } from "../config.js";
-import { makePacks } from "./pack.js";
+import { DRAFT, PACK } from "../config.js";
+import { makePacks, packSizeFor } from "./pack.js";
 import { Bot } from "./bots.js";
 import { scorePick } from "../scoring/score.js";
 import { readSignals } from "../scoring/explain.js";
@@ -89,6 +89,6 @@ export class DraftEngine {
   }
 
   totalPicks(): number {
-    return PACK.packsPerDraft * packSize();
+    return PACK.packsPerDraft * packSizeFor(this.set);
   }
 }

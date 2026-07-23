@@ -9,5 +9,6 @@ export function toSetData(doc: Doc<"sets">): SetData {
     doc.code,
     doc.cards,
     new Map(doc.colorPairWinRates.map(({ pair, winRate }) => [pair, winRate])),
+    doc.packComposition,
   );
 }

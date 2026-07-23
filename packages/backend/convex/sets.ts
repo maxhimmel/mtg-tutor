@@ -1,15 +1,19 @@
 import { v } from "convex/values";
 import {
+  type Card,
   type CardDataResponse,
   type ColorRating,
   type ScryfallCard,
+  type SeventeenLandsCard,
   colorPairWinRates,
+  isBasicLand,
   mergeCards,
+  normalizeName,
 } from "@mtg-tutor/core";
-import { action, internalMutation, query } from "./_generated/server.js";
+import { action, internalMutation, mutation, query } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
-import { card } from "./validators.js";
+import { card, packComposition } from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
 // return type would be inferred from a type that depends on itself. Declaring
@@ -39,18 +43,18 @@ async function getJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-async function fetchScryfallSet(setCode: string): Promise<ScryfallCard[]> {
+async function scryfallSearch(query: string): Promise<ScryfallCard[]> {
   const out: ScryfallCard[] = [];
   let url: string | null =
-    `https://api.scryfall.com/cards/search?q=set%3A${encodeURIComponent(setCode)}` +
-    `+is%3Abooster&unique=cards&order=set`;
+    `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}` +
+    `&unique=prints&order=set`;
 
   while (url) {
     const res: Response = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
     });
     if (res.status === 404) return out;
-    if (!res.ok) throw new Error(`Scryfall ${res.status} for set ${setCode}`);
+    if (!res.ok) throw new Error(`Scryfall ${res.status} for query "${query}"`);
 
     const body = (await res.json()) as {
       data: ScryfallCard[];
@@ -62,6 +66,58 @@ async function fetchScryfallSet(setCode: string): Promise<ScryfallCard[]> {
     if (url) await sleep(SCRYFALL_DELAY_MS);
   }
 
+  return out;
+}
+
+// Every card that can appear in the set's boosters -- which is more than the set
+// itself. Modern boosters carry a bonus sheet (Mystical Archive) and Special
+// Guests, printed under their own set codes and released the same day. Those are
+// real picks: a bonus card appears in 100% of SOS packs.
+//
+// `is:booster` used to filter this and cannot: Scryfall does not flag it for
+// Play Booster sets, so `set:sos is:booster` 404s and the set was undraftable.
+// The caller narrows the result to 17Lands' manifest instead, which is the
+// authoritative list of what is actually in packs.
+async function fetchScryfallPool(setCode: string): Promise<ScryfallCard[]> {
+  const main = await scryfallSearch(`set:${setCode}`);
+  if (main.length === 0) return main;
+
+  const released = await getJson<{ released_at?: string }>(
+    `https://api.scryfall.com/sets/${encodeURIComponent(setCode)}`,
+  ).catch(() => ({ released_at: undefined }));
+  if (!released.released_at) return main;
+
+  await sleep(SCRYFALL_DELAY_MS);
+  // Bonus sheets ship on the set's release day, so this finds them without a
+  // per-set mapping table -- Special Guests is shared across sets and is not a
+  // Scryfall child of any of them.
+  const sameDay = await scryfallSearch(
+    `game:arena date=${released.released_at} -set:${setCode}`,
+  ).catch(() => [] as ScryfallCard[]);
+
+  return [...main, ...sameDay];
+}
+
+// Narrows a Scryfall pool to the cards 17Lands saw in packs, plus basic lands.
+// Also collapses reprints/variants to one card per name -- `unique=prints` is
+// deliberate (it is how a bonus-sheet printing keeps its own rarity) but it
+// returns showcase and borderless versions of the same card too. The first
+// print wins, and the main set is searched first, so a card appearing in both
+// the set and a bonus sheet keeps its main-set rarity.
+function pickDraftable(cards: Card[], ratings: SeventeenLandsCard[]): Card[] {
+  const manifest = new Set(ratings.map((r) => normalizeName(r.name)));
+  const seen = new Set<string>();
+  const out: Card[] = [];
+
+  for (const c of cards) {
+    const key = normalizeName(c.name);
+    if (seen.has(key)) continue;
+    // With no ratings at all we cannot tell draftable from promo, so keep
+    // everything rather than ingest an empty set.
+    if (manifest.size > 0 && !manifest.has(key) && !isBasicLand(c)) continue;
+    seen.add(key);
+    out.push(c);
+  }
   return out;
 }
 
@@ -80,7 +136,7 @@ export const ingest = action({
     // came back rated and every other set silently scored on RARITY_BASELINE.
     // Date params are inert on both endpoints (the real ones are start/end).
     const [scryfall, ratings, colorRatings] = await Promise.all([
-      fetchScryfallSet(setCode),
+      fetchScryfallPool(setCode),
       getJson<CardDataResponse>(
         `https://www.17lands.com/api/card_data?expansion=${exp}&event_type=${format}`,
       ).then((r) => r.data ?? []),
@@ -97,7 +153,11 @@ export const ingest = action({
       throw new Error(`No Scryfall cards found for set "${setCode}". Check the set code.`);
     }
 
-    const cards = mergeCards(scryfall, ratings);
+    // 17Lands lists exactly what appears in packs, so it decides the pool --
+    // that drops promos, art cards and Alchemy rebalances the searches pull in,
+    // and keeps the bonus sheet. Basics are the one omission (they are not
+    // rated) and the Play Booster land slot needs them.
+    const cards = pickDraftable(mergeCards(scryfall, ratings), ratings);
     const pairs = [...colorPairWinRates(colorRatings)].map(([pair, winRate]) => ({
       pair,
       winRate,
@@ -154,6 +214,9 @@ export const store = internalMutation({
       colorPairWinRates: args.colorPairWinRates,
       ratedCardCount: rated,
       ingestedAt: new Date().toISOString(),
+      // `replace` writes the whole document, so carrying this forward is what
+      // stops a re-ingest from silently dropping the set back to 15-card packs.
+      packComposition: existing?.packComposition,
     };
 
     const setId = existing
@@ -165,6 +228,41 @@ export const store = internalMutation({
       cardCount: args.cards.length,
       ratedCardCount: rated,
       keptExistingSnapshot: false,
+    };
+  },
+});
+
+// Written from the 17Lands draft dataset by
+// `packages/backend/scripts/extract-pack-composition.mjs`, which ingestion has
+// no way to reach -- the shapes come from observing real boosters, not from any
+// API. Kept separate so re-ingesting a set never has to redo it.
+export const storePackComposition = mutation({
+  args: {
+    code: v.string(),
+    format: v.string(),
+    composition: packComposition,
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("sets")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", args.code.toLowerCase()).eq("format", args.format),
+      )
+      .unique();
+    if (!existing) {
+      throw new Error(
+        `No stored set "${args.code}" (${args.format}). Run sets:ingest for it first.`,
+      );
+    }
+
+    const total = args.composition.shapes.reduce((sum, s) => sum + s.weight, 0);
+    if (total <= 0) throw new Error("Pack composition has no weight; nothing to sample.");
+
+    await ctx.db.patch(existing._id, { packComposition: args.composition });
+    return {
+      setId: existing._id,
+      packSize: args.composition.size,
+      shapeCount: args.composition.shapes.length,
     };
   },
 });
