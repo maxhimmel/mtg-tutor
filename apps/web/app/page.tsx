@@ -41,10 +41,10 @@ function SetPicker() {
   const router = useRouter();
   const [starting, setStarting] = useState<string | null>(null);
 
-  async function start(setCode: string) {
+  async function start(setCode: string, format: string) {
     setStarting(setCode);
     try {
-      const sessionId = await startDraft({ setCode });
+      const sessionId = await startDraft({ setCode, format });
       router.push(`/draft/${sessionId}`);
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
@@ -74,7 +74,7 @@ function SetPicker() {
           <button
             key={`${s.code}-${s.format}`}
             className="setCard"
-            onClick={() => start(s.code)}
+            onClick={() => start(s.code, s.format)}
             disabled={starting !== null}
           >
             <span className="code">{s.code.toUpperCase()}</span>
