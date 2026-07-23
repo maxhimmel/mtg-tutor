@@ -213,3 +213,62 @@ Open / unfinished:
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
+
+# Own the draft data (done 2026-07-23, merged to main, NOT pushed/deployed):
+
+Six phases landed on `main` (umbrella `own-draft-data`, `--no-ff`, branches
+deleted). The app now scores on statistics we derive ourselves from the 17Lands
+**public datasets** (the sanctioned source), deals boosters that match how sets
+really open (bonus sheets + land slot + observed shapes), and makes **no 17Lands
+API call at runtime** — the API survives only as a testing oracle
+(`pnpm validate-set-stats`). SOS and TDM ship with committed stats artifacts,
+validated vs the API at Spearman 0.92–0.93. Details live in the
+`set-stats-pipeline`, `play-booster-pack-model`, and `17lands-data-sources`
+auto-memories. Issues #3 and #4 above were fixed here (both were misdiagnosed).
+
+## Un-actioned: production deploy
+
+`main` is merged but **not pushed and prod is not seeded**. Vercel's build runs
+`convex deploy`, so a push ships schema+functions to prod Convex — but prod has
+its own DB: the `setStats` table is empty and `sets:ingest` now *requires* seeded
+stats. After pushing, on prod:
+
+```
+cd packages/backend && node scripts/seed-set-stats.mjs --prod
+pnpm --filter @mtg-tutor/backend exec convex run sets:ingest '{"setCode":"sos","format":"TradDraft"}' --prod
+# repeat for tdm
+```
+
+Any set already on prod (e.g. `fdn`) stays listed on old data until its stats are
+built+seeded. The deploy is non-breaking: a schema-validation failure fails the
+Vercel build and keeps the old site up.
+
+## Follow-up roadmap (compressed; pick per future session)
+
+Ordered by value × readiness. Each is a candidate feature branch.
+
+1. **`archetype-aware-scoring`** — consume the archetype splits + synergies we
+   now own (in `setStats`, read by nothing yet) so `cardValue`/scoring rates a
+   card by how good it is *in your colours*, and surface the metrics we compute
+   but never show (trap warnings from `maindeckRate`, synergy hints, archetype
+   fit in explanations). **Fixes Issue #2.** Highest value; data is validated and
+   live. `cardValue` (`core/scoring/value.ts`) is the single tuning point.
+2. **`deck-builder`** — fix **Issue #1** (Evolving Wilds / multi-colour lands
+   miscounted vs the 17-land target) and replace hardcoded 17-land/23-spell with
+   real winning-deck land counts & curves from the data. `core/draft/deck.ts`.
+   Small, self-contained.
+3. **`bulk-ingestion`** — a loop over the availability gate + build + seed +
+   ingest so the app ships with real data for a dozen sets, not two. Building
+   blocks (gate, validate) exist. This is also when a pre-existing stale prod set
+   gets rebuilt.
+4. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
+   data (needs a new draft-data pass) instead of greedy `cardValue` + colour
+   bias, so signals/wheeling feel like a real pod. `core/draft/bots.ts`.
+5. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
+   mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
+   This is what would re-tighten the availability gate to require replay
+   (`USED_KINDS` in `scripts/lib/datasets.mjs`).
+
+Separate track: the **review features** already in "Deferred" above (alternate
+draft lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) —
+unrelated to the data work.
