@@ -41,18 +41,33 @@ function checkFields(label: string, obj: Record<string, unknown>, expected: stri
 }
 
 async function verify17Lands() {
-  const url = `https://www.17lands.com/card_ratings/data?expansion=${SET.toUpperCase()}&format=PremierDraft`;
+  const url = `https://www.17lands.com/api/card_data?expansion=${SET.toUpperCase()}&event_type=PremierDraft`;
   console.log(`\n── 17Lands ──\nGET ${url}`);
   const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
   console.log(`   status: ${res.status} ${res.statusText}`);
   if (!res.ok) throw new Error(`17Lands request failed: ${res.status}`);
-  const data = (await res.json()) as Record<string, unknown>[];
+  const body = (await res.json()) as { data?: Record<string, unknown>[] };
+  if (!Array.isArray(body.data)) {
+    console.error(`   ❌ expected an envelope with a "data" array, got: ${Object.keys(body)}`);
+    return;
+  }
+  const data = body.data;
   console.log(`   cards returned: ${data.length}`);
   if (!data.length) {
     console.error(`   ⚠️  empty payload — set "${SET}" may have no 17Lands data`);
     return;
   }
-  const withData = data.find((c) => (c.ever_drawn_game_count as number) > 0) ?? data[0];
+
+  // The whole point of this check: the legacy endpoint still answers, but with
+  // every win rate null. A card list alone does not mean the ratings arrived.
+  const rated = data.filter((c) => c.ever_drawn_win_rate != null);
+  if (!rated.length) {
+    console.error(`   ❌ ${data.length} cards but 0 rated — ratings are not coming through`);
+    return;
+  }
+  console.log(`   ✅ rated cards: ${rated.length}/${data.length}`);
+
+  const withData = rated[0];
   checkFields("17Lands card", withData, EXPECTED_17LANDS);
   console.log(
     `   e.g. ${withData.name}: GIH WR=${withData.ever_drawn_win_rate} ALSA=${withData.avg_seen} n=${withData.ever_drawn_game_count} rarity=${withData.rarity} color=${withData.color}`,

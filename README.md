@@ -4,11 +4,11 @@ An interactive CLI that helps you get better at drafting Magic: The Gathering. S
 
 ## Why
 
-Reading pick guides is passive. Improvement comes from **reps with objective feedback**. `mtg-tutor` gives you the reps (a full 45-pick draft), the objective feedback (each pick scored 0–100 vs the statistically best card still in the pack), the reasoning (why the better card was better — removal, win-rate gap, whether it wheels), and the long-term view (are your early picks strong but your late picks sloppy? do you commit to colors too slowly?).
+Reading pick guides is passive. Improvement comes from **reps with objective feedback**. `mtg-tutor` gives you the reps (a full draft — 42 picks for a modern Play Booster set), the objective feedback (each pick scored 0–100 vs the statistically best card still in the pack), the reasoning (why the better card was better — removal, win-rate gap, whether it wheels), and the long-term view (are your early picks strong but your late picks sloppy? do you commit to colors too slowly?).
 
 ## How it works
 
-- **Ground truth = 17Lands.** Card quality comes from `ever_drawn_win_rate` (GIH WR) and `avg_seen` (ALSA), pulled live per set. Cards without enough data fall back to a rarity-based baseline.
+- **Ground truth = our own data, derived from 17Lands' public datasets.** Card quality comes from GIH WR and ALSA that we compute ourselves from the [public draft/game datasets](https://www.17lands.com/public_datasets) — the source 17Lands sanctions for outside use — not from their live API. Cards without enough data fall back to a per-rarity baseline measured from the same set. The live API is kept only as a testing oracle (`pnpm validate-set-stats`), never a runtime dependency.
 - **Card pool = Scryfall.** The set's cards, types, mana costs, and rarities come from Scryfall; packs are generated from the rarity pools (1 rare/mythic, 3 uncommons, 11 commons per 15-card pack).
 - **Bots draft against you.** Each of the 7 bots commits to colors as it picks, so signals flow and packs wheel realistically.
 - **Everything lives in Convex.** Set data is ingested once per set and shared across devices; drafts are stored against your account. The CLI and the web app are peer clients of the same backend — draft in the terminal, review it in the browser with card art.
@@ -52,7 +52,7 @@ mtg-tutor stats
 
 During a draft, arrow-key through the pack (cards are pre-sorted by win rate with hints), press Enter to pick, and read the grade + reasoning after each pick. At the end you get an overall score, best-pick accuracy, a suggested 40-card deck, and your biggest missed picks — then choose whether to save the draft.
 
-> **Note on set coverage:** scoring quality depends on how much 17Lands Premier Draft data a set has. Recent, heavily-played sets score best. 17Lands stops serving win rates once a set leaves rotation, and a set with none is scored on rarity baselines alone — which makes grades close to meaningless. Both clients say so rather than implying a good draft.
+> **Note on set coverage:** scoring quality depends on how much data a set has in the 17Lands public datasets. Recent, heavily-played sets score best. A set we haven't built stats for is scored on rarity baselines alone — which makes grades close to meaningless — and both clients say so rather than implying a good draft. (The datasets go back years, so this is a matter of which sets we've ingested, not of sets "aging out.")
 
 ## Development
 
@@ -161,7 +161,7 @@ packages/
   backend/                     @mtg-tutor/backend -- Convex: the shared session store
     convex/
       schema.ts                sets, draftSessions, reviewVerdicts
-      sets.ts                  Scryfall + 17Lands ingestion
+      sets.ts                  Scryfall + our-stats ingestion; setStats store
       draft.ts                 start / state / pick / results / save
       http.ts                  the streaming coach endpoint
       auth.config.ts           validates WorkOS RS256 JWTs
@@ -172,7 +172,7 @@ key and no set data — it authenticates with a WorkOS device flow (`mtg-tutor l
 drives the same Convex functions the web app does. A feature therefore cannot ship to one
 client and silently skip the other, which is the whole reason the CLI still exists.
 
-**A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished 45-pick draft replays in 0.16ms, which is noise next to the round trip that asked for it.
+**A draft session is `{setCode, format, seed, pickedNames[]}` and nothing else.** No board state is stored; every read replays the draft from the seed. A finished draft replays in 0.16ms, which is noise next to the round trip that asked for it.
 
 **Every session read and write goes through `loadBoard`.** It requires an identity and refuses sessions belonging to someone else, so ownership is enforced in one place rather than six. A new function that queries `draftSessions` directly is how that regresses.
 
@@ -212,3 +212,20 @@ non-monorepo Next.js quickstart.
 4. Put anything UI-agnostic in `packages/core`, never the reverse — `core` must not import from an app.
 
 Scoring, bots, and the deck builder all share one `cardValue()` function (`core/scoring`), so tuning card evaluation is a single-file change.
+
+**Packs are dealt from observed shapes, not a formula.** A modern Play Booster has a wildcard slot, so a set has no fixed rarity mix — real SOS boosters span **66 distinct shapes** (5–9 commons, 0–3 rares) and every one of them contains a bonus-sheet card. `makePack` samples that observed distribution, so a Mystical Archive or Special Guest card shows up exactly as often as it does in the real format. Sets with no observed data fall back to the fixed 15-card `PACK` constants and stay playable.
+
+The shapes, and all the win-rate data, come from the 17Lands public datasets. Adding a set is a four-step flow — availability check, build the stats artifact, seed it, then ingest the draftable set from Scryfall + those stats:
+
+```bash
+pnpm check-availability SOS TradDraft          # refuses sets without the datasets
+pnpm build-set-stats SOS TradDraft             # ~1.2GB of CSV -> ~260KB artifact
+pnpm seed-set-stats                            # upload committed artifacts to Convex
+pnpm --filter @mtg-tutor/backend exec convex run sets:ingest '{"setCode":"sos","format":"TradDraft"}'
+```
+
+`sets:ingest` reads the seeded stats, so it must run last. It makes no 17Lands API call.
+
+**A set's card pool is bigger than the set.** Bonus sheets (Mystical Archive, `soa`) and Special Guests (`spg`) print into a set's boosters under their own set codes, so ingestion searches the set *plus everything Arena-legal released the same day* — Special Guests is shared across sets and is not a Scryfall child of any of them, so no mapping table can find it. **Our stats' card list then decides what stays**, which drops promos, art cards and Alchemy rebalances while keeping the bonus sheet. Basic lands are added back because they are not rated and the land slot needs them. For SOS this yields exactly 346 cards: 271 `sos` + 65 `soa` + 10 `spg`.
+
+Do not reintroduce `is:booster` to that Scryfall query. It is not set on Play Booster sets, so `set:sos is:booster` returns a 404 and made the set undraftable.

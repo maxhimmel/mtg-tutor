@@ -4,32 +4,64 @@
 
 2. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
-3. **17Lands `card_ratings` returns empty stats for rotated sets** (found 2026-07-21).
-   The endpoint still returns the full card list, but every entry has
-   `seen_count: 0`, `game_count: 0`, `ever_drawn_win_rate: null` — so ingestion
-   silently falls back to `RARITY_BASELINE` for every card and scoring is
-   rarity-only. Evidence from the old per-machine cache, by fetch date: BLB (Jul 2) and
-   MH3 (Jul 6) have real data; WOE (Jul 8), MKM, TDM, FDN, DSK all have zero. MSH
-   (a currently-running set) still returns data. So this looks like a 17Lands-side
-   change around Jul 7-8 that stopped serving historical aggregates for sets no
-   longer in rotation — not a date-range bug (tested no-params, the set's own
-   release window, and 2019->today; all return zeros).
-   Impact: practicing a *current* set still works; practicing older sets does not.
-   Worse than "no feedback" — the feedback actively misleads. A real FDN draft
-   scored **97.1/100 overall with 24% best-pick accuracy and zero missed picks
-   listed**, despite 34 of 45 picks not being the top card: rarity-only values
-   sit so close together that a wrong pick costs almost nothing, and the
-   missed-picks list needs win rates to explain a miss so it stays empty. The
-   web results view now says this outright instead of implying a good draft.
-   Options to explore: 17Lands' public data downloads, a different endpoint/param,
-   or caching a good snapshot per set before it rotates out.
+3. ~~**17Lands `card_ratings` returns empty stats for rotated sets**~~ — **fixed
+   2026-07-23. The original diagnosis was wrong.** Rotation had nothing to do with
+   it: we were calling a legacy endpoint with a legacy parameter name.
 
-4. **17Lands and Scryfall disagree on some set codes.** `MSH` is a valid 17Lands
-   expansion but not a Scryfall set code, so `sets:ingest` for it throws
-   `No Scryfall cards found`. Any set where the two services differ is
-   undraftable — which is most of the sting of Issue #3, since a *currently
-   rotating* set is exactly the one with usable win rates. Wants a small
-   code-mapping table in `convex/sets.ts`.
+   | | was | now |
+   |---|---|---|
+   | endpoint | `/card_ratings/data` | `/api/card_data` |
+   | format param | `format=` | `event_type=` |
+   | response | bare array | `{copyright, notes, data:[…]}` |
+
+   ```
+   /card_ratings/data?expansion=SOS&format=TradDraft  -> 341 cards,   0 rated
+   /api/card_data?expansion=SOS&event_type=TradDraft  -> 341 cards, 297 rated, 4.3M games
+   ```
+
+   Every set works, back to 2020 — STX returns 332/338 rated, ZNR 253, DSK 272,
+   FIN 348. The legacy endpoint only appeared to work for live queues because it
+   suppresses any card under `ever_drawn_game_count >= 500`, and the live slice is
+   small; DSK's 5 rated cards were n=526/579/585/546/506 against top-unrated
+   489/475/470/464.
+
+   Two things hid this for two days. `sets.ts` was already **half-migrated** — the
+   neighbouring `color_ratings` call used `event_type=` correctly, so the file
+   looked current. And both fetches ended in `.catch(() => [])`, turning a wrong
+   URL into "this set has no ratings" instead of an error. The ratings fetch now
+   throws, and `verify-data` fails when a set returns cards but zero rated cards.
+
+   Also confirmed inert: `start_date`/`end_date` do nothing on these endpoints
+   (MSH restricted to 2020 returns byte-identical totals to no-dates). The real
+   params, per 17Lands' own JS bundle, are `start`/`end`/`time_period`. That is why
+   the earlier "tested 2019->today, all zeros" check came back clean and misled us.
+
+   The impact statement stands and is why this mattered: a real FDN draft scored
+   **97.1/100 with 24% best-pick accuracy and zero missed picks**, because
+   rarity-only values sit too close together for a wrong pick to cost anything.
+
+   Bonus found on the working endpoint: `user_group=top|middle|bottom` segments
+   ratings by player skill, and the payload carries IWD, OH WR, GD WR, GND WR,
+   `play_rate` and `pool_count` — none of which the `Card` model reads yet.
+
+4. ~~**17Lands and Scryfall disagree on some set codes.**~~ — **mostly fixed
+   2026-07-23, and again the diagnosis was wrong.** The blocker was not set
+   codes: it was the `is:booster` filter on the Scryfall query. Scryfall does not
+   set that flag for Play Booster sets, so `set:sos is:booster` 404s while
+   `set:sos` returns 271 cards. Dropping the filter makes SOS ingest.
+
+   Fixing it properly meant modelling what is actually in a booster. SOS packs
+   draw from three sets — `sos` (271) + `soa` Mystical Archive (65) + `spg`
+   Special Guests (10) = the 346 cards 17Lands tracks. `spg` is shared across
+   sets and is **not** a Scryfall child of `sos`, so no parent/child mapping
+   finds it; ingestion searches the set plus everything Arena-legal released on
+   the set's release date, then keeps only what 17Lands lists (plus basics).
+   Verified: `sets:ingest` for SOS returns exactly 346 cards, 297 rated.
+
+   **No code-mapping table is needed.** `MSH` was the original example of "a
+   valid 17Lands expansion but not a Scryfall set code"; it ingests fine once
+   `is:booster` is gone — 339 cards, 285 rated. The two services never disagreed
+   about the code.
 
 # Ideas:
 
@@ -37,6 +69,38 @@
 
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
 - The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
+
+2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
+   publishes three public datasets per set/format; the stats pipeline pulls only
+   **draft** and **game**. Replay is the third and by far the largest (431MB
+   gzipped for FIN, vs 90-206MB draft and 26-62MB game), and nothing we compute
+   today needs it, so downloading it would triple the pipeline's cost for zero
+   current gain.
+
+   It is one row per game — the same 63,987 games as the game dataset, joinable
+   1:1 — carrying turn-by-turn board state for 30 turns: cards drawn/discarded,
+   lands played, creatures cast, attacks and blocks, damage, mana spent, and
+   end-of-turn hand/board/life for both players.
+
+   What it would unlock, none of which is derivable from draft or game data:
+
+   - **A mulligan/keep trainer.** `candidate_hand_1..7` plus `opening_hand` and
+     `won` is a labelled dataset of real keep-or-mull decisions and their
+     outcomes. Draft tutors rarely teach this, and it is a distinct skill from
+     drafting — so it is a new practice surface, not an improvement to an
+     existing one, which is why it sits behind everything else.
+   - **Format speed.** Life totals and board state per turn say when games are
+     actually decided. That is real pick advice: in a fast format a six-drop is
+     worse than its raw GIH WR implies, and right now nothing in scoring knows
+     how fast a format is.
+   - **Curve and land-count truth.** End-of-turn lands in play vs winning,
+     measured rather than assumed. Relevant to Issue #1 above.
+   - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
+     *draft* tutor; per-turn play coaching is a different product, and the data
+     existing is not a reason to build it.
+
+   If we do pick this up: the pipeline already streams gzip and never keeps raw
+   files, so adding replay is a new derivation pass, not new infrastructure.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 

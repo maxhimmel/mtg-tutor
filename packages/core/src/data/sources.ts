@@ -28,6 +28,7 @@ export interface ScryfallCard {
   card_faces?: ScryfallFace[];
   collector_number: string;
   booster: boolean;
+  set: string; // Scryfall set code; a bonus-sheet card's differs from the set drafted.
 }
 
 export interface SeventeenLandsCard {
@@ -42,6 +43,15 @@ export interface SeventeenLandsCard {
   ever_drawn_win_rate: number | null; // GIH WR
   ever_drawn_game_count: number | null;
   win_rate: number | null;
+}
+
+// `/api/card_data` wraps the card list in an envelope carrying 17Lands' own
+// copyright and usage notice. The legacy `/card_ratings/data` returned a bare
+// array; it still responds, but only ever with data for currently-live queues.
+export interface CardDataResponse {
+  copyright: string;
+  notes: string;
+  data: SeventeenLandsCard[];
 }
 
 export interface ColorRating {
