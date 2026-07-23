@@ -23,7 +23,8 @@
     "smoke-draft": "node scripts/smoke-draft.mjs",
     "build-set-stats": "node scripts/build-set-stats.mjs",
     "seed-set-stats": "node scripts/seed-set-stats.mjs",
-    "check-availability": "node scripts/check-set-availability.mjs"
+    "check-availability": "node scripts/check-set-availability.mjs",
+    "validate-set-stats": "node scripts/validate-set-stats.mjs"
   },
   "dependencies": {
     "@mtg-tutor/core": "workspace:*",

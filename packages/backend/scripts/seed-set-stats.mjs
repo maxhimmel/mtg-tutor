@@ -52,9 +52,11 @@ function run(fn, payload) {
 
 for (const file of files) {
   const artifact = JSON.parse(readFileSync(join(DATA, file), "utf8"));
-  const { setCode, format, packComposition, ...rest } = artifact;
+  const { setCode, format, ...rest } = artifact;
   const label = `${setCode}/${format}`;
 
+  // The whole artifact goes into setStats, pack composition included. `ingest`
+  // reads it from there, so there is no separate composition upload.
   process.stderr.write(`${label}: stats ... `);
   const stats = run("sets:storeSetStats", {
     code: setCode,
@@ -63,19 +65,11 @@ for (const file of files) {
     baseWinRate: rest.baseWinRate,
     cards: rest.cards,
     archetypes: rest.archetypes,
+    colorWinRates: rest.colorWinRates,
     synergies: rest.synergies,
+    packComposition: rest.packComposition,
   });
   process.stderr.write(stats.trim().replace(/\s+/g, " ") + "\n");
-
-  if (packComposition) {
-    process.stderr.write(`${label}: pack composition ... `);
-    const comp = run("sets:storePackComposition", {
-      code: setCode,
-      format,
-      composition: packComposition,
-    });
-    process.stderr.write(comp.trim().replace(/\s+/g, " ") + "\n");
-  }
 }
 
 console.error(`\nseeded ${files.length} artifact(s)${prod ? " into production" : ""}`);

@@ -1,5 +1,5 @@
 // Derives a set's own draft statistics from the 17Lands public datasets and
-// writes the artifact `sets:storeSetStats` + `sets:storePackComposition` expect.
+// writes the artifact `sets:storeSetStats` expects (pack composition included).
 //
 //   node scripts/build-set-stats.mjs SOS TradDraft
 //   node scripts/build-set-stats.mjs SOS TradDraft --draft ~/d.csv --game ~/g.csv
@@ -148,9 +148,15 @@ async function slotIndex(code) {
 
 // One pass yields every per-card rate 17Lands publishes, plus two things it does
 // not: the same rates split by deck archetype, and card-pair win-rate lift.
-async function readGameData(localPath) {
+//
+// Basic lands are skipped entirely. They are in every deck of their color, so
+// their per-card win rate is just the deck's, their archetype rows are noise
+// ("Plains wins 65% in UG"), and they show up as spurious synergy partners. They
+// are never scored, so dropping them here is pure signal -- and smaller.
+async function readGameData(localPath, isBasic) {
   const stats = new Map();
   const archetypes = new Map();
+  const colorRecord = new Map(); // main_colors -> {n, w}, the archetype's own win rate
   const pairN = new Map();
   const pairW = new Map();
   let header = null;
@@ -195,10 +201,12 @@ async function readGameData(localPath) {
     const arch = row[archI] || "";
     games++;
     wins += won;
+    if (arch) bump(colorRecord, arch, won);
 
     const inDeck = [];
     for (const [name, d, o, dr, tu] of cols) {
       if (!row[d] || row[d] === "0") continue;
+      if (isBasic(name)) continue;
       inDeck.push(name);
 
       const s =
@@ -237,7 +245,7 @@ async function readGameData(localPath) {
     }
   }
 
-  return { stats, archetypes, pairN, pairW, games, wins };
+  return { stats, archetypes, colorRecord, pairN, pairW, games, wins };
 }
 
 // ---------------------------------------------------------------- draft data
@@ -360,7 +368,8 @@ const t0 = Date.now();
 const slots = await slotIndex(setCode);
 log(`resolved ${slots.size} cards from Scryfall`);
 
-const game = await readGameData(flag("game"));
+const isBasic = (name) => slots.get(norm(name)) === "land";
+const game = await readGameData(flag("game"), isBasic);
 log(`game: ${game.games} games, ${game.stats.size} cards (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 
 const draft = await readDraftData(flag("draft"), slots);
@@ -426,6 +435,17 @@ for (const [key, e] of game.archetypes) {
   archetypes.push({ name: key.slice(0, i), colors: key.slice(i + 1), n: e.n, wr: round(e.w / e.n) });
 }
 
+// Each archetype's own win rate (independent of any card). Replaces the
+// /color_ratings API call the app used to make at ingest -- the last runtime
+// 17Lands dependency. Two-color pairs feed colorPairWinRates; the rest are
+// context for coaching.
+const colorWinRates = [];
+for (const [colors, e] of game.colorRecord) {
+  if (e.n < MIN_ARCHETYPE) continue;
+  colorWinRates.push({ colors, n: e.n, wr: round(e.w / e.n) });
+}
+colorWinRates.sort((a, b) => b.n - a.n);
+
 // Lift, not raw pair win rate: two strong cards win together because they are
 // strong, so subtract what each independently predicts and keep the remainder.
 const soloWr = new Map();
@@ -459,6 +479,7 @@ const artifact = {
   baseWinRate: round(baseWinRate),
   cards,
   archetypes,
+  colorWinRates,
   synergies,
   packComposition: packComposition(draft.shapes, draft.packs),
 };
