@@ -148,7 +148,12 @@ async function slotIndex(code) {
 
 // One pass yields every per-card rate 17Lands publishes, plus two things it does
 // not: the same rates split by deck archetype, and card-pair win-rate lift.
-async function readGameData(localPath) {
+//
+// Basic lands are skipped entirely. They are in every deck of their color, so
+// their per-card win rate is just the deck's, their archetype rows are noise
+// ("Plains wins 65% in UG"), and they show up as spurious synergy partners. They
+// are never scored, so dropping them here is pure signal -- and smaller.
+async function readGameData(localPath, isBasic) {
   const stats = new Map();
   const archetypes = new Map();
   const pairN = new Map();
@@ -199,6 +204,7 @@ async function readGameData(localPath) {
     const inDeck = [];
     for (const [name, d, o, dr, tu] of cols) {
       if (!row[d] || row[d] === "0") continue;
+      if (isBasic(name)) continue;
       inDeck.push(name);
 
       const s =
@@ -360,7 +366,8 @@ const t0 = Date.now();
 const slots = await slotIndex(setCode);
 log(`resolved ${slots.size} cards from Scryfall`);
 
-const game = await readGameData(flag("game"));
+const isBasic = (name) => slots.get(norm(name)) === "land";
+const game = await readGameData(flag("game"), isBasic);
 log(`game: ${game.games} games, ${game.stats.size} cards (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 
 const draft = await readDraftData(flag("draft"), slots);
