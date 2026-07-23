@@ -4,6 +4,8 @@ import { useCallback } from "react";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { AuthKitProvider, useAccessToken, useAuth } from "@workos-inc/authkit-nextjs/components";
 import { env } from "./env";
+import { SettingsProvider } from "./components/SettingsProvider";
+import { HoverPreviewProvider } from "./components/CardPreview";
 
 // No null-guard here any more. The URL is validated in ./env, so a missing one
 // fails the build naming the variable rather than rendering a warning box that
@@ -36,7 +38,9 @@ export function ConvexClientProvider({ children }: { children: React.ReactNode }
   return (
     <AuthKitProvider>
       <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
-        {children}
+        <SettingsProvider>
+          <HoverPreviewProvider>{children}</HoverPreviewProvider>
+        </SettingsProvider>
       </ConvexProviderWithAuth>
     </AuthKitProvider>
   );
