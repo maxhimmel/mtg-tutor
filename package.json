@@ -12,6 +12,8 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "dev": "pnpm --filter @mtg-tutor/cli dev",
+    "dev:web": "turbo run dev --filter=@mtg-tutor/backend --filter=@mtg-tutor/web",
+    "new-set": "pnpm --filter @mtg-tutor/backend new-set",
     "draft": "pnpm --filter @mtg-tutor/cli draft",
     "review": "pnpm --filter @mtg-tutor/cli review",
     "stats": "pnpm --filter @mtg-tutor/cli stats",

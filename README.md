@@ -57,12 +57,21 @@ During a draft, arrow-key through the pack (cards are pre-sorted by win rate wit
 ## Development
 
 ```bash
+pnpm dev:web           # start the web stack: convex dev + next dev together (turbo, one Ctrl-C stops both)
 pnpm test              # unit suites for every package (vitest, via turbo)
 pnpm build             # build every package in dependency order
 pnpm verify-data       # sanity-check the live 17Lands + Scryfall response shapes
 pnpm smoke-draft fdn   # headless full-draft smoke test, against Convex
 pnpm login             # sign in; the CLI needs a session to reach the backend
 ```
+
+`pnpm dev:web` fans out to the `dev` tasks of `@mtg-tutor/backend` (`convex dev`)
+and `@mtg-tutor/web` (`next dev`) as persistent, uncached turbo tasks, so both
+run in one terminal with prefixed, interleaved output. It assumes a first-time
+setup has already happened: `apps/web/.env.local` filled in from
+`apps/web/.env.example` (three of the values are written to
+`packages/backend/.env.local` by `convex dev` on its first run), and the dev
+deployment seeded once with `pnpm seed-set-stats && pnpm ingest-sets`.
 
 Never run `next build` while `next dev` is running — they share `apps/web/.next`, and the build overwrites the dev server's bundle with one compiled under different env. The symptom is a page stuck on "Loading sets" with no error anywhere. Use `pnpm --filter @mtg-tutor/web typecheck` instead.
 
@@ -224,13 +233,25 @@ Scoring, bots, and the deck builder all share one `cardValue()` function (`core/
 The shapes, and all the win-rate data, come from the 17Lands public datasets. Adding a set is a four-step flow — availability check, build the stats artifact, seed it, then ingest the draftable set from Scryfall + those stats:
 
 ```bash
-pnpm check-availability SOS TradDraft          # refuses sets without the datasets
-pnpm build-set-stats SOS TradDraft             # ~1.2GB of CSV -> ~260KB artifact
-pnpm seed-set-stats                            # upload committed artifacts to Convex
-pnpm --filter @mtg-tutor/backend exec convex run sets:ingest '{"setCode":"sos","format":"TradDraft"}'
+pnpm new-set SOS TradDraft                     # runs all four steps below, scoped to this set
 ```
 
-`sets:ingest` reads the seeded stats, so it must run last. It makes no 17Lands API call.
+`new-set` is a thin orchestrator over the four underlying scripts, which you can
+still run individually — to re-derive from local CSVs, target a different output,
+or seed/ingest an existing artifact on its own:
+
+```bash
+pnpm check-availability SOS TradDraft          # refuses sets without the datasets
+pnpm build-set-stats SOS TradDraft             # ~1.2GB of CSV -> ~260KB artifact
+pnpm seed-set-stats sos.TradDraft              # upload the committed artifact to Convex
+pnpm ingest-sets sos.TradDraft                 # rebuild the `sets` doc from Scryfall + stats
+```
+
+The last two steps take an optional `<set>.<Format>` filter (as above) or run
+over every committed artifact when omitted. `ingest-sets` reads the seeded stats,
+so it must run last; it makes no 17Lands API call. Add `--prod` to
+`pnpm new-set … --prod` (or to the individual seed/ingest steps) to target
+production instead of your dev deployment.
 
 **A set's card pool is bigger than the set.** Bonus sheets (Mystical Archive, `soa`) and Special Guests (`spg`) print into a set's boosters under their own set codes, so ingestion searches the set *plus everything Arena-legal released the same day* — Special Guests is shared across sets and is not a Scryfall child of any of them, so no mapping table can find it. **Our stats' card list then decides what stays**, which drops promos, art cards and Alchemy rebalances while keeping the bonus sheet. Basic lands are added back because they are not rated and the land slot needs them. For SOS this yields exactly 346 cards: 271 `sos` + 65 `soa` + 10 `spg`.
 
