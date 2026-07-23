@@ -82,6 +82,25 @@ export function mergeCards(
   });
 }
 
+// The population's own game win rate, which is not 50%: 17Lands' users beat the
+// field they are matched against, by ~9 points in SOS TradDraft. Useful context
+// for reporting -- scoring instead measures per-rarity baselines directly from
+// rated cards (see observedRarityBaselines), which handles the same skew without
+// assuming every rarity is skewed equally.
+//
+// Only non-summary rows are counted -- the summary rows aggregate the others,
+// and including them double-counts every game exactly once.
+export function overallWinRate(ratings: ColorRating[]): number | undefined {
+  let wins = 0;
+  let games = 0;
+  for (const cr of ratings) {
+    if (cr.is_summary) continue;
+    wins += cr.wins;
+    games += cr.games;
+  }
+  return games > 0 ? wins / games : undefined;
+}
+
 // Archetype win rates keyed like "WU", skipping the summary rows and anything
 // that isn't a real two-colour pair.
 export function colorPairWinRates(ratings: ColorRating[]): Map<string, number> {

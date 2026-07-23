@@ -9,6 +9,7 @@ import {
   isBasicLand,
   mergeCards,
   normalizeName,
+  observedRarityBaselines,
 } from "@mtg-tutor/core";
 import { action, internalMutation, mutation, query } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
@@ -157,7 +158,19 @@ export const ingest = action({
     // that drops promos, art cards and Alchemy rebalances the searches pull in,
     // and keeps the bonus sheet. Basics are the one omission (they are not
     // rated) and the Play Booster land slot needs them.
-    const cards = pickDraftable(mergeCards(scryfall, ratings), ratings);
+    const draftable = pickDraftable(mergeCards(scryfall, ratings), ratings);
+
+    // Measure what an unrated card of each rarity is worth in THIS set, from the
+    // set's own rated cards, and stamp it on every card. Without it, unrated
+    // cards are scored against a fixed guess that no format actually sits on --
+    // ~7 points low for SOS, and 41 of its 49 unrated cards are rares/mythics.
+    // See the note on Card.rarityBaseline for why it is denormalised.
+    const baselines = observedRarityBaselines(draftable);
+    const cards = draftable.map((c) => {
+      const rarityBaseline = baselines.get(c.rarity);
+      return rarityBaseline != null ? { ...c, rarityBaseline } : c;
+    });
+
     const pairs = [...colorPairWinRates(colorRatings)].map(([pair, winRate]) => ({
       pair,
       winRate,

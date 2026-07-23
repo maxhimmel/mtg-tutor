@@ -24,6 +24,14 @@ export interface Card {
   // 17Lands ratings (undefined when the set/card has no data).
   gihWinRate?: number; // ever_drawn_win_rate, 0-1
   gihGames?: number; // ever_drawn_game_count (sample size)
+  // What an unrated card of this rarity is worth in this set, measured from the
+  // set's own rated cards instead of guessed (see observedRarityBaselines).
+  // A per-rarity constant, denormalised onto every card so `cardValue(card)`
+  // needs no set context -- otherwise bots, the deck builder and scoring would
+  // all have to thread it through their signatures. Costs ~8KB on a 164KB set
+  // document. Absent for sets ingested before this, which fall back to
+  // RARITY_BASELINE and score exactly as they did.
+  rarityBaseline?: number;
   alsa?: number; // avg_seen — average last seen at
   avgPick?: number;
   winRate?: number;

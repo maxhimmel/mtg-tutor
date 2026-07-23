@@ -40,6 +40,7 @@ export const card = v.object({
   avgPick: v.optional(v.number()),
   winRate: v.optional(v.number()),
   setCode: v.optional(v.string()),
+  rarityBaseline: v.optional(v.number()),
 });
 
 export type StoredCard = Infer<typeof card>;
