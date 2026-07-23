@@ -68,6 +68,31 @@ export const packComposition = v.object({
 type AssertAssignable<A extends B, B> = [A, B];
 export type _CardShapeMatchesCore = AssertAssignable<StoredCard, Card>;
 
+// Per-card statistics derived from the 17Lands public datasets by
+// scripts/build-set-stats.mjs. Every rate carries its own sample size, because
+// the floors used when building are deliberately looser than 17Lands' own and a
+// consumer may want to be stricter.
+export const cardStats = v.object({
+  name: v.string(),
+  gihN: v.number(), // games the card was in hand at some point
+  gihWr: v.optional(v.number()),
+  ohN: v.number(), // opening hand
+  ohWr: v.optional(v.number()),
+  gdN: v.number(), // drawn later, not in opening hand
+  gdWr: v.optional(v.number()),
+  gndN: v.number(), // in deck, never drawn
+  gndWr: v.optional(v.number()),
+  iwd: v.optional(v.number()), // gihWr - gndWr
+  deckN: v.number(),
+  deckWr: v.optional(v.number()),
+  alsa: v.optional(v.number()),
+  ata: v.optional(v.number()),
+  seen: v.number(),
+  taken: v.number(),
+  maindeckRate: v.optional(v.number()),
+  trophyPickRate: v.optional(v.number()),
+});
+
 export const draftSummary = v.object({
   overallScore: v.number(),
   accuracy: v.number(),
