@@ -1,19 +1,22 @@
 import { v } from "convex/values";
 import {
   type Card,
-  type CardDataResponse,
-  type ColorRating,
   type ScryfallCard,
   type SeventeenLandsCard,
-  colorPairWinRates,
   isBasicLand,
   mergeCards,
   normalizeName,
   observedRarityBaselines,
 } from "@mtg-tutor/core";
-import { action, internalMutation, mutation, query } from "./_generated/server.js";
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
 import { card, cardStats, packComposition } from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
@@ -122,42 +125,58 @@ function pickDraftable(cards: Card[], ratings: SeventeenLandsCard[]): Card[] {
   return out;
 }
 
-// Pulls Scryfall + 17Lands and stores the merged set. Safe to re-run: see the
-// unrated-snapshot guard in `store`.
+// Our own stats, adapted to the shape `mergeCards` reads. This is where win
+// rates enter the set document: from setStats, which we derived from the
+// 17Lands public datasets -- not from the API. The API is a testing oracle only
+// (see scripts/validate-set-stats.mjs), never a runtime dependency.
+function statsAsRatings(stats: Doc<"setStats">): SeventeenLandsCard[] {
+  return stats.cards.map((c) => ({
+    name: c.name,
+    color: "",
+    rarity: "",
+    url: "",
+    avg_seen: c.alsa ?? null,
+    avg_pick: c.ata ?? null,
+    seen_count: c.seen ?? null,
+    pick_count: c.taken ?? null,
+    ever_drawn_win_rate: c.gihWr ?? null,
+    ever_drawn_game_count: c.gihN ?? null,
+    win_rate: c.deckWr ?? null,
+  }));
+}
+
+// Builds the draftable set document from Scryfall (card metadata + pool) and our
+// own setStats (win rates, baselines, colour-pair rates, pack composition). No
+// 17Lands API call. Requires stats to be built and seeded first --
+//   pnpm build-set-stats <SET> <FORMAT> && pnpm seed-set-stats
+// -- so the flow is availability -> build -> seed -> ingest.
 export const ingest = action({
   args: { setCode: v.string(), format: v.optional(v.string()) },
   handler: async (ctx, args): Promise<IngestResult> => {
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
-    const exp = setCode.toUpperCase();
 
-    // `/api/card_data` with `event_type` serves every set back to 2020. The
-    // legacy `/card_ratings/data?format=` this used to call still responds, but
-    // suppresses any card under 500 games-in-hand, so only currently-live queues
-    // came back rated and every other set silently scored on RARITY_BASELINE.
-    // Date params are inert on both endpoints (the real ones are start/end).
-    const [scryfall, ratings, colorRatings] = await Promise.all([
+    const [scryfall, stats] = await Promise.all([
       fetchScryfallPool(setCode),
-      getJson<CardDataResponse>(
-        `https://www.17lands.com/api/card_data?expansion=${exp}&event_type=${format}`,
-      ).then((r) => r.data ?? []),
-      getJson<ColorRating[]>(
-        `https://www.17lands.com/color_ratings/data?expansion=${exp}&event_type=${format}` +
-          `&combine_splash=false`,
-      ).catch((e) => {
-        console.warn(`color_ratings failed for ${exp}/${format}: ${String(e)}`);
-        return [] as ColorRating[];
-      }),
+      ctx.runQuery(internal.sets.readStats, { code: setCode, format }),
     ]);
 
     if (scryfall.length === 0) {
       throw new Error(`No Scryfall cards found for set "${setCode}". Check the set code.`);
     }
+    if (!stats) {
+      throw new Error(
+        `No stats for "${setCode}" (${format}). Build and seed them first: ` +
+          `pnpm build-set-stats ${setCode.toUpperCase()} ${format} && pnpm seed-set-stats`,
+      );
+    }
 
-    // 17Lands lists exactly what appears in packs, so it decides the pool --
-    // that drops promos, art cards and Alchemy rebalances the searches pull in,
-    // and keeps the bonus sheet. Basics are the one omission (they are not
-    // rated) and the Play Booster land slot needs them.
+    const ratings = statsAsRatings(stats);
+
+    // Our stats list exactly what appears in packs, so it decides the pool --
+    // that drops promos, art cards and Alchemy rebalances the Scryfall search
+    // pulls in, and keeps the bonus sheet. Basics are the one omission (they are
+    // not rated) and the Play Booster land slot needs them.
     const draftable = pickDraftable(mergeCards(scryfall, ratings), ratings);
 
     // Measure what an unrated card of each rarity is worth in THIS set, from the
@@ -171,18 +190,30 @@ export const ingest = action({
       return rarityBaseline != null ? { ...c, rarityBaseline } : c;
     });
 
-    const pairs = [...colorPairWinRates(colorRatings)].map(([pair, winRate]) => ({
-      pair,
-      winRate,
-    }));
+    // Two-colour archetype win rates, for describing guilds in the review.
+    const pairs = (stats.colorWinRates ?? [])
+      .filter((c) => /^[WUBRG]{2}$/.test(c.colors))
+      .map((c) => ({ pair: c.colors, winRate: c.wr }));
 
     return await ctx.runMutation(internal.sets.store, {
       code: setCode,
       format,
       cards,
       colorPairWinRates: pairs,
+      packComposition: stats.packComposition,
     });
   },
+});
+
+export const readStats = internalQuery({
+  args: { code: v.string(), format: v.string() },
+  handler: async (ctx, args) =>
+    await ctx.db
+      .query("setStats")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", args.code.toLowerCase()).eq("format", args.format),
+      )
+      .unique(),
 });
 
 export const store = internalMutation({
@@ -191,6 +222,7 @@ export const store = internalMutation({
     format: v.string(),
     cards: v.array(card),
     colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
+    packComposition: v.optional(packComposition),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args.cards).length;
@@ -227,9 +259,9 @@ export const store = internalMutation({
       colorPairWinRates: args.colorPairWinRates,
       ratedCardCount: rated,
       ingestedAt: new Date().toISOString(),
-      // `replace` writes the whole document, so carrying this forward is what
-      // stops a re-ingest from silently dropping the set back to 15-card packs.
-      packComposition: existing?.packComposition,
+      // Ingest passes this from setStats; fall back to any existing value so a
+      // bare re-run can't drop the set back to 15-card packs.
+      packComposition: args.packComposition ?? existing?.packComposition,
     };
 
     const setId = existing
@@ -245,43 +277,9 @@ export const store = internalMutation({
   },
 });
 
-// Written from the 17Lands draft dataset by
-// `packages/backend/scripts/extract-pack-composition.mjs`, which ingestion has
-// no way to reach -- the shapes come from observing real boosters, not from any
-// API. Kept separate so re-ingesting a set never has to redo it.
-export const storePackComposition = mutation({
-  args: {
-    code: v.string(),
-    format: v.string(),
-    composition: packComposition,
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("sets")
-      .withIndex("by_code_and_format", (q) =>
-        q.eq("code", args.code.toLowerCase()).eq("format", args.format),
-      )
-      .unique();
-    if (!existing) {
-      throw new Error(
-        `No stored set "${args.code}" (${args.format}). Run sets:ingest for it first.`,
-      );
-    }
-
-    const total = args.composition.shapes.reduce((sum, s) => sum + s.weight, 0);
-    if (total <= 0) throw new Error("Pack composition has no weight; nothing to sample.");
-
-    await ctx.db.patch(existing._id, { packComposition: args.composition });
-    return {
-      setId: existing._id,
-      packSize: args.composition.size,
-      shapeCount: args.composition.shapes.length,
-    };
-  },
-});
-
-// Upserts the artifact produced by scripts/build-set-stats.mjs. Kept separate
-// from `ingest` because it cannot be derived from any API -- it comes from
+// Upserts the artifact produced by scripts/build-set-stats.mjs -- the whole of a
+// set's derived stats, including its pack composition, which `ingest` then reads.
+// Separate from `ingest` because it cannot be derived from any API: it comes from
 // streaming ~1.2GB of public dataset, which no server action should attempt.
 export const storeSetStats = mutation({
   args: {
@@ -293,6 +291,9 @@ export const storeSetStats = mutation({
     archetypes: v.array(
       v.object({ name: v.string(), colors: v.string(), n: v.number(), wr: v.number() }),
     ),
+    colorWinRates: v.array(
+      v.object({ colors: v.string(), n: v.number(), wr: v.number() }),
+    ),
     synergies: v.array(
       v.object({
         name: v.string(),
@@ -301,6 +302,7 @@ export const storeSetStats = mutation({
         ),
       }),
     ),
+    packComposition: v.optional(packComposition),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args).length;

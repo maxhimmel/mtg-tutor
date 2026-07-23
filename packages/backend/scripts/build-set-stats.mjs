@@ -1,5 +1,5 @@
 // Derives a set's own draft statistics from the 17Lands public datasets and
-// writes the artifact `sets:storeSetStats` + `sets:storePackComposition` expect.
+// writes the artifact `sets:storeSetStats` expects (pack composition included).
 //
 //   node scripts/build-set-stats.mjs SOS TradDraft
 //   node scripts/build-set-stats.mjs SOS TradDraft --draft ~/d.csv --game ~/g.csv
@@ -156,6 +156,7 @@ async function slotIndex(code) {
 async function readGameData(localPath, isBasic) {
   const stats = new Map();
   const archetypes = new Map();
+  const colorRecord = new Map(); // main_colors -> {n, w}, the archetype's own win rate
   const pairN = new Map();
   const pairW = new Map();
   let header = null;
@@ -200,6 +201,7 @@ async function readGameData(localPath, isBasic) {
     const arch = row[archI] || "";
     games++;
     wins += won;
+    if (arch) bump(colorRecord, arch, won);
 
     const inDeck = [];
     for (const [name, d, o, dr, tu] of cols) {
@@ -243,7 +245,7 @@ async function readGameData(localPath, isBasic) {
     }
   }
 
-  return { stats, archetypes, pairN, pairW, games, wins };
+  return { stats, archetypes, colorRecord, pairN, pairW, games, wins };
 }
 
 // ---------------------------------------------------------------- draft data
@@ -433,6 +435,17 @@ for (const [key, e] of game.archetypes) {
   archetypes.push({ name: key.slice(0, i), colors: key.slice(i + 1), n: e.n, wr: round(e.w / e.n) });
 }
 
+// Each archetype's own win rate (independent of any card). Replaces the
+// /color_ratings API call the app used to make at ingest -- the last runtime
+// 17Lands dependency. Two-color pairs feed colorPairWinRates; the rest are
+// context for coaching.
+const colorWinRates = [];
+for (const [colors, e] of game.colorRecord) {
+  if (e.n < MIN_ARCHETYPE) continue;
+  colorWinRates.push({ colors, n: e.n, wr: round(e.w / e.n) });
+}
+colorWinRates.sort((a, b) => b.n - a.n);
+
 // Lift, not raw pair win rate: two strong cards win together because they are
 // strong, so subtract what each independently predicts and keep the remainder.
 const soloWr = new Map();
@@ -466,6 +479,7 @@ const artifact = {
   baseWinRate: round(baseWinRate),
   cards,
   archetypes,
+  colorWinRates,
   synergies,
   packComposition: packComposition(draft.shapes, draft.packs),
 };

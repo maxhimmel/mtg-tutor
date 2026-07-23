@@ -22,8 +22,8 @@ export default defineSchema({
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
-    // Derived from 17Lands draft data, which ingestion cannot reach; written
-    // separately by `sets:storePackComposition`. Survives re-ingestion.
+    // Copied from setStats by `ingest` -- the observed booster shapes, on the
+    // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
 
@@ -54,6 +54,14 @@ export default defineSchema({
         wr: v.number(),
       }),
     ),
+    // Each archetype's own win rate (no card dimension). `ingest` reads the
+    // two-color entries into the set's colorPairWinRates, replacing the
+    // /color_ratings API call -- the last runtime 17Lands dependency. Optional
+    // so the schema deploys over docs seeded before it existed; storeSetStats
+    // always writes it, so a re-seed fills it in.
+    colorWinRates: v.optional(
+      v.array(v.object({ colors: v.string(), n: v.number(), wr: v.number() })),
+    ),
     // Win-rate lift when two cards share a deck, best partners first.
     synergies: v.array(
       v.object({
@@ -63,6 +71,9 @@ export default defineSchema({
         ),
       }),
     ),
+    // The set's observed booster shapes, so `ingest` can put them on the set
+    // document without a second round trip. See buildSetData / makePack.
+    packComposition: v.optional(packComposition),
     builtAt: v.string(),
   }).index("by_code_and_format", ["code", "format"]),
 
