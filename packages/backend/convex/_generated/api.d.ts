@@ -12,6 +12,7 @@ import type * as anthropic from "../anthropic.js";
 import type * as auth from "../auth.js";
 import type * as draft from "../draft.js";
 import type * as http from "../http.js";
+import type * as llm from "../llm.js";
 import type * as review from "../review.js";
 import type * as sessions from "../sessions.js";
 import type * as setData from "../setData.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   draft: typeof draft;
   http: typeof http;
+  llm: typeof llm;
   review: typeof review;
   sessions: typeof sessions;
   setData: typeof setData;
