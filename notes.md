@@ -69,6 +69,8 @@
    If we do pick this up: the pipeline already streams gzip and never keeps raw
    files, so adding replay is a new derivation pass, not new infrastructure.
 
+3. What about a button on the side panel or something for the user to click to get a hint/make a suggestion/pick for them?
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:

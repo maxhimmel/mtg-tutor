@@ -111,7 +111,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
         <>
           <div
             ref={boxRef}
-            className="pointer-events-none fixed z-50 rounded-xl shadow-2xl transition-opacity"
+            className="popup-surface pointer-events-none fixed z-50 overflow-hidden p-1 transition-opacity"
             style={{
               left: pos?.left ?? -9999,
               top: pos?.top ?? -9999,
@@ -122,14 +122,14 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
             <img
               src={hover.card.imageUrl}
               alt={hover.card.name}
-              className="w-full rounded-xl"
+              className="w-full rounded-lg"
               draggable={false}
             />
           </div>
 
           {keywords.length > 0 && pos?.panelLeft != null && (
             <div
-              className="pointer-events-none fixed z-50 overflow-y-auto rounded-xl border border-base-300 bg-base-200 p-3 shadow-2xl"
+              className="popup-surface pointer-events-none fixed z-50 overflow-y-auto p-3"
               style={{
                 left: pos.panelLeft,
                 top: pos.top,
