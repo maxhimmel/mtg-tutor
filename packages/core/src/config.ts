@@ -20,6 +20,16 @@ export const DRAFT = {
   humanSeat: 0,
 };
 
+// The 40-card limited deck. 23/17 is the convention, not a measurement -- the
+// real per-set winning-deck curves are in the data we now own and are not read
+// yet. maxNonbasicLands caps how many drafted lands displace basics: a couple of
+// fixers help, a pile of taplands is how a deck stops casting its spells.
+export const DECK = {
+  size: 40,
+  spellCount: 23,
+  maxNonbasicLands: 3,
+};
+
 export const SCORING = {
   // A ~2% GIH WR gap to the best card costs ~15 points.
   winRateGapK: 750,

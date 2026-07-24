@@ -25,12 +25,14 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
               Suggested deck — {deck.colors.join("") || "splashy"}
             </h2>
             <p className="text-base-content/60">
-              {deck.spells.length} spells + {deck.lands} lands
+              {deck.spells.length} spells
+              {deck.nonbasicLands.length > 0 && ` + ${deck.nonbasicLands.length} lands you drafted`}{" "}
+              + {deck.basicLands} basics
             </p>
             <div className="grid gap-0.5">
               {/* Keyed by position, not name: drafting two copies of the same
                   card is normal, so names are not unique in a pool. */}
-              {deck.spells.map((c, i) => (
+              {[...deck.spells, ...deck.nonbasicLands].map((c, i) => (
                 <div
                   key={`${c.name}-${i}`}
                   className="flex justify-between gap-4 border-b border-base-300 py-1 text-sm"

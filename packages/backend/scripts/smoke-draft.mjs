@@ -88,7 +88,8 @@ console.log(`pool size: ${state.pool.length}`);
 console.log(`avg score taking the best each time: ${(scoreTotal / picks).toFixed(1)} (expect ~100)`);
 console.log(`distinct cards seen carrying art: ${withArt.size}`);
 console.log(`summary: ${JSON.stringify(results.summary)}`);
-console.log(`suggested deck: ${results.deck.colors.join("") || "splashy"}, ${results.deck.spells.length} spells + ${results.deck.lands} lands`);
+const { spells, nonbasicLands, basicLands } = results.deck;
+console.log(`suggested deck: ${results.deck.colors.join("") || "splashy"}, ${spells.length} spells + ${nonbasicLands.length} drafted lands + ${basicLands} basics = ${spells.length + nonbasicLands.length + basicLands}`);
 console.log(`\n${picks} round trips in ${elapsed}ms (${(elapsed / picks).toFixed(0)}ms per pick)`);
 
 // The whole session is {seed, pickedNames} -- prove a re-read replays identically.
