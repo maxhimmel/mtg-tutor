@@ -41,7 +41,7 @@ export async function runReview(
   let correct = 0;
 
   for (const pick of draft.picks) {
-    const decision = isDecisionPick(pick.pack, REVIEW.decisionPickMinCards);
+    const decision = isDecisionPick(pick.pack.length, REVIEW.decisionPickMinCards);
 
     // Trivial/forced picks flash by; only decision picks get a reveal (and, in
     // quiz mode, a guess prompt first).
@@ -99,7 +99,7 @@ async function runReport(
 
   const decisionIdx = draft.picks
     .map((pk, i) => ({ pk, i }))
-    .filter(({ pk }) => isDecisionPick(pk.pack, REVIEW.decisionPickMinCards));
+    .filter(({ pk }) => isDecisionPick(pk.pack.length, REVIEW.decisionPickMinCards));
 
   const verdicts = new Map<number, ReviewVerdict | undefined>();
   const spin = spinner();
@@ -112,7 +112,7 @@ async function runReport(
   spin.stop(`Analyzed ${decisionIdx.length} decision picks`);
 
   draft.picks.forEach((pick, i) => {
-    if (!isDecisionPick(pick.pack, REVIEW.decisionPickMinCards)) {
+    if (!isDecisionPick(pick.pack.length, REVIEW.decisionPickMinCards)) {
       renderTrivial(pick);
       return;
     }
