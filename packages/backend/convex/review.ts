@@ -7,11 +7,12 @@ import {
   summarizeDraft,
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
+import { z } from "zod";
 import { action, internalQuery, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions } from "./sessions.js";
 import { reviewVerdict } from "./validators.js";
-import { CoachUnavailableError, toolInput, text } from "./anthropic.js";
+import { CoachUnavailableError, object, text } from "./llm.js";
 
 // The picker list. Completed drafts only -- there is nothing to review about a
 // draft still in progress. Uses the summary denormalized at completion, so this
@@ -116,30 +117,23 @@ export const saveVerdict = mutation({
 let systemPrompt: string | undefined;
 const system = () => (systemPrompt ??= buildReviewSystemPrompt(loadPrinciples()));
 
-const VERDICT_TOOL = {
-  name: "record_verdict",
-  description: "Record the coaching verdict for this pick.",
-  input_schema: {
-    type: "object" as const,
-    properties: {
-      contextBestName: {
-        type: "string",
-        description:
-          "Exact name of the card that was the best pick given the player's pool and signals (the context-best). May equal the raw-power best.",
-      },
-      divergenceLesson: {
-        type: "string",
-        description:
-          "1-2 sentences: why the context-best and raw-power best agree or differ, and what that teaches.",
-      },
-      narrative: {
-        type: "string",
-        description: "2-4 sentences coaching the pick, citing principle ids in brackets.",
-      },
-    },
-    required: ["contextBestName", "divergenceLesson", "narrative"],
-  },
-};
+// Mirrors the reviewVerdict validator. The descriptions are load-bearing --
+// they are the only instruction the model gets about what each field means.
+const VERDICT_SCHEMA = z.object({
+  contextBestName: z
+    .string()
+    .describe(
+      "Exact name of the card that was the best pick given the player's pool and signals (the context-best). May equal the raw-power best.",
+    ),
+  divergenceLesson: z
+    .string()
+    .describe(
+      "1-2 sentences: why the context-best and raw-power best agree or differ, and what that teaches.",
+    ),
+  narrative: z
+    .string()
+    .describe("2-4 sentences coaching the pick, citing principle ids in brackets."),
+});
 
 // Replay gives the pack and the pool as it stood BEFORE the pick, which is what
 // makes "context-best" mean anything.
@@ -190,15 +184,15 @@ export const verdict = action({
     const context = await ctx.runQuery(internal.review.verdictContext, args);
     if (context.cached) return context.cached;
 
-    let input: Record<string, unknown>;
+    let input: z.infer<typeof VERDICT_SCHEMA>;
     try {
-      input = await toolInput({
+      input = await object({
         system: system(),
         userContent: context.userContent,
-        // Headroom so the tool-input JSON isn't truncated mid-object, which used
-        // to surface as "verdict was missing required fields".
+        // Headroom so the JSON isn't truncated mid-object, which used to
+        // surface as "verdict was missing required fields".
         maxTokens: 1024,
-        tool: VERDICT_TOOL,
+        schema: VERDICT_SCHEMA,
       });
     } catch (e) {
       // Callers show the data-only reveal instead; a missing key should not end
@@ -207,15 +201,16 @@ export const verdict = action({
       throw e;
     }
 
-    // The context-best name is the one field we cannot invent. The prose fields
-    // are defaulted so a clipped narrative still teaches something.
-    if (typeof input.contextBestName !== "string" || !input.contextBestName) {
+    // The schema guarantees three strings, but not that they are non-empty. The
+    // context-best name is the one field we cannot invent; the prose fields are
+    // defaulted so a clipped narrative still teaches something.
+    if (!input.contextBestName) {
       throw new Error("Review verdict was missing the context-best card.");
     }
     const result: ReviewVerdict = {
       contextBestName: input.contextBestName,
-      divergenceLesson: (input.divergenceLesson as string) || "—",
-      narrative: (input.narrative as string) || "(no coaching returned)",
+      divergenceLesson: input.divergenceLesson || "—",
+      narrative: input.narrative || "(no coaching returned)",
     };
 
     await ctx.runMutation(api.review.saveVerdict, { ...args, verdict: result });

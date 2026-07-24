@@ -16,9 +16,13 @@
     }
   },
   "scripts": {
-    "dev": "convex dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:only": "convex dev",
+    "env:watch": "node scripts/watch-env.mjs",
     "build": "node scripts/codegen.mjs",
     "deploy": "convex deploy",
+    "env:pull": "convex env list > .env.convex && echo 'wrote .env.convex (gitignored)'",
+    "env:push": "convex env set --force --from-file .env.convex",
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "smoke-draft": "node scripts/smoke-draft.mjs",
     "new-set": "node scripts/new-set.mjs",
@@ -29,8 +33,12 @@
     "validate-set-stats": "node scripts/validate-set-stats.mjs"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4",
+    "@ai-sdk/openai-compatible": "^3",
     "@mtg-tutor/core": "workspace:*",
-    "convex": "^1.17.0"
+    "ai": "^7",
+    "convex": "^1.17.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
