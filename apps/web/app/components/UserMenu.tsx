@@ -114,10 +114,10 @@ export function UserMenu() {
                   <button
                     key={n}
                     type="button"
-                    className={`flex-1 rounded-md py-1 text-xs tabular-nums transition-colors ${
+                    className={`flex-1 cursor-pointer rounded-md py-1 text-xs tabular-nums transition-colors ${
                       selected
-                        ? "bg-base-100 font-semibold"
-                        : "text-base-content/50 hover:text-base-content"
+                        ? "bg-primary font-semibold text-primary-content"
+                        : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
                     }`}
                     aria-pressed={selected}
                     onClick={() => update({ coachMinPackCards: n })}
@@ -133,7 +133,7 @@ export function UserMenu() {
 
           <button
             type="button"
-            className="rounded-lg px-2 py-1.5 text-left text-sm hover:bg-base-300"
+            className="cursor-pointer rounded-lg px-2 py-1.5 text-left text-sm hover:bg-base-300"
             onClick={() => signOut()}
           >
             Sign out

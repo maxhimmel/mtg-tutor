@@ -22,7 +22,7 @@ export function CardTile({
   return (
     <button
       type="button"
-      className="card-aspect group relative block w-full overflow-hidden rounded-xl border border-transparent bg-transparent p-0 transition hover:-translate-y-1 hover:border-primary hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+      className="card-aspect group relative block w-full cursor-pointer overflow-hidden rounded-xl border border-transparent bg-transparent p-0 transition hover:-translate-y-1 hover:border-primary hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
       onClick={() => {
         hidePreview();
         onPick(card);
