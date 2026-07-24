@@ -1,35 +1,6 @@
 # Issues:
 
-1. ~~The suggested decks have incorrect spell counts when including the Evolving
-   Wilds/multi-colored lands.~~ — **fixed 2026-07-24.** Lands are colorless, so
-   `suggestDeck` counted every one of them (including drafted basics) as one of
-   the 23 spells and then added 17 basics anyway. The pool is now partitioned
-   before anything else; drafted lands take land slots, capped at
-   `DECK.maxNonbasicLands`.
-
-2. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
-
-3. ~~I don't think we should be wasting AI explanation tokens during the last few
-   picks.~~ — **fixed 2026-07-24.** `/coach` refuses picks below
-   `COACH.minPackCards` (204, both clients fall back to `explainPick`); the user
-   menu sets the threshold and a skipped pick offers "Coach this pick anyway".
-
-4. ~~More info on the "picks" panel during a draft: counters for card types and
-   creature types.~~ — **fixed 2026-07-24** via `parseTypeLine` in core.
-
-5. ~~How can we get some free to use MTG mana icons?!~~ — **fixed 2026-07-24.**
-   The Mana font (SIL OFL 1.1 font, MIT CSS), self-hosted; `<ManaCost>`.
-
-6. ~~Have certain card mechanics (i.e. trample, haste, etc) have an additional
-   side-popup next to the hovered-cards popup.~~ — **fixed 2026-07-24** with a
-   curated glossary in `core/model/keywords.ts`, matched against oracle text
-   with reminder-text parentheticals stripped. If false positives show up, the
-   precision upgrade is Scryfall's per-card `keywords` array — which costs a
-   `Card` schema change and a re-ingest, and still needs this table for the
-   definitions.
-
-7. ~~The "last pic" and "coach" panel should have card names highlighted and
-   hoverable.~~ — **fixed 2026-07-24** (`CardName` / `CardText`).
+1. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
 # Ideas:
 

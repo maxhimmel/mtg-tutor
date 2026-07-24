@@ -9,6 +9,16 @@
   aspect-ratio: 488 / 680;
 }
 
+/* daisyUI's hover-3d is transform-driven and ships no reduced-motion guard of
+   its own, so the tilt is opted out of here. */
+@media (prefers-reduced-motion: reduce) {
+  .hover-3d > :first-child {
+    transform: none;
+    scale: 1;
+    transition: none;
+  }
+}
+
 /* Every surface that floats above the page -- card previews, the keyword panel,
    the user menu -- so they read as one family and always have an edge. The
    border is tinted with base-content rather than using base-300, which is

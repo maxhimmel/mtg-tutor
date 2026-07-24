@@ -5,6 +5,11 @@ import { pct } from "../lib/format";
 import { useSettings } from "../lib/useSettings";
 import { useCardHover, useHidePreview } from "./CardPreview";
 
+// daisyUI's hover-3d reads the tilt direction from which of eight sibling hover
+// zones the cursor is in -- a 3x3 grid minus the centre. They are part of the
+// component's DOM contract, not spacing.
+const TILT_ZONES = [0, 1, 2, 3, 4, 5, 6, 7];
+
 export function CardTile({
   card,
   onPick,
@@ -22,7 +27,7 @@ export function CardTile({
   return (
     <button
       type="button"
-      className="card-aspect group relative block w-full cursor-pointer overflow-hidden rounded-xl border border-transparent bg-transparent p-0 transition hover:-translate-y-1 hover:border-primary hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+      className="hover-3d group w-full cursor-pointer bg-transparent p-0 perspective-midrange disabled:cursor-not-allowed disabled:opacity-50"
       onClick={() => {
         hidePreview();
         onPick(card);
@@ -31,27 +36,29 @@ export function CardTile({
       aria-label={`Pick ${card.name}`}
       {...hover}
     >
-      {card.imageUrl ? (
-        // Plain <img>: Scryfall already serves an appropriately sized "normal"
-        // image, so next/image's optimizer would add cost without benefit.
-        <img
-          src={card.imageUrl}
-          alt={card.name}
-          loading="lazy"
-          className="h-full w-full rounded-xl object-cover"
-        />
-      ) : (
-        <span className="flex h-full w-full flex-col justify-between rounded-xl border border-base-300 bg-base-200 p-3 text-left">
-          <span className="text-sm font-semibold">{card.name}</span>
-          <span className="text-xs text-base-content/60">{card.typeLine}</span>
-        </span>
-      )}
+      {/* First child is the face that tilts; hover-3d clips it and applies the shine. */}
+      <span className="card-aspect relative block w-full rounded-xl border border-transparent group-hover:border-primary">
+        {card.imageUrl ? (
+          // Plain <img>: Scryfall already serves an appropriately sized "normal"
+          // image, so next/image's optimizer would add cost without benefit.
+          <img src={card.imageUrl} alt={card.name} loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full flex-col justify-between border border-base-300 bg-base-200 p-3 text-left">
+            <span className="text-sm font-semibold">{card.name}</span>
+            <span className="text-xs text-base-content/60">{card.typeLine}</span>
+          </span>
+        )}
 
-      {settings.guiderails && (
-        <span className="badge badge-sm absolute bottom-1.5 right-1.5 border-base-300 bg-base-100/90 font-mono text-base-content/80">
-          {rate}
-        </span>
-      )}
+        {settings.guiderails && (
+          <span className="badge badge-sm absolute bottom-1.5 right-1.5 border-base-300 bg-base-100/90 font-mono text-base-content/80">
+            {rate}
+          </span>
+        )}
+      </span>
+
+      {TILT_ZONES.map((i) => (
+        <span key={i} aria-hidden className="block" />
+      ))}
     </button>
   );
 }
