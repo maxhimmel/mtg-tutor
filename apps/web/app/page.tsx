@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
-import { AuthButton } from "./components/AuthButton";
+import { UserMenu } from "./components/UserMenu";
 
 export default function Home() {
   return (
@@ -13,7 +13,7 @@ export default function Home() {
         <div className="text-lg font-bold tracking-tight">
           mtg<span className="text-primary">-</span>tutor
         </div>
-        <AuthButton />
+        <UserMenu />
       </div>
 
       <Unauthenticated>
