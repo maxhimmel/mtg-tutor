@@ -10,7 +10,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
-  generateObject,
+  Output,
   generateText,
   streamText,
   type LanguageModel,
@@ -113,15 +113,49 @@ export async function text(req: Request): Promise<string> {
  * cannot do tool-shaped structured output.
  */
 export async function object<T>(req: Request & { schema: z.ZodType<T> }): Promise<T> {
-  const { object: out } = await generateObject({ ...common(req), schema: req.schema });
-  return out;
+  const { output } = await generateText({
+    ...common(req),
+    output: Output.object({ schema: req.schema }),
+  });
+  return output;
 }
 
 /**
  * Plain UTF-8 text, not SSE and not the AI SDK's own stream protocol: both the
- * browser and the CLI read this body directly with a TextDecoder.
+ * browser and the CLI read this body directly with a TextDecoder, so anything
+ * framed would render as visible garbage rather than fail loudly.
  */
 export function stream(req: Request): ReadableStream<Uint8Array> {
-  const { textStream } = streamText(common(req));
-  return textStream.pipeThrough(new TextEncoderStream());
+  const encoder = new TextEncoder();
+  let failure: unknown;
+
+  const { textStream } = streamText({
+    ...common(req),
+    // streamText suppresses errors instead of throwing, so a failure has to be
+    // caught here or it becomes a silently truncated answer.
+    onError: ({ error }) => {
+      failure = error;
+    },
+  });
+
+  // Drained with an explicit pump in start() rather than pull(). With pull(),
+  // the response body reached the client but the stream never terminated and
+  // the connection hung open; pumping to completion here closes it reliably.
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const chunk of textStream) controller.enqueue(encoder.encode(chunk));
+      } catch (e) {
+        failure ??= e;
+      }
+      // Surfaced inline rather than as a status code: the response has already
+      // begun by the time this is known, and both callers treat a truncated
+      // body as "partial coaching already shown" rather than as an error.
+      if (failure !== undefined) {
+        const message = failure instanceof Error ? failure.message : String(failure);
+        controller.enqueue(encoder.encode(`\n[coaching interrupted: ${message}]`));
+      }
+      controller.close();
+    },
+  });
 }

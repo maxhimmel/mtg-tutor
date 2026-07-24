@@ -3,20 +3,13 @@ import { buildSystemPrompt, loadPrinciples } from "@mtg-tutor/core";
 import { httpAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
+import { CoachUnavailableError, stream } from "./llm.js";
 
 const http = httpRouter();
 
-// Deliberately raw fetch rather than @anthropic-ai/sdk: the SDK reaches for
-// node:fs in its credential loader, which the V8 runtime that HTTP actions run
-// in cannot provide, and http.ts cannot opt into "use node". A streaming
-// passthrough only needs the SSE text deltas anyway.
-const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
-
 // Short, snappy per-pick coaching: this fires up to 45 times in one draft, so
-// the whole budget goes to the answer rather than to thinking. Kept in step
-// with apps/cli's ANTHROPIC config.
-const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5";
+// the whole budget goes to the answer rather than to thinking -- see the `fast`
+// flag below, which llm.ts turns into thinking-disabled + low effort.
 const MAX_TOKENS = 400;
 
 // The principles corpus is byte-identical on every call, so cache it: only the
@@ -29,60 +22,6 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
-
-// Anthropic streams SSE. Pull out the text deltas, tolerating chunk boundaries
-// that split a line in half.
-function textDeltas(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-
-  // Drained with an explicit pump in start() rather than pull(). With pull(),
-  // the response body reached the client but the stream never terminated and
-  // the connection hung open; pumping to completion here closes it reliably.
-  return new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const reader = body.getReader();
-      let buffer = "";
-
-      const emit = (chunk: string) => {
-        buffer += chunk;
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? ""; // keep the trailing partial line
-
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const payload = line.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
-
-          try {
-            const event = JSON.parse(payload);
-            if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
-              controller.enqueue(encoder.encode(event.delta.text));
-            }
-          } catch {
-            // A malformed line is not worth killing the stream over.
-          }
-        }
-      };
-
-      try {
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          emit(decoder.decode(value, { stream: true }));
-        }
-        emit(decoder.decode());
-      } catch (e) {
-        controller.enqueue(
-          encoder.encode(`\n[coaching interrupted: ${e instanceof Error ? e.message : e}]`),
-        );
-      } finally {
-        reader.releaseLock();
-        controller.close();
-      }
-    },
-  });
-}
 
 http.route({
   path: "/coach",
@@ -131,43 +70,29 @@ http.route({
       });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    let coaching: ReadableStream<Uint8Array>;
+    try {
+      coaching = stream({
+        system: system(),
+        userContent: context.userContent,
+        maxTokens: MAX_TOKENS,
+        fast: true,
+      });
+    } catch (e) {
       // Callers already fall back to the deterministic explanation, so say so
-      // plainly rather than failing the draft.
-      return new Response("coaching unavailable: ANTHROPIC_API_KEY is not set", {
-        status: 503,
-        headers: cors,
-      });
+      // plainly rather than failing the draft. Only a misconfigured deployment
+      // lands here -- once the stream opens, failures surface inline in the
+      // body instead, because the response has already started.
+      if (e instanceof CoachUnavailableError) {
+        return new Response(`coaching unavailable: ${e.message}`, {
+          status: 503,
+          headers: cors,
+        });
+      }
+      throw e;
     }
 
-    const upstream = await fetch(ANTHROPIC_URL, {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        stream: true,
-        thinking: { type: "disabled" },
-        output_config: { effort: "low" },
-        system: [{ type: "text", text: system(), cache_control: { type: "ephemeral" } }],
-        messages: [{ role: "user", content: context.userContent }],
-      }),
-    });
-
-    if (!upstream.ok || !upstream.body) {
-      const detail = await upstream.text().catch(() => "");
-      return new Response(`coaching failed: ${upstream.status} ${detail}`.trim(), {
-        status: 502,
-        headers: cors,
-      });
-    }
-
-    return new Response(textDeltas(upstream.body), {
+    return new Response(coaching, {
       status: 200,
       headers: {
         ...cors,

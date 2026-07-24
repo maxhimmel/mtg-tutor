@@ -8,7 +8,6 @@
  * @module
  */
 
-import type * as anthropic from "../anthropic.js";
 import type * as auth from "../auth.js";
 import type * as draft from "../draft.js";
 import type * as http from "../http.js";
@@ -27,7 +26,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  anthropic: typeof anthropic;
   auth: typeof auth;
   draft: typeof draft;
   http: typeof http;
