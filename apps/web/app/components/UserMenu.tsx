@@ -14,10 +14,10 @@ export function UserMenu() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // daisyUI's dropdown opens on :focus-within, which cannot survive a control
-  // that takes focus out of the document -- a native <select> opens an OS-level
-  // popup and the whole menu collapses under it. Owning the open state instead
-  // means anything at all can live in here.
+  // Open state is ours, not CSS's. daisyUI drives its dropdown off
+  // :focus-within, which both closes the menu when a control takes focus out of
+  // the document (a native <select> opens an OS-level popup) and keeps it open
+  // while the trigger still holds focus after a "close".
   useEffect(() => {
     if (!open) return;
 
@@ -54,7 +54,7 @@ export function UserMenu() {
   const label = user.email ?? "Account";
 
   return (
-    <div ref={menuRef} className={`dropdown dropdown-end ${open ? "dropdown-open" : ""}`}>
+    <div ref={menuRef} className="relative">
       <button
         type="button"
         className="btn btn-sm btn-outline gap-2"
@@ -69,66 +69,72 @@ export function UserMenu() {
         <span className="hidden max-w-[16ch] truncate sm:inline">{label}</span>
       </button>
 
-      {/* A settings panel rather than daisyUI's `menu`, whose child styling
-          fights anything that is not a single link per row. */}
-      <div className="popup-surface dropdown-content z-50 mt-2 flex w-72 flex-col gap-1 p-2">
-        <div className="truncate px-2 py-1 text-xs text-base-content/60">{label}</div>
+      {/* Mounted only while open, and deliberately not daisyUI's `dropdown`:
+          that hides its content with `:not(:focus-within) { display: none }`,
+          so a trigger that still holds focus keeps the panel in the layout
+          after it is "closed" -- an invisible 18rem box over the column below,
+          swallowing hovers. Not daisyUI's `menu` either, whose child styling
+          fights any row that is not a single link. */}
+      {open && (
+        <div className="popup-surface absolute right-0 top-full z-50 mt-2 flex w-72 flex-col gap-1 p-2">
+          <div className="truncate px-2 py-1 text-xs text-base-content/60">{label}</div>
 
-        <label className="flex cursor-pointer items-start justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-base-300">
-          <span className="flex flex-col">
-            <span>Guiderails</span>
-            <span className="text-xs text-base-content/60">
-              Show each card&apos;s win rate while drafting
+          <label className="flex cursor-pointer items-start justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-base-300">
+            <span className="flex flex-col">
+              <span>Guiderails</span>
+              <span className="text-xs text-base-content/60">
+                Show each card&apos;s win rate while drafting
+              </span>
             </span>
-          </span>
-          <input
-            type="checkbox"
-            className="toggle toggle-primary toggle-sm"
-            checked={settings.guiderails}
-            onChange={(e) => update({ guiderails: e.target.checked })}
-            aria-label="Toggle guiderails (per-card win-rate hints)"
-          />
-        </label>
+            <input
+              type="checkbox"
+              className="toggle toggle-primary toggle-sm"
+              checked={settings.guiderails}
+              onChange={(e) => update({ guiderails: e.target.checked })}
+              aria-label="Toggle guiderails (per-card win-rate hints)"
+            />
+          </label>
 
-        {/* Not a <select>: a segmented control keeps every option visible and
+          {/* Not a <select>: a segmented control keeps every option visible and
             never leaves the page, so the menu cannot be dismissed by its own
             control. */}
-        <div className="flex flex-col gap-1.5 px-2 py-1.5 text-sm">
-          <span>AI coach</span>
-          <span className="text-xs text-base-content/60">
-            Skip picks with fewer cards left than this
-          </span>
-          <div
-            className="join w-full"
-            role="group"
-            aria-label="Smallest pack the AI coach comments on"
-          >
-            {COACH_THRESHOLDS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`btn join-item btn-xs flex-1 ${
-                  settings.coachMinPackCards === n ? "btn-primary" : "btn-outline"
-                }`}
-                aria-pressed={settings.coachMinPackCards === n}
-                onClick={() => update({ coachMinPackCards: n })}
-              >
-                {n}
-              </button>
-            ))}
+          <div className="flex flex-col gap-1.5 px-2 py-1.5 text-sm">
+            <span>AI coach</span>
+            <span className="text-xs text-base-content/60">
+              Skip picks with fewer cards left than this
+            </span>
+            <div
+              className="join w-full"
+              role="group"
+              aria-label="Smallest pack the AI coach comments on"
+            >
+              {COACH_THRESHOLDS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`btn join-item btn-xs flex-1 ${
+                    settings.coachMinPackCards === n ? "btn-primary" : "btn-outline"
+                  }`}
+                  aria-pressed={settings.coachMinPackCards === n}
+                  onClick={() => update({ coachMinPackCards: n })}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="my-1 border-t border-base-300" />
+
+          <button
+            type="button"
+            className="rounded-lg px-2 py-1.5 text-left text-sm hover:bg-base-300"
+            onClick={() => signOut()}
+          >
+            Sign out
+          </button>
         </div>
-
-        <div className="my-1 border-t border-base-300" />
-
-        <button
-          type="button"
-          className="rounded-lg px-2 py-1.5 text-left text-sm hover:bg-base-300"
-          onClick={() => signOut()}
-        >
-          Sign out
-        </button>
-      </div>
+      )}
     </div>
   );
 }
