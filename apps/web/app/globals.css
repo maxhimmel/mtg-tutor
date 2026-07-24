@@ -8,3 +8,11 @@
 .card-aspect {
   aspect-ratio: 488 / 680;
 }
+
+/* Every surface that floats above the page -- card previews, the keyword panel,
+   the user menu -- so they read as one family and always have an edge. The
+   border is tinted with base-content rather than using base-300, which is
+   nearly invisible against base-200 in the dark theme. */
+@utility popup-surface {
+  @apply rounded-box border border-base-content/20 bg-base-200 shadow-2xl;
+}
