@@ -1,2 +1,6 @@
 
 .env.local
+
+# Deployment env vars, pulled with `pnpm env:pull`. Holds every secret the
+# deployment has -- never commit it. Track .env.convex.example instead.
+.env.convex

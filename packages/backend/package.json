@@ -19,6 +19,8 @@
     "dev": "convex dev",
     "build": "node scripts/codegen.mjs",
     "deploy": "convex deploy",
+    "env:pull": "convex env list > .env.convex && echo 'wrote .env.convex (gitignored)'",
+    "env:push": "convex env set --force --from-file .env.convex",
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "smoke-draft": "node scripts/smoke-draft.mjs",
     "new-set": "node scripts/new-set.mjs",
