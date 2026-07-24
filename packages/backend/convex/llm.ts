@@ -13,6 +13,7 @@ import {
   Output,
   generateText,
   streamText,
+  type JSONValue,
   type LanguageModel,
   type SystemModelMessage,
 } from "ai";
@@ -21,6 +22,10 @@ import type { z } from "zod";
 export class CoachUnavailableError extends Error {}
 
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5";
+
+// Provider options are namespaced by provider name, so tuning() and resolve()
+// have to agree on this string.
+const COMPATIBLE_NAME = "local";
 
 function isAnthropic(): boolean {
   // Anthropic stays the default so an unconfigured production deployment keeps
@@ -37,11 +42,18 @@ function resolve(): LanguageModel {
       );
     }
     const provider = createOpenAICompatible({
-      name: "local",
+      name: COMPATIBLE_NAME,
       baseURL,
       // Local runtimes (Ollama, llama.cpp) accept anything here; hosted
       // gateways do not, so it is passed through when present.
       apiKey: process.env.LLM_API_KEY,
+      // Without this the provider falls back to `response_format: json_object`,
+      // the legacy JSON mode -- which Groq rejects outright unless the prompt
+      // happens to contain the word "json", and which no endpoint validates
+      // against the schema. Proper json_schema is the default because Groq,
+      // OpenRouter, vLLM and recent Ollama all support it; set
+      // LLM_JSON_SCHEMA=false for an endpoint that does not.
+      supportsStructuredOutputs: process.env.LLM_JSON_SCHEMA !== "false",
     });
     return provider(process.env.LLM_MODEL ?? "");
   }
@@ -62,9 +74,10 @@ interface Request {
   userContent: string;
   maxTokens: number;
   /**
-   * Coaching fires up to 45 times in one draft, so the budget goes to the
-   * answer rather than to thinking. Anthropic-only; the openai-compatible path
-   * never sends it, because a local runtime would reject the unknown fields.
+   * Coaching fires up to 45 times in one draft, so the budget should go to the
+   * answer rather than to thinking. This matters more than it looks on a
+   * reasoning model: gpt-oss on Groq spent an entire 64-token budget thinking
+   * and returned an empty string.
    */
   fast?: boolean;
 }
@@ -87,9 +100,15 @@ function instructions(system: string): SystemModelMessage {
   };
 }
 
-function tuning(fast?: boolean) {
-  if (!isAnthropic() || !fast) return undefined;
-  return { anthropic: { thinking: { type: "disabled" as const }, effort: "low" as const } };
+// Annotated because the openai-compatible branch keys off a const rather than a
+// literal, which otherwise widens to an index signature that admits undefined.
+function tuning(fast?: boolean): Record<string, Record<string, JSONValue>> | undefined {
+  if (!fast) return undefined;
+  return isAnthropic()
+    ? { anthropic: { thinking: { type: "disabled" as const }, effort: "low" as const } }
+    : // The openai-compatible analogue. Ignored by endpoints that don't reason,
+      // which is why it is safe to send unconditionally on this branch.
+      { [COMPATIBLE_NAME]: { reasoningEffort: "low" } };
 }
 
 function common(req: Request) {
