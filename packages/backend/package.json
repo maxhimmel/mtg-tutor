@@ -16,7 +16,9 @@
     }
   },
   "scripts": {
-    "dev": "convex dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:only": "convex dev",
+    "env:watch": "node scripts/watch-env.mjs",
     "build": "node scripts/codegen.mjs",
     "deploy": "convex deploy",
     "env:pull": "convex env list > .env.convex && echo 'wrote .env.convex (gitignored)'",
