@@ -6,13 +6,13 @@ import { useMutation, useQuery } from "convex/react";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
-import { type Card, type PickScore, explainPick } from "@mtg-tutor/core";
-import { AuthButton } from "../../components/AuthButton";
+import { type Card, type PickScore, explainPick, isDecisionPick } from "@mtg-tutor/core";
 import { CardTile } from "../../components/CardTile";
 import { PicksColumn } from "../../components/PicksColumn";
 import { Results } from "../../components/Results";
-import { SettingsToggle } from "../../components/SettingsToggle";
+import { UserMenu } from "../../components/UserMenu";
 import { gradeColor, pct } from "../../lib/format";
+import { useSettings } from "../../lib/useSettings";
 import { convexSiteUrl } from "../../lib/convexSite";
 
 const SITE = convexSiteUrl;
@@ -21,6 +21,7 @@ interface LastPick {
   score: PickScore;
   signal?: string;
   pickIndex: number;
+  cardsInPack: number;
 }
 
 export function DraftBoard({ sessionId }: { sessionId: string }) {
@@ -29,8 +30,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const pickCard = useMutation(api.draft.pick);
   const { getAccessToken } = useAccessToken();
 
+  const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
   const [coach, setCoach] = useState("");
+  const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
 
   // Guards against an earlier pick's stream overwriting a later one when the
@@ -38,13 +41,26 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const streamRun = useRef(0);
 
   const streamCoach = useCallback(
-    async (pickIndex: number, score: PickScore) => {
+    async (pickIndex: number, score: PickScore, cardsInPack: number, force = false) => {
       const run = ++streamRun.current;
       const fallback = () => {
         if (run === streamRun.current) setCoach(explainPick(score).join("\n"));
       };
+      const skip = () => {
+        if (run === streamRun.current) setSkipped(true);
+        fallback();
+      };
+
+      // Forcing means "coach this one regardless": a floor of 1 passes any pack
+      // that still has a card in it, which is every pack you can pick from.
+      const minPackCards = force ? 1 : settings.coachMinPackCards;
 
       setCoach("");
+      setSkipped(false);
+
+      // Checked here as well as server-side so a forced pick costs no round
+      // trip, not just no tokens.
+      if (!isDecisionPick(cardsInPack, minPackCards)) return skip();
       if (!SITE) return fallback();
 
       try {
@@ -59,8 +75,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             "content-type": "application/json",
             ...(token ? { authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ sessionId, pickIndex }),
+          body: JSON.stringify({ sessionId, pickIndex, minPackCards }),
         });
+
+        // 204 is the server agreeing this pick was forced -- it can disagree
+        // with us, since it owns the clamp and we do not.
+        if (res.status === 204) return skip();
 
         // 401 unauthenticated, 503 when no API key is configured; fall back to
         // the deterministic explanation rather than leaving the panel empty.
@@ -84,17 +104,19 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         fallback();
       }
     },
-    [sessionId, getAccessToken],
+    [sessionId, getAccessToken, settings.coachMinPackCards],
   );
 
   async function onPick(card: Card) {
     if (picking) return;
     setPicking(true);
+    // Read before the mutation returns: `result` already holds the next pack.
+    const cardsInPack = state?.pack.length ?? 0;
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
       const score = result.score as PickScore;
-      setLast({ score, signal: result.signal, pickIndex: result.pickIndex });
-      void streamCoach(result.pickIndex, score);
+      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, cardsInPack });
+      void streamCoach(result.pickIndex, score, cardsInPack);
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     } finally {
@@ -130,10 +152,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             </>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <SettingsToggle />
-          <AuthButton />
-        </div>
+        <UserMenu />
       </div>
 
       {state.complete ? (
@@ -172,9 +191,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       </div>
                     )}
                     {last.signal && <div className="text-sm text-info">{last.signal}</div>}
-                    <div className="mt-2 min-h-[3.2rem] whitespace-pre-wrap border-t border-base-300 pt-2">
-                      <span className="mb-1 block text-xs text-base-content/60">Coach</span>
-                      {coach || <span className="text-base-content/60">thinking…</span>}
+                    <div className="mt-2 min-h-[3.2rem] border-t border-base-300 pt-2">
+                      <span className="mb-1 block text-xs text-base-content/60">
+                        {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
+                      </span>
+                      <div className="whitespace-pre-wrap">
+                        {coach || <span className="text-base-content/60">thinking…</span>}
+                      </div>
+                      {skipped && (
+                        <button
+                          className="btn btn-outline btn-xs mt-2"
+                          onClick={() =>
+                            void streamCoach(last.pickIndex, last.score, last.cardsInPack, true)
+                          }
+                        >
+                          Coach this pick anyway
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : (

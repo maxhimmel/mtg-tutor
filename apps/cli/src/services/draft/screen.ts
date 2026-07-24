@@ -1,6 +1,6 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { cardValue, explainPick } from "@mtg-tutor/core";
+import { COACH, cardValue, explainPick, isDecisionPick } from "@mtg-tutor/core";
 import type { Card, PickScore } from "@mtg-tutor/core";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
@@ -40,7 +40,13 @@ export async function runDraft(
       cardName: picked.name,
     });
 
-    await showPickFeedback(sessionId, result.pickIndex, result.score as PickScore, result.signal);
+    await showPickFeedback(
+      sessionId,
+      result.pickIndex,
+      result.score as PickScore,
+      result.signal,
+      pack.length,
+    );
 
     state = {
       ...state,
@@ -60,12 +66,18 @@ async function showPickFeedback(
   pickIndex: number,
   score: PickScore,
   signal: string | undefined,
+  cardsInPack: number,
 ) {
   const head =
     `${gradeColor(score.grade)} ${pc.bold(String(score.score))}/100` +
     (score.isBest ? pc.green("  ✓ best pick") : pc.dim(`  (rank ${score.rankInPack})`));
 
-  if (await streamCoaching(sessionId, pickIndex, head)) return;
+  // The tail of a pack is forced, so it gets the deterministic explanation and
+  // no LLM call. The web app makes this adjustable; the CLI has no settings
+  // store, so it uses the shared default.
+  const coachable = isDecisionPick(cardsInPack, COACH.minPackCards);
+
+  if (coachable && (await streamCoaching(sessionId, pickIndex, head))) return;
 
   const lines = explainPick(score);
   if (signal) lines.push(pc.cyan(signal));

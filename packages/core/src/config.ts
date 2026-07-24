@@ -39,9 +39,19 @@ export const RARITY_BASELINE: Record<string, number> = {
   bonus: 0.52,
 };
 
-// Post-draft review. Only "decision" picks (packs with at least this many cards
-// left) get quizzed; the rest flash by as a passive summary. A future frontend
-// can expose this as a slider.
+// Post-draft review. Only decision picks (see isDecisionPick) get quizzed; the
+// rest flash by as a passive summary. A future frontend can expose this as a
+// slider.
 export const REVIEW = {
   decisionPickMinCards: 5,
+};
+
+// Live AI coaching. Same threshold as review, for the same reason -- the last
+// few picks of a pack are forced, and coaching them spends tokens on "you had
+// no choice". Clients may raise or lower their own threshold; the server clamps
+// whatever it is sent to 1..maxMinPackCards so one client cannot ask for
+// coaching on picks that do not exist.
+export const COACH = {
+  minPackCards: REVIEW.decisionPickMinCards,
+  maxMinPackCards: 15,
 };

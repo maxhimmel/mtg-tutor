@@ -1,5 +1,5 @@
 import { httpRouter } from "convex/server";
-import { buildSystemPrompt, loadPrinciples } from "@mtg-tutor/core";
+import { COACH, buildSystemPrompt, isDecisionPick, loadPrinciples } from "@mtg-tutor/core";
 import { httpAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -47,13 +47,21 @@ http.route({
       return new Response("expected a JSON object", { status: 400, headers: cors });
     }
 
-    const { sessionId, pickIndex } = body as Record<string, unknown>;
+    const { sessionId, pickIndex, minPackCards } = body as Record<string, unknown>;
     if (typeof sessionId !== "string" || typeof pickIndex !== "number") {
       return new Response("expected { sessionId: string, pickIndex: number }", {
         status: 400,
         headers: cors,
       });
     }
+
+    // The caller's threshold, clamped: 1 is "coach this pick whatever it cost
+    // me" (the force button), and no client gets to demand coaching on packs
+    // larger than any that exist.
+    const minCards = Math.min(
+      Math.max(typeof minPackCards === "number" ? minPackCards : COACH.minPackCards, 1),
+      COACH.maxMinPackCards,
+    );
 
     // Resolve the pick before checking config, so a bad session id reports as a
     // bad session rather than being masked by a missing key.
@@ -68,6 +76,15 @@ http.route({
         status: 404,
         headers: cors,
       });
+    }
+
+    // The gate lives here, not only in the clients: this endpoint is what spends
+    // the deployment's key, so it is the one place that can actually refuse.
+    // 204 rather than an error -- there is nothing wrong, there is just nothing
+    // to say about a pick you had no choice in, and both clients already know
+    // how to fall back to the deterministic explanation.
+    if (!isDecisionPick(context.cardsInPack, minCards)) {
+      return new Response(null, { status: 204, headers: cors });
     }
 
     let coaching: ReadableStream<Uint8Array>;

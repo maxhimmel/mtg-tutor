@@ -77,14 +77,16 @@ describe("gradeFor", () => {
 });
 
 describe("isDecisionPick", () => {
-  const pack = (n: number) => Array.from({ length: n }, (_, i) => card(`c${i}`));
   it("is a decision when the pack still has enough cards", () => {
-    expect(isDecisionPick(pack(8), 5)).toBe(true);
-    expect(isDecisionPick(pack(5), 5)).toBe(true);
+    expect(isDecisionPick(8, 5)).toBe(true);
+    expect(isDecisionPick(5, 5)).toBe(true);
   });
   it("is trivial once the pack is picked down past the threshold", () => {
-    expect(isDecisionPick(pack(4), 5)).toBe(false);
-    expect(isDecisionPick(pack(1), 5)).toBe(false);
+    expect(isDecisionPick(4, 5)).toBe(false);
+    expect(isDecisionPick(1, 5)).toBe(false);
+  });
+  it("coaches every pick at the floor the force button sends", () => {
+    expect(isDecisionPick(1, 1)).toBe(true);
   });
 });
 

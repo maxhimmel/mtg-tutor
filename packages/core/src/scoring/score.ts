@@ -32,10 +32,13 @@ export function committedColors(pool: Card[]): Set<string> {
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
 }
 
-// A pick worth quizzing: the pack still has enough cards that the choice is real
-// (late forced picks of 2-3 cards teach nothing). Threshold is configurable.
-export function isDecisionPick(pack: Card[], minCards: number): boolean {
-  return pack.length >= minCards;
+// A pick worth thinking about: the pack still has enough cards that the choice
+// is real (late forced picks of 2-3 cards teach nothing). Takes a count rather
+// than the pack, because the coach gate runs server-side where only the size
+// crosses the wire. Threshold is configurable -- REVIEW quizzes on it, COACH
+// spends tokens on it.
+export function isDecisionPick(cardsInPack: number, minCards: number): boolean {
+  return cardsInPack >= minCards;
 }
 
 // Lenient grading for the review quiz: the guess is "right" if it matches either
