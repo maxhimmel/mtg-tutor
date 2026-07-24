@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { ConvexClientProvider } from "./providers";
+// Imported here rather than @import-ed from globals.css so Next resolves the
+// font files the stylesheet references relative to itself, in node_modules.
+import "mana-font/css/mana.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
