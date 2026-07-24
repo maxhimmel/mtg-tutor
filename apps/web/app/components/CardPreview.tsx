@@ -1,7 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import type { Card } from "@mtg-tutor/core";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { type Card, keywordsOf } from "@mtg-tutor/core";
 
 interface HoverState {
   card: Card;
@@ -38,9 +46,18 @@ export function useHidePreview() {
 
 const PREVIEW_W = 320; // px; height follows the card aspect ratio
 const PREVIEW_H = Math.round((PREVIEW_W * 680) / 488);
+const PANEL_W = 260;
 const GAP = 12;
 
-function place(anchor: DOMRect): { left: number; top: number } {
+interface Placement {
+  left: number;
+  top: number;
+  // Null when there is no room for the keyword panel on either side of the
+  // preview; the card image is what the player asked for and always wins.
+  panelLeft: number | null;
+}
+
+function place(anchor: DOMRect, wantsPanel: boolean): Placement {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
@@ -53,13 +70,24 @@ function place(anchor: DOMRect): { left: number; top: number } {
   let top = anchor.top + anchor.height / 2 - PREVIEW_H / 2;
   top = Math.max(GAP, Math.min(top, vh - GAP - PREVIEW_H));
 
-  return { left, top };
+  // The panel sits beyond the preview, so the image never has to move to make
+  // room for it.
+  let panelLeft: number | null = null;
+  if (wantsPanel) {
+    const beyond = left + PREVIEW_W + GAP;
+    const before = left - GAP - PANEL_W;
+    if (beyond + PANEL_W <= vw - GAP) panelLeft = beyond;
+    else if (before >= GAP) panelLeft = before;
+  }
+
+  return { left, top, panelLeft };
 }
 
 export function HoverPreviewProvider({ children }: { children: React.ReactNode }) {
   const [hover, setHover] = useState<HoverState | null>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<Placement | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const keywords = useMemo(() => (hover ? keywordsOf(hover.card) : []), [hover]);
 
   const show = useCallback((card: Card, el: HTMLElement) => {
     setHover({ card, anchor: el.getBoundingClientRect() });
@@ -73,30 +101,53 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // useEffect (not layout) keeps this off the server render; the box stays at
   // opacity 0 until a position is set, so there is no visible flash.
   useEffect(() => {
-    if (hover) setPos(place(hover.anchor));
-  }, [hover]);
+    if (hover) setPos(place(hover.anchor, keywords.length > 0));
+  }, [hover, keywords]);
 
   return (
     <HoverPreviewContext.Provider value={{ show, hide }}>
       {children}
       {hover?.card.imageUrl && (
-        <div
-          ref={boxRef}
-          className="pointer-events-none fixed z-50 rounded-xl shadow-2xl transition-opacity"
-          style={{
-            left: pos?.left ?? -9999,
-            top: pos?.top ?? -9999,
-            width: PREVIEW_W,
-            opacity: pos ? 1 : 0,
-          }}
-        >
-          <img
-            src={hover.card.imageUrl}
-            alt={hover.card.name}
-            className="w-full rounded-xl"
-            draggable={false}
-          />
-        </div>
+        <>
+          <div
+            ref={boxRef}
+            className="pointer-events-none fixed z-50 rounded-xl shadow-2xl transition-opacity"
+            style={{
+              left: pos?.left ?? -9999,
+              top: pos?.top ?? -9999,
+              width: PREVIEW_W,
+              opacity: pos ? 1 : 0,
+            }}
+          >
+            <img
+              src={hover.card.imageUrl}
+              alt={hover.card.name}
+              className="w-full rounded-xl"
+              draggable={false}
+            />
+          </div>
+
+          {keywords.length > 0 && pos?.panelLeft != null && (
+            <div
+              className="pointer-events-none fixed z-50 overflow-y-auto rounded-xl border border-base-300 bg-base-200 p-3 shadow-2xl"
+              style={{
+                left: pos.panelLeft,
+                top: pos.top,
+                width: PANEL_W,
+                maxHeight: PREVIEW_H,
+              }}
+            >
+              <ul className="flex flex-col gap-2.5">
+                {keywords.map((k) => (
+                  <li key={k.name}>
+                    <span className="text-sm font-semibold">{k.name}</span>
+                    <p className="text-xs leading-snug text-base-content/70">{k.reminder}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
     </HoverPreviewContext.Provider>
   );
