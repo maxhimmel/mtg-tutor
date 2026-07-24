@@ -163,22 +163,18 @@ validated vs the API at Spearman 0.92–0.93. Details live in the
 `set-stats-pipeline`, `play-booster-pack-model`, and `17lands-data-sources`
 auto-memories. Issues #3 and #4 above were fixed here (both were misdiagnosed).
 
-## Un-actioned: production deploy
+## Production deploy — done
 
-`main` is merged but **not pushed and prod is not seeded**. Vercel's build runs
-`convex deploy`, so a push ships schema+functions to prod Convex — but prod has
-its own DB: the `setStats` table is empty and `sets:ingest` now *requires* seeded
-stats. After pushing, on prod:
+Shipped and verified 2026-07-24: `main` is pushed, and `convex run sets:list
+--prod` returns `sos`, `tdm`, and `fdn` (ingested 2026-07-23). The manual
+`seed-set-stats.mjs --prod` / `sets:ingest --prod` steps this section used to
+list are no longer needed — `apps/web/vercel.json`'s build command runs
+`convex deploy --cmd '... seed-set-stats.mjs && ingest-sets.mjs'`, so seeding
+happens as part of the build.
 
-```
-cd packages/backend && node scripts/seed-set-stats.mjs --prod
-pnpm --filter @mtg-tutor/backend exec convex run sets:ingest '{"setCode":"sos","format":"TradDraft"}' --prod
-# repeat for tdm
-```
-
-Any set already on prod (e.g. `fdn`) stays listed on old data until its stats are
-built+seeded. The deploy is non-breaking: a schema-validation failure fails the
-Vercel build and keeps the old site up.
+**A push to `main` is therefore a production deploy.** The deploy is
+non-breaking: a schema-validation failure fails the Vercel build and keeps the
+old site up.
 
 ## Follow-up roadmap (compressed; pick per future session)
 
