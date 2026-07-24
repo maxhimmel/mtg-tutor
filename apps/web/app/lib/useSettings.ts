@@ -15,7 +15,7 @@ export const SETTINGS_KEY = "mtg-tutor:settings";
 
 export interface SettingsContextValue {
   settings: Settings;
-  setGuiderails: (on: boolean) => void;
+  update: (patch: Partial<Settings>) => void;
 }
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);

@@ -7,11 +7,10 @@ import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { type Card, type PickScore, explainPick } from "@mtg-tutor/core";
-import { AuthButton } from "../../components/AuthButton";
 import { CardTile } from "../../components/CardTile";
 import { PicksColumn } from "../../components/PicksColumn";
 import { Results } from "../../components/Results";
-import { SettingsToggle } from "../../components/SettingsToggle";
+import { UserMenu } from "../../components/UserMenu";
 import { gradeColor, pct } from "../../lib/format";
 import { convexSiteUrl } from "../../lib/convexSite";
 
@@ -130,10 +129,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             </>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <SettingsToggle />
-          <AuthButton />
-        </div>
+        <UserMenu />
       </div>
 
       {state.complete ? (

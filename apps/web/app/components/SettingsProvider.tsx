@@ -23,23 +23,19 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const persist = useCallback((next: Settings) => {
-    setSettings(next);
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-    } catch {
-      // Storage may be full or blocked; the in-memory value still applies.
-    }
+  const update = useCallback((patch: Partial<Settings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+      } catch {
+        // Storage may be full or blocked; the in-memory value still applies.
+      }
+      return next;
+    });
   }, []);
 
-  const setGuiderails = useCallback(
-    (on: boolean) => persist({ ...settings, guiderails: on }),
-    [persist, settings],
-  );
-
   return (
-    <SettingsContext.Provider value={{ settings, setGuiderails }}>
-      {children}
-    </SettingsContext.Provider>
+    <SettingsContext.Provider value={{ settings, update }}>{children}</SettingsContext.Provider>
   );
 }
