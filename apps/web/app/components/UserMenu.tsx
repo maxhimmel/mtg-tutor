@@ -3,6 +3,10 @@
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { useSettings } from "../lib/useSettings";
 
+// 2 is "coach everything except the literally forced last card"; 9 stops at the
+// halfway point of a Play Booster pack.
+const COACH_THRESHOLDS = [2, 3, 5, 7, 9];
+
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
   const { settings, update } = useSettings();
@@ -61,6 +65,29 @@ export function UserMenu() {
               onChange={(e) => update({ guiderails: e.target.checked })}
               aria-label="Toggle guiderails (per-card win-rate hints)"
             />
+          </label>
+        </li>
+
+        <li>
+          <label className="flex cursor-pointer items-start justify-between gap-3">
+            <span className="flex flex-col">
+              <span>AI coach</span>
+              <span className="text-xs text-base-content/60">
+                Skip picks with fewer cards left than this
+              </span>
+            </span>
+            <select
+              className="select select-bordered select-xs w-20 shrink-0"
+              value={settings.coachMinPackCards}
+              onChange={(e) => update({ coachMinPackCards: Number(e.target.value) })}
+              aria-label="Smallest pack the AI coach comments on"
+            >
+              {COACH_THRESHOLDS.map((n) => (
+                <option key={n} value={n}>
+                  {n} cards
+                </option>
+              ))}
+            </select>
           </label>
         </li>
 

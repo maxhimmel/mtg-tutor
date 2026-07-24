@@ -167,6 +167,9 @@ export const coachContext = internalQuery({
       setCode: session.setCode,
       packNo: record.packNo,
       pickNo: record.pickNo,
+      // How many cards this pick chose between, so /coach can refuse to spend
+      // tokens on a pack that was picking for you.
+      cardsInPack: record.pack.length,
     };
   },
 });
