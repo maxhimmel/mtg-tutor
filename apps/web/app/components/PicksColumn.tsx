@@ -1,6 +1,6 @@
 "use client";
 
-import type { Card } from "@mtg-tutor/core";
+import { type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { COLOR_NAMES } from "../lib/format";
 import { useCardHover } from "./CardPreview";
 import { ManaCost } from "./ManaCost";
@@ -19,6 +19,10 @@ function PickRow({ card }: { card: Card }) {
   );
 }
 
+// Enough to see what the deck is becoming without turning the panel into a
+// wall of one-off tribes; the rest stay in the tooltip.
+const TOP_CREATURE_TYPES = 6;
+
 export function PicksColumn({ pool }: { pool: Card[] }) {
   // Copy before sorting -- state.pool is shared React state and must not be
   // mutated. Ascending mana value, name as the tie-break.
@@ -26,6 +30,10 @@ export function PicksColumn({ pool }: { pool: Card[] }) {
 
   const colors = new Map<string, number>();
   for (const c of pool) for (const col of c.colors) colors.set(col, (colors.get(col) ?? 0) + 1);
+
+  const types = tally(pool, cardTypes);
+  const tribes = tally(pool, creatureTypes);
+  const asCounts = (counts: [string, number][]) => counts.map(([n, c]) => `${n} ${c}`).join(" · ");
 
   return (
     <div className="card border border-base-300 bg-base-200">
@@ -44,6 +52,24 @@ export function PicksColumn({ pool }: { pool: Card[] }) {
               ))}
           </div>
         </div>
+
+        {types.length > 0 && (
+          <div className="flex flex-col gap-1.5 border-b border-base-300 pb-2">
+            <div className="flex flex-wrap gap-1">
+              {types.map(([type, n]) => (
+                <span key={type} className="badge badge-ghost badge-sm font-normal">
+                  {type} {n}
+                </span>
+              ))}
+            </div>
+            {tribes.length > 0 && (
+              <div className="truncate text-xs text-base-content/60" title={asCounts(tribes)}>
+                {asCounts(tribes.slice(0, TOP_CREATURE_TYPES))}
+                {tribes.length > TOP_CREATURE_TYPES && " …"}
+              </div>
+            )}
+          </div>
+        )}
 
         {picks.length === 0 ? (
           <p className="text-sm text-base-content/60">Nothing drafted yet.</p>
