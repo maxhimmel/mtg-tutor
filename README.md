@@ -12,6 +12,7 @@ Reading pick guides is passive. Improvement comes from **reps with objective fee
 - **Card pool = Scryfall.** The set's cards, types, mana costs, and rarities come from Scryfall; packs are generated from the rarity pools (1 rare/mythic, 3 uncommons, 11 commons per 15-card pack).
 - **Bots draft against you.** Each of the 7 bots commits to colors as it picks, so signals flow and packs wheel realistically.
 - **Everything lives in Convex.** Set data is ingested once per set and shared across devices; drafts are stored against your account. The CLI and the web app are peer clients of the same backend — draft in the terminal, review it in the browser with card art.
+- **Mana symbols = the [Mana font](https://github.com/andrewgioia/mana)** by Andrew Gioia, self-hosted in the web app (font under SIL OFL 1.1, CSS under MIT).
 
 ## Install
 

@@ -4,6 +4,7 @@
 export * from "./config.js";
 
 export * from "./model/card.js";
+export * from "./model/mana.js";
 export * from "./model/setData.js";
 
 export * from "./data/sources.js";

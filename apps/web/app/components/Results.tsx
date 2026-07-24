@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
+import { ManaCost } from "./ManaCost";
 
 export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
   const results = useQuery(api.draft.results, { sessionId });
@@ -35,8 +36,11 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
                   key={`${c.name}-${i}`}
                   className="flex justify-between gap-4 border-b border-base-300 py-1 text-sm"
                 >
-                  <span>{c.name}</span>
-                  <span className="text-base-content/60">{pct(c.gihWinRate)}</span>
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate">{c.name}</span>
+                    <ManaCost cost={c.manaCost} className="shrink-0 whitespace-nowrap text-xs" />
+                  </span>
+                  <span className="shrink-0 text-base-content/60">{pct(c.gihWinRate)}</span>
                 </div>
               ))}
             </div>

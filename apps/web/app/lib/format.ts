@@ -4,8 +4,8 @@
 export const pct = (v?: number | null): string =>
   v == null ? "—" : `${(v * 100).toFixed(1)}%`;
 
-// "{2}{U}{U}" -> "2UU". Cleaned mana cost for compact list rows; a full
-// mana-symbol rendering is a later polish.
+// "{2}{U}{U}" -> "2UU". The spoken form of a cost the ManaCost component draws
+// as symbols, so a screen reader gets something better than a row of icons.
 export const manaText = (cost?: string): string =>
   (cost ?? "").replace(/[{}]/g, "").replace(/\//g, "");
 

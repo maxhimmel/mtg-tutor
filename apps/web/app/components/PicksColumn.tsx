@@ -1,8 +1,9 @@
 "use client";
 
 import type { Card } from "@mtg-tutor/core";
-import { COLOR_NAMES, manaText } from "../lib/format";
+import { COLOR_NAMES } from "../lib/format";
 import { useCardHover } from "./CardPreview";
+import { ManaCost } from "./ManaCost";
 
 function PickRow({ card }: { card: Card }) {
   const hover = useCardHover(card);
@@ -13,9 +14,7 @@ function PickRow({ card }: { card: Card }) {
       {...hover}
     >
       <span className="truncate">{card.name}</span>
-      <span className="shrink-0 font-mono text-xs text-base-content/60">
-        {manaText(card.manaCost)}
-      </span>
+      <ManaCost cost={card.manaCost} className="shrink-0 whitespace-nowrap text-xs" />
     </li>
   );
 }
