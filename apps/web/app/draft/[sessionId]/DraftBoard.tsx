@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { type Card, type PickScore, explainPick, isDecisionPick } from "@mtg-tutor/core";
+import { CardName, CardText } from "../../components/CardText";
 import { CardTile } from "../../components/CardTile";
 import { PicksColumn } from "../../components/PicksColumn";
 import { Results } from "../../components/Results";
@@ -107,6 +108,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [sessionId, getAccessToken, settings.coachMinPackCards],
   );
 
+  // Every card the coach could plausibly name: what is in front of you, what
+  // you have taken, and the card the data preferred.
+  const boardCards = useMemo(() => {
+    const cards: Card[] = [...(state?.pack ?? []), ...(state?.pool ?? [])];
+    if (last) cards.push(last.score.best, last.score.picked);
+    return cards;
+  }, [state?.pack, state?.pool, last]);
+
   async function onPick(card: Card) {
     if (picking) return;
     setPicking(true);
@@ -184,10 +193,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         {last.score.score}/100
                       </span>
                     </div>
-                    <div>{last.score.picked.name}</div>
+                    <div>
+                      <CardName card={last.score.picked} />
+                    </div>
                     {!last.score.isBest && (
-                      <div className="text-sm text-primary">
-                        best was {last.score.best.name} ({pct(last.score.best.gihWinRate)})
+                      <div className="text-sm">
+                        best was <CardName card={last.score.best} /> (
+                        {pct(last.score.best.gihWinRate)})
                       </div>
                     )}
                     {last.signal && <div className="text-sm text-info">{last.signal}</div>}
@@ -196,7 +208,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
                       </span>
                       <div className="whitespace-pre-wrap">
-                        {coach || <span className="text-base-content/60">thinking…</span>}
+                        {coach ? (
+                          <CardText text={coach} cards={boardCards} />
+                        ) : (
+                          <span className="text-base-content/60">thinking…</span>
+                        )}
                       </div>
                       {skipped && (
                         <button
