@@ -101,26 +101,31 @@ export function UserMenu() {
           <div className="flex flex-col gap-1.5 px-2 py-1.5 text-sm">
             <span>AI coach</span>
             <span className="text-xs text-base-content/60">
-              Skip picks with fewer cards left than this
+              Skips picks with fewer than {settings.coachMinPackCards} cards left
             </span>
             <div
-              className="join w-full"
+              className="flex rounded-lg bg-base-300 p-0.5"
               role="group"
               aria-label="Smallest pack the AI coach comments on"
             >
-              {COACH_THRESHOLDS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`btn join-item btn-xs flex-1 ${
-                    settings.coachMinPackCards === n ? "btn-primary" : "btn-outline"
-                  }`}
-                  aria-pressed={settings.coachMinPackCards === n}
-                  onClick={() => update({ coachMinPackCards: n })}
-                >
-                  {n}
-                </button>
-              ))}
+              {COACH_THRESHOLDS.map((n) => {
+                const selected = settings.coachMinPackCards === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`flex-1 rounded-md py-1 text-xs tabular-nums transition-colors ${
+                      selected
+                        ? "bg-base-100 font-semibold"
+                        : "text-base-content/50 hover:text-base-content"
+                    }`}
+                    aria-pressed={selected}
+                    onClick={() => update({ coachMinPackCards: n })}
+                  >
+                    {n}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
