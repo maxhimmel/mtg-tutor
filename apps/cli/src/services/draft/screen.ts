@@ -115,15 +115,18 @@ async function showResults(convex: ConvexHttpClient, sessionId: Id<"draftSession
   const results = await convex.query(api.draft.results, { sessionId });
   const { summary, deck, mistakes, ratedCardCount } = results;
 
-  const deckLines = deck.spells
-    .slice(0, 23)
+  const deckLines = [...deck.spells, ...deck.nonbasicLands]
     .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
     .join("\n");
+
+  const landLine = deck.nonbasicLands.length
+    ? `${deck.nonbasicLands.length} drafted lands, +${deck.basicLands} basics`
+    : `+${deck.basicLands} basics`;
 
   p.note(
     `Overall score: ${pc.bold(summary.overallScore.toFixed(1))}/100\n` +
       `Best-pick accuracy: ${pc.bold((summary.accuracy * 100).toFixed(0))}%\n` +
-      `Suggested deck (${deck.colors.join("") || "splashy"}, +${deck.lands} lands):\n${deckLines}`,
+      `Suggested deck (${deck.colors.join("") || "splashy"}, ${landLine}):\n${deckLines}`,
     "Draft complete",
   );
 

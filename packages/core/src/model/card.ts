@@ -77,8 +77,14 @@ export interface SetData {
   packComposition?: PackComposition;
 }
 
+// Front face only: a creature that transforms into a land is a creature you
+// cast, not a land you play.
+const frontFace = (typeLine: string) => typeLine.split("//")[0];
+
+export const isLand = (c: { typeLine: string }) => /\bLand\b/.test(frontFace(c.typeLine));
+
 export const isBasicLand = (c: { typeLine: string }) =>
-  /\bBasic\b/.test(c.typeLine) && /\bLand\b/.test(c.typeLine);
+  /\bBasic\b/.test(frontFace(c.typeLine)) && isLand(c);
 
 // Match names across 17Lands and Scryfall: lowercase, front face of DFCs,
 // strip accents/punctuation noise.
