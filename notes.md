@@ -4,16 +4,17 @@
 
 2. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
-3. ~~17Lands returns empty stats for rotated sets~~ — **fixed 2026-07-23; the
-   diagnosis was wrong.** Not rotation: we called a legacy endpoint
-   (`/card_ratings/data?format=`) instead of `/api/card_data?event_type=`, which
-   serves every set back to 2020. See "Own the draft data" below and the
-   `issue-3-ratings-real-cause` / `17lands-data-sources` memories.
+3. I don't think we should be wasting AI explanation tokens during the last few picks. They're essentially forced picks at that point and a waste of API tokens.
 
-4. ~~17Lands and Scryfall disagree on some set codes~~ — **fixed 2026-07-23; also
-   misdiagnosed.** The blocker was the `is:booster` Scryfall filter (unset on Play
-   Booster sets), not set codes; no mapping table needed. See "Own the draft data"
-   below and the `play-booster-pack-model` memory.
+4. More info on the "picks" panel during a draft:
+   - Counters for card types
+   - Counters for creature types
+
+5. How can we get some free to use MTG mana icons?!
+
+6. Have certain card mechanics (i.e. trample, haste, etc) have an additional side-popup next to the hovered-cards popup. That way I don't need to guess what that mechanic does.
+
+7. The "last pic" and "coach" panel should have something where card names have a special highlight to them and when i hover them that card's hover popup appears.
 
 # Ideas:
 
@@ -35,7 +36,6 @@
    end-of-turn hand/board/life for both players.
 
    What it would unlock, none of which is derivable from draft or game data:
-
    - **A mulligan/keep trainer.** `candidate_hand_1..7` plus `opening_hand` and
      `won` is a labelled dataset of real keep-or-mull decisions and their
      outcomes. Draft tutors rarely teach this, and it is a distinct skill from
@@ -48,7 +48,7 @@
    - **Curve and land-count truth.** End-of-turn lands in play vs winning,
      measured rather than assumed. Relevant to Issue #1 above.
    - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
-     *draft* tutor; per-turn play coaching is a different product, and the data
+     _draft_ tutor; per-turn play coaching is a different product, and the data
      existing is not a reason to build it.
 
    If we do pick this up: the pipeline already streams gzip and never keeps raw
@@ -110,14 +110,14 @@ Open / unfinished (completed items dropped):
    `node:fs` in its credential loader, and `convex/http.ts` can't opt into
    `"use node"` because HTTP actions are V8-only. The coach endpoint therefore
    calls the Messages API with raw `fetch` and parses the SSE `text_delta`
-   events itself. If an action ever *does* need the SDK, it has to live in a
+   events itself. If an action ever _does_ need the SDK, it has to live in a
    separate `"use node"` file and can't be an HTTP action.
    Gotcha found while building it: a `ReadableStream` that drains the upstream
    body from `pull()` delivers the whole body but **never terminates** — the
    client hangs with the response already in hand. Pumping to completion inside
    `start()` closes it properly. Verified end to end: first byte ~1.1s, full
    response ~3.2s.
-2. Review and stats remain CLI-only *surfaces*, but their logic is now backend
+2. Review and stats remain CLI-only _surfaces_, but their logic is now backend
    functions (`convex/review.ts`, `convex/stats.ts`), so a web version is a UI
    job rather than a port. The review quiz has no web equivalent yet.
 3. **Headless runs need a token.** `smoke-draft.mjs` cannot talk to the draft
@@ -129,7 +129,7 @@ Open / unfinished (completed items dropped):
 4. **Three WorkOS values are copied by hand from `packages/backend/.env.local`
    into `apps/web/.env.local`, and that is as good as it gets.** Convex's own
    schema (`convex/schemas/convex.schema.json`) documents `localEnvVars` as
-   *"writes the given mapping to the local `.env` file"* with **no path option**,
+   _"writes the given mapping to the local `.env` file"_ with **no path option**,
    so `convex dev` cannot populate the Next app's file. A `next.config.ts` that
    read the backend's `.env.local` was tried and reverted: shipped code reaching
    into a sibling package's gitignored file, to save three lines set once, is a
@@ -140,7 +140,7 @@ Open / unfinished (completed items dropped):
    all drop what they were not told about, and only Convex's deployment env
    errors loudly. Three deploys broke on this. The countermeasures now in place:
    `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
-   `globalEnv` rather than per-task (a task-level `env` *replaces* the general
+   `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
    list — verified with `turbo run build --dry=json`). Do not add a task-level
    `env` key; put it in `globalEnv`.
 6. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
@@ -182,7 +182,7 @@ Ordered by value × readiness. Each is a candidate feature branch.
 
 1. **`archetype-aware-scoring`** — consume the archetype splits + synergies we
    now own (in `setStats`, read by nothing yet) so `cardValue`/scoring rates a
-   card by how good it is *in your colours*, and surface the metrics we compute
+   card by how good it is _in your colours_, and surface the metrics we compute
    but never show (trap warnings from `maindeckRate`, synergy hints, archetype
    fit in explanations). **Fixes Issue #2.** Highest value; data is validated and
    live. `cardValue` (`core/scoring/value.ts`) is the single tuning point.
