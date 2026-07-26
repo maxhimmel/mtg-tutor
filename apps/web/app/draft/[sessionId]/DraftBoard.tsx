@@ -6,10 +6,18 @@ import { useMutation, useQuery } from "convex/react";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
-import { type Card, type PickScore, explainPick, isDecisionPick } from "@mtg-tutor/core";
+import {
+  type Card,
+  type PickScore,
+  explainPick,
+  isDecisionPick,
+  loadPrinciples,
+  splitCitations,
+} from "@mtg-tutor/core";
 import { CardName, CardText } from "../../components/CardText";
 import { CardTile } from "../../components/CardTile";
 import { PicksColumn } from "../../components/PicksColumn";
+import { PrincipleBadges } from "../../components/PrincipleBadge";
 import { Results } from "../../components/Results";
 import { UserMenu } from "../../components/UserMenu";
 import { gradeColor, pct } from "../../lib/format";
@@ -17,6 +25,7 @@ import { useSettings } from "../../lib/useSettings";
 import { convexSiteUrl } from "../../lib/convexSite";
 
 const SITE = convexSiteUrl;
+const PRINCIPLES = loadPrinciples();
 
 interface LastPick {
   score: PickScore;
@@ -116,6 +125,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     return cards;
   }, [state?.pack, state?.pool, last]);
 
+  // Recomputed on every streamed chunk, which is why splitCitations tolerates a
+  // half-arrived citation rather than flashing "[EVA" into the prose.
+  const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
+
   async function onPick(card: Card) {
     if (picking) return;
     setPicking(true);
@@ -144,11 +157,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   return (
     <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
       <div className="mb-5 flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300 pb-3">
-        <div className="text-lg font-bold tracking-tight">
-          <Link href="/" className="no-underline text-base-content">
-            mtg<span className="text-primary">-</span>tutor
-          </Link>{" "}
-          <span className="font-normal text-base-content/60">{state.setCode.toUpperCase()}</span>
+        <div className="flex flex-wrap items-baseline gap-4">
+          <div className="text-lg font-bold tracking-tight">
+            <Link href="/" className="no-underline text-base-content">
+              mtg<span className="text-primary">-</span>tutor
+            </Link>{" "}
+            <span className="font-normal text-base-content/60">{state.setCode.toUpperCase()}</span>
+          </div>
+          <Link href="/principles" className="text-sm text-base-content/60 hover:text-primary">
+            Draft principles
+          </Link>
         </div>
         <div className="tabular-nums text-base-content/60">
           {state.complete ? (
@@ -209,11 +227,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       </span>
                       <div className="whitespace-pre-wrap">
                         {coach ? (
-                          <CardText text={coach} cards={boardCards} />
+                          <CardText text={advice.prose} cards={boardCards} />
                         ) : (
                           <span className="text-base-content/60">thinking…</span>
                         )}
                       </div>
+                      <PrincipleBadges principles={advice.principles} />
                       {skipped && (
                         <button
                           className="btn btn-outline btn-xs mt-2"

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
@@ -10,8 +11,13 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
       <div className="mb-5 flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300 pb-3">
-        <div className="text-lg font-bold tracking-tight">
-          mtg<span className="text-primary">-</span>tutor
+        <div className="flex flex-wrap items-baseline gap-4">
+          <div className="text-lg font-bold tracking-tight">
+            mtg<span className="text-primary">-</span>tutor
+          </div>
+          <Link href="/principles" className="text-sm text-base-content/60 hover:text-primary">
+            Draft principles
+          </Link>
         </div>
         <UserMenu />
       </div>
@@ -26,6 +32,13 @@ export default function Home() {
         <a className="btn btn-primary btn-sm" href="/sign-in">
           Sign in
         </a>
+        <p className="mt-4 text-sm text-base-content/60">
+          Or read the{" "}
+          <Link href="/principles" className="link link-primary">
+            draft principles
+          </Link>{" "}
+          the coach is grounded in — free, no account needed.
+        </p>
       </Unauthenticated>
 
       <Authenticated>
