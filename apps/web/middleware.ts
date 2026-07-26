@@ -1,12 +1,13 @@
 import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 
-// The landing page lists sets without needing an identity; everything that
-// touches a draft session does. Gating at the edge means an unauthenticated
-// visitor gets bounced to WorkOS instead of watching the board fail to load.
+// The landing page and the principles reference are readable without an
+// identity; everything that touches a draft session is not. Gating at the edge
+// means an unauthenticated visitor gets bounced to WorkOS instead of watching
+// the board fail to load.
 export default authkitMiddleware({
   middlewareAuth: {
     enabled: true,
-    unauthenticatedPaths: ["/", "/sign-in", "/sign-up", "/callback"],
+    unauthenticatedPaths: ["/", "/principles", "/sign-in", "/sign-up", "/callback"],
   },
 });
 

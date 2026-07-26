@@ -21,6 +21,7 @@ export * from "./scoring/explain.js";
 export * from "./util/rng.js";
 
 export * from "./tutor/principles.js";
+export * from "./tutor/citations.js";
 export * from "./tutor/prompt.js";
 export * from "./tutor/pickCoach.js";
 export * from "./tutor/reviewPrompt.js";
