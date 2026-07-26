@@ -44,6 +44,40 @@ describe("splitCitations", () => {
     expect(prose).toBe("Take the bomb, then reassess.");
   });
 
+  it("tolerates the spacing the model actually emits", () => {
+    const observed =
+      "Muldrotha is a powerful, high‑cost engine but at pick 2 its 6‑mana curve makes it a " +
+      "slower bomb than the 2-drop Burst Lightning [ EVAL-02 ]. Stick with the best absolute " +
+      "power early and stay open [ SIG-01 ].";
+    const { prose, principles } = split(observed);
+    expect(prose).not.toContain("[");
+    expect(prose).toContain("high‑cost");
+    expect(prose.endsWith("stay open.")).toBe(true);
+    expect(principles.map((p) => p.id)).toEqual(["EVAL-02", "SIG-01"]);
+  });
+
+  it("accepts parentheses and comma-separated ids", () => {
+    const { prose, principles } = split("Take the bomb (EVAL-02, SIG-01) and move on.");
+    expect(prose).toBe("Take the bomb and move on.");
+    expect(principles.map((p) => p.id)).toEqual(["EVAL-02", "SIG-01"]);
+  });
+
+  it("resolves an id spelled with a typographic hyphen", () => {
+    const { principles } = split("Bombs win. [ EVAL‑02 ]");
+    expect(principles.map((p) => p.id)).toEqual(["EVAL-02"]);
+  });
+
+  it("catches an id the model left unbracketed", () => {
+    const { prose, principles } = split("Bombs win the game. EVAL-02");
+    expect(prose).toBe("Bombs win the game.");
+    expect(principles.map((p) => p.id)).toEqual(["EVAL-02"]);
+  });
+
+  it("leaves bracketed prose that is not a citation alone", () => {
+    const text = "Take the removal [the data disagrees, but only slightly].";
+    expect(split(text)).toEqual({ prose: text, principles: [] });
+  });
+
   it("hides a citation still arriving from the stream", () => {
     expect(split("Bombs win the game. [EVA").prose).toBe("Bombs win the game.");
     expect(split("Bombs win the game. [").prose).toBe("Bombs win the game.");

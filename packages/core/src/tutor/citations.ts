@@ -5,11 +5,21 @@ export interface SplitCitations {
   principles: Principle[];
 }
 
-const CITATION = /\[([A-Z]+-\d+)\]/g;
+// How the model actually writes citations varies run to run: "[EVAL-02]",
+// "[ EVAL-02 ]", "(EVAL-02, SIG-01)", or bare. It also reaches for typographic
+// hyphens mid-word, so an id may not be spelled with an ASCII one.
+const HYPHEN = "-\\u2010\\u2011\\u2012\\u2013\\u2014\\u2212";
+const ID = `[A-Z]{2,}[${HYPHEN}]\\d{1,3}`;
+const HYPHENS = new RegExp(`[${HYPHEN}]`, "g");
 
-// A citation half-arrived from the stream, e.g. "[EVA". Anchored to the end so
+// A bracket counts as a citation only when it holds nothing but ids, so
+// bracketed prose is left alone.
+const GROUP = new RegExp(`[\\[(]\\s*(${ID}(?:\\s*[,;]\\s*${ID})*)\\s*[\\])]`, "g");
+const BARE = new RegExp(`\\b${ID}\\b`, "g");
+
+// A citation half-arrived from the stream, e.g. "[ EVA". Anchored to the end so
 // it only ever eats the token still being typed, never a bracket mid-sentence.
-const PARTIAL_CITATION = /\[[A-Z]*-?\d*$/;
+const PARTIAL_CITATION = new RegExp(`[\\[(]\\s*[A-Z]*[${HYPHEN}]?\\d*$`);
 
 const indexes = new WeakMap<PrinciplesDoc, Map<string, Principle>>();
 
@@ -45,14 +55,22 @@ export function splitCitations(text: string, doc: PrinciplesDoc): SplitCitations
   const index = indexOf(doc);
   const cited = new Map<string, Principle>();
 
-  const stripped = text.replace(CITATION, (_token, id: string) => {
+  const take = (raw: string) => {
+    const id = raw.replace(HYPHENS, "-");
     const principle = index.get(id);
     if (principle) cited.set(id, principle);
-    return "";
-  });
-
-  return {
-    prose: tidy(stripped.replace(PARTIAL_CITATION, "")),
-    principles: [...cited.values()],
   };
+
+  const stripped = text
+    .replace(GROUP, (_token, ids: string) => {
+      for (const id of ids.split(/[,;]/)) take(id.trim());
+      return "";
+    })
+    .replace(BARE, (id) => {
+      take(id);
+      return "";
+    })
+    .replace(PARTIAL_CITATION, "");
+
+  return { prose: tidy(stripped), principles: [...cited.values()] };
 }
