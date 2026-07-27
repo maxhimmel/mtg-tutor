@@ -10,6 +10,26 @@
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
 
+3. **"Best pick" is decided by data alone, and the interesting answer needs the
+   model.** `scorePick` ranks a pack by `cardValue` and calls the top card the
+   best — pure 17Lands win rate, blind to what is already in your pool. The
+   review then has a second, better idea of best: the **context-best**, the card
+   that serves _this_ deck, and the lesson the whole feature is built around is
+   the gap between the two.
+
+   The problem is that context-best only exists after a model call, so nothing
+   can filter, sort or flag picks by it up front. Concretely: the missed-picks
+   report has to filter on `isBest` (did you take the data's top card), which
+   silently drops every pick where you took the raw best and the coach would
+   still have taken something else — exactly the divergence worth teaching.
+
+   What would fix it is a deterministic context-aware value: `cardValue` reading
+   the archetype splits and synergies we already own, so scoring knows your
+   colours. That is roadmap #1 (`archetype-aware-scoring`) — this is a second
+   reason to do it, and the place it would pay off beyond scoring. Until then
+   `isBest` is the honest proxy and the report is named for what it actually
+   shows.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
