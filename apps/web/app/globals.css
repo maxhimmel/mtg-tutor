@@ -1,6 +1,61 @@
 @import "tailwindcss";
-@plugin "daisyui" {
-  themes: dark --default, light;
+@plugin "daisyui";
+
+/* The chrome is Magic's card back rather than a dashboard: warm brown-blacks
+   held at very low chroma so they read as paper and wood, with one saturated
+   colour -- an antique gold, the same family as the GOLD_PLATE that
+   lib/cardFrame.ts paints multicolour cards with. Everything here is
+   deliberately quiet, because the loudest things on screen should be the card
+   art and the placards, not the frame around them.
+
+   The status colours double as the grade scale (see gradeColor in lib/format),
+   so they are spaced by hue rather than picked individually: green, blue,
+   orange, red. Warning sits at hue 48 to stay clearly orange against the gold
+   primary at 85. */
+@plugin "daisyui/theme" {
+  name: "tutor";
+  default: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(19% 0.008 62);
+  --color-base-200: oklch(23% 0.010 62);
+  --color-base-300: oklch(30% 0.012 62);
+  --color-base-content: oklch(91% 0.014 85);
+
+  --color-primary: oklch(79% 0.105 85);
+  --color-primary-content: oklch(21% 0.030 68);
+  --color-secondary: oklch(62% 0.105 245);
+  --color-secondary-content: oklch(97% 0.010 245);
+  --color-accent: oklch(72% 0.095 155);
+  --color-accent-content: oklch(20% 0.020 155);
+  --color-neutral: oklch(28% 0.012 62);
+  --color-neutral-content: oklch(90% 0.010 62);
+
+  --color-info: oklch(70% 0.100 240);
+  --color-info-content: oklch(18% 0.020 240);
+  --color-success: oklch(74% 0.130 148);
+  --color-success-content: oklch(18% 0.020 148);
+  --color-warning: oklch(77% 0.140 48);
+  --color-warning-content: oklch(20% 0.030 48);
+  --color-error: oklch(66% 0.165 27);
+  --color-error-content: oklch(97% 0.010 27);
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* Wired to the next/font variables declared in layout.tsx. Overriding
+   --font-sans is what moves the whole document onto Archivo, since Tailwind's
+   preflight sets the document family from it. */
+@theme {
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
 }
 
 /* The card tile keeps MTG's fixed card proportions; nothing in daisyUI/Tailwind
@@ -25,4 +80,28 @@
    nearly invisible against base-200 in the dark theme. */
 @utility popup-surface {
   @apply rounded-box border border-base-content/20 bg-base-200 shadow-2xl;
+}
+
+/* The one-line label above every panel and section. Small, wide-tracked, and
+   quiet -- it names the region without competing with what is inside it. */
+@utility eyebrow {
+  @apply text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-base-content/60;
+}
+
+/* The only animation in the app, and it fires in the only place worth marking:
+   a graded pick landing. Applied through motion-safe:, so a reduced-motion
+   reader gets the verdict with no movement at all. */
+@keyframes verdict-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-verdict {
+  animation: verdict-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }

@@ -19,48 +19,60 @@ import { ManaCost } from "./ManaCost";
 // is 0.13 of that, the corner radius 0.3, and the type 0.57 -- which is why the
 // plate hugs the name so tightly and the row reads as chunky rather than airy.
 // Everything below is that ratio against a 30px row.
+// Hovering or focusing one opens the same card preview the pack tiles and card
+// names do. That lives here rather than on the list row because a placard is
+// shown outside a list too -- the verdict stacks two of them -- and a row that
+// previews next to one that does not is the kind of gap nobody notices until
+// they reach for it.
 export function CardPlacard({ card, className }: { card: Card; className?: string }) {
   const frame = frameFor(card);
+  const hover = useCardHover(card);
 
   return (
     <div
-      className={`rounded-lg border border-[#0a0a0a] p-[3px] ${className ?? ""}`}
-      style={{
-        background: frame.ring,
-        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.3)",
-      }}
+      className={`cursor-default rounded-[11px] outline-offset-2 focus-visible:outline focus-visible:outline-primary motion-safe:transition-transform motion-safe:hover:-translate-y-px ${className ?? ""}`}
+      tabIndex={0}
+      {...hover}
     >
       <div
-        className="flex items-center justify-between gap-2 rounded-md border border-black/55 px-1.5"
+        className="rounded-lg border border-[#0a0a0a] p-[3px]"
         style={{
-          background: `linear-gradient(to bottom, color-mix(in srgb, ${frame.plate} 88%, #fff), ${frame.plate})`,
-          // The bright hairline the plate is drawn with, just inside its dark edge.
-          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)",
+          background: frame.ring,
+          boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.3)",
         }}
       >
-        <span
-          className="truncate font-serif text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
-          title={card.name}
+        <div
+          className="flex items-center justify-between gap-2 rounded-md border border-black/55 px-1.5"
+          style={{
+            background: `linear-gradient(to bottom, color-mix(in srgb, ${frame.plate} 88%, #fff), ${frame.plate})`,
+            // The bright hairline the plate is drawn with, just inside its dark edge.
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)",
+          }}
         >
-          {card.name}
-        </span>
-        <ManaCost cost={card.manaCost} shadow className="shrink-0 whitespace-nowrap text-[11px]" />
+          {/* The app's display face, which is here for the same reason it is on
+              headings: it is the closest licensable stand-in for Beleren, the
+              face Magic prints card names in. */}
+          <span
+            className="truncate font-display text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
+            title={card.name}
+          >
+            {card.name}
+          </span>
+          <ManaCost
+            cost={card.manaCost}
+            shadow
+            className="shrink-0 whitespace-nowrap text-[11px]"
+          />
+        </div>
       </div>
     </div>
   );
 }
 
 function PlacardRow({ card, trailing }: { card: Card; trailing?: ReactNode }) {
-  const hover = useCardHover(card);
   return (
     <li className="flex items-center gap-3">
-      <div
-        className="min-w-0 flex-1 cursor-default rounded-[11px] outline-offset-2 focus-visible:outline focus-visible:outline-primary motion-safe:transition-transform motion-safe:hover:-translate-y-px"
-        tabIndex={0}
-        {...hover}
-      >
-        <CardPlacard card={card} />
-      </div>
+      <CardPlacard card={card} className="min-w-0 flex-1" />
       {trailing != null && (
         <span className="shrink-0 text-sm tabular-nums text-base-content/60">{trailing}</span>
       )}

@@ -4,6 +4,12 @@
 export const pct = (v?: number | null): string =>
   v == null ? "—" : `${(v * 100).toFixed(1)}%`;
 
+// The gap between two win rates, in the percentage points players compare them
+// in. Undefined rather than "—" when either side is missing, so a caller can
+// drop the whole line instead of printing a dash next to a minus sign.
+export const pctPoints = (a?: number | null, b?: number | null): string | undefined =>
+  a == null || b == null ? undefined : `${((a - b) * 100).toFixed(1)}%`;
+
 // "{2}{U}{U}" -> "2UU". The spoken form of a cost the ManaCost component draws
 // as symbols, so a screen reader gets something better than a row of icons.
 export const manaText = (cost?: string): string =>

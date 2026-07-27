@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
@@ -14,14 +13,15 @@ import {
   loadPrinciples,
   splitCitations,
 } from "@mtg-tutor/core";
-import { CardName, CardText } from "../../components/CardText";
+import { AppHeader } from "../../components/AppHeader";
+import { CardText } from "../../components/CardText";
 import { CardTile } from "../../components/CardTile";
+import { Panel } from "../../components/Panel";
 import { PicksColumn } from "../../components/PicksColumn";
 import { PrincipleBadges } from "../../components/PrincipleBadge";
 import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
-import { UserMenu } from "../../components/UserMenu";
-import { gradeColor, pct } from "../../lib/format";
+import { Verdict } from "../../components/Verdict";
 import { useSettings } from "../../lib/useSettings";
 import { convexSiteUrl } from "../../lib/convexSite";
 
@@ -157,38 +157,25 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
   return (
     <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300 pb-3">
-        <div className="flex flex-wrap items-baseline gap-4">
-          <div className="text-lg font-bold tracking-tight">
-            <Link href="/" className="no-underline text-base-content">
-              mtg<span className="text-primary">-</span>tutor
-            </Link>{" "}
-            <span className="inline-flex items-baseline gap-1.5 font-normal text-base-content/60">
-              <SetIcon
-                uri={state.setIcon}
-                name={state.setName}
-                className="size-4 self-center"
-              />
-              <span title={state.setName}>{state.setCode.toUpperCase()}</span>
-            </span>
-          </div>
-          <Link href="/principles" className="text-sm text-base-content/60 hover:text-primary">
-            Draft principles
-          </Link>
-        </div>
-        <div className="tabular-nums text-base-content/60">
+      <AppHeader>
+        <div className="flex items-center gap-2.5 text-sm tabular-nums text-base-content/60">
+          <span className="flex items-center gap-1.5 text-base-content/80" title={state.setName}>
+            <SetIcon uri={state.setIcon} name={state.setName} className="size-4" />
+            {state.setCode.toUpperCase()}
+          </span>
+          <span aria-hidden className="h-3.5 w-px bg-base-300" />
           {state.complete ? (
-            <strong className="text-base-content">Draft complete</strong>
+            <span className="font-semibold text-base-content">Draft complete</span>
           ) : (
-            <>
-              Pack <strong className="text-base-content">{state.packNo}</strong> · Pick{" "}
-              <strong className="text-base-content">{state.pickNo}</strong> · {state.pack.length}{" "}
-              cards · pool <strong className="text-base-content">{state.pool.length}</strong>
-            </>
+            <span>
+              Pack <strong className="font-semibold text-base-content">{state.packNo}</strong> ·
+              Pick <strong className="font-semibold text-base-content">{state.pickNo}</strong> ·{" "}
+              {state.pack.length} in pack · pool{" "}
+              <strong className="font-semibold text-base-content">{state.pool.length}</strong>
+            </span>
           )}
         </div>
-        <UserMenu />
-      </div>
+      </AppHeader>
 
       {state.complete ? (
         <Results sessionId={id} />
@@ -201,63 +188,46 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           </div>
 
           <aside className="flex flex-col gap-4">
-            <div className="card border border-base-300 bg-base-200">
-              <div className="card-body gap-2 p-4">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-base-content/60">
-                  Last pick
-                </h2>
-                {last ? (
-                  <>
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className="text-2xl font-bold tracking-tight"
-                        style={{ color: gradeColor(last.score.grade) }}
-                      >
-                        {last.score.grade}
-                      </span>
-                      <span className="tabular-nums text-base-content/60">
-                        {last.score.score}/100
-                      </span>
+            <Panel title="Last pick" bodyClassName="gap-3">
+              {last ? (
+                <>
+                  {/* Keyed by pick so each new verdict re-mounts and replays the
+                      entrance -- the one animation in the app, on the one moment
+                      the player is waiting for. */}
+                  <div key={last.pickIndex} className="motion-safe:animate-verdict">
+                    <Verdict score={last.score} />
+                  </div>
+
+                  {last.signal && <p className="text-sm text-info">{last.signal}</p>}
+
+                  <div className="border-t border-base-300 pt-3">
+                    <div className="eyebrow mb-1.5">
+                      {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
                     </div>
-                    <div>
-                      <CardName card={last.score.picked} />
-                    </div>
-                    {!last.score.isBest && (
-                      <div className="text-sm">
-                        best was <CardName card={last.score.best} /> (
-                        {pct(last.score.best.gihWinRate)})
-                      </div>
-                    )}
-                    {last.signal && <div className="text-sm text-info">{last.signal}</div>}
-                    <div className="mt-2 min-h-[3.2rem] border-t border-base-300 pt-2">
-                      <span className="mb-1 block text-xs text-base-content/60">
-                        {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
-                      </span>
-                      <div className="whitespace-pre-wrap">
-                        {coach ? (
-                          <CardText text={advice.prose} cards={boardCards} />
-                        ) : (
-                          <span className="text-base-content/60">thinking…</span>
-                        )}
-                      </div>
-                      <PrincipleBadges principles={advice.principles} />
-                      {skipped && (
-                        <button
-                          className="btn btn-outline btn-xs mt-2"
-                          onClick={() =>
-                            void streamCoach(last.pickIndex, last.score, last.cardsInPack, true)
-                          }
-                        >
-                          Coach this pick anyway
-                        </button>
+                    <div className="min-h-[3.2rem] whitespace-pre-wrap leading-relaxed">
+                      {coach ? (
+                        <CardText text={advice.prose} cards={boardCards} />
+                      ) : (
+                        <span className="text-base-content/60">thinking…</span>
                       )}
                     </div>
-                  </>
-                ) : (
-                  <p className="text-base-content/60">Pick a card to see how it scored.</p>
-                )}
-              </div>
-            </div>
+                    <PrincipleBadges principles={advice.principles} />
+                    {skipped && (
+                      <button
+                        className="btn btn-outline btn-xs mt-3"
+                        onClick={() =>
+                          void streamCoach(last.pickIndex, last.score, last.cardsInPack, true)
+                        }
+                      >
+                        Coach this pick anyway
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="text-base-content/60">Pick a card to see how it scored.</p>
+              )}
+            </Panel>
 
             <PicksColumn pool={state.pool} />
           </aside>

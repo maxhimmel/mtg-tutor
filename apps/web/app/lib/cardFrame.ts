@@ -30,6 +30,13 @@ const GOLD_PLATE = "#d3c68c";
 
 const WUBRG: ColorCode[] = ["W", "U", "B", "R", "G"];
 
+// The same ring a placard is drawn with, for anything that needs to name a
+// colour outside a card row -- the pool's colour counts, most of all. Sharing
+// the value is the point: the swatch beside "Blue 7" is exactly the blue on the
+// seven cards it is counting.
+export const ringFor = (color: string): string =>
+  (RINGS as Record<string, string>)[color] ?? RINGS.colorless;
+
 export interface Frame {
   // Paints the ring. A flat colour for one colour, a gradient for several.
   ring: string;
