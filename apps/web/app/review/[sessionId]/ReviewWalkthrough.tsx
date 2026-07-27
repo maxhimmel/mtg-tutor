@@ -33,6 +33,14 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
   const picks = draft?.picks;
   const { get, request } = useVerdicts(id, picks);
 
+  // Same reuse the verdict cache guards against: one component serves both ids
+  // when the router moves between two drafts, and a position kept from a longer
+  // draft opens the shorter one on its own results screen.
+  useEffect(() => {
+    setStep(0);
+    setGuesses(new Map());
+  }, [sessionId]);
+
   // Only decision picks are steps. A pick with three cards left teaches
   // nothing, so the CLI flashes those past and so does this.
   const decisions = useMemo(() => (picks ?? []).filter(decisionPick), [picks]);

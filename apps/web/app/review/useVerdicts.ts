@@ -38,6 +38,15 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
   // depended on by an effect without re-firing as answers land.
   const asked = useRef(new Set<number>());
 
+  // The router reuses one component across two ids of the same dynamic route,
+  // so without this a second draft would inherit the first draft's answers and
+  // -- worse -- its record of what had already been asked, and would never ask
+  // for anything.
+  useEffect(() => {
+    asked.current = new Set();
+    setVerdicts(new Map());
+  }, [sessionId]);
+
   useEffect(() => {
     if (!seed) return;
     const frozen = seed.filter((p) => p.verdict && !asked.current.has(p.pickIndex));
