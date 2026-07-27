@@ -38,8 +38,11 @@ export function CardPlacard({ card, className }: { card: Card; className?: strin
           boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)",
         }}
       >
+        {/* The app's display face, which is here for the same reason it is on
+            headings: it is the closest licensable stand-in for Beleren, the
+            face Magic prints card names in. */}
         <span
-          className="truncate font-serif text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
+          className="truncate font-display text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
           title={card.name}
         >
           {card.name}
