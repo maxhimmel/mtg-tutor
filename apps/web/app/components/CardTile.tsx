@@ -1,6 +1,7 @@
 "use client";
 
 import type { Card } from "@mtg-tutor/core";
+import { webpImage } from "../lib/cardImage";
 import { pct } from "../lib/format";
 import { useSettings } from "../lib/useSettings";
 import { useCardHover, useHidePreview } from "./CardPreview";
@@ -39,9 +40,9 @@ export function CardTile({
       {/* First child is the face that tilts; hover-3d clips it and applies the shine. */}
       <span className="card-aspect relative block w-full rounded-xl border border-transparent group-hover:border-primary">
         {card.imageUrl ? (
-          // Plain <img>: Scryfall already serves an appropriately sized "normal"
-          // image, so next/image's optimizer would add cost without benefit.
-          <img src={card.imageUrl} alt={card.name} loading="lazy" className="h-full w-full object-cover" />
+          // Plain <img>: Scryfall already serves an appropriately sized image,
+          // so next/image's optimizer would add cost without benefit.
+          <img src={webpImage(card.imageUrl)} alt={card.name} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full w-full flex-col justify-between border border-base-300 bg-base-200 p-3 text-left">
             <span className="text-sm font-semibold">{card.name}</span>

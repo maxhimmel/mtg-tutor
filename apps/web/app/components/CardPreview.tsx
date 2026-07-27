@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { type Card, keywordsOf } from "@mtg-tutor/core";
+import { webpImage } from "../lib/cardImage";
 
 interface HoverState {
   card: Card;
@@ -120,7 +121,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
             }}
           >
             <img
-              src={hover.card.imageUrl}
+              src={webpImage(hover.card.imageUrl)}
               alt={hover.card.name}
               className="w-full rounded-lg"
               draggable={false}
