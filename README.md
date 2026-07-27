@@ -231,13 +231,13 @@ Scoring, bots, and the deck builder all share one `cardValue()` function (`core/
 
 **Packs are dealt from observed shapes, not a formula.** A modern Play Booster has a wildcard slot, so a set has no fixed rarity mix — real SOS boosters span **66 distinct shapes** (5–9 commons, 0–3 rares) and every one of them contains a bonus-sheet card. `makePack` samples that observed distribution, so a Mystical Archive or Special Guest card shows up exactly as often as it does in the real format. Sets with no observed data fall back to the fixed 15-card `PACK` constants and stay playable.
 
-The shapes, and all the win-rate data, come from the 17Lands public datasets. Adding a set is a four-step flow — availability check, build the stats artifact, seed it, then ingest the draftable set from Scryfall + those stats:
+The shapes, and all the win-rate data, come from the 17Lands public datasets. Adding a set is a five-step flow — availability check, build the stats artifact, seed it, ingest the draftable set from Scryfall + those stats, then prove it deals the packs its data claims:
 
 ```bash
-pnpm new-set SOS TradDraft                     # runs all four steps below, scoped to this set
+pnpm new-set SOS TradDraft                     # runs all five steps below, scoped to this set
 ```
 
-`new-set` is a thin orchestrator over the four underlying scripts, which you can
+`new-set` is a thin orchestrator over the five underlying scripts, which you can
 still run individually — to re-derive from local CSVs, target a different output,
 or seed/ingest an existing artifact on its own:
 
@@ -246,14 +246,21 @@ pnpm check-availability SOS TradDraft          # refuses sets without the datase
 pnpm build-set-stats SOS TradDraft             # ~1.2GB of CSV -> ~260KB artifact
 pnpm seed-set-stats sos.TradDraft              # upload the committed artifact to Convex
 pnpm ingest-sets sos.TradDraft                 # rebuild the `sets` doc from Scryfall + stats
+pnpm validate-pack-model SOS TradDraft         # deal 200k packs and check they match
 ```
 
-The last two steps take an optional `<set>.<Format>` filter (as above) or run
+The middle steps take an optional `<set>.<Format>` filter (as above) or run
 over every committed artifact when omitted. `ingest-sets` reads the seeded stats,
-so it must run last; it makes no 17Lands API call. Add `--prod` to
-`pnpm new-set … --prod` (or to the individual seed/ingest steps) to target
+so it must run before validation; it makes no 17Lands API call. Add `--prod` to
+`pnpm new-set … --prod` (or to the individual steps) to target
 production instead of your dev deployment.
+
+**The last step exists because this pipeline's failure mode is a plausible success.** MKM once ingested "286 cards" with a bonus pool holding ten Special Guests instead of the fifty-card sheet its shapes were counted from: nothing threw, the set listed, and 11% of packs would have dealt the wrong card. `validate-pack-model` checks the artifact's shapes are coherent, that every card they assume can actually be dealt, and that 200k dealt packs come out at the rates the artifact claims — then cross-checks against [MTGJSON](https://mtgjson.com)'s booster collation, which shares no source with 17Lands. MTGJSON is an oracle only, and a patchy one (it carries an Arena booster model for well under half our sets), so it asserts where it can and says so where it cannot — the same standing the 17Lands API has in `validate-set-stats`.
 
 **A set's card pool is bigger than the set.** Bonus sheets (Mystical Archive, `soa`) and Special Guests (`spg`) print into a set's boosters under their own set codes, so ingestion searches the set *plus everything Arena-legal released the same day* — Special Guests is shared across sets and is not a Scryfall child of any of them, so no mapping table can find it. **Our stats' card list then decides what stays**, which drops promos, art cards and Alchemy rebalances while keeping the bonus sheet. Basic lands are added back because they are not rated and the land slot needs them. For SOS this yields exactly 346 cards: 271 `sos` + 65 `soa` + 10 `spg`.
 
+**That same-day search is a fast path, not the last word.** It answers *"what shipped on release day"*, which is only a proxy for *"what can appear in this set's boosters"* — and MKM breaks the proxy: its Arena packs carry a 50-card List sheet printed between 2005 and 2017, which no release-day query can reach. So the draft dataset's pack columns are the authoritative manifest, and Scryfall is only ever asked about names we already have. `build-set-stats` resolves whatever the bulk crawl misses by exact name and records the answer in the artifact as `packCards`; `ingest` fetches those by exact printing. A name that cannot be resolved at all **fails the build** rather than becoming a slot nothing can fill.
+
 Do not reintroduce `is:booster` to that Scryfall query. It is not set on Play Booster sets, so `set:sos is:booster` returns a 404 and made the set undraftable.
+
+Do not widen the pack-slot validator to accept an unrecognised slot either. `makePack` walks a fixed `SLOT_ORDER` and silently skips what it does not know, so a slot with no pool turns a loud seed failure into packs that quietly deal a card short.

@@ -1,7 +1,8 @@
 // Adds a draftable set end to end: availability preflight -> build the stats
 // artifact from the 17Lands public datasets -> seed it into Convex -> ingest the
-// set from Scryfall + those stats. The same four steps the README spells out,
-// run in order and scoped to just this set, so a new set is one command:
+// set from Scryfall + those stats -> validate that it deals the packs its data
+// claims. The steps the README spells out, run in order and scoped to just this
+// set, so a new set is one command:
 //
 //   pnpm new-set DSK                 # DSK PremierDraft, into the dev deployment
 //   pnpm new-set DSK TradDraft       # pick the format
@@ -37,6 +38,11 @@ try {
   run("build-set-stats", force ? [set, format, "--force"] : [set, format]);
   run("seed-set-stats", prod ? [artifact, "--prod"] : [artifact]);
   run("ingest-sets", prod ? [artifact, "--prod"] : [artifact]);
+  // A set that ingests without throwing can still be wrong in ways nothing above
+  // would notice -- a bonus pool holding ten cards where the shapes were counted
+  // from fifty deals the wrong card in 11% of packs and reports success. This
+  // step deals packs and counts them, so the pipeline proves its own output.
+  run("validate-pack-model", prod ? [set, format, "--prod"] : [set, format]);
 } catch {
   console.error(`\nAborted -- ${artifact} was not fully added. See the failing step above.`);
   process.exit(1);

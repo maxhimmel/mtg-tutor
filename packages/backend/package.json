@@ -30,7 +30,8 @@
     "seed-set-stats": "node scripts/seed-set-stats.mjs",
     "ingest-sets": "node scripts/ingest-sets.mjs",
     "check-availability": "node scripts/check-set-availability.mjs",
-    "validate-set-stats": "node scripts/validate-set-stats.mjs"
+    "validate-set-stats": "node scripts/validate-set-stats.mjs",
+    "validate-pack-model": "node scripts/validate-pack-model.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",
