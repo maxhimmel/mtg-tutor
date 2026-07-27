@@ -42,6 +42,10 @@
 
 3. What about a button on the side panel or something for the user to click to get a hint/make a suggestion/pick for them?
 
+4. Clicking on a draft pick shouldn't immediately be the user's pick. It should select/highlight the card with a little badge indicated w/some wording. And then have a "confirm pick" button anchored somewhere. Double-clicking should behave as the current system works and not require the confirm button.
+
+5. Pre-load all the images in the current pack before we display that page. Remove the image popping in as it dynamically loads. I'd rather have a loading page/spinner/state than the faster image lazy loading.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
