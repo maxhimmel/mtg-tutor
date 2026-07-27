@@ -1,19 +1,20 @@
 # Issues:
 
-1. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
-
-2. Not the first time I've seen the coach reference the mana-cost for a card incorrectly. The `Nurturing Bristleback` is actually worth `5GG` (7 total). Here's what the coach said:
-
-```
-Child of the Volcano is a modest 4‑drop creature that doesn’t qualify as a bomb and leaves you with a higher curve and no clear signal for a second color, so it’s a weaker pick than the available 3‑drop bomb Nurturing Bristleback.
-```
+1. **The coach invents mana costs.** It called `Nurturing Bristleback` a 3-drop;
+   it is `5GG`. Cause found in the code, not guessed: `buildPickContext`
+   (`core/tutor/pickCoach.ts`) renders the passed cards as
+   `name (Colour, GIH WR x%)` only — no `cmc`, no type line. Just the *picked*
+   card gets `${picked.cmc} mana`. So every curve/size claim the coach makes
+   about a card it did not pick is invention. Cheap fix: put cmc + type line on
+   the passed cards too. (Roadmap #1 does not fix this — different bug.)
 
 # Ideas:
 
-1. A quiz on what card a certain mono-colored card could/should belong to.
+1. A quiz on what archetype a mono-colored card belongs to.
 
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
 - The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
+- Standalone: its own command and data model, not part of reviewing a draft.
 
 2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
    publishes three public datasets per set/format; the stats pipeline pulls only
@@ -38,7 +39,7 @@ Child of the Volcano is a modest 4‑drop creature that doesn’t qualify as a b
      worse than its raw GIH WR implies, and right now nothing in scoring knows
      how fast a format is.
    - **Curve and land-count truth.** End-of-turn lands in play vs winning,
-     measured rather than assumed. Relevant to Issue #1 above.
+     measured rather than assumed. Feeds the deck-builder work (roadmap #2).
    - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
      _draft_ tutor; per-turn play coaching is a different product, and the data
      existing is not a reason to build it.
@@ -46,13 +47,16 @@ Child of the Volcano is a modest 4‑drop creature that doesn’t qualify as a b
    If we do pick this up: the pipeline already streams gzip and never keeps raw
    files, so adding replay is a new derivation pass, not new infrastructure.
 
-3. What about a button on the side panel or something for the user to click to get a hint/make a suggestion/pick for them?
+3. What about a button on the side panel or something for the user to click to
+   get a hint/make a suggestion/pick for them? (Guiderails is the always-on
+   version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
 
 4. Clicking on a draft pick shouldn't immediately be the user's pick. It should select/highlight the card with a little badge indicated w/some wording. And then have a "confirm pick" button anchored somewhere. Double-clicking should behave as the current system works and not require the confirm button.
 
-5. Pre-load all the images in the current pack before we display that page. Remove the image popping in as it dynamically loads. I'd rather have a loading page/spinner/state than the faster image lazy loading.
-
-6. After a draft the AI can step thru each pick and point out why a different pick woulda ben better (assuming we had a sub-optimal pick on that pack).
+5. Pre-load all the images in the current pack before we display that page.
+   Remove the image popping in as it dynamically loads. I'd rather have a
+   loading page/spinner/state than the faster image lazy loading.
+   (`CardTile.tsx` currently uses a plain `<img loading="lazy">`.)
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -63,9 +67,9 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    specifically to keep this possible later without a retrofit.
 2. Longitudinal review-quiz trend tracking (persist each quiz outcome + add stats
    panels showing judgment improvement over time). Natural 2nd iteration once the
-   review loop feels right; MVP only shows a session score.
-3. Standalone archetype quiz — see Ideas #1 above. Separate command / data model,
-   not part of reviewing a draft.
+   review loop feels right; MVP only shows a session score. Nothing persists
+   quiz outcomes today — `reviewVerdicts` stores the coach's verdict, not your
+   guess.
 
 # Web platform (done, 2026-07-21 to 2026-07-22, deployed):
 
@@ -81,8 +85,7 @@ Decisions worth not re-litigating:
    document. Ingestion refuses anything over 900KB rather than silently failing.
 3. **Ingestion refuses to overwrite rated data with unrated data** — a guard
    against a re-ingest that comes back all-null (a brand-new set, or an upstream
-   hiccup) wiping a good snapshot. (Originally framed around Issue #3's "rotation"
-   theory, since disproven; the guard stands on its own.)
+   hiccup) wiping a good snapshot.
 4. **The CLI stays a peer client, not a legacy shim.** Both it and the web app
    drive the same Convex functions, so a feature can't ship to one and skip the
    other. Cost: the CLI needs a running deployment.
@@ -99,30 +102,7 @@ Decisions worth not re-litigating:
    `pick`, `results`, `save`, and `coachContext`. Adding a function that reaches
    into `draftSessions` without going through `loadBoard` is the way this
    regresses.
-
-Open / unfinished (completed items dropped):
-
-1. **`@anthropic-ai/sdk` does not work in Convex's V8 runtime** — it imports
-   `node:fs` in its credential loader, and `convex/http.ts` can't opt into
-   `"use node"` because HTTP actions are V8-only. The coach endpoint therefore
-   calls the Messages API with raw `fetch` and parses the SSE `text_delta`
-   events itself. If an action ever _does_ need the SDK, it has to live in a
-   separate `"use node"` file and can't be an HTTP action.
-   Gotcha found while building it: a `ReadableStream` that drains the upstream
-   body from `pull()` delivers the whole body but **never terminates** — the
-   client hangs with the response already in hand. Pumping to completion inside
-   `start()` closes it properly. Verified end to end: first byte ~1.1s, full
-   response ~3.2s.
-2. Review and stats remain CLI-only _surfaces_, but their logic is now backend
-   functions (`convex/review.ts`, `convex/stats.ts`), so a web version is a UI
-   job rather than a port. The review quiz has no web equivalent yet.
-3. **Headless runs need a token.** `smoke-draft.mjs` cannot talk to the draft
-   functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via the
-   WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
-   deployment's `WORKOS_CLIENT_ID`/`WORKOS_API_KEY` — which only works if the
-   environment has password auth enabled. Now that the device flow exists it
-   could instead read `~/.mtg-tutor/credentials.json`.
-4. **Three WorkOS values are copied by hand from `packages/backend/.env.local`
+8. **Three WorkOS values are copied by hand from `packages/backend/.env.local`
    into `apps/web/.env.local`, and that is as good as it gets.** Convex's own
    schema (`convex/schemas/convex.schema.json`) documents `localEnvVars` as
    _"writes the given mapping to the local `.env` file"_ with **no path option**,
@@ -131,69 +111,73 @@ Open / unfinished (completed items dropped):
    into a sibling package's gitignored file, to save three lines set once, is a
    worse trade than the duplication. Re-provisioning AuthKit means updating both
    files.
-5. **Env vars cross four boundaries and three of them fail silently** — Vercel
-   project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
-   all drop what they were not told about, and only Convex's deployment env
-   errors loudly. Three deploys broke on this. The countermeasures now in place:
-   `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
-   `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
-   list — verified with `turbo run build --dry=json`). Do not add a task-level
-   `env` key; put it in `globalEnv`.
-6. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
-   traces from the project directory by default, and under pnpm 652 of the 653
-   files in `next-server.js.nft.json` resolve outside `apps/web`.
-7. **Draft sessions created before auth have `userId: undefined` and are now
+9. **Env vars cross four boundaries and three of them fail silently** — Vercel
+    project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
+    all drop what they were not told about, and only Convex's deployment env
+    errors loudly. Three deploys broke on this. The countermeasures now in place:
+    `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
+    `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
+    list — verified with `turbo run build --dry=json`). Do not add a task-level
+    `env` key; put it in `globalEnv`.
+10. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
+    traces from the project directory by default, and under pnpm 652 of the 653
+    files in `next-server.js.nft.json` resolve outside `apps/web`.
+
+Open / unfinished:
+
+1. **Review and stats are CLI-only _surfaces_.** Their logic already lives in
+   backend functions (`convex/review.ts`, `convex/stats.ts`), so a web version
+   is a UI job rather than a port. The pick-by-pick review walkthrough and its
+   quiz exist only as `mtg-tutor review`; the web app has no route for either.
+2. **Headless runs need a token.** `smoke-draft.mjs` cannot talk to the draft
+   functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via the
+   WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
+   deployment's `WORKOS_CLIENT_ID`/`WORKOS_API_KEY` — which only works if the
+   environment has password auth enabled. Now that the device flow exists it
+   could instead read `~/.mtg-tutor/credentials.json`.
+3. **Draft sessions created before auth have `userId: undefined` and are now
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
 
-# Own the draft data (done 2026-07-23, merged to main, NOT pushed/deployed):
+# Own the draft data (done, shipped to production 2026-07-24):
 
-Six phases landed on `main` (umbrella `own-draft-data`, `--no-ff`, branches
-deleted). The app now scores on statistics we derive ourselves from the 17Lands
-**public datasets** (the sanctioned source), deals boosters that match how sets
-really open (bonus sheets + land slot + observed shapes), and makes **no 17Lands
-API call at runtime** — the API survives only as a testing oracle
-(`pnpm validate-set-stats`). SOS and TDM ship with committed stats artifacts,
-validated vs the API at Spearman 0.92–0.93. Details live in the
-`set-stats-pipeline`, `play-booster-pack-model`, and `17lands-data-sources`
-auto-memories. Issues #3 and #4 above were fixed here (both were misdiagnosed).
+The app scores on statistics we derive ourselves from the 17Lands **public
+datasets** (the sanctioned source), deals boosters that match how sets really
+open (bonus sheets + land slot + observed shapes), and makes **no 17Lands API
+call at runtime** — the API survives only as a testing oracle
+(`pnpm validate-set-stats`). Details live in the `set-stats-pipeline`,
+`play-booster-pack-model`, and `17lands-data-sources` auto-memories.
 
-## Production deploy — done
+`main` is pushed and seeding happens inside the Vercel build
+(`apps/web/vercel.json` runs `convex deploy --cmd '... seed-set-stats.mjs &&
+ingest-sets.mjs'`). **A push to `main` is therefore a production deploy.** The
+deploy is non-breaking: a schema-validation failure fails the Vercel build and
+keeps the old site up.
 
-Shipped and verified 2026-07-24: `main` is pushed, and `convex run sets:list
---prod` returns `sos`, `tdm`, and `fdn` (ingested 2026-07-23). The manual
-`seed-set-stats.mjs --prod` / `sets:ingest --prod` steps this section used to
-list are no longer needed — `apps/web/vercel.json`'s build command runs
-`convex deploy --cmd '... seed-set-stats.mjs && ingest-sets.mjs'`, so seeding
-happens as part of the build.
-
-**A push to `main` is therefore a production deploy.** The deploy is
-non-breaking: a schema-validation failure fails the Vercel build and keeps the
-old site up.
+Adding a set is one command — `pnpm new-set <CODE> [format] [--prod]` — which
+runs availability gate → build → seed → ingest → validate-pack-model. 17 set
+artifacts are committed and ship.
 
 ## Follow-up roadmap (compressed; pick per future session)
 
 Ordered by value × readiness. Each is a candidate feature branch.
 
 1. **`archetype-aware-scoring`** — consume the archetype splits + synergies we
-   now own (in `setStats`, read by nothing yet) so `cardValue`/scoring rates a
-   card by how good it is _in your colours_, and surface the metrics we compute
-   but never show (trap warnings from `maindeckRate`, synergy hints, archetype
-   fit in explanations). **Fixes Issue #2.** Highest value; data is validated and
-   live. `cardValue` (`core/scoring/value.ts`) is the single tuning point.
-2. **`deck-builder`** — ~~fix Issue #1~~ (done 2026-07-24) and replace the
-   `DECK` 23-spell/17-land convention with real winning-deck land counts &
-   curves from the data. `core/draft/deck.ts`; `DECK` in `core/config.ts` is
-   the single tuning point. Small, self-contained.
-3. **`bulk-ingestion`** — a loop over the availability gate + build + seed +
-   ingest so the app ships with real data for a dozen sets, not two. Building
-   blocks (gate, validate) exist. This is also when a pre-existing stale prod set
-   gets rebuilt.
-4. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
+   now own (`setStats.archetypes` / `.synergies`, read by nothing in scoring
+   yet) so `cardValue`/scoring rates a card by how good it is _in your colours_,
+   and surface the metrics we compute but never show (trap warnings from
+   `maindeckRate`, synergy hints, archetype fit in explanations). Highest value;
+   data is validated and live. `cardValue` (`core/scoring/value.ts`) is the
+   single tuning point.
+2. **`deck-builder`** — replace the `DECK` 23-spell/17-land convention with real
+   winning-deck land counts & curves from the data. `core/draft/deck.ts`; `DECK`
+   in `core/config.ts` is the single tuning point. Small, self-contained.
+3. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
    data (needs a new draft-data pass) instead of greedy `cardValue` + colour
-   bias, so signals/wheeling feel like a real pod. `core/draft/bots.ts`.
-5. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
+   bias, so signals/wheeling feel like a real pod. `core/draft/bots.ts` is still
+   `cardValue + colorBias + noise`.
+4. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
    This is what would re-tighten the availability gate to require replay
    (`USED_KINDS` in `scripts/lib/datasets.mjs`).
