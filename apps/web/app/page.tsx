@@ -6,8 +6,9 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
 import { AppHeader } from "./components/AppHeader";
-import { SetIcon } from "./components/SetIcon";
-import { releaseDate } from "./lib/format";
+import { SetGrid } from "./components/SetGrid";
+import { SetList } from "./components/SetList";
+import { useSettings, type SetView } from "./lib/useSettings";
 
 export default function Home() {
   return (
@@ -43,11 +44,57 @@ export default function Home() {
   );
 }
 
+function ViewIcon({ view }: { view: SetView }) {
+  return view === "grid" ? (
+    <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="1" width="6" height="6" rx="1.5" />
+      <rect x="9" y="1" width="6" height="6" rx="1.5" />
+      <rect x="1" y="9" width="6" height="6" rx="1.5" />
+      <rect x="9" y="9" width="6" height="6" rx="1.5" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 16 16" className="size-4" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="2" width="14" height="2.5" rx="1.25" />
+      <rect x="1" y="6.75" width="14" height="2.5" rx="1.25" />
+      <rect x="1" y="11.5" width="14" height="2.5" rx="1.25" />
+    </svg>
+  );
+}
+
+// One button rather than a two-option segmented control: with exactly two views
+// the unselected half of a segmented control is already the button, so the
+// second one only costs width. It draws the view it switches *to*, which is the
+// convention for a flip control -- and since an icon alone cannot say whether
+// it means "you are here" or "go here", the accessible name says it outright.
+function SetViewToggle({
+  value,
+  onChange,
+}: {
+  value: SetView;
+  onChange: (view: SetView) => void;
+}) {
+  const next: SetView = value === "grid" ? "list" : "grid";
+  const label = `Switch to ${next} view`;
+
+  return (
+    <button
+      type="button"
+      className="btn btn-sm btn-ghost btn-square"
+      onClick={() => onChange(next)}
+      aria-label={label}
+      title={label}
+    >
+      <ViewIcon view={next} />
+    </button>
+  );
+}
+
 function SetPicker() {
   const sets = useQuery(api.sets.list);
   const startDraft = useMutation(api.draft.start);
   const router = useRouter();
   const [starting, setStarting] = useState<string | null>(null);
+  const { settings, update } = useSettings();
 
   async function start(setCode: string, format: string) {
     setStarting(setCode);
@@ -62,9 +109,19 @@ function SetPicker() {
 
   return (
     <>
-      <h1 className="mb-5 font-display text-2xl font-semibold tracking-tight">
-        Pick a set to draft
-      </h1>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">
+          Pick a set to draft
+        </h1>
+        {/* Only once there is something to view. A toggle over an empty page
+            offers a choice between two ways of seeing nothing. */}
+        {sets != null && sets.length > 0 && (
+          <SetViewToggle
+            value={settings.setView}
+            onChange={(setView) => update({ setView })}
+          />
+        )}
+      </div>
 
       {sets === undefined && <p className="text-base-content/60">Loading sets…</p>}
 
@@ -81,40 +138,12 @@ function SetPicker() {
         </div>
       )}
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-        {sets?.map((s) => (
-          <button
-            key={`${s.code}-${s.format}`}
-            type="button"
-            className="group card relative cursor-pointer overflow-hidden border border-base-300 bg-base-200 p-4 text-left transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => start(s.code, s.format)}
-            disabled={starting !== null}
-          >
-            {/* A set symbol is the mark a set stamps on every card in it, so it
-                gets to be the thing that identifies the set here too -- oversized
-                and bled off the corner, behind the type rather than beside it. */}
-            <SetIcon
-              uri={s.iconUri}
-              className="pointer-events-none absolute -right-4 -top-3 size-28 text-base-content/[0.07] transition-colors group-hover:text-primary/20"
-            />
-
-            <span className="relative flex flex-col gap-1">
-              <span className="font-display text-lg font-semibold leading-tight">
-                {s.name ?? s.code.toUpperCase()}
-              </span>
-              <span className="eyebrow">
-                {s.code.toUpperCase()} · {s.format}
-              </span>
-              <span className="mt-2 text-sm tabular-nums text-base-content/60">
-                {s.cardCount} cards · {s.ratedCardCount} with 17Lands data
-              </span>
-              <span className="text-sm text-base-content/60">
-                {starting === s.code ? "Starting…" : releaseDate(s.releasedAt)}
-              </span>
-            </span>
-          </button>
+      {sets != null &&
+        (settings.setView === "list" ? (
+          <SetList sets={sets} starting={starting} onStart={start} />
+        ) : (
+          <SetGrid sets={sets} starting={starting} onStart={start} />
         ))}
-      </div>
 
       {sets?.some((s) => s.ratedCardCount === 0) && (
         <div role="alert" className="alert alert-warning my-4">
