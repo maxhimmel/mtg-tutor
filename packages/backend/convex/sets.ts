@@ -372,9 +372,7 @@ export const ingest = action({
     // hold nothing older than the set itself, which is all of them but MKM.
     const known = new Set(scryfall.cards.map((c) => normalizeName(c.name)));
     const leftovers = await fetchByPrinting(
-      packCards.filter(
-        (p) => p.slot === "bonus" && !known.has(normalizeName(p.name)),
-      ),
+      packCards.filter((p) => !known.has(normalizeName(p.name))),
     );
 
     // Our stats list exactly what appears in packs, so it decides the pool --
