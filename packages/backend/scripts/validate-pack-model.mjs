@@ -203,6 +203,7 @@ console.log(`\ndealt packs (${PACKS.toLocaleString()})`);
 const rng = mulberry32(20260727);
 const sizes = new Map();
 const slotHits = new Map();
+const cardHits = new Map();
 const seenCards = new Set();
 let duplicates = 0;
 
@@ -220,6 +221,7 @@ for (let i = 0; i < PACKS; i++) {
   const inPack = new Set();
   for (const c of pack) {
     seenCards.add(c.name);
+    cardHits.set(c.name, (cardHits.get(c.name) ?? 0) + 1);
     const slot = slotOfCard.get(c.name);
     if (slot) inPack.add(slot);
   }
@@ -275,6 +277,52 @@ const idle = Object.entries(set.pools).filter(
 );
 for (const [slot, cards] of idle) {
   skip(`${cards.length} card(s) pooled in '${slot}', which no observed shape deals`);
+}
+
+// The slot rates above would look identical whether cards inside a slot are
+// drawn evenly or by their observed odds -- and drawing a bonus sheet evenly is
+// exactly the bug that made SOS deal its rarest Mystical Archive card nine times
+// too often. So check the distribution WITHIN each weighted slot too.
+for (const slot of used) {
+  const cards = set.pools[slot] ?? [];
+  if (!cards.length || !cards.every((c) => c.packRate != null)) {
+    if (cards.length) skip(`'${slot}' has no observed rates; drawn evenly`);
+    continue;
+  }
+
+  const totalRate = cards.reduce((n, c) => n + c.packRate, 0);
+  const draws = cards.reduce((n, c) => n + (cardHits.get(c.name) ?? 0), 0);
+
+  // Only judge cards sampled often enough for the ratio to mean anything.
+  // 1.0 is "dealt exactly as often as expected", so that is the identity to
+  // start from -- starting at 0 would read as maximally wrong.
+  let worst = 1;
+  let worstCard = null;
+  let judged = 0;
+  for (const c of cards) {
+    const expected = (c.packRate / totalRate) * draws;
+    if (expected < 100) continue;
+    judged++;
+    const ratio = (cardHits.get(c.name) ?? 0) / expected;
+    if (Math.abs(ratio - 1) > Math.abs(worst - 1)) {
+      worst = ratio;
+      worstCard = c.name;
+    }
+  }
+
+  if (!judged) {
+    skip(`'${slot}' drawn too rarely in ${PACKS.toLocaleString()} packs to check card odds`);
+  } else if (Math.abs(worst - 1) > 0.25) {
+    fail(
+      `'${slot}' cards are not dealt at their observed odds — ` +
+        `${worstCard} came out ${worst.toFixed(2)}x expected`,
+    );
+  } else {
+    ok(
+      `'${slot}' cards dealt at their observed odds ` +
+        `(${judged} checked, worst ${worst.toFixed(2)}x)`,
+    );
+  }
 }
 
 // ------------------------------------------------------------------- oracle
