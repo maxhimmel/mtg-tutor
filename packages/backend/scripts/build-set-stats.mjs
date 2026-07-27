@@ -5,6 +5,13 @@
 //   node scripts/build-set-stats.mjs SOS TradDraft --draft ~/d.csv --game ~/g.csv
 //   node scripts/build-set-stats.mjs SOS TradDraft --force   # skip availability gate
 //
+// The set's pack columns in the draft dataset are the authoritative list of what
+// its boosters contain. Scryfall is asked about those names -- first in bulk by
+// set and release day, then by exact name for whatever that misses -- and is
+// never asked to guess membership on its own. A name that still cannot be
+// slotted fails the build (--allow-unresolved treats it as a bonus-sheet card),
+// because an artifact with an unplaceable slot cannot be seeded.
+//
 // Refuses a set whose draft and game datasets are not both published for the
 // format -- see lib/datasets.mjs. The gate is skipped when both are given as
 // local files, or with --force.
@@ -29,7 +36,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const UA = "mtg-tutor/0.1 (draft-trainer)";
 const log = (...a) => console.error(...a);
 
-const BOOLEAN_FLAGS = new Set(["force"]);
+const BOOLEAN_FLAGS = new Set(["force", "allow-unresolved"]);
 const argv = process.argv.slice(2);
 const flags = {};
 const positional = [];
@@ -44,7 +51,8 @@ const setCode = (positional[0] ?? "").toLowerCase();
 const format = positional[1] ?? "PremierDraft";
 if (!setCode) {
   console.error(
-    "usage: build-set-stats.mjs <setCode> <format> [--draft path] [--game path] [--out path] [--force]",
+    "usage: build-set-stats.mjs <setCode> <format> [--draft path] [--game path] [--out path]" +
+      " [--force] [--allow-unresolved]",
   );
   process.exit(1);
 }
@@ -103,9 +111,13 @@ const norm = (n) =>
 
 // ---------------------------------------------------------------- scryfall
 
-async function scryfall(query) {
+// `unique` is the caller's call. Pool crawls want `prints`, so a bonus-sheet
+// printing keeps its own rarity rather than collapsing into the main set's. The
+// by-name lookup wants `cards`: one row per card, already the Arena-legal
+// printing, which is the one whose set code and rarity belong in the artifact.
+async function scryfall(query, unique = "prints") {
   const out = [];
-  let url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=prints`;
+  let url = `https://api.scryfall.com/cards/search?q=${encodeURIComponent(query)}&unique=${unique}`;
   while (url) {
     const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
     if (res.status === 404) return out;
@@ -118,8 +130,37 @@ async function scryfall(query) {
   return out;
 }
 
+// The slots makePack knows how to fill (SLOT_ORDER in core/src/draft/pack.ts).
+// A pack card that cannot be placed in one of these is a build failure: the
+// Convex validator would reject the artifact, and widening it would instead make
+// makePack skip the slot and quietly deal short packs.
+const SLOTS = new Set(["common", "uncommon", "rare", "mythic", "bonus", "land"]);
+
+// Which slot a printing fills. The same rule ingestion applies when it rebuilds
+// the pools (see isBonusSheet): a card whose own set differs from the set being
+// drafted came off a bonus sheet, whatever that sheet is called.
+function slotOf(print, code) {
+  const type = print.type_line ?? "";
+  if (/\bBasic\b/.test(type) && /\bLand\b/.test(type)) return "land";
+  return print.set.toLowerCase() !== code.toLowerCase() ? "bonus" : print.rarity;
+}
+
+const indexPrints = (index, prints, code) => {
+  for (const c of prints) {
+    const key = norm(c.name);
+    if (index.has(key)) continue; // first print wins; main set searched first
+    index.set(key, { slot: slotOf(c, code), setCode: c.set.toLowerCase() });
+  }
+  return index;
+};
+
 // Same rule ingestion uses (see fetchScryfallPool): the set, plus anything
 // Arena-legal released the same day, which is how bonus sheets ship.
+//
+// This is a fast path, not the last word. It answers "what shipped on release
+// day", which is only a proxy for "what can appear in this set's boosters" --
+// MKM's Arena packs carry a 50-card List sheet of printings from 2005-2017 that
+// no same-day query can reach. resolveByName picks up whatever it misses.
 async function slotIndex(code) {
   const set = await fetch(`https://api.scryfall.com/sets/${code}`, {
     headers: { "User-Agent": UA, Accept: "application/json" },
@@ -130,16 +171,25 @@ async function slotIndex(code) {
     ...(set.released_at ? await scryfall(`game:arena date=${set.released_at} -set:${code}`) : []),
   ];
 
+  return indexPrints(new Map(), prints, code);
+}
+
+// Scryfall caps a query's length, and these are OR-ed exact names.
+const NAMES_PER_QUERY = 20;
+
+// Resolves pack cards the release-day query could not see, by asking Scryfall
+// about names we already have rather than asking it to guess membership.
+// `unique=cards` with `game:arena` returns the Arena-legal printing -- which is
+// the one whose set code and rarity we want, and is often decades older than the
+// set being drafted. Names come from 17Lands' pack columns, which are the
+// authoritative list of what was actually opened.
+async function resolveByName(names, code) {
   const index = new Map();
-  for (const c of prints) {
-    const key = norm(c.name);
-    if (index.has(key)) continue; // first print wins; main set searched first
-    const type = c.type_line ?? "";
-    const basic = /\bBasic\b/.test(type) && /\bLand\b/.test(type);
-    index.set(
-      key,
-      basic ? "land" : c.set.toLowerCase() !== code.toLowerCase() ? "bonus" : c.rarity,
-    );
+  for (let i = 0; i < names.length; i += NAMES_PER_QUERY) {
+    const chunk = names.slice(i, i + NAMES_PER_QUERY);
+    const q = `game:arena (${chunk.map((n) => `!"${n.replace(/"/g, "")}"`).join(" or ")})`;
+    indexPrints(index, await scryfall(q, "cards"), code);
+    if (i + NAMES_PER_QUERY < names.length) await new Promise((r) => setTimeout(r, 90));
   }
   return index;
 }
@@ -280,16 +330,32 @@ async function readDraftData(localPath, slots) {
       pickI = header.indexOf("pick");
       mdI = header.indexOf("pick_maindeck_rate");
       winsI = header.indexOf("event_match_wins");
-      packCols = header
+      const cols = header
         .map((h, i) => [h, i])
         .filter(([h]) => h.startsWith("pack_card_"))
-        .map(([h, i]) => {
-          const name = h.slice("pack_card_".length);
-          const slot = slots.get(norm(name));
-          if (!slot) unresolved.add(name);
-          return [i, name, slot ?? "unknown"];
-        });
-      if (pickNoI < 0 || packCols.length === 0) throw new Error("not a 17Lands draft dataset");
+        .map(([h, i]) => [i, h.slice("pack_card_".length)]);
+      if (pickNoI < 0 || cols.length === 0) throw new Error("not a 17Lands draft dataset");
+
+      // The pack columns ARE the set's booster manifest. Anything in here that
+      // the release-day query could not see gets looked up by name, so a card
+      // is never dropped or mis-slotted just because it was printed decades
+      // before the set it now appears in.
+      const missing = cols.map(([, name]) => name).filter((name) => !slots.has(norm(name)));
+      if (missing.length) {
+        log(`  resolving ${missing.length} pack cards by name`);
+        for (const [key, entry] of await resolveByName(missing, setCode)) {
+          if (!slots.has(key)) slots.set(key, entry);
+        }
+      }
+
+      packCols = cols.map(([i, name]) => {
+        const entry = slots.get(norm(name));
+        if (!entry || !SLOTS.has(entry.slot)) {
+          unresolved.add(name);
+          return [i, name, "bonus"];
+        }
+        return [i, name, entry.slot];
+      });
       continue;
     }
 
@@ -323,9 +389,19 @@ async function readDraftData(localPath, slots) {
     }
   }
 
+  // Every column the set's boosters can contain, with the slot it fills and the
+  // set it was printed in. This is the seam between the two halves of the
+  // pipeline: the shapes below are keyed by these slots, and ingestion rebuilds
+  // the matching pools from these names -- so neither side has to re-derive
+  // which cards are in the set, and they cannot drift apart.
+  const packCards = packCols.map(([, name, slot]) => {
+    const setCode = slots.get(norm(name))?.setCode;
+    return setCode ? { name, slot, setCode } : { name, slot };
+  });
+
   return {
     seen, seenSum, taken, takenSum, maindeck,
-    trophySeen, trophyTaken, shapes, packs, unresolved,
+    trophySeen, trophyTaken, shapes, packs, unresolved, packCards,
   };
 }
 
@@ -368,14 +444,28 @@ const t0 = Date.now();
 const slots = await slotIndex(setCode);
 log(`resolved ${slots.size} cards from Scryfall`);
 
-const isBasic = (name) => slots.get(norm(name)) === "land";
+const isBasic = (name) => slots.get(norm(name))?.slot === "land";
 const game = await readGameData(flag("game"), isBasic);
 log(`game: ${game.games} games, ${game.stats.size} cards (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
 
 const draft = await readDraftData(flag("draft"), slots);
 log(`draft: ${draft.packs} packs, ${draft.shapes.size} shapes (${((Date.now() - t0) / 1000).toFixed(0)}s)`);
+// A name that survives both the release-day query and the by-name lookup has no
+// slot we can place it in. Writing it anyway produced `unknown`, which the
+// Convex validator rejects at seed time -- so stop here, where the names are in
+// hand, rather than shipping an artifact that cannot be loaded.
 if (draft.unresolved.size) {
-  log(`  WARNING: ${draft.unresolved.size} unresolved: ${[...draft.unresolved].slice(0, 6).join(", ")}`);
+  const names = [...draft.unresolved];
+  log("");
+  log(`  ${names.length} pack card(s) could not be resolved to a slot:`);
+  for (const n of names) log(`    ${n}`);
+  if (!flag("allow-unresolved")) {
+    log("");
+    log("  Refusing to write an artifact that cannot be seeded.");
+    log("  Re-run with --allow-unresolved to treat these as bonus-sheet cards.");
+    process.exit(1);
+  }
+  log("  --allow-unresolved: treating them as bonus-sheet cards.");
 }
 
 const baseWinRate = game.wins / game.games;
@@ -481,6 +571,7 @@ const artifact = {
   archetypes,
   colorWinRates,
   synergies,
+  packCards: draft.packCards,
   packComposition: packComposition(draft.shapes, draft.packs),
 };
 
@@ -494,4 +585,8 @@ log(`wrote ${out}`);
 log(`  ${(json.length / 1024).toFixed(0)}KB · ${cards.length} cards · base WR ${round(baseWinRate, 3)}`);
 log(`  ${archetypes.length} archetype splits · ${synergies.length} cards with synergies`);
 log(`  pack: size ${artifact.packComposition.size}, ${artifact.packComposition.shapes.length} shapes`);
+log(
+  `  ${artifact.packCards.length} pack cards · ` +
+    `${artifact.packCards.filter((c) => c.slot === "bonus").length} off a bonus sheet`,
+);
 log(`  ${((Date.now() - t0) / 1000).toFixed(0)}s total`);
