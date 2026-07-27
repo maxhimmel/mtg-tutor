@@ -6,8 +6,7 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
 import { AppHeader } from "./components/AppHeader";
-import { SetIcon } from "./components/SetIcon";
-import { releaseDate } from "./lib/format";
+import { SetPlate, type SetSummary } from "./components/SetPlate";
 
 export default function Home() {
   return (
@@ -43,28 +42,51 @@ export default function Home() {
   );
 }
 
+// `sets.list` already sorts newest first, so a set's year band is just a run of
+// neighbours sharing a release year -- no regrouping, and the bands come out in
+// the same order the list is in. Release year is how drafters index formats
+// ("the 2022 sets"), which is why the page is banded by it rather than by
+// anything invented for the layout.
+function byYear(sets: SetSummary[]): { year: string; sets: SetSummary[] }[] {
+  const bands: { year: string; sets: SetSummary[] }[] = [];
+  for (const set of sets) {
+    const year = set.releasedAt?.slice(0, 4) ?? "Undated";
+    const last = bands.at(-1);
+    if (last?.year === year) last.sets.push(set);
+    else bands.push({ year, sets: [set] });
+  }
+  return bands;
+}
+
 function SetPicker() {
   const sets = useQuery(api.sets.list);
   const startDraft = useMutation(api.draft.start);
   const router = useRouter();
   const [starting, setStarting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function start(setCode: string, format: string) {
     setStarting(setCode);
+    setError(null);
     try {
       const sessionId = await startDraft({ setCode, format });
       router.push(`/draft/${sessionId}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      setError(e instanceof Error ? e.message : String(e));
       setStarting(null);
     }
   }
 
   return (
     <>
-      <h1 className="mb-5 font-display text-2xl font-semibold tracking-tight">
-        Pick a set to draft
-      </h1>
+      <div className="mb-8 max-w-xl">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">
+          Pick a format
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-base-content/60">
+          Each set shows the two-colour pair that wins most in it — the lane to beat.
+        </p>
+      </div>
 
       {sets === undefined && <p className="text-base-content/60">Loading sets…</p>}
 
@@ -81,49 +103,40 @@ function SetPicker() {
         </div>
       )}
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-        {sets?.map((s) => (
-          <button
-            key={`${s.code}-${s.format}`}
-            type="button"
-            className="group card relative cursor-pointer overflow-hidden border border-base-300 bg-base-200 p-4 text-left transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => start(s.code, s.format)}
-            disabled={starting !== null}
-          >
-            {/* A set symbol is the mark a set stamps on every card in it, so it
-                gets to be the thing that identifies the set here too -- oversized
-                and bled off the corner, behind the type rather than beside it. */}
-            <SetIcon
-              uri={s.iconUri}
-              className="pointer-events-none absolute -right-4 -top-3 size-28 text-base-content/[0.07] transition-colors group-hover:text-primary/20"
-            />
+      {error && (
+        <div role="alert" className="alert alert-error my-4">
+          <span>Couldn&rsquo;t start that draft. {error}</span>
+        </div>
+      )}
 
-            <span className="relative flex flex-col gap-1">
-              <span className="font-display text-lg font-semibold leading-tight">
-                {s.name ?? s.code.toUpperCase()}
-              </span>
-              <span className="eyebrow">
-                {s.code.toUpperCase()} · {s.format}
-              </span>
-              <span className="mt-2 text-sm tabular-nums text-base-content/60">
-                {s.cardCount} cards · {s.ratedCardCount} with 17Lands data
-              </span>
-              <span className="text-sm text-base-content/60">
-                {starting === s.code ? "Starting…" : releaseDate(s.releasedAt)}
-              </span>
-            </span>
-          </button>
+      <div className="flex flex-col gap-10">
+        {byYear(sets ?? []).map((band) => (
+          <section key={band.year}>
+            <h2 className="eyebrow mb-4 flex items-center gap-4 tabular-nums">
+              {band.year}
+              <span className="h-px flex-1 bg-base-300" />
+            </h2>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
+              {band.sets.map((s) => (
+                <SetPlate
+                  key={`${s.code}-${s.format}`}
+                  set={s}
+                  starting={starting === s.code}
+                  dimmed={starting !== null && starting !== s.code}
+                  onStart={() => start(s.code, s.format)}
+                />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 
       {sets?.some((s) => s.ratedCardCount === 0) && (
-        <div role="alert" className="alert alert-warning my-4">
-          <span>
-            Sets showing <strong>0 with 17Lands data</strong> will be scored on rarity
-            baselines alone — 17Lands stops serving win rates once a set leaves rotation.
-            Grades will be much less meaningful.
-          </span>
-        </div>
+        <p className="mt-10 max-w-xl text-sm leading-relaxed text-base-content/50">
+          A set marked <strong className="font-semibold">no win-rate data</strong> is
+          graded on rarity alone — 17Lands stops publishing win rates once a format
+          leaves rotation. Its grades mean much less.
+        </p>
       )}
     </>
   );

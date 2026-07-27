@@ -53,3 +53,20 @@ export const COLOR_NAMES: Record<string, string> = {
   R: "Red",
   G: "Green",
 };
+
+// What drafters actually call a two-colour pair. The names are Ravnica's, but
+// they are the vernacular in every format -- people say "Boros aggro" about a
+// set with no guilds in it at all -- so a pair is more legible named than spelt
+// "WR". Keyed in WUBRG order, which is how 17Lands writes them.
+export const GUILD_NAMES: Record<string, string> = {
+  WU: "Azorius",
+  WB: "Orzhov",
+  WR: "Boros",
+  WG: "Selesnya",
+  UB: "Dimir",
+  UR: "Izzet",
+  UG: "Simic",
+  BR: "Rakdos",
+  BG: "Golgari",
+  RG: "Gruul",
+};
