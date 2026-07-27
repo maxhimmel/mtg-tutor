@@ -82,24 +82,29 @@ async function scryfallSearch(query: string): Promise<ScryfallCard[]> {
 // Play Booster sets, so `set:sos is:booster` 404s and the set was undraftable.
 // The caller narrows the result to 17Lands' manifest instead, which is the
 // authoritative list of what is actually in packs.
-async function fetchScryfallPool(setCode: string): Promise<ScryfallCard[]> {
+//
+// The same set lookup carries the set's display name, which is the only place
+// it comes from -- card documents know their set code but not its name.
+async function fetchScryfallPool(
+  setCode: string,
+): Promise<{ cards: ScryfallCard[]; name?: string }> {
   const main = await scryfallSearch(`set:${setCode}`);
-  if (main.length === 0) return main;
+  if (main.length === 0) return { cards: main };
 
-  const released = await getJson<{ released_at?: string }>(
+  const set = await getJson<{ name?: string; released_at?: string }>(
     `https://api.scryfall.com/sets/${encodeURIComponent(setCode)}`,
-  ).catch(() => ({ released_at: undefined }));
-  if (!released.released_at) return main;
+  ).catch(() => ({ name: undefined, released_at: undefined }));
+  if (!set.released_at) return { cards: main, name: set.name };
 
   await sleep(SCRYFALL_DELAY_MS);
   // Bonus sheets ship on the set's release day, so this finds them without a
   // per-set mapping table -- Special Guests is shared across sets and is not a
   // Scryfall child of any of them.
   const sameDay = await scryfallSearch(
-    `game:arena date=${released.released_at} -set:${setCode}`,
+    `game:arena date=${set.released_at} -set:${setCode}`,
   ).catch(() => [] as ScryfallCard[]);
 
-  return [...main, ...sameDay];
+  return { cards: [...main, ...sameDay], name: set.name };
 }
 
 // Narrows a Scryfall pool to the cards 17Lands saw in packs, plus basic lands.
@@ -161,7 +166,7 @@ export const ingest = action({
       ctx.runQuery(internal.sets.readStats, { code: setCode, format }),
     ]);
 
-    if (scryfall.length === 0) {
+    if (scryfall.cards.length === 0) {
       throw new Error(`No Scryfall cards found for set "${setCode}". Check the set code.`);
     }
     if (!stats) {
@@ -177,7 +182,7 @@ export const ingest = action({
     // that drops promos, art cards and Alchemy rebalances the Scryfall search
     // pulls in, and keeps the bonus sheet. Basics are the one omission (they are
     // not rated) and the Play Booster land slot needs them.
-    const draftable = pickDraftable(mergeCards(scryfall, ratings), ratings);
+    const draftable = pickDraftable(mergeCards(scryfall.cards, ratings), ratings);
 
     // Measure what an unrated card of each rarity is worth in THIS set, from the
     // set's own rated cards, and stamp it on every card. Without it, unrated
@@ -197,6 +202,7 @@ export const ingest = action({
 
     return await ctx.runMutation(internal.sets.store, {
       code: setCode,
+      name: scryfall.name,
       format,
       cards,
       colorPairWinRates: pairs,
@@ -219,6 +225,7 @@ export const readStats = internalQuery({
 export const store = internalMutation({
   args: {
     code: v.string(),
+    name: v.optional(v.string()),
     format: v.string(),
     cards: v.array(card),
     colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
@@ -244,6 +251,11 @@ export const store = internalMutation({
     // then would destroy a good snapshot, so keep the one we already have.
     // (This is not about rotation: /api/card_data serves every set back to 2020.)
     if (existing && rated === 0 && existing.ratedCardCount > 0) {
+      // The card list is discarded, but the name is metadata the snapshot has
+      // nothing to lose by taking.
+      if (args.name && !existing.name) {
+        await ctx.db.patch(existing._id, { name: args.name });
+      }
       return {
         setId: existing._id,
         cardCount: existing.cards.length,
@@ -254,6 +266,9 @@ export const store = internalMutation({
 
     const doc = {
       code: args.code,
+      // Fall back to the stored name so a run that could not reach Scryfall's
+      // set endpoint cannot blank it out.
+      name: args.name ?? existing?.name,
       format: args.format,
       cards: args.cards,
       colorPairWinRates: args.colorPairWinRates,
@@ -359,6 +374,7 @@ export const list = query({
     const sets = await ctx.db.query("sets").collect();
     return sets.map((s) => ({
       code: s.code,
+      name: s.name,
       format: s.format,
       cardCount: s.cards.length,
       ratedCardCount: s.ratedCardCount,

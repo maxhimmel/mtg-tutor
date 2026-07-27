@@ -51,8 +51,8 @@ export async function run(argv: string[]): Promise<void> {
       message: "Pick a set to draft",
       options: sets.map((set) => ({
         value: set.code,
-        label: `${set.code.toUpperCase()} ${pc.dim(set.format)}`,
-        hint: `${set.cardCount} cards, ${set.ratedCardCount} with 17Lands data`,
+        label: `${set.name ?? set.code.toUpperCase()} ${pc.dim(set.format)}`,
+        hint: `${set.code.toUpperCase()} · ${set.cardCount} cards, ${set.ratedCardCount} with 17Lands data`,
       })),
     });
     if (p.isCancel(chosen)) {

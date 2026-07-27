@@ -14,6 +14,9 @@ export default defineSchema({
   // mutation reads exactly one document instead of hundreds of card rows.
   sets: defineTable({
     code: v.string(),
+    // Scryfall's display name, captured at ingest. Optional because sets
+    // ingested before this field existed have none until they are re-ingested.
+    name: v.optional(v.string()),
     format: v.string(),
     cards: v.array(card),
     // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.

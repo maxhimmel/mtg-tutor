@@ -92,9 +92,10 @@ function SetPicker() {
             onClick={() => start(s.code, s.format)}
             disabled={starting !== null}
           >
-            <span className="text-lg font-bold tracking-wide">{s.code.toUpperCase()}</span>
+            <span className="text-lg font-bold">{s.name ?? s.code.toUpperCase()}</span>
             <span className="text-sm text-base-content/60">
-              {s.cardCount} cards · {s.ratedCardCount} with 17Lands data
+              {s.code.toUpperCase()} · {s.cardCount} cards · {s.ratedCardCount} with 17Lands
+              data
             </span>
             <span className="text-sm text-base-content/60">{s.format}</span>
             {starting === s.code && <span className="text-sm text-base-content/60">Starting…</span>}
