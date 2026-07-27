@@ -15,24 +15,23 @@ import { ManaCost } from "./ManaCost";
 // for screen readers, and costs no request -- which matters when a finished pool
 // stacks 45 of these in one scrolling column.
 //
-// The colours are the reference's; the spacing deliberately is not. Arena draws
-// this at 74px a row, where the plate hugs the name to about 1.1x the font size
-// and the whole thing reads chunky. Scaled down to a pool of 45 in a narrow
-// column that density turns cramped, so the plate keeps real padding, the type
-// stays at reading size rather than filling the row, and the corners stay soft.
+// Proportions come off the reference, where the ring is 74px tall: the ring band
+// is 0.13 of that, the corner radius 0.3, and the type 0.57 -- which is why the
+// plate hugs the name so tightly and the row reads as chunky rather than airy.
+// Everything below is that ratio against a 30px row.
 export function CardPlacard({ card, className }: { card: Card; className?: string }) {
   const frame = frameFor(card);
 
   return (
     <div
-      className={`rounded-[11px] border border-[#0a0a0a] p-0.75 ${className ?? ""}`}
+      className={`rounded-lg border border-[#0a0a0a] p-[3px] ${className ?? ""}`}
       style={{
         background: frame.ring,
         boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.3)",
       }}
     >
       <div
-        className="flex items-center justify-between gap-2 rounded-lg border border-black/55 px-2 py-0.75"
+        className="flex items-center justify-between gap-2 rounded-md border border-black/55 px-1.5"
         style={{
           background: `linear-gradient(to bottom, color-mix(in srgb, ${frame.plate} 88%, #fff), ${frame.plate})`,
           // The bright hairline the plate is drawn with, just inside its dark edge.
@@ -40,7 +39,7 @@ export function CardPlacard({ card, className }: { card: Card; className?: strin
         }}
       >
         <span
-          className="truncate font-serif text-[13px] font-semibold leading-5 tracking-tight text-[#0d0b06]"
+          className="truncate font-serif text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
           title={card.name}
         >
           {card.name}
@@ -82,7 +81,7 @@ export function CardPlacardList({
   className?: string;
 }) {
   return (
-    <ul className={`flex flex-col gap-1 ${className ?? ""}`}>
+    <ul className={`flex flex-col gap-0.5 ${className ?? ""}`}>
       {/* Keyed by position, not name: drafting two copies of the same card is
           normal, so names are not unique in a pool. */}
       {cards.map((card, i) => (
