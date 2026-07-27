@@ -1,4 +1,5 @@
 import type { Principle, PrinciplesDoc } from "./principlesSchema.js";
+import { ANY_HYPHEN, HYPHEN_CLASS } from "./typography.js";
 
 export interface SplitCitations {
   prose: string;
@@ -8,9 +9,7 @@ export interface SplitCitations {
 // How the model actually writes citations varies run to run: "[EVAL-02]",
 // "[ EVAL-02 ]", "(EVAL-02, SIG-01)", or bare. It also reaches for typographic
 // hyphens mid-word, so an id may not be spelled with an ASCII one.
-const HYPHEN = "-\\u2010\\u2011\\u2012\\u2013\\u2014\\u2212";
-const ID = `[A-Z]{2,}[${HYPHEN}]\\d{1,3}`;
-const HYPHENS = new RegExp(`[${HYPHEN}]`, "g");
+const ID = `[A-Z]{2,}[${HYPHEN_CLASS}]\\d{1,3}`;
 
 // A bracket counts as a citation only when it holds nothing but ids, so
 // bracketed prose is left alone.
@@ -19,7 +18,7 @@ const BARE = new RegExp(`\\b${ID}\\b`, "g");
 
 // A citation half-arrived from the stream, e.g. "[ EVA". Anchored to the end so
 // it only ever eats the token still being typed, never a bracket mid-sentence.
-const PARTIAL_CITATION = new RegExp(`[\\[(]\\s*[A-Z]*[${HYPHEN}]?\\d*$`);
+const PARTIAL_CITATION = new RegExp(`[\\[(]\\s*[A-Z]*[${HYPHEN_CLASS}]?\\d*$`);
 
 const indexes = new WeakMap<PrinciplesDoc, Map<string, Principle>>();
 
@@ -56,7 +55,7 @@ export function splitCitations(text: string, doc: PrinciplesDoc): SplitCitations
   const cited = new Map<string, Principle>();
 
   const take = (raw: string) => {
-    const id = raw.replace(HYPHENS, "-");
+    const id = raw.replace(ANY_HYPHEN, "-");
     const principle = index.get(id);
     if (principle) cited.set(id, principle);
   };
