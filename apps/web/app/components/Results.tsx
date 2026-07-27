@@ -6,8 +6,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
+import { CardPlacardList } from "./CardPlacard";
 import { CardName } from "./CardText";
-import { ManaCost } from "./ManaCost";
 
 export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
   const results = useQuery(api.draft.results, { sessionId });
@@ -31,22 +31,10 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
               {deck.nonbasicLands.length > 0 && ` + ${deck.nonbasicLands.length} lands you drafted`}{" "}
               + {deck.basicLands} basics
             </p>
-            <div className="grid gap-0.5">
-              {/* Keyed by position, not name: drafting two copies of the same
-                  card is normal, so names are not unique in a pool. */}
-              {[...deck.spells, ...deck.nonbasicLands].map((c, i) => (
-                <div
-                  key={`${c.name}-${i}`}
-                  className="flex justify-between gap-4 border-b border-base-300 py-1 text-sm"
-                >
-                  <span className="flex min-w-0 items-baseline gap-2">
-                    <span className="truncate">{c.name}</span>
-                    <ManaCost cost={c.manaCost} className="shrink-0 whitespace-nowrap text-xs" />
-                  </span>
-                  <span className="shrink-0 text-base-content/60">{pct(c.gihWinRate)}</span>
-                </div>
-              ))}
-            </div>
+            <CardPlacardList
+              cards={[...deck.spells, ...deck.nonbasicLands]}
+              trailing={(c) => pct(c.gihWinRate)}
+            />
           </div>
         </div>
 

@@ -2,22 +2,7 @@
 
 import { type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { COLOR_NAMES } from "../lib/format";
-import { useCardHover } from "./CardPreview";
-import { ManaCost } from "./ManaCost";
-
-function PickRow({ card }: { card: Card }) {
-  const hover = useCardHover(card);
-  return (
-    <li
-      className="flex cursor-default items-center justify-between gap-2 rounded-md px-2 py-1 text-sm hover:bg-base-100"
-      tabIndex={0}
-      {...hover}
-    >
-      <span className="truncate">{card.name}</span>
-      <ManaCost cost={card.manaCost} className="shrink-0 whitespace-nowrap text-xs" />
-    </li>
-  );
-}
+import { CardPlacardList } from "./CardPlacard";
 
 // Enough to see what the deck is becoming without turning the panel into a
 // wall of one-off tribes; the rest stay in the tooltip.
@@ -74,11 +59,7 @@ export function PicksColumn({ pool }: { pool: Card[] }) {
         {picks.length === 0 ? (
           <p className="text-sm text-base-content/60">Nothing drafted yet.</p>
         ) : (
-          <ul className="max-h-[60vh] overflow-y-auto">
-            {picks.map((card, i) => (
-              <PickRow key={`${card.name}-${i}`} card={card} />
-            ))}
-          </ul>
+          <CardPlacardList cards={picks} className="max-h-[60vh] overflow-y-auto pr-1" />
         )}
       </div>
     </div>

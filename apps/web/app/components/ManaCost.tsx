@@ -65,7 +65,17 @@ const codeFor = (symbol: string): string | undefined => {
   return SYMBOLS.has(code) ? code : undefined;
 };
 
-export function ManaCost({ cost, className }: { cost?: string; className?: string }) {
+export function ManaCost({
+  cost,
+  shadow,
+  className,
+}: {
+  cost?: string;
+  // The drop shadow the symbols are printed with. Right on a card frame, too
+  // heavy in a plain row of text.
+  shadow?: boolean;
+  className?: string;
+}) {
   const symbols = parseManaCost(cost);
   if (symbols.length === 0) return null;
 
@@ -74,7 +84,11 @@ export function ManaCost({ cost, className }: { cost?: string; className?: strin
       {symbols.map((symbol, i) => {
         const code = codeFor(symbol);
         return code ? (
-          <i key={i} className={`ms ms-${code} ms-cost`} aria-hidden="true" />
+          <i
+            key={i}
+            className={`ms ms-${code} ms-cost${shadow ? " ms-shadow" : ""}`}
+            aria-hidden="true"
+          />
         ) : (
           <span key={i} className="font-mono text-xs" aria-hidden="true">
             {symbol}
