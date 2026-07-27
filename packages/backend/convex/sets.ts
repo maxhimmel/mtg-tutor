@@ -405,9 +405,24 @@ export const ingest = action({
     // ~7 points low for SOS, and 41 of its 49 unrated cards are rares/mythics.
     // See the note on Card.rarityBaseline for why it is denormalised.
     const baselines = observedRarityBaselines(draftable);
+    // How often each card was really opened, denormalised onto the card for the
+    // same reason rarityBaseline is: makePack fills a slot from a plain Card[]
+    // and has no set context to look anything up in. A card with no measured
+    // rate leaves the field off, and makePack then draws that whole pool evenly
+    // -- see sampleUnique.
+    const rates = new Map(
+      packCards
+        .filter((p) => p.openedRate != null)
+        .map((p) => [normalizeName(p.name), p.openedRate as number]),
+    );
     const cards = draftable.map((c) => {
       const rarityBaseline = baselines.get(c.rarity);
-      return rarityBaseline != null ? { ...c, rarityBaseline } : c;
+      const packRate = rates.get(normalizeName(c.name));
+      return {
+        ...c,
+        ...(rarityBaseline != null ? { rarityBaseline } : {}),
+        ...(packRate != null ? { packRate } : {}),
+      };
     });
 
     // Two-colour archetype win rates, for describing guilds in the review.

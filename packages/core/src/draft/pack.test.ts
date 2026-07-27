@@ -57,6 +57,96 @@ describe("makePack with observed composition", () => {
   });
 });
 
+describe("weighted slots", () => {
+  // A bonus sheet shaped like a real one: 5 cards carrying 10x the odds of the
+  // other 20, the way SOS's Mystical Archive weights uncommons over mythics.
+  function weightedBonusSet() {
+    const set = fakePlayBoosterSet();
+    const heavy = new Set(["B0", "B1", "B2", "B3", "B4"]);
+    for (const c of set.cards) {
+      if (c.setCode === "bns") c.packRate = heavy.has(c.name) ? 0.1 : 0.01;
+      else c.packRate = 0.05;
+    }
+    return set;
+  }
+
+  const bonusDraws = (set: ReturnType<typeof weightedBonusSet>, runs: number) => {
+    const rng = mulberry32(4);
+    const hits = new Map<string, number>();
+    for (let i = 0; i < runs; i++) {
+      for (const c of makePack(set, rng)) {
+        if (c.setCode === "bns") hits.set(c.name, (hits.get(c.name) ?? 0) + 1);
+      }
+    }
+    return hits;
+  };
+
+  it("deals a card about as often as its observed rate says", () => {
+    const runs = 40000;
+    const hits = bonusDraws(weightedBonusSet(), runs);
+    const total = [...hits.values()].reduce((a, b) => a + b, 0);
+
+    // 5 cards at 0.1 and 20 at 0.01 -> the heavy five should take
+    // 0.5 / (0.5 + 0.2) = ~71% of the slot between them.
+    const heavyShare =
+      ["B0", "B1", "B2", "B3", "B4"].reduce((n, k) => n + (hits.get(k) ?? 0), 0) / total;
+    expect(heavyShare).toBeGreaterThan(0.66);
+    expect(heavyShare).toBeLessThan(0.76);
+
+    // Every card still reachable -- weighting must not silently strand the tail.
+    expect(hits.size).toBe(25);
+  });
+
+  it("draws evenly when any card in the pool has no observed rate", () => {
+    const set = weightedBonusSet();
+    // One unmeasured card is enough: a partly-weighted pool would rank the
+    // measured cards above the rest, which is worse than not weighting at all.
+    delete set.pools.bonus.find((c) => c.name === "B7")!.packRate;
+
+    const hits = bonusDraws(set, 40000);
+    const total = [...hits.values()].reduce((a, b) => a + b, 0);
+    const heavyShare =
+      ["B0", "B1", "B2", "B3", "B4"].reduce((n, k) => n + (hits.get(k) ?? 0), 0) / total;
+
+    // Uniform over 25 puts any five at 20%.
+    expect(heavyShare).toBeGreaterThan(0.17);
+    expect(heavyShare).toBeLessThan(0.23);
+  });
+
+  it("still deals the right pack size and no duplicates", () => {
+    const set = weightedBonusSet();
+    const rng = mulberry32(8);
+    for (let i = 0; i < 500; i++) {
+      const pack = makePack(set, rng);
+      expect(pack).toHaveLength(14);
+      expect(new Set(pack.map((c) => c.name)).size).toBe(14);
+    }
+  });
+
+  it("is deterministic for a given seed", () => {
+    const names = (seed: number) =>
+      makePack(weightedBonusSet(), mulberry32(seed)).map((c) => c.name);
+    expect(names(42)).toEqual(names(42));
+  });
+
+  it("falls back to an even draw when a pool was never observed at all", () => {
+    // Real case: MKM records its five basics at a rate of zero, because its
+    // Arena boosters have no land slot. A set that pools such cards and then
+    // does deal them must not divide by a total weight of zero.
+    const set = weightedBonusSet();
+    for (const c of set.pools.bonus) c.packRate = 0;
+
+    const rng = mulberry32(6);
+    const hits = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const pack = makePack(set, rng);
+      expect(pack).toHaveLength(14);
+      for (const c of pack) if (c.setCode === "bns") hits.add(c.name);
+    }
+    expect(hits.size).toBe(25);
+  });
+});
+
 describe("sets without observed composition", () => {
   it("falls back to the fixed 15-card shape", () => {
     const set = fakeSet();

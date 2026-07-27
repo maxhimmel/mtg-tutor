@@ -20,6 +20,13 @@ export interface Card {
   // Special Guest cards, which appear in packs without belonging to the set.
   // Absent on sets ingested before those were modelled; treated as main-set.
   setCode?: string;
+  // How often this card was actually opened, as a fraction of observed packs.
+  // Cards within a slot are NOT equally likely: a real bonus sheet is weighted
+  // by rarity, and SOS's Mystical Archive runs 18:2:1 across uncommon/rare/
+  // mythic -- so drawing its 65 cards evenly deals a Mystical Archive mythic
+  // about seven times too often. Absent for sets built before this was measured,
+  // which keep drawing uniformly and so keep replaying identically.
+  packRate?: number;
 
   // 17Lands ratings (undefined when the set/card has no data).
   gihWinRate?: number; // ever_drawn_win_rate, 0-1

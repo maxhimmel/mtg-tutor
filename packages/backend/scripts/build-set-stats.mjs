@@ -311,6 +311,7 @@ async function readDraftData(localPath, slots) {
   const trophySeen = new Map();
   const trophyTaken = new Map();
   const shapes = new Map();
+  const opened = new Map();
   const unresolved = new Set();
 
   let header = null;
@@ -371,7 +372,12 @@ async function readDraftData(localPath, slots) {
       add(seen, name);
       add(seenSum, name, pickNo);
       if (trophy) add(trophySeen, name);
-      if (counts) counts[slot] = (counts[slot] ?? 0) + n;
+      if (counts) {
+        counts[slot] = (counts[slot] ?? 0) + n;
+        // Only fresh packs, and counting copies rather than packs, so this is
+        // expected copies per booster -- the weight a slot should draw by.
+        add(opened, name, n);
+      }
     }
     if (counts) {
       packs++;
@@ -396,7 +402,14 @@ async function readDraftData(localPath, slots) {
   // which cards are in the set, and they cannot drift apart.
   const packCards = packCols.map(([, name, slot]) => {
     const setCode = slots.get(norm(name))?.setCode;
-    return setCode ? { name, slot, setCode } : { name, slot };
+    const entry = { name, slot };
+    if (setCode) entry.setCode = setCode;
+    // Cards within a slot are not equally likely -- real bonus sheets are
+    // weighted by rarity. Recording what was actually opened lets makePack draw
+    // by it instead of evenly. Six places keeps a ~0.0025 rate meaningful
+    // without bloating the artifact.
+    if (packs > 0) entry.openedRate = round((opened.get(name) ?? 0) / packs, 6);
+    return entry;
   });
 
   return {
