@@ -212,6 +212,9 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
                   <PickReveal
                     pick={current}
                     verdict={verdict}
+                    // Revealing always asks, so an absent verdict here is
+                    // always one in flight.
+                    pending
                     guess={guess}
                     correct={correct}
                   />

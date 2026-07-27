@@ -74,11 +74,16 @@ function Marks({
 export function PickReveal({
   pick,
   verdict,
+  pending,
   guess,
   correct,
 }: {
   pick: ReviewPick;
   verdict: VerdictState;
+  // Whether a verdict is actually on its way. Without this, "no verdict" and
+  // "verdict coming" look identical, and the report -- which deliberately does
+  // not ask until told to -- would spin forever on picks nobody asked about.
+  pending: boolean;
   guess?: string | null;
   correct?: boolean | null;
 }) {
@@ -114,7 +119,7 @@ export function PickReveal({
         )}
       />
 
-      {verdict === undefined && (
+      {verdict === undefined && pending && (
         <p className="flex items-center gap-2 text-sm text-base-content/60">
           <span className="loading loading-spinner loading-xs" />
           Coach is reviewing this pick…
