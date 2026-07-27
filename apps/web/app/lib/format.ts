@@ -9,6 +9,21 @@ export const pct = (v?: number | null): string =>
 export const manaText = (cost?: string): string =>
   (cost ?? "").replace(/[{}]/g, "").replace(/\//g, "");
 
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+// "2026-04-24" -> "Apr 24, 2026". Formatted off the string rather than through
+// Date, which reads a bare ISO date as UTC midnight and so renders the day
+// before for anyone west of Greenwich.
+export const releaseDate = (iso?: string): string | undefined => {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
+  if (!parts) return undefined;
+  const [, year, month, day] = parts;
+  return `${MONTHS[Number(month) - 1]} ${Number(day)}, ${year}`;
+};
+
 // Map letter grades onto daisyUI's built-in semantic tokens so grade coloring
 // tracks whatever daisyUI theme is active -- no bespoke palette to maintain.
 const GRADE_VARS: Record<string, string> = {

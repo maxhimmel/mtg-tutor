@@ -19,6 +19,7 @@ import { CardTile } from "../../components/CardTile";
 import { PicksColumn } from "../../components/PicksColumn";
 import { PrincipleBadges } from "../../components/PrincipleBadge";
 import { Results } from "../../components/Results";
+import { SetIcon } from "../../components/SetIcon";
 import { UserMenu } from "../../components/UserMenu";
 import { gradeColor, pct } from "../../lib/format";
 import { useSettings } from "../../lib/useSettings";
@@ -162,7 +163,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             <Link href="/" className="no-underline text-base-content">
               mtg<span className="text-primary">-</span>tutor
             </Link>{" "}
-            <span className="font-normal text-base-content/60">{state.setCode.toUpperCase()}</span>
+            <span className="inline-flex items-baseline gap-1.5 font-normal text-base-content/60">
+              <SetIcon
+                uri={state.setIcon}
+                name={state.setName}
+                className="size-4 self-center"
+              />
+              <span title={state.setName}>{state.setCode.toUpperCase()}</span>
+            </span>
           </div>
           <Link href="/principles" className="text-sm text-base-content/60 hover:text-primary">
             Draft principles

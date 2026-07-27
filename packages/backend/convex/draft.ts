@@ -43,10 +43,14 @@ export const start = mutation({
 export const state = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
     return {
       sessionId: session._id,
       setCode: session.setCode,
+      // The board already holds the set document to replay the draft, so
+      // naming and badging the set costs nothing extra here.
+      setName: setDoc.name,
+      setIcon: setDoc.iconUri,
       format: session.format,
       status: session.status,
       saved: session.saved,

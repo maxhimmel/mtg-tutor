@@ -574,6 +574,7 @@ export const list = query({
         ratedCardCount: s.ratedCardCount,
         ingestedAt: s.ingestedAt,
         releasedAt: s.releasedAt,
+        iconUri: s.iconUri,
       }))
       // Newest first. Dates are ISO yyyy-mm-dd, so they compare as strings. A
       // set with no date yet -- ingested before the field existed, or whose

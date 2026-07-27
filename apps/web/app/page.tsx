@@ -6,6 +6,8 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
 import { UserMenu } from "./components/UserMenu";
+import { SetIcon } from "./components/SetIcon";
+import { releaseDate } from "./lib/format";
 
 export default function Home() {
   return (
@@ -92,12 +94,18 @@ function SetPicker() {
             onClick={() => start(s.code, s.format)}
             disabled={starting !== null}
           >
-            <span className="text-lg font-bold">{s.name ?? s.code.toUpperCase()}</span>
+            <span className="flex w-full items-center gap-2.5">
+              <SetIcon uri={s.iconUri} className="size-7 text-base-content/70" />
+              <span className="text-lg font-bold">{s.name ?? s.code.toUpperCase()}</span>
+            </span>
             <span className="text-sm text-base-content/60">
               {s.code.toUpperCase()} · {s.cardCount} cards · {s.ratedCardCount} with 17Lands
               data
             </span>
-            <span className="text-sm text-base-content/60">{s.format}</span>
+            <span className="text-sm text-base-content/60">
+              {s.format}
+              {releaseDate(s.releasedAt) && ` · released ${releaseDate(s.releasedAt)}`}
+            </span>
             {starting === s.code && <span className="text-sm text-base-content/60">Starting…</span>}
           </button>
         ))}
