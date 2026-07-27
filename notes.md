@@ -3,10 +3,12 @@
 1. **The coach invents mana costs.** It called `Nurturing Bristleback` a 3-drop;
    it is `5GG`. Cause found in the code, not guessed: `buildPickContext`
    (`core/tutor/pickCoach.ts`) renders the passed cards as
-   `name (Colour, GIH WR x%)` only — no `cmc`, no type line. Just the *picked*
+   `name (Colour, GIH WR x%)` only — no `cmc`, no type line. Just the _picked_
    card gets `${picked.cmc} mana`. So every curve/size claim the coach makes
    about a card it did not pick is invention. Cheap fix: put cmc + type line on
    the passed cards too. (Roadmap #1 does not fix this — different bug.)
+
+2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
 
 # Ideas:
 
@@ -112,13 +114,13 @@ Decisions worth not re-litigating:
    worse trade than the duplication. Re-provisioning AuthKit means updating both
    files.
 9. **Env vars cross four boundaries and three of them fail silently** — Vercel
-    project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
-    all drop what they were not told about, and only Convex's deployment env
-    errors loudly. Three deploys broke on this. The countermeasures now in place:
-    `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
-    `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
-    list — verified with `turbo run build --dry=json`). Do not add a task-level
-    `env` key; put it in `globalEnv`.
+   project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
+   all drop what they were not told about, and only Convex's deployment env
+   errors loudly. Three deploys broke on this. The countermeasures now in place:
+   `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
+   `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
+   list — verified with `turbo run build --dry=json`). Do not add a task-level
+   `env` key; put it in `globalEnv`.
 10. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
     traces from the project directory by default, and under pnpm 652 of the 653
     files in `next-server.js.nft.json` resolve outside `apps/web`.
