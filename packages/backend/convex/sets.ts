@@ -575,6 +575,17 @@ export const list = query({
         ingestedAt: s.ingestedAt,
         releasedAt: s.releasedAt,
         iconUri: s.iconUri,
+        // The two-colour pair with the format's highest win rate -- the one
+        // thing about a set that says how it actually plays, and the only part
+        // of colorPairWinRates a picker needs. Reduced here rather than shipped
+        // whole, since the other nine pairs would be ten times the payload for
+        // nothing the caller renders. The rate itself is deliberately not
+        // returned: 17Lands' population wins ~58%, so a bare percentage means
+        // nothing without the baseline that lives on setStats.
+        topPair: s.colorPairWinRates.reduce<
+          { pair: string; winRate: number } | undefined
+        >((best, p) => (best == null || p.winRate > best.winRate ? p : best), undefined)
+          ?.pair,
       }))
       // Newest first. Dates are ISO yyyy-mm-dd, so they compare as strings. A
       // set with no date yet -- ingested before the field existed, or whose
