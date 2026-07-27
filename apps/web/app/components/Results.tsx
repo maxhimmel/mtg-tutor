@@ -8,6 +8,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
 import { CardPlacardList } from "./CardPlacard";
 import { CardName } from "./CardText";
+import { Panel } from "./Panel";
 
 export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
   const results = useQuery(api.draft.results, { sessionId });
@@ -17,53 +18,49 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
   if (results === undefined) return <p className="text-base-content/60">Tallying up…</p>;
 
   const { summary, deck, mistakes } = results;
+  const isSaved = saved || results.saved;
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="flex flex-col gap-4">
-        <div className="card border border-base-300 bg-base-200">
-          <div className="card-body gap-2 p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-base-content/60">
-              Suggested deck — {deck.colors.join("") || "splashy"}
-            </h2>
-            <p className="text-base-content/60">
+        <Panel
+          title={`Suggested deck — ${deck.colors.join("") || "splashy"}`}
+          aside={
+            <span className="text-xs tabular-nums text-base-content/50">
               {deck.spells.length} spells
-              {deck.nonbasicLands.length > 0 && ` + ${deck.nonbasicLands.length} lands you drafted`}{" "}
-              + {deck.basicLands} basics
-            </p>
-            <CardPlacardList
-              cards={[...deck.spells, ...deck.nonbasicLands]}
-              trailing={(c) => pct(c.gihWinRate)}
-            />
-          </div>
-        </div>
+              {deck.nonbasicLands.length > 0 && ` + ${deck.nonbasicLands.length} lands`} +{" "}
+              {deck.basicLands} basics
+            </span>
+          }
+        >
+          <CardPlacardList
+            cards={[...deck.spells, ...deck.nonbasicLands]}
+            trailing={(c) => pct(c.gihWinRate)}
+          />
+        </Panel>
 
         {mistakes.length > 0 && (
-          <div className="card border border-base-300 bg-base-200">
-            <div className="card-body gap-2 p-4">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-base-content/60">
-                Biggest missed picks
-              </h2>
-              <div className="grid gap-0.5">
-                {mistakes.map((m) => (
-                  <div
-                    key={`${m.packNo}-${m.pickNo}`}
-                    className="flex justify-between gap-4 border-b border-base-300 py-1 text-sm"
-                  >
-                    <span>
-                      <span className="text-base-content/60">
-                        P{m.packNo}P{m.pickNo}
-                      </span>{" "}
-                      took <CardName card={m.picked} />
+          <Panel title="Biggest missed picks">
+            <ul className="flex flex-col">
+              {mistakes.map((m) => (
+                <li
+                  key={`${m.packNo}-${m.pickNo}`}
+                  className="flex flex-wrap justify-between gap-x-4 gap-y-1 border-b border-base-300 py-1.5 text-sm last:border-0"
+                >
+                  <span>
+                    <span className="mr-1.5 tabular-nums text-base-content/60">
+                      P{m.packNo}P{m.pickNo}
                     </span>
-                    <span className="text-base-content/60">
-                      over <CardName card={m.best} /> (+{(m.cost * 100).toFixed(1)}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+                    took <CardName card={m.picked} />
+                  </span>
+                  <span className="text-base-content/60">
+                    over <CardName card={m.best} />{" "}
+                    <span className="tabular-nums">+{(m.cost * 100).toFixed(1)}%</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
         )}
       </div>
 
@@ -82,47 +79,45 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
           </div>
         )}
 
-        <div className="card border border-base-300 bg-base-200">
-          <div className="card-body gap-2 p-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-base-content/60">
-              Result
-            </h2>
-            <div className="flex justify-between py-0.5 tabular-nums">
-              <span className="text-base-content/60">Overall score</span>
-              <strong>{summary.overallScore.toFixed(1)}/100</strong>
-            </div>
-            <div className="flex justify-between py-0.5 tabular-nums">
-              <span className="text-base-content/60">Best-pick accuracy</span>
-              <strong>{(summary.accuracy * 100).toFixed(0)}%</strong>
-            </div>
-            <div className="flex justify-between py-0.5 tabular-nums">
-              <span className="text-base-content/60">Colors</span>
-              <strong>{summary.colorPair || "—"}</strong>
-            </div>
-            <div className="flex justify-between py-0.5 tabular-nums">
-              <span className="text-base-content/60">Picks</span>
-              <strong>{summary.pickCount}</strong>
-            </div>
+        {/* The draft's answer to the per-pick grade, set the same way so the two
+            read as the same verdict at two scales. */}
+        <Panel title="Result" bodyClassName="gap-3">
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-5xl font-semibold leading-none tracking-tight">
+              {summary.overallScore.toFixed(1)}
+            </span>
+            <span className="text-sm tabular-nums text-base-content/45">/100</span>
           </div>
-        </div>
 
-        <div className="card border border-base-300 bg-base-200">
-          <div className="card-body gap-2 p-4">
-            <button
-              className="btn btn-primary w-full"
-              disabled={saved || results.saved}
-              onClick={async () => {
-                await save({ sessionId });
-                setSaved(true);
-              }}
-            >
-              {saved || results.saved ? "Saved" : "Save this draft"}
-            </button>
-            <p className="text-sm text-base-content/60">
-              <Link href="/">Draft another set →</Link>
-            </p>
-          </div>
-        </div>
+          <dl className="flex flex-col border-t border-base-300 pt-2 text-sm">
+            {[
+              ["Best-pick accuracy", `${(summary.accuracy * 100).toFixed(0)}%`],
+              ["Colors", summary.colorPair || "—"],
+              ["Picks", String(summary.pickCount)],
+            ].map(([term, value]) => (
+              <div key={term} className="flex justify-between gap-4 py-1 tabular-nums">
+                <dt className="text-base-content/60">{term}</dt>
+                <dd className="font-semibold">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Panel>
+
+        <Panel>
+          <button
+            className="btn btn-primary w-full"
+            disabled={isSaved}
+            onClick={async () => {
+              await save({ sessionId });
+              setSaved(true);
+            }}
+          >
+            {isSaved ? "Saved" : "Save this draft"}
+          </button>
+          <Link href="/" className="link link-hover text-sm text-base-content/60">
+            Draft another set →
+          </Link>
+        </Panel>
       </aside>
     </div>
   );

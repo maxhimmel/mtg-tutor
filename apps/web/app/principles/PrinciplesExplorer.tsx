@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Principle, PrincipleSource, PrinciplesDoc } from "@mtg-tutor/core";
-import { UserMenu } from "../components/UserMenu";
+import { AppHeader } from "../components/AppHeader";
 
 const label = (category: string) => category.replace(/-/g, " ");
 
@@ -60,15 +59,12 @@ export function PrinciplesExplorer({
 
   return (
     <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <div className="mb-5 flex flex-wrap items-baseline justify-between gap-4 border-b border-base-300 pb-3">
-        <Link href="/" className="text-lg font-bold tracking-tight">
-          mtg<span className="text-primary">-</span>tutor
-        </Link>
-        <UserMenu />
-      </div>
+      <AppHeader />
 
       <div className="max-w-3xl">
-        <h1 className="mb-2 text-2xl font-semibold">{doc.meta.title}</h1>
+        <h1 className="mb-2 font-display text-3xl font-semibold tracking-tight">
+          {doc.meta.title}
+        </h1>
         {doc.meta.note && <p className="mb-2 text-base-content/70">{doc.meta.note}</p>}
         <p className="text-base-content/60">
           These {doc.principles.length} principles are the coach&apos;s fact-check reference.
@@ -136,9 +132,7 @@ export function PrinciplesExplorer({
       <div className="flex flex-col gap-8">
         {groups.map(([category, list]) => (
           <section key={category} id={category} className="scroll-mt-6">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-base-content/60">
-              {label(category)}
-            </h2>
+            <h2 className="eyebrow mb-3">{label(category)}</h2>
             <div className="flex flex-col gap-3">
               {list.map((p) => (
                 <article
@@ -177,9 +171,7 @@ export function PrinciplesExplorer({
       </div>
 
       <section id="sources" className="mt-12 scroll-mt-6 border-t border-base-300 pt-6">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-base-content/60">
-          Sources
-        </h2>
+        <h2 className="eyebrow mb-3">Sources</h2>
         <p className="mb-3 max-w-3xl text-sm text-base-content/60">
           These principles are distilled from published Limited strategy writing rather than
           invented. Nothing here is set-specific.
