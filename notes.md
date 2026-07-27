@@ -2,6 +2,12 @@
 
 1. I did a draft and went wide with my color choices because I was focusing on dragon synergies, but it kept complaining that I should solidify my color choice.
 
+2. Not the first time I've seen the coach reference the mana-cost for a card incorrectly. The `Nurturing Bristleback` is actually worth `5GG` (7 total). Here's what the coach said:
+
+```
+Child of the Volcano is a modest 4‑drop creature that doesn’t qualify as a bomb and leaves you with a higher curve and no clear signal for a second color, so it’s a weaker pick than the available 3‑drop bomb Nurturing Bristleback.
+```
+
 # Ideas:
 
 1. A quiz on what card a certain mono-colored card could/should belong to.
@@ -60,10 +66,6 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    review loop feels right; MVP only shows a session score.
 3. Standalone archetype quiz — see Ideas #1 above. Separate command / data model,
    not part of reviewing a draft.
-4. ~~Keep review logic UI-agnostic in `core/` for an eventual React frontend~~ —
-   done: `packages/core` is now a dependency-free package (see below). The
-   decision-pick threshold (`REVIEW.decisionPickMinCards`) lives there and is
-   still not user-adjustable; exposing it as a slider is the remaining half.
 
 # Web platform (done, 2026-07-21 to 2026-07-22, deployed):
 
