@@ -62,7 +62,7 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // fingerprint used, so splitting it in two does not itself trigger the global
 // re-crawl this change exists to avoid.
 const POOL_REVISION = "2-set-name";
-const META_REVISION = "1-name-icon";
+const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
@@ -254,6 +254,7 @@ export const ingest = action({
             format,
             name: meta.name,
             iconUri: meta.icon_svg_uri,
+            releasedAt: meta.released_at,
             metaRevision: META_REVISION,
           });
           return {
@@ -316,6 +317,7 @@ export const ingest = action({
       code: setCode,
       name: scryfall.meta.name,
       iconUri: scryfall.meta.icon_svg_uri,
+      releasedAt: scryfall.meta.released_at,
       format,
       cards,
       colorPairWinRates: pairs,
@@ -361,6 +363,7 @@ export const storeMeta = internalMutation({
     format: v.string(),
     name: v.optional(v.string()),
     iconUri: v.optional(v.string()),
+    releasedAt: v.optional(v.string()),
     metaRevision: v.string(),
   },
   handler: async (ctx, args) => {
@@ -380,6 +383,7 @@ export const storeMeta = internalMutation({
     await ctx.db.patch(doc._id, {
       name: args.name ?? doc.name,
       iconUri: args.iconUri ?? doc.iconUri,
+      releasedAt: args.releasedAt ?? doc.releasedAt,
       metaRevision: args.metaRevision,
     });
   },
@@ -401,6 +405,7 @@ export const store = internalMutation({
     code: v.string(),
     name: v.optional(v.string()),
     iconUri: v.optional(v.string()),
+    releasedAt: v.optional(v.string()),
     format: v.string(),
     cards: v.array(card),
     colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
@@ -459,6 +464,7 @@ export const store = internalMutation({
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
       iconUri: args.iconUri ?? existing?.iconUri,
+      releasedAt: args.releasedAt ?? existing?.releasedAt,
       packComposition: args.packComposition ?? existing?.packComposition,
       sourceHash: args.sourceHash,
       metaRevision: args.metaRevision,
@@ -559,13 +565,26 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     const sets = await ctx.db.query("sets").collect();
-    return sets.map((s) => ({
-      code: s.code,
-      name: s.name,
-      format: s.format,
-      cardCount: s.cards.length,
-      ratedCardCount: s.ratedCardCount,
-      ingestedAt: s.ingestedAt,
-    }));
+    return sets
+      .map((s) => ({
+        code: s.code,
+        name: s.name,
+        format: s.format,
+        cardCount: s.cards.length,
+        ratedCardCount: s.ratedCardCount,
+        ingestedAt: s.ingestedAt,
+        releasedAt: s.releasedAt,
+      }))
+      // Newest first. Dates are ISO yyyy-mm-dd, so they compare as strings. A
+      // set with no date yet -- ingested before the field existed, or whose
+      // metadata fetch failed -- sorts last rather than pretending to be old.
+      .sort((a, b) => {
+        if (a.releasedAt !== b.releasedAt) {
+          if (!a.releasedAt) return 1;
+          if (!b.releasedAt) return -1;
+          return b.releasedAt.localeCompare(a.releasedAt);
+        }
+        return a.code.localeCompare(b.code) || a.format.localeCompare(b.format);
+      });
   },
 });

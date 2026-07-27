@@ -28,6 +28,9 @@ export default defineSchema({
     // Scryfall's icon for the set, an SVG URL. Set-level metadata like `name`:
     // one cheap request refreshes both, independently of the card pool.
     iconUri: v.optional(v.string()),
+    // Scryfall's release date, ISO yyyy-mm-dd, which is what `list` orders by.
+    // Same cheap metadata request as the name and icon.
+    releasedAt: v.optional(v.string()),
     // Pool revision + hash of the stats artifact the CARD list was built from.
     // Lets a deploy re-crawl only the sets that actually changed. Absent on
     // documents written before it existed, which means they rebuild once.
