@@ -25,11 +25,17 @@ export default defineSchema({
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
-    // Ingest revision + hash of the stats artifact this document was built
-    // from. Lets a deploy re-ingest only the sets that actually changed instead
-    // of re-crawling Scryfall for all of them. Absent on documents written
-    // before it existed, which simply means the next ingest rebuilds them.
+    // Scryfall's icon for the set, an SVG URL. Set-level metadata like `name`:
+    // one cheap request refreshes both, independently of the card pool.
+    iconUri: v.optional(v.string()),
+    // Pool revision + hash of the stats artifact the CARD list was built from.
+    // Lets a deploy re-crawl only the sets that actually changed. Absent on
+    // documents written before it existed, which means they rebuild once.
     sourceHash: v.optional(v.string()),
+    // Revision of the set-level metadata above, tracked apart from sourceHash
+    // so adding a field like the icon costs one request per set rather than a
+    // full re-crawl of every card.
+    metaRevision: v.optional(v.string()),
     // Copied from setStats by `ingest` -- the observed booster shapes, on the
     // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),

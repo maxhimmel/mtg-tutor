@@ -67,6 +67,7 @@ function deploymentUrl() {
 const client = new ConvexHttpClient(deploymentUrl());
 
 let ingested = 0;
+let refreshed = 0;
 let skipped = 0;
 
 for (const file of files) {
@@ -86,6 +87,9 @@ for (const file of files) {
   if (result.skipped) {
     skipped++;
     process.stderr.write("unchanged, skipped\n");
+  } else if (result.metaOnly) {
+    refreshed++;
+    process.stderr.write("metadata refreshed (no card crawl)\n");
   } else {
     ingested++;
     process.stderr.write(`ingest ... ${JSON.stringify(result)}\n`);
@@ -93,6 +97,6 @@ for (const file of files) {
 }
 
 console.error(
-  `\ningested ${ingested} set(s), skipped ${skipped} unchanged` +
-    `${prod ? " (production)" : ""}`,
+  `\ningested ${ingested} set(s), refreshed ${refreshed} metadata-only, ` +
+    `skipped ${skipped} unchanged${prod ? " (production)" : ""}`,
 );

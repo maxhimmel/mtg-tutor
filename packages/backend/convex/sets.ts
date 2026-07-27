@@ -27,8 +27,11 @@ export interface IngestResult {
   cardCount: number;
   ratedCardCount: number;
   keptExistingSnapshot: boolean;
-  // True when the stored fingerprint already matched and no Scryfall crawl ran.
+  // True when both fingerprints already matched and nothing was fetched at all.
   skipped: boolean;
+  // True when the card pool was current and only the one-request set metadata
+  // was refreshed.
+  metaOnly: boolean;
 }
 
 const USER_AGENT =
@@ -37,12 +40,29 @@ const SCRYFALL_DELAY_MS = 90;
 const SCRYFALL_MAX_RETRIES = 5;
 const SCRYFALL_BACKOFF_MS = 1_000;
 
-// Half of a set document's fingerprint; the artifact's own hash is the other
-// half. Bump this whenever ingest changes WHAT it stores, so that a deploy
-// re-ingests every set even though not one artifact changed -- adding the set
-// name was exactly that case, and without a bump here it would have been
-// skipped into invisibility.
-const INGEST_REVISION = "2-set-name";
+// A set document is fingerprinted in two independent halves, because its two
+// halves cost wildly different amounts to rebuild.
+//
+// The pool -- the card list -- comes from paginated /cards/search crawls, two of
+// them per set. That is the expensive half and the one that earns 429s.
+// POOL_REVISION pairs with the stats artifact's hash; bump it when the stored
+// CARD data changes shape.
+//
+// The metadata -- name, icon -- comes from /sets/{code}, which is one request
+// and returns everything at once. META_REVISION alone gates it, with no artifact
+// hash, because none of it derives from our stats. Bump it to add or change a
+// set-level field and every set refreshes for one request each.
+//
+// Keeping these apart is the whole point: adding the set name previously
+// invalidated everything and dragged eight full card crawls behind a field that
+// costs one cheap call.
+//
+// The values are opaque tags whose only job is to differ from their
+// predecessors. POOL_REVISION deliberately keeps the value the combined
+// fingerprint used, so splitting it in two does not itself trigger the global
+// re-crawl this change exists to avoid.
+const POOL_REVISION = "2-set-name";
+const META_REVISION = "1-name-icon";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
@@ -101,6 +121,22 @@ async function scryfallSearch(query: string): Promise<ScryfallCard[]> {
   return out;
 }
 
+// Everything we keep about a set that is not a card. One request serves all of
+// it, which is what makes refreshing it independently worth doing.
+interface ScryfallSet {
+  name?: string;
+  released_at?: string;
+  icon_svg_uri?: string;
+}
+
+// Never throws: a set whose metadata cannot be fetched still has a usable card
+// pool, and the UI falls back to the set code.
+async function fetchSetMeta(setCode: string): Promise<ScryfallSet> {
+  return await getJson<ScryfallSet>(
+    `https://api.scryfall.com/sets/${encodeURIComponent(setCode)}`,
+  ).catch(() => ({}));
+}
+
 // Every card that can appear in the set's boosters -- which is more than the set
 // itself. Modern boosters carry a bonus sheet (Mystical Archive) and Special
 // Guests, printed under their own set codes and released the same day. Those are
@@ -111,28 +147,26 @@ async function scryfallSearch(query: string): Promise<ScryfallCard[]> {
 // The caller narrows the result to 17Lands' manifest instead, which is the
 // authoritative list of what is actually in packs.
 //
-// The same set lookup carries the set's display name, which is the only place
-// it comes from -- card documents know their set code but not its name.
+// The set lookup this needs for the release date is the same one that carries
+// the metadata, so a full ingest gets both without paying twice.
 async function fetchScryfallPool(
   setCode: string,
-): Promise<{ cards: ScryfallCard[]; name?: string }> {
+): Promise<{ cards: ScryfallCard[]; meta: ScryfallSet }> {
   const main = await scryfallSearch(`set:${setCode}`);
-  if (main.length === 0) return { cards: main };
+  if (main.length === 0) return { cards: main, meta: {} };
 
-  const set = await getJson<{ name?: string; released_at?: string }>(
-    `https://api.scryfall.com/sets/${encodeURIComponent(setCode)}`,
-  ).catch(() => ({ name: undefined, released_at: undefined }));
-  if (!set.released_at) return { cards: main, name: set.name };
+  const meta = await fetchSetMeta(setCode);
+  if (!meta.released_at) return { cards: main, meta };
 
   await sleep(SCRYFALL_DELAY_MS);
   // Bonus sheets ship on the set's release day, so this finds them without a
   // per-set mapping table -- Special Guests is shared across sets and is not a
   // Scryfall child of any of them.
   const sameDay = await scryfallSearch(
-    `game:arena date=${set.released_at} -set:${setCode}`,
+    `game:arena date=${meta.released_at} -set:${setCode}`,
   ).catch(() => [] as ScryfallCard[]);
 
-  return { cards: [...main, ...sameDay], name: set.name };
+  return { cards: [...main, ...sameDay], meta };
 }
 
 // Narrows a Scryfall pool to the cards 17Lands saw in packs, plus basic lands.
@@ -200,17 +234,42 @@ export const ingest = action({
     // Checked before anything touches Scryfall: re-ingesting a set that has not
     // changed costs two paginated crawls, and doing that for every set on every
     // deploy is what got us rate limited in the first place.
-    const fingerprint = args.sourceHash
-      ? `${INGEST_REVISION}:${args.sourceHash}`
+    const poolFingerprint = args.sourceHash
+      ? `${POOL_REVISION}:${args.sourceHash}`
       : undefined;
 
-    if (fingerprint && !args.force) {
+    if (poolFingerprint && !args.force) {
       const current = await ctx.runQuery(internal.sets.readIngestState, {
         code: setCode,
         format,
       });
-      if (current && current.sourceHash === fingerprint) {
-        return { ...current.result, keptExistingSnapshot: false, skipped: true };
+
+      if (current && current.sourceHash === poolFingerprint) {
+        // The card pool is current, so the crawl is off the table either way.
+        // Metadata may still be behind -- one request settles it.
+        if (current.metaRevision !== META_REVISION) {
+          const meta = await fetchSetMeta(setCode);
+          await ctx.runMutation(internal.sets.storeMeta, {
+            code: setCode,
+            format,
+            name: meta.name,
+            iconUri: meta.icon_svg_uri,
+            metaRevision: META_REVISION,
+          });
+          return {
+            ...current.result,
+            keptExistingSnapshot: false,
+            skipped: false,
+            metaOnly: true,
+          };
+        }
+
+        return {
+          ...current.result,
+          keptExistingSnapshot: false,
+          skipped: true,
+          metaOnly: false,
+        };
       }
     }
 
@@ -255,12 +314,14 @@ export const ingest = action({
 
     return await ctx.runMutation(internal.sets.store, {
       code: setCode,
-      name: scryfall.name,
+      name: scryfall.meta.name,
+      iconUri: scryfall.meta.icon_svg_uri,
       format,
       cards,
       colorPairWinRates: pairs,
       packComposition: stats.packComposition,
-      sourceHash: fingerprint,
+      sourceHash: poolFingerprint,
+      metaRevision: META_REVISION,
     });
   },
 });
@@ -282,12 +343,45 @@ export const readIngestState = internalQuery({
 
     return {
       sourceHash: doc.sourceHash,
+      metaRevision: doc.metaRevision,
       result: {
         setId: doc._id,
         cardCount: doc.cards.length,
         ratedCardCount: doc.ratedCardCount,
       },
     };
+  },
+});
+
+// The cheap half of an ingest: set-level fields only, patched onto a document
+// whose card pool is already current. Everything here came from one request.
+export const storeMeta = internalMutation({
+  args: {
+    code: v.string(),
+    format: v.string(),
+    name: v.optional(v.string()),
+    iconUri: v.optional(v.string()),
+    metaRevision: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const doc = await ctx.db
+      .query("sets")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .unique();
+    if (!doc) {
+      throw new Error(`No set "${args.code}" (${args.format}) to refresh.`);
+    }
+
+    // A failed metadata fetch arrives as undefined rather than an error, so
+    // fall back to what is stored instead of blanking a good value. The
+    // revision still advances: the fields are as current as Scryfall will say.
+    await ctx.db.patch(doc._id, {
+      name: args.name ?? doc.name,
+      iconUri: args.iconUri ?? doc.iconUri,
+      metaRevision: args.metaRevision,
+    });
   },
 });
 
@@ -306,11 +400,13 @@ export const store = internalMutation({
   args: {
     code: v.string(),
     name: v.optional(v.string()),
+    iconUri: v.optional(v.string()),
     format: v.string(),
     cards: v.array(card),
     colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
     packComposition: v.optional(packComposition),
     sourceHash: v.optional(v.string()),
+    metaRevision: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args.cards).length;
@@ -346,6 +442,7 @@ export const store = internalMutation({
         ratedCardCount: existing.ratedCardCount,
         keptExistingSnapshot: true,
         skipped: false,
+        metaOnly: false,
       };
     }
 
@@ -361,8 +458,10 @@ export const store = internalMutation({
       ingestedAt: new Date().toISOString(),
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
+      iconUri: args.iconUri ?? existing?.iconUri,
       packComposition: args.packComposition ?? existing?.packComposition,
       sourceHash: args.sourceHash,
+      metaRevision: args.metaRevision,
     };
 
     const setId = existing
@@ -375,6 +474,7 @@ export const store = internalMutation({
       ratedCardCount: rated,
       keptExistingSnapshot: false,
       skipped: false,
+      metaOnly: false,
     };
   },
 });
