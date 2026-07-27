@@ -128,6 +128,23 @@ describe("weighted slots", () => {
       makePack(weightedBonusSet(), mulberry32(seed)).map((c) => c.name);
     expect(names(42)).toEqual(names(42));
   });
+
+  it("falls back to an even draw when a pool was never observed at all", () => {
+    // Real case: MKM records its five basics at a rate of zero, because its
+    // Arena boosters have no land slot. A set that pools such cards and then
+    // does deal them must not divide by a total weight of zero.
+    const set = weightedBonusSet();
+    for (const c of set.pools.bonus) c.packRate = 0;
+
+    const rng = mulberry32(6);
+    const hits = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const pack = makePack(set, rng);
+      expect(pack).toHaveLength(14);
+      for (const c of pack) if (c.setCode === "bns") hits.add(c.name);
+    }
+    expect(hits.size).toBe(25);
+  });
 });
 
 describe("sets without observed composition", () => {
