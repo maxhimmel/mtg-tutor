@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd ../../packages/backend && pnpm exec convex deploy --cmd 'cd ../.. && pnpm turbo run build --filter=@mtg-tutor/web && cd packages/backend && node scripts/seed-set-stats.mjs && node scripts/ingest-sets.mjs' --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL",
+  "//": "seed and ingest run AFTER convex deploy returns, not inside --cmd. `convex deploy --help` is explicit that --cmd is step 1 and the function push is step 5, so anything inside --cmd calls the PREVIOUS deployment -- which deadlocked the build every time a function's arguments changed. Only the web build belongs in --cmd, because that is what needs the URL injected.",
+  "buildCommand": "cd ../../packages/backend && pnpm exec convex deploy --cmd 'cd ../.. && pnpm turbo run build --filter=@mtg-tutor/web' --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL && node scripts/seed-set-stats.mjs && node scripts/ingest-sets.mjs",
   "framework": "nextjs"
 }

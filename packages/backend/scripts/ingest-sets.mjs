@@ -48,10 +48,13 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-// In the Vercel build the URL is handed to us directly: `convex deploy` runs
-// this via --cmd with NEXT_PUBLIC_CONVEX_URL set to the just-deployed
-// deployment. Locally there is no such var, so fall back to asking the CLI for
-// whichever deployment it would target -- dev by default, prod with --prod.
+// This no longer runs inside `convex deploy --cmd`, so nothing injects the URL
+// any more: --cmd is step 1 of a deploy and the function push is step 5, which
+// meant anything in there talked to the PREVIOUS deployment. It now runs after
+// the deploy returns, and resolves the target the same way it always did
+// locally -- by asking the CLI. On Vercel, CONVEX_DEPLOY_KEY points the CLI at
+// production; locally it is dev by default and prod with --prod. An explicit
+// NEXT_PUBLIC_CONVEX_URL still wins if something sets one.
 function deploymentUrl() {
   const fromEnv = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL;
   if (fromEnv) return fromEnv;
