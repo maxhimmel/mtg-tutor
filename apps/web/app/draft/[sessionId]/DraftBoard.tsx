@@ -32,7 +32,9 @@ interface LastPick {
   score: PickScore;
   signal?: string;
   pickIndex: number;
-  cardsInPack: number;
+  // The pack this pick chose from, captured before the mutation swaps it for
+  // the next one. The coach talks about these cards and nothing else holds them.
+  pack: Card[];
 }
 
 export function DraftBoard({ sessionId }: { sessionId: string }) {
@@ -118,13 +120,15 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [sessionId, getAccessToken, settings.coachMinPackCards],
   );
 
-  // Every card the coach could plausibly name: what is in front of you, what
-  // you have taken, and the card the data preferred.
-  const boardCards = useMemo(() => {
-    const cards: Card[] = [...(state?.pack ?? []), ...(state?.pool ?? [])];
-    if (last) cards.push(last.score.best, last.score.picked);
-    return cards;
-  }, [state?.pack, state?.pool, last]);
+  // Every card the coach could plausibly name: what is in front of you, what you
+  // have taken, and the pack it is actually coaching -- which is no longer the
+  // pack in front of you, since picking advanced the board. Without that last
+  // one only the pick and the data's pick could ever be matched, and the rest of
+  // the pack the coach compared them against rendered as plain text.
+  const boardCards = useMemo(
+    () => [...(state?.pack ?? []), ...(state?.pool ?? []), ...(last?.pack ?? [])],
+    [state?.pack, state?.pool, last],
+  );
 
   // Recomputed on every streamed chunk, which is why splitCitations tolerates a
   // half-arrived citation rather than flashing "[EVA" into the prose.
@@ -134,12 +138,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     if (picking) return;
     setPicking(true);
     // Read before the mutation returns: `result` already holds the next pack.
-    const cardsInPack = state?.pack.length ?? 0;
+    const pack = state?.pack ?? [];
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
       const score = result.score as PickScore;
-      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, cardsInPack });
-      void streamCoach(result.pickIndex, score, cardsInPack);
+      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack });
+      void streamCoach(result.pickIndex, score, pack.length);
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     } finally {
@@ -216,7 +220,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       <button
                         className="btn btn-outline btn-xs mt-3"
                         onClick={() =>
-                          void streamCoach(last.pickIndex, last.score, last.cardsInPack, true)
+                          void streamCoach(last.pickIndex, last.score, last.pack.length, true)
                         }
                       >
                         Coach this pick anyway
