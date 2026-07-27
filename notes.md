@@ -46,6 +46,8 @@
 
 5. Pre-load all the images in the current pack before we display that page. Remove the image popping in as it dynamically loads. I'd rather have a loading page/spinner/state than the faster image lazy loading.
 
+6. After a draft the AI can step thru each pick and point out why a different pick woulda ben better (assuming we had a sub-optimal pick on that pack).
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
