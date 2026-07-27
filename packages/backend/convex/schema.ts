@@ -25,6 +25,11 @@ export default defineSchema({
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
+    // Ingest revision + hash of the stats artifact this document was built
+    // from. Lets a deploy re-ingest only the sets that actually changed instead
+    // of re-crawling Scryfall for all of them. Absent on documents written
+    // before it existed, which simply means the next ingest rebuilds them.
+    sourceHash: v.optional(v.string()),
     // Copied from setStats by `ingest` -- the observed booster shapes, on the
     // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),

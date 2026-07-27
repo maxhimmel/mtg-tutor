@@ -3,9 +3,15 @@
 // Scryfall, so this runs after seed-set-stats.mjs -- together they take a fresh
 // Convex deployment from empty to fully populated with no source CSVs needed.
 //
-//   node scripts/ingest-sets.mjs                 # every artifact
+//   node scripts/ingest-sets.mjs                 # every changed artifact
 //   node scripts/ingest-sets.mjs sos.TradDraft   # just one
 //   node scripts/ingest-sets.mjs --prod
+//   node scripts/ingest-sets.mjs --force         # rebuild even if unchanged
+//
+// Each artifact is hashed and the hash travels with the ingest call, so a set
+// whose stats have not moved is left alone -- an ordinary deploy touches
+// Scryfall not at all. `--force` is the way back in when the set itself changed
+// upstream (a new printing, an erratum) while our artifact stayed put.
 //
 // The artifact filenames are the set list, so a set shows up here exactly when
 // its stats are committed -- no separate list to keep in sync. Calls go over
@@ -13,6 +19,7 @@
 // resolve the deployment URL for the same target `--prod` would pick.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +31,7 @@ const DATA = resolve(HERE, "..", "data");
 
 const argv = process.argv.slice(2);
 const prod = argv.includes("--prod");
+const force = argv.includes("--force");
 const only = argv.filter((a) => !a.startsWith("--"));
 
 if (!existsSync(DATA)) {
@@ -58,13 +66,33 @@ function deploymentUrl() {
 
 const client = new ConvexHttpClient(deploymentUrl());
 
-for (const file of files) {
-  const { setCode, format } = JSON.parse(readFileSync(join(DATA, file), "utf8"));
-  const label = `${setCode}/${format}`;
+let ingested = 0;
+let skipped = 0;
 
-  process.stderr.write(`${label}: ingest ... `);
-  const result = await client.action(api.sets.ingest, { setCode, format });
-  process.stderr.write(JSON.stringify(result) + "\n");
+for (const file of files) {
+  const raw = readFileSync(join(DATA, file), "utf8");
+  const { setCode, format } = JSON.parse(raw);
+  const label = `${setCode}/${format}`;
+  const sourceHash = createHash("sha256").update(raw).digest("hex");
+
+  process.stderr.write(`${label}: `);
+  const result = await client.action(api.sets.ingest, {
+    setCode,
+    format,
+    sourceHash,
+    force,
+  });
+
+  if (result.skipped) {
+    skipped++;
+    process.stderr.write("unchanged, skipped\n");
+  } else {
+    ingested++;
+    process.stderr.write(`ingest ... ${JSON.stringify(result)}\n`);
+  }
 }
 
-console.error(`\ningested ${files.length} set(s)${prod ? " into production" : ""}`);
+console.error(
+  `\ningested ${ingested} set(s), skipped ${skipped} unchanged` +
+    `${prod ? " (production)" : ""}`,
+);

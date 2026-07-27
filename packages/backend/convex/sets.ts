@@ -27,6 +27,8 @@ export interface IngestResult {
   cardCount: number;
   ratedCardCount: number;
   keptExistingSnapshot: boolean;
+  // True when the stored fingerprint already matched and no Scryfall crawl ran.
+  skipped: boolean;
 }
 
 const USER_AGENT =
@@ -34,6 +36,13 @@ const USER_AGENT =
 const SCRYFALL_DELAY_MS = 90;
 const SCRYFALL_MAX_RETRIES = 5;
 const SCRYFALL_BACKOFF_MS = 1_000;
+
+// Half of a set document's fingerprint; the artifact's own hash is the other
+// half. Bump this whenever ingest changes WHAT it stores, so that a deploy
+// re-ingests every set even though not one artifact changed -- adding the set
+// name was exactly that case, and without a bump here it would have been
+// skipped into invisibility.
+const INGEST_REVISION = "2-set-name";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
@@ -175,10 +184,35 @@ function statsAsRatings(stats: Doc<"setStats">): SeventeenLandsCard[] {
 //   pnpm build-set-stats <SET> <FORMAT> && pnpm seed-set-stats
 // -- so the flow is availability -> build -> seed -> ingest.
 export const ingest = action({
-  args: { setCode: v.string(), format: v.optional(v.string()) },
+  args: {
+    setCode: v.string(),
+    format: v.optional(v.string()),
+    // Hash of the stats artifact this ingest is for. Omitted by callers that
+    // have no artifact to hand (the CLI ingesting a set on demand), which just
+    // means the set is always rebuilt.
+    sourceHash: v.optional(v.string()),
+    force: v.optional(v.boolean()),
+  },
   handler: async (ctx, args): Promise<IngestResult> => {
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
+
+    // Checked before anything touches Scryfall: re-ingesting a set that has not
+    // changed costs two paginated crawls, and doing that for every set on every
+    // deploy is what got us rate limited in the first place.
+    const fingerprint = args.sourceHash
+      ? `${INGEST_REVISION}:${args.sourceHash}`
+      : undefined;
+
+    if (fingerprint && !args.force) {
+      const current = await ctx.runQuery(internal.sets.readIngestState, {
+        code: setCode,
+        format,
+      });
+      if (current && current.sourceHash === fingerprint) {
+        return { ...current.result, keptExistingSnapshot: false, skipped: true };
+      }
+    }
 
     const [scryfall, stats] = await Promise.all([
       fetchScryfallPool(setCode),
@@ -226,7 +260,34 @@ export const ingest = action({
       cards,
       colorPairWinRates: pairs,
       packComposition: stats.packComposition,
+      sourceHash: fingerprint,
     });
+  },
+});
+
+// Just enough of a set document to decide whether to rebuild it, and to answer
+// for it if not. Deliberately not `sets.get`: that returns the whole card list,
+// and shipping 164KB into an action to compare one string would trade one waste
+// for another.
+export const readIngestState = internalQuery({
+  args: { code: v.string(), format: v.string() },
+  handler: async (ctx, args) => {
+    const doc = await ctx.db
+      .query("sets")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .unique();
+    if (!doc) return null;
+
+    return {
+      sourceHash: doc.sourceHash,
+      result: {
+        setId: doc._id,
+        cardCount: doc.cards.length,
+        ratedCardCount: doc.ratedCardCount,
+      },
+    };
   },
 });
 
@@ -249,6 +310,7 @@ export const store = internalMutation({
     cards: v.array(card),
     colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
     packComposition: v.optional(packComposition),
+    sourceHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args.cards).length;
@@ -275,11 +337,15 @@ export const store = internalMutation({
       if (args.name && !existing.name) {
         await ctx.db.patch(existing._id, { name: args.name });
       }
+      // The fingerprint is deliberately left stale. It describes the document we
+      // just declined to write, so leaving it means the next run tries again
+      // rather than skipping a set that never took.
       return {
         setId: existing._id,
         cardCount: existing.cards.length,
         ratedCardCount: existing.ratedCardCount,
         keptExistingSnapshot: true,
+        skipped: false,
       };
     }
 
@@ -296,6 +362,7 @@ export const store = internalMutation({
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
       packComposition: args.packComposition ?? existing?.packComposition,
+      sourceHash: args.sourceHash,
     };
 
     const setId = existing
@@ -307,6 +374,7 @@ export const store = internalMutation({
       cardCount: args.cards.length,
       ratedCardCount: rated,
       keptExistingSnapshot: false,
+      skipped: false,
     };
   },
 });
