@@ -32,6 +32,12 @@ export interface IngestResult {
   // True when the card pool was current and only the one-request set metadata
   // was refreshed.
   metaOnly: boolean;
+  // Pack cards the artifact declares but the pool ended up without. Should
+  // always be 0: build-set-stats refuses to write a name it could not resolve,
+  // so anything here means the pool silently deals a smaller bonus sheet than
+  // the shapes were counted from. Absent on the cached paths, which fetch
+  // nothing.
+  missingPackCards?: number;
 }
 
 const USER_AGENT =
@@ -220,9 +226,14 @@ async function postCollection(
 async function fetchByPrinting(
   wanted: { name: string; setCode?: string }[],
 ): Promise<ScryfallCard[]> {
+  // Front face only. /cards/collection matches a split or double-faced card by
+  // the face name -- `Consign` resolves, `Consign // Oblivion` comes back in
+  // not_found -- and it is the one place our card names are not already
+  // front-face. Casing and punctuation are left alone; normalizeName would strip
+  // the comma out of `Syr Konrad, the Grim` and stop matching.
   const identifiers = wanted
     .filter((c) => c.setCode)
-    .map((c) => ({ name: c.name, set: c.setCode as string }));
+    .map((c) => ({ name: c.name.split("//")[0].trim(), set: c.setCode as string }));
   const out: ScryfallCard[] = [];
 
   for (let i = 0; i < identifiers.length; i += COLLECTION_BATCH) {
@@ -404,7 +415,12 @@ export const ingest = action({
       .filter((c) => /^[WUBRG]{2}$/.test(c.colors))
       .map((c) => ({ pair: c.colors, winRate: c.wr }));
 
-    return await ctx.runMutation(internal.sets.store, {
+    const pooled = new Set(cards.map((c) => normalizeName(c.name)));
+    const missingPackCards = packCards.filter(
+      (p) => !pooled.has(normalizeName(p.name)),
+    ).length;
+
+    const stored = await ctx.runMutation(internal.sets.store, {
       code: setCode,
       name: scryfall.meta.name,
       iconUri: scryfall.meta.icon_svg_uri,
@@ -416,6 +432,8 @@ export const ingest = action({
       sourceHash: poolFingerprint,
       metaRevision: META_REVISION,
     });
+
+    return { ...stored, missingPackCards };
   },
 });
 

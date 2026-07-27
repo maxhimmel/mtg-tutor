@@ -96,6 +96,14 @@ for (const file of files) {
   } else {
     ingested++;
     process.stderr.write(`ingest ... ${JSON.stringify(result)}\n`);
+    // The artifact names every card the set's boosters can contain, so the pool
+    // coming back short means those cards can never be dealt even though the
+    // pack shapes were counted with them in.
+    if (result.missingPackCards) {
+      process.stderr.write(
+        `  WARNING: ${result.missingPackCards} pack card(s) missing from the pool\n`,
+      );
+    }
   }
 }
 
