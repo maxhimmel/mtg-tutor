@@ -2,19 +2,21 @@
 
 import { type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { COLOR_NAMES } from "../lib/format";
+import { CardPlacard } from "./CardPlacard";
 import { useCardHover } from "./CardPreview";
-import { ManaCost } from "./ManaCost";
 
 function PickRow({ card }: { card: Card }) {
   const hover = useCardHover(card);
   return (
     <li
-      className="flex cursor-default items-center justify-between gap-2 rounded-md px-2 py-1 text-sm hover:bg-base-100"
+      className="cursor-default rounded-md outline-offset-2 focus:outline focus:outline-primary"
       tabIndex={0}
       {...hover}
     >
-      <span className="truncate">{card.name}</span>
-      <ManaCost cost={card.manaCost} className="shrink-0 whitespace-nowrap text-xs" />
+      <CardPlacard
+        card={card}
+        className="transition-transform hover:-translate-y-px hover:brightness-105"
+      />
     </li>
   );
 }
@@ -74,7 +76,7 @@ export function PicksColumn({ pool }: { pool: Card[] }) {
         {picks.length === 0 ? (
           <p className="text-sm text-base-content/60">Nothing drafted yet.</p>
         ) : (
-          <ul className="max-h-[60vh] overflow-y-auto">
+          <ul className="flex max-h-[60vh] flex-col gap-1 overflow-y-auto pr-1">
             {picks.map((card, i) => (
               <PickRow key={`${card.name}-${i}`} card={card} />
             ))}
