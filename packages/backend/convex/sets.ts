@@ -32,6 +32,8 @@ export interface IngestResult {
 const USER_AGENT =
   "mtg-tutor/0.1 (draft-trainer; https://github.com/maxhimmel/mtg-tutor)";
 const SCRYFALL_DELAY_MS = 90;
+const SCRYFALL_MAX_RETRIES = 5;
+const SCRYFALL_BACKOFF_MS = 1_000;
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
@@ -39,10 +41,29 @@ const MAX_SET_BYTES = 900_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Scryfall rate limits on their side regardless of how politely SCRYFALL_DELAY_MS
+// spaces our requests -- a deploy ingests every set back to back from a shared
+// Vercel egress IP, and the sixth set in a row is enough to earn a 429. Backing
+// off and retrying is what they ask for; throwing meant one 429 anywhere in a
+// crawl failed the whole deploy and left production half-updated.
+async function scryfallFetch(url: string): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    });
+    if (res.status !== 429 || attempt >= SCRYFALL_MAX_RETRIES) return res;
+
+    const retryAfter = Number(res.headers.get("Retry-After"));
+    await sleep(
+      retryAfter > 0
+        ? retryAfter * 1000
+        : SCRYFALL_BACKOFF_MS * 2 ** attempt,
+    );
+  }
+}
+
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-  });
+  const res = await scryfallFetch(url);
   if (!res.ok) throw new Error(`${res.status} from ${url}`);
   return (await res.json()) as T;
 }
@@ -54,9 +75,7 @@ async function scryfallSearch(query: string): Promise<ScryfallCard[]> {
     `&unique=prints&order=set`;
 
   while (url) {
-    const res: Response = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-    });
+    const res: Response = await scryfallFetch(url);
     if (res.status === 404) return out;
     if (!res.ok) throw new Error(`Scryfall ${res.status} for query "${query}"`);
 
