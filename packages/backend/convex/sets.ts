@@ -17,7 +17,7 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { card, cardStats, packComposition } from "./validators.js";
+import { card, cardStats, packCard, packComposition } from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
 // return type would be inferred from a type that depends on itself. Declaring
@@ -32,6 +32,12 @@ export interface IngestResult {
   // True when the card pool was current and only the one-request set metadata
   // was refreshed.
   metaOnly: boolean;
+  // Pack cards the artifact declares but the pool ended up without. Should
+  // always be 0: build-set-stats refuses to write a name it could not resolve,
+  // so anything here means the pool silently deals a smaller bonus sheet than
+  // the shapes were counted from. Absent on the cached paths, which fetch
+  // nothing.
+  missingPackCards?: number;
 }
 
 const USER_AGENT =
@@ -169,14 +175,93 @@ async function fetchScryfallPool(
   return { cards: [...main, ...sameDay], meta };
 }
 
+// Scryfall's /cards/collection cap.
+const COLLECTION_BATCH = 75;
+
+// POST counterpart to scryfallFetch: same 429 backoff, different verb. A card
+// the endpoint cannot find comes back under `not_found` and is simply absent
+// from the result -- a missing bonus card is a smaller problem than a thrown
+// ingest, and pickDraftable already tolerates a name it never sees.
+async function postCollection(
+  identifiers: { name: string; set: string }[],
+): Promise<ScryfallCard[]> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch("https://api.scryfall.com/cards/collection", {
+      method: "POST",
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ identifiers }),
+    });
+
+    if (res.status === 429 && attempt < SCRYFALL_MAX_RETRIES) {
+      const retryAfter = Number(res.headers.get("Retry-After"));
+      await sleep(
+        retryAfter > 0 ? retryAfter * 1000 : SCRYFALL_BACKOFF_MS * 2 ** attempt,
+      );
+      continue;
+    }
+    if (!res.ok) throw new Error(`Scryfall ${res.status} from /cards/collection`);
+
+    const body = (await res.json()) as { data: ScryfallCard[] };
+    return body.data;
+  }
+}
+
+// Fetches pack cards the release-day crawl above cannot reach. MKM's Arena
+// boosters carry a 50-card List sheet printed between 2005 and 2017, so no
+// "released the same day" query can find them; build-set-stats resolved each one
+// by name and recorded which printing it landed on, and this reads that answer
+// back rather than repeating the guess.
+//
+// Identified by {name, set} rather than name alone, which matters: a name-only
+// lookup returns the card's DEFAULT printing, and for `Worldspine Wurm` that is
+// a paper-only one. The stored set code is what makes this exact.
+//
+// /cards/collection takes 75 identifiers per request, so a set like MKM costs
+// one round trip rather than fifty -- which is what keeps this inside the
+// action's time budget.
+async function fetchByPrinting(
+  wanted: { name: string; setCode?: string }[],
+): Promise<ScryfallCard[]> {
+  // Front face only. /cards/collection matches a split or double-faced card by
+  // the face name -- `Consign` resolves, `Consign // Oblivion` comes back in
+  // not_found -- and it is the one place our card names are not already
+  // front-face. Casing and punctuation are left alone; normalizeName would strip
+  // the comma out of `Syr Konrad, the Grim` and stop matching.
+  const identifiers = wanted
+    .filter((c) => c.setCode)
+    .map((c) => ({ name: c.name.split("//")[0].trim(), set: c.setCode as string }));
+  const out: ScryfallCard[] = [];
+
+  for (let i = 0; i < identifiers.length; i += COLLECTION_BATCH) {
+    out.push(...(await postCollection(identifiers.slice(i, i + COLLECTION_BATCH))));
+    if (i + COLLECTION_BATCH < identifiers.length) await sleep(SCRYFALL_DELAY_MS);
+  }
+  return out;
+}
+
 // Narrows a Scryfall pool to the cards 17Lands saw in packs, plus basic lands.
 // Also collapses reprints/variants to one card per name -- `unique=prints` is
 // deliberate (it is how a bonus-sheet printing keeps its own rarity) but it
 // returns showcase and borderless versions of the same card too. The first
 // print wins, and the main set is searched first, so a card appearing in both
 // the set and a bonus sheet keeps its main-set rarity.
-function pickDraftable(cards: Card[], ratings: SeventeenLandsCard[]): Card[] {
-  const manifest = new Set(ratings.map((r) => normalizeName(r.name)));
+//
+// The manifest is the union of the rated cards and the set's pack columns. Both
+// are needed: ratings come from GAME data, so a card that appeared in packs but
+// never made a deck is missing from them -- MKM's `Possibility Storm` is exactly
+// that, and keying on ratings alone would fetch it and then drop it again.
+function pickDraftable(
+  cards: Card[],
+  ratings: SeventeenLandsCard[],
+  packCards: { name: string }[] = [],
+): Card[] {
+  const manifest = new Set(
+    [...ratings.map((r) => r.name), ...packCards.map((p) => p.name)].map(normalizeName),
+  );
   const seen = new Set<string>();
   const out: Card[] = [];
 
@@ -290,12 +375,29 @@ export const ingest = action({
     }
 
     const ratings = statsAsRatings(stats);
+    const packCards = stats.packCards ?? [];
+
+    // Bonus-sheet cards the release-day crawl could not reach. build-set-stats
+    // already resolved which printing each one is, so this is an exact lookup
+    // and costs one request per 75 cards. Empty for every set whose boosters
+    // hold nothing older than the set itself, which is all of them but MKM.
+    const known = new Set(scryfall.cards.map((c) => normalizeName(c.name)));
+    const leftovers = await fetchByPrinting(
+      packCards.filter((p) => !known.has(normalizeName(p.name))),
+    );
 
     // Our stats list exactly what appears in packs, so it decides the pool --
     // that drops promos, art cards and Alchemy rebalances the Scryfall search
     // pulls in, and keeps the bonus sheet. Basics are the one omission (they are
     // not rated) and the Play Booster land slot needs them.
-    const draftable = pickDraftable(mergeCards(scryfall.cards, ratings), ratings);
+    //
+    // Leftovers go last so pickDraftable's first-print-wins dedupe still lets a
+    // name that is in both the main set and a bonus sheet keep its main rarity.
+    const draftable = pickDraftable(
+      mergeCards([...scryfall.cards, ...leftovers], ratings),
+      ratings,
+      packCards,
+    );
 
     // Measure what an unrated card of each rarity is worth in THIS set, from the
     // set's own rated cards, and stamp it on every card. Without it, unrated
@@ -313,7 +415,12 @@ export const ingest = action({
       .filter((c) => /^[WUBRG]{2}$/.test(c.colors))
       .map((c) => ({ pair: c.colors, winRate: c.wr }));
 
-    return await ctx.runMutation(internal.sets.store, {
+    const pooled = new Set(cards.map((c) => normalizeName(c.name)));
+    const missingPackCards = packCards.filter(
+      (p) => !pooled.has(normalizeName(p.name)),
+    ).length;
+
+    const stored = await ctx.runMutation(internal.sets.store, {
       code: setCode,
       name: scryfall.meta.name,
       iconUri: scryfall.meta.icon_svg_uri,
@@ -325,6 +432,8 @@ export const ingest = action({
       sourceHash: poolFingerprint,
       metaRevision: META_REVISION,
     });
+
+    return { ...stored, missingPackCards };
   },
 });
 
@@ -511,6 +620,7 @@ export const storeSetStats = mutation({
       }),
     ),
     packComposition: v.optional(packComposition),
+    packCards: v.optional(v.array(packCard)),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args).length;

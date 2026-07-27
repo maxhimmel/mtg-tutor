@@ -4,6 +4,7 @@ import {
   card,
   cardStats,
   draftSummary,
+  packCard,
   packComposition,
   reviewVerdict,
 } from "./validators.js";
@@ -91,6 +92,11 @@ export default defineSchema({
     // The set's observed booster shapes, so `ingest` can put them on the set
     // document without a second round trip. See buildSetData / makePack.
     packComposition: v.optional(packComposition),
+    // Every card the set's boosters can contain, with its slot and printing.
+    // `ingest` reads this to fetch bonus-sheet cards Scryfall's release-day
+    // query cannot find. Optional: artifacts built before it existed have none,
+    // and ingestion falls back to discovery alone for those.
+    packCards: v.optional(v.array(packCard)),
     builtAt: v.string(),
   }).index("by_code_and_format", ["code", "format"]),
 

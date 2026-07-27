@@ -64,6 +64,29 @@ export const packComposition = v.object({
   ),
 });
 
+// One entry per pack column in the 17Lands draft dataset -- the authoritative
+// list of what a set's boosters can contain, with the slot each card fills and
+// the set it was printed in. `slot` is deliberately the same vocabulary
+// packComposition uses, since the shapes above are counted with these keys.
+//
+// This exists because a set's booster pool cannot always be discovered from
+// Scryfall: MKM's Arena packs carry a 50-card List sheet of printings from
+// 2005-2017, which no "released the same day" query can reach. build-set-stats
+// resolves them once, and ingestion reads the answer instead of re-deriving it.
+export const packCard = v.object({
+  name: v.string(),
+  slot: v.union(
+    v.literal("common"),
+    v.literal("uncommon"),
+    v.literal("rare"),
+    v.literal("mythic"),
+    v.literal("bonus"),
+    v.literal("land"),
+  ),
+  // Absent only for artifacts built before this field existed.
+  setCode: v.optional(v.string()),
+});
+
 // Compile-time guard: if the stored shape ever drifts from core's Card, this
 // stops type-checking rather than failing at runtime on a replayed draft.
 type AssertAssignable<A extends B, B> = [A, B];

@@ -83,6 +83,7 @@ for (const file of files) {
     colorWinRates: rest.colorWinRates,
     synergies: rest.synergies,
     packComposition: rest.packComposition,
+    packCards: rest.packCards,
   });
   process.stderr.write(JSON.stringify(stats) + "\n");
 }
