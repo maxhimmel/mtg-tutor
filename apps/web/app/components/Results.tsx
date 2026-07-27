@@ -114,6 +114,11 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
           >
             {isSaved ? "Saved" : "Save this draft"}
           </button>
+          {/* The moment anyone is most likely to want the walkthrough is the
+              moment they have just seen the grade it explains. */}
+          <Link href={`/review/${sessionId}`} className="btn btn-outline w-full">
+            Review it pick by pick
+          </Link>
           <Link href="/" className="link link-hover text-sm text-base-content/60">
             Draft another set →
           </Link>
