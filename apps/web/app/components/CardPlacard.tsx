@@ -6,40 +6,40 @@ import { frameFor } from "../lib/cardFrame";
 import { useCardHover } from "./CardPreview";
 import { ManaCost } from "./ManaCost";
 
-// The placard across the top of a printed Magic card: the name on the left, the
-// mana cost on the right. Two nested boxes, which is the thing that makes it read
-// as a card -- a saturated frame band, and inside it a plate that is nearly white
-// and only faintly tinted by the card's colour. Filling the whole bar with the
-// frame colour is what made the first attempt look like a stack of colour blocks.
+// The row Arena draws for a card in a deck list: a saturated ring in the card's
+// colour, and inside it a plate of the same colour mixed toward white, carrying
+// the name in black on the left and the mana cost on the right.
 //
-// Rebuilt in CSS rather than cropped out of the card image. The image would be
-// exact for bespoke frames, but this stays crisp at any size, keeps the name as
-// real selectable text for screen readers, and costs no request -- which matters
-// when a finished pool stacks 45 of these in one scrolling column.
+// Built in CSS rather than cropped out of the card image. The image would be
+// exact, but this stays crisp at any size, keeps the name as real selectable text
+// for screen readers, and costs no request -- which matters when a finished pool
+// stacks 45 of these in one scrolling column.
 //
-// Proportions are scaled off a 672px-wide scan, where the plate measures 586x51:
-// corner radius is 0.37 of the plate's height, the name's inset 0.3 of it, and the
-// frame band around it about a sixth of it.
+// Proportions come off the reference, where the ring is 74px tall: the ring band
+// is 0.13 of that, the corner radius 0.3, and the type 0.57 -- which is why the
+// plate hugs the name so tightly and the row reads as chunky rather than airy.
+// Everything below is that ratio against a 30px row.
 export function CardPlacard({ card, className }: { card: Card; className?: string }) {
   const frame = frameFor(card);
 
   return (
     <div
-      className={`rounded-[11px] border border-[#0d0d0d] p-0.75 ${className ?? ""}`}
-      style={{ background: frame.band }}
+      className={`rounded-lg border border-[#0a0a0a] p-[3px] ${className ?? ""}`}
+      style={{
+        background: frame.ring,
+        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.3)",
+      }}
     >
       <div
-        className="placard-plate flex items-center justify-between gap-2 rounded-lg border px-2 py-0.75"
+        className="flex items-center justify-between gap-2 rounded-md border border-black/55 px-1.5"
         style={{
-          background: `linear-gradient(to bottom, ${frame.plateTop}, ${frame.plateBottom})`,
-          borderColor: frame.stroke,
-          // The highlight along the plate's top edge, and the shadow it casts down
-          // onto the frame band.
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7), 0 1px 2px rgba(0,0,0,0.45)",
+          background: `linear-gradient(to bottom, color-mix(in srgb, ${frame.plate} 88%, #fff), ${frame.plate})`,
+          // The bright hairline the plate is drawn with, just inside its dark edge.
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)",
         }}
       >
         <span
-          className="truncate font-serif text-[13px] font-semibold leading-5 tracking-tight text-[#12100e]"
+          className="truncate font-serif text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
           title={card.name}
         >
           {card.name}
@@ -81,7 +81,7 @@ export function CardPlacardList({
   className?: string;
 }) {
   return (
-    <ul className={`flex flex-col gap-1 ${className ?? ""}`}>
+    <ul className={`flex flex-col gap-0.5 ${className ?? ""}`}>
       {/* Keyed by position, not name: drafting two copies of the same card is
           normal, so names are not unique in a pool. */}
       {cards.map((card, i) => (

@@ -1,78 +1,63 @@
-import { type Card, type ColorCode, isLand, parseManaCost } from "@mtg-tutor/core";
+import { type Card, type ColorCode, isLand } from "@mtg-tutor/core";
 
-// The colours of a printed M15 card frame, sampled from Scryfall scans.
+// Colours for the deck-list row Arena draws: a saturated ring in the card's
+// colour, wrapping a plate that is the same colour mixed toward white.
+//
+// Sampled from a screenshot of the real thing -- mono blue gave ring #3d87c6 and
+// plate #9fc0d8, mono black gave #5e5c5a and #a8a5a2. Both plates sit at about
+// 55% ring against white, so only the ring is stored here and the plate is
+// derived; keeping one number per colour is what stops the two drifting apart.
 //
 // These are deliberately literal hex rather than daisyUI tokens: they encode
 // which Magic colour a card is, not which part of our UI this is, so they must
 // not shift with the active theme. Every plate is light enough for near-black
-// text, so the placard reads the same in light and dark.
+// text, so the row reads the same in light and dark.
+const RINGS = {
+  W: "#c2b78e",
+  U: "#3d87c6",
+  B: "#5e5c5a",
+  R: "#c25a3e",
+  G: "#4e8a55",
+  artifact: "#8c98a2",
+  land: "#9b7d55",
+} satisfies Record<string, string>;
+
+// A multicolour card keeps both colours in the ring and goes gold in the plate,
+// which is the only place a colour pair is visible at all. Sampled off a {U}{B}
+// card: the ring runs blue on the left to black on the right, flat at both ends
+// and blending across the middle.
+const GOLD_PLATE = "#d3c68c";
+
+const WUBRG: ColorCode[] = ["W", "U", "B", "R", "G"];
+
 export interface Frame {
-  // The saturated outer band. A gradient for hybrids, where the two colours meet.
-  band: string;
-  // The plate's hairline, which on a real card is the band colour darkened.
-  stroke: string;
-  plateTop: string;
-  plateBottom: string;
+  // Paints the ring. A flat colour for one colour, a gradient for several.
+  ring: string;
+  plate: string;
 }
 
-// A plate is nearly white on every frame except gold and land, which are printed
-// in an actual gold. Sampling Serra Angel, Sphinx of Foresight, Sign in Blood,
-// Shock, Beast Within, Sol Ring, Lightning Helix and Command Tower gives:
-const FRAMES = {
-  W: { band: "#f6efd6", stroke: "#a1946f", plateTop: "#fbfaf4", plateBottom: "#e6e3d6" },
-  U: { band: "#2f7fbe", stroke: "#5d7d99", plateTop: "#e8eef5", plateBottom: "#c6d2de" },
-  B: { band: "#1c1a18", stroke: "#4a4744", plateTop: "#d9d7d3", plateBottom: "#b8b5b0" },
-  R: { band: "#d4462b", stroke: "#a97f68", plateTop: "#f7e2d3", plateBottom: "#edcdb6" },
-  G: { band: "#22874d", stroke: "#6d7a68", plateTop: "#eef1e9", plateBottom: "#d3dbcd" },
-  gold: { band: "#c9a94e", stroke: "#8a7434", plateTop: "#e0d3a4", plateBottom: "#c9b881" },
-  artifact: { band: "#8f9aa2", stroke: "#6d777e", plateTop: "#e4e6e8", plateBottom: "#c7ccd0" },
-  land: { band: "#a2825a", stroke: "#6b5c37", plateTop: "#d9d3a8", plateBottom: "#bdb682" },
-} satisfies Record<string, Frame>;
+const plateFor = (ring: string) => `color-mix(in srgb, ${ring} 55%, #fff)`;
 
-const COLORS: ColorCode[] = ["W", "U", "B", "R", "G"];
+const mono = (ring: string): Frame => ({ ring, plate: plateFor(ring) });
 
-// A hybrid card is printed with the two colours meeting across the band rather
-// than blended into gold, so the pair itself is visible. The gradient runs the
-// same direction the printed frame does: first colour on the left.
-function hybridFrame(a: ColorCode, b: ColorCode): Frame {
-  const left = FRAMES[a];
-  const right = FRAMES[b];
-  return {
-    band: `linear-gradient(100deg, ${left.band} 0%, ${left.band} 38%, ${right.band} 62%, ${right.band} 100%)`,
-    stroke: FRAMES.gold.stroke,
-    plateTop: "#f0eee8",
-    plateBottom: "#d6d3ca",
-  };
-}
-
-// True when every coloured pip is a hybrid of the card's own two colours -- the
-// printed test for the split frame. A card mixing hybrid and plain pips, or one
-// whose hybrids are Phyrexian or generic-hybrid ({2/W}), is printed in gold.
-function isFullyHybrid(manaCost: string, colors: ColorCode[]): boolean {
-  const pips = parseManaCost(manaCost).filter((s) => COLORS.some((c) => s.includes(c)));
-  if (pips.length === 0) return false;
-  return pips.every((pip) => {
-    const parts = pip.split("/");
-    return (
-      parts.length === 2 &&
-      parts.every((p) => colors.includes(p as ColorCode)) &&
-      parts[0] !== parts[1]
-    );
+function multicolor(colors: ColorCode[]): Frame {
+  const span = 100 / colors.length;
+  const stops = colors.flatMap((c, i) => {
+    // Hold each colour flat over the middle half of its share so the blends stay
+    // in the seams rather than washing the whole ring out.
+    const start = i * span + span * 0.25;
+    const end = (i + 1) * span - span * 0.25;
+    return [`${RINGS[c]} ${start.toFixed(1)}%`, `${RINGS[c]} ${end.toFixed(1)}%`];
   });
+  return { ring: `linear-gradient(to right, ${stops.join(", ")})`, plate: GOLD_PLATE };
 }
 
-// Printed frame precedence: a land takes the land frame whatever its colour
-// identity, a colourless card takes the artifact frame, one colour takes that
-// colour, a fully hybrid pair takes the split frame, and anything else with two
-// or more colours takes gold.
+// Precedence: a land takes the land frame whatever its colour identity, a
+// colourless card takes the artifact frame, one colour takes that colour, and
+// anything else runs its colours across the ring.
 export function frameFor(card: Card): Frame {
-  if (isLand(card)) return FRAMES.land;
-  if (card.colors.length === 0) return FRAMES.artifact;
-  if (card.colors.length === 1) return FRAMES[card.colors[0]];
-  if (card.colors.length === 2 && isFullyHybrid(card.manaCost, card.colors)) {
-    // Order by the colour wheel so {G/W} and {W/G} produce the same frame.
-    const [a, b] = COLORS.filter((c) => card.colors.includes(c));
-    return hybridFrame(a, b);
-  }
-  return FRAMES.gold;
+  if (isLand(card)) return mono(RINGS.land);
+  if (card.colors.length === 0) return mono(RINGS.artifact);
+  if (card.colors.length === 1) return mono(RINGS[card.colors[0]]);
+  return multicolor(WUBRG.filter((c) => card.colors.includes(c)));
 }

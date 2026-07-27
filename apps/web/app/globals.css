@@ -19,27 +19,6 @@
   }
 }
 
-/* The paper grain a printed name plate has. Without it the plate is a clean CSS
-   gradient and reads as a UI chip rather than something that came off a press;
-   the noise is what sells it. Generated rather than fetched, so it costs nothing.
-   Delete this rule and the class on the plate to drop the effect. */
-.placard-plate {
-  position: relative;
-  isolation: isolate;
-}
-
-.placard-plate::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-  opacity: 0.06;
-  mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
 /* Every surface that floats above the page -- card previews, the keyword panel,
    the user menu -- so they read as one family and always have an edge. The
    border is tinted with base-content rather than using base-300, which is
