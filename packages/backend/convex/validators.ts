@@ -41,6 +41,7 @@ export const card = v.object({
   winRate: v.optional(v.number()),
   setCode: v.optional(v.string()),
   rarityBaseline: v.optional(v.number()),
+  packRate: v.optional(v.number()),
 });
 
 export type StoredCard = Infer<typeof card>;
@@ -85,6 +86,10 @@ export const packCard = v.object({
   ),
   // Absent only for artifacts built before this field existed.
   setCode: v.optional(v.string()),
+  // Expected copies of this card per booster, measured from opened packs. Feeds
+  // Card.packRate, which is what lets makePack draw a slot by observed odds
+  // rather than evenly.
+  openedRate: v.optional(v.number()),
 });
 
 // Compile-time guard: if the stored shape ever drifts from core's Card, this

@@ -1,8 +1,7 @@
 import type { Card, PackShape, PackSlot, SetData } from "../model/card.js";
 import { PACK } from "../config.js";
 
-function sampleUnique(pool: Card[], n: number, rng: () => number): Card[] {
-  if (pool.length <= n) return [...pool];
+function sampleUniform(pool: Card[], n: number, rng: () => number): Card[] {
   const picked: Card[] = [];
   const used = new Set<number>();
   while (picked.length < n) {
@@ -13,6 +12,47 @@ function sampleUnique(pool: Card[], n: number, rng: () => number): Card[] {
     }
   }
   return picked;
+}
+
+// Draw without replacement, each card weighted by how often it was really
+// opened. Renormalising after every draw is what makes it "without
+// replacement": the remaining cards keep their relative odds.
+//
+// Linear in pool size per draw, which is nothing here -- pools run to ~100 cards
+// and no slot asks for more than nine.
+function sampleWeighted(pool: Card[], n: number, rng: () => number): Card[] {
+  const remaining = [...pool];
+  const weights = remaining.map((c) => c.packRate as number);
+  const picked: Card[] = [];
+
+  while (picked.length < n && remaining.length > 0) {
+    const total = weights.reduce((a, b) => a + b, 0);
+    // Every remaining card was seen zero times. Nothing left to weight by, so
+    // fall back rather than divide by zero.
+    if (total <= 0) return [...picked, ...sampleUniform(remaining, n - picked.length, rng)];
+
+    let roll = rng() * total;
+    let i = 0;
+    while (i < weights.length - 1 && roll > weights[i]) {
+      roll -= weights[i];
+      i++;
+    }
+    picked.push(remaining[i]);
+    remaining.splice(i, 1);
+    weights.splice(i, 1);
+  }
+  return picked;
+}
+
+// A pool is weighted only when every card in it carries an observed rate. A
+// partially-measured pool would silently rank the measured cards above the rest,
+// which is worse than drawing evenly; and this is what keeps a set that has not
+// been rebuilt dealing exactly the packs its saved drafts replay from.
+function sampleUnique(pool: Card[], n: number, rng: () => number): Card[] {
+  if (pool.length <= n) return [...pool];
+  return pool.every((c) => c.packRate != null)
+    ? sampleWeighted(pool, n, rng)
+    : sampleUniform(pool, n, rng);
 }
 
 function weightedShape(shapes: PackShape[], rng: () => number): PackShape {
