@@ -2,24 +2,7 @@
 
 import { type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { COLOR_NAMES } from "../lib/format";
-import { CardPlacard } from "./CardPlacard";
-import { useCardHover } from "./CardPreview";
-
-function PickRow({ card }: { card: Card }) {
-  const hover = useCardHover(card);
-  return (
-    <li
-      className="cursor-default rounded-md outline-offset-2 focus:outline focus:outline-primary"
-      tabIndex={0}
-      {...hover}
-    >
-      <CardPlacard
-        card={card}
-        className="transition-transform hover:-translate-y-px hover:brightness-105"
-      />
-    </li>
-  );
-}
+import { CardPlacardList } from "./CardPlacard";
 
 // Enough to see what the deck is becoming without turning the panel into a
 // wall of one-off tribes; the rest stay in the tooltip.
@@ -76,11 +59,7 @@ export function PicksColumn({ pool }: { pool: Card[] }) {
         {picks.length === 0 ? (
           <p className="text-sm text-base-content/60">Nothing drafted yet.</p>
         ) : (
-          <ul className="flex max-h-[60vh] flex-col gap-1 overflow-y-auto pr-1">
-            {picks.map((card, i) => (
-              <PickRow key={`${card.name}-${i}`} card={card} />
-            ))}
-          </ul>
+          <CardPlacardList cards={picks} className="max-h-[60vh] overflow-y-auto pr-1" />
         )}
       </div>
     </div>
