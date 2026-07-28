@@ -10,19 +10,26 @@ import {
 } from "./validators.js";
 
 export default defineSchema({
-  // One document per (set, format). A whole set of cards measures 126-164KB
-  // for real sets, well inside Convex's 1MB document limit, so a draft
-  // mutation reads exactly one document instead of hundreds of card rows.
+  // One document per (set, format), carrying only what a listing needs. The
+  // card pool lives in `setCards` instead: `list` reads every row in this table
+  // to build the set picker, and Convex charges for every byte a query reads,
+  // not the bytes it returns. With the pool inline that was ~240KB per set --
+  // ~4MB read to return 4KB, on every page that shows the picker.
   sets: defineTable({
     code: v.string(),
     // Scryfall's display name, captured at ingest. Optional because sets
     // ingested before this field existed have none until they are re-ingested.
     name: v.optional(v.string()),
     format: v.string(),
-    cards: v.array(card),
-    // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
-    colorPairWinRates: v.array(
-      v.object({ pair: v.string(), winRate: v.number() }),
+    // Being split out into `setCards`. Optional during the migration; rows that
+    // still carry it have not been migrated yet.
+    cards: v.optional(v.array(card)),
+    // Denormalized so `list` can report the pool size without reading it.
+    // Optional until every row is migrated.
+    cardCount: v.optional(v.number()),
+    // Moving to `setCards` with the pool. Optional during the migration.
+    colorPairWinRates: v.optional(
+      v.array(v.object({ pair: v.string(), winRate: v.number() })),
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
@@ -40,6 +47,28 @@ export default defineSchema({
     // so adding a field like the icon costs one request per set rather than a
     // full re-crawl of every card.
     metaRevision: v.optional(v.string()),
+    // Moving to `setCards` with the pool. Was ~4.4KB of booster shapes, by far
+    // the largest thing left on a document whose whole job is to be listed.
+    packComposition: v.optional(packComposition),
+  }).index("by_code_and_format", ["code", "format"]),
+
+  // Everything the draft engine needs and nothing else, kept apart from the
+  // metadata above for the same reason setStats is: this measures ~240KB, and
+  // only a replay ever reads it. Anything that merely lists or names sets reads
+  // `sets` alone, at ~280 bytes a row.
+  //
+  // Still one document per (set, format) -- well inside Convex's 1MB limit, so
+  // replaying a draft reads exactly one row rather than hundreds of card rows.
+  setCards: defineTable({
+    code: v.string(),
+    format: v.string(),
+    cards: v.array(card),
+    // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
+    // Optional only until every deployment has migrated -- rows written by the
+    // first pass of the split moved the pool alone.
+    colorPairWinRates: v.optional(
+      v.array(v.object({ pair: v.string(), winRate: v.number() })),
+    ),
     // Copied from setStats by `ingest` -- the observed booster shapes, on the
     // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),
@@ -50,9 +79,9 @@ export default defineSchema({
   // use, and they carry things no API exposes: archetype-conditional win rates,
   // card synergy, maindeck rate, and what 3-0 drafters took.
   //
-  // A separate table from `sets` on purpose. `sets` is read on every pick, and
-  // none of this belongs on that path; keeping them apart means a 198KB stats
-  // document never slows a draft down.
+  // A separate table from `setCards` on purpose. That table is read on every
+  // pick, and none of this belongs on that path; keeping them apart means a
+  // 198KB stats document never slows a draft down.
   setStats: defineTable({
     code: v.string(),
     format: v.string(),
@@ -98,6 +127,18 @@ export default defineSchema({
     // and ingestion falls back to discovery alone for those.
     packCards: v.optional(v.array(packCard)),
     builtAt: v.string(),
+  }).index("by_code_and_format", ["code", "format"]),
+
+  // Which artifact each setStats row was built from, on a row small enough to
+  // ask. Every deploy re-runs seed-set-stats over all 17 artifacts, and they
+  // almost never change -- but Convex charges for bytes read out of the
+  // database, so checking the hash on the ~270KB stats document itself would
+  // cost as much as the write it was trying to avoid. Hence a separate row of
+  // about a hundred bytes. Same hash ingest-sets puts on `sets.sourceHash`.
+  setStatsMeta: defineTable({
+    code: v.string(),
+    format: v.string(),
+    sourceHash: v.string(),
   }).index("by_code_and_format", ["code", "format"]),
 
   // A draft is fully determined by its seed plus the ordered names the human

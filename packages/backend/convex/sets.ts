@@ -472,7 +472,7 @@ export const readIngestState = internalQuery({
       metaRevision: doc.metaRevision,
       result: {
         setId: doc._id,
-        cardCount: doc.cards.length,
+        cardCount: doc.cardCount ?? doc.cards?.length ?? 0,
         ratedCardCount: doc.ratedCardCount,
       },
     };
@@ -551,6 +551,10 @@ export const store = internalMutation({
       .query("sets")
       .withIndex("by_code_and_format", (q) => q.eq("code", args.code).eq("format", args.format))
       .unique();
+    const existingCards = await ctx.db
+      .query("setCards")
+      .withIndex("by_code_and_format", (q) => q.eq("code", args.code).eq("format", args.format))
+      .unique();
 
     // A set can come back with the full card list and every win rate null --
     // a brand new set with no games yet, or an upstream hiccup. Re-ingesting
@@ -567,12 +571,32 @@ export const store = internalMutation({
       // rather than skipping a set that never took.
       return {
         setId: existing._id,
-        cardCount: existing.cards.length,
+        cardCount: existing.cardCount ?? existing.cards?.length ?? 0,
         ratedCardCount: existing.ratedCardCount,
         keptExistingSnapshot: true,
         skipped: false,
         metaOnly: false,
       };
+    }
+
+    // The draft payload, on its own row. Nothing here may leak back onto the
+    // `sets` document: that row is read once per set by `list` on every page
+    // showing the picker, which is what made the pool expensive in the first
+    // place. See the setCards comment in schema.ts.
+    const cardsDoc = {
+      code: args.code,
+      format: args.format,
+      cards: args.cards,
+      colorPairWinRates: args.colorPairWinRates,
+      // Ingest passes this from setStats; fall back to any existing value so a
+      // bare re-run can't drop the set back to 15-card packs.
+      packComposition: args.packComposition ?? existingCards?.packComposition,
+    };
+
+    if (existingCards) {
+      await ctx.db.replace(existingCards._id, cardsDoc);
+    } else {
+      await ctx.db.insert("setCards", cardsDoc);
     }
 
     const doc = {
@@ -581,15 +605,11 @@ export const store = internalMutation({
       // set endpoint cannot blank it out.
       name: args.name ?? existing?.name,
       format: args.format,
-      cards: args.cards,
-      colorPairWinRates: args.colorPairWinRates,
+      cardCount: args.cards.length,
       ratedCardCount: rated,
       ingestedAt: new Date().toISOString(),
-      // Ingest passes this from setStats; fall back to any existing value so a
-      // bare re-run can't drop the set back to 15-card packs.
       iconUri: args.iconUri ?? existing?.iconUri,
       releasedAt: args.releasedAt ?? existing?.releasedAt,
-      packComposition: args.packComposition ?? existing?.packComposition,
       sourceHash: args.sourceHash,
       metaRevision: args.metaRevision,
     };
@@ -636,6 +656,10 @@ export const storeSetStats = mutation({
     ),
     packComposition: v.optional(packComposition),
     packCards: v.optional(v.array(packCard)),
+    // Hash of the artifact file, so an unchanged one is not re-written on every
+    // deploy. Optional: an upload without one always writes.
+    sourceHash: v.optional(v.string()),
+    force: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args).length;
@@ -650,7 +674,27 @@ export const storeSetStats = mutation({
     }
 
     const code = args.code.toLowerCase();
-    const doc = { ...args, code, builtAt: new Date().toISOString() };
+
+    // Checked before anything touches the stats document itself. Reading that
+    // document is the expensive act, not writing it, so the hash has to be
+    // answerable from somewhere small. See setStatsMeta in schema.ts.
+    const meta = await ctx.db
+      .query("setStatsMeta")
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", args.format))
+      .unique();
+
+    if (args.sourceHash && meta?.sourceHash === args.sourceHash && !args.force) {
+      return {
+        id: null,
+        cards: args.cards.length,
+        bytes,
+        baseWinRate: args.baseWinRate,
+        skipped: true,
+      };
+    }
+
+    const { sourceHash, force: _force, ...rest } = args;
+    const doc = { ...rest, code, builtAt: new Date().toISOString() };
     const existing = await ctx.db
       .query("setStats")
       .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", args.format))
@@ -660,7 +704,28 @@ export const storeSetStats = mutation({
       ? (await ctx.db.replace(existing._id, doc), existing._id)
       : await ctx.db.insert("setStats", doc);
 
-    return { id, cards: args.cards.length, bytes, baseWinRate: args.baseWinRate };
+    // Written last, so a run that dies mid-write leaves a stale-or-absent hash
+    // and the next deploy retries rather than skipping a set that never landed.
+    if (sourceHash) {
+      const metaDoc = { code, format: args.format, sourceHash };
+      if (meta) {
+        await ctx.db.replace(meta._id, metaDoc);
+      } else {
+        await ctx.db.insert("setStatsMeta", metaDoc);
+      }
+    } else if (meta) {
+      // An unhashed upload invalidates the fingerprint rather than leaving one
+      // that describes an artifact this no longer holds.
+      await ctx.db.delete(meta._id);
+    }
+
+    return {
+      id,
+      cards: args.cards.length,
+      bytes,
+      baseWinRate: args.baseWinRate,
+      skipped: false,
+    };
   },
 });
 
@@ -675,15 +740,35 @@ export const getStats = query({
       .unique(),
 });
 
+// The whole set, metadata and draft payload stitched back together. Deliberately
+// fat and deliberately not used by the app: only the validation scripts
+// (smoke-draft, validate-pack-model) call it, and they need the pool. Anything
+// that just lists or names sets must use `list`, which is ~550x cheaper.
 export const get = query({
   args: { setCode: v.string(), format: v.optional(v.string()) },
-  handler: async (ctx, args) =>
-    await ctx.db
+  handler: async (ctx, args) => {
+    const code = args.setCode.toLowerCase();
+    const format = args.format ?? "PremierDraft";
+
+    const setDoc = await ctx.db
       .query("sets")
-      .withIndex("by_code_and_format", (q) =>
-        q.eq("code", args.setCode.toLowerCase()).eq("format", args.format ?? "PremierDraft"),
-      )
-      .unique(),
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", format))
+      .unique();
+    if (!setDoc) return null;
+
+    const cardsDoc = await ctx.db
+      .query("setCards")
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", format))
+      .unique();
+
+    return {
+      ...setDoc,
+      cards: cardsDoc?.cards ?? setDoc.cards ?? [],
+      colorPairWinRates:
+        cardsDoc?.colorPairWinRates ?? setDoc.colorPairWinRates ?? [],
+      packComposition: cardsDoc?.packComposition ?? setDoc.packComposition,
+    };
+  },
 });
 
 export const list = query({
@@ -695,7 +780,7 @@ export const list = query({
         code: s.code,
         name: s.name,
         format: s.format,
-        cardCount: s.cards.length,
+        cardCount: s.cardCount ?? s.cards?.length ?? 0,
         ratedCardCount: s.ratedCardCount,
         ingestedAt: s.ingestedAt,
         releasedAt: s.releasedAt,

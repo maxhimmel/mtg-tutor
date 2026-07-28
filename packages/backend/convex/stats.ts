@@ -3,7 +3,7 @@ import { replayDraft } from "@mtg-tutor/core";
 import type { SetData } from "@mtg-tutor/core";
 import { query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
-import { ownSessions, setDocFor } from "./sessions.js";
+import { ownSessions, setCardsFor, setDocFor } from "./sessions.js";
 import { toSetData } from "./setData.js";
 
 // Per-draft numbers come from the denormalized summary, but the per-pick
@@ -30,7 +30,8 @@ export const overview = query({
       const cached = setCache.get(key);
       if (cached) return cached;
       try {
-        const set = toSetData(await setDocFor(ctx, session.setCode, session.format));
+        const setDoc = await setDocFor(ctx, session.setCode, session.format);
+        const set = toSetData(await setCardsFor(ctx, setDoc));
         setCache.set(key, set);
         return set;
       } catch {
