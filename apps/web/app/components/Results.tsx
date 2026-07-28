@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
@@ -12,13 +11,10 @@ import { Panel } from "./Panel";
 
 export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
   const results = useQuery(api.draft.results, { sessionId });
-  const save = useMutation(api.draft.save);
-  const [saved, setSaved] = useState(false);
 
   if (results === undefined) return <p className="text-base-content/60">Tallying up…</p>;
 
   const { summary, deck, mistakes } = results;
-  const isSaved = saved || results.saved;
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -104,19 +100,9 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
         </Panel>
 
         <Panel>
-          <button
-            className="btn btn-primary w-full"
-            disabled={isSaved}
-            onClick={async () => {
-              await save({ sessionId });
-              setSaved(true);
-            }}
-          >
-            {isSaved ? "Saved" : "Save this draft"}
-          </button>
           {/* The moment anyone is most likely to want the walkthrough is the
               moment they have just seen the grade it explains. */}
-          <Link href={`/review/${sessionId}`} className="btn btn-outline w-full">
+          <Link href={`/review/${sessionId}`} className="btn btn-primary w-full">
             Review it pick by pick
           </Link>
           <Link href="/" className="link link-hover text-sm text-base-content/60">

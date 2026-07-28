@@ -110,14 +110,17 @@ export default defineSchema({
     seed: v.number(),
     pickedNames: v.array(v.string()),
     status: v.union(v.literal("active"), v.literal("complete")),
-    saved: v.boolean(),
+    // Dead, and optional only so the rows that still carry it keep validating.
+    // A draft was never opt-in -- the row is inserted before the first pick and
+    // nothing is ever deleted -- and no query has read this since stats and
+    // review moved to ownSessions. Nothing writes it now; stripping it from the
+    // old rows is a migration for whenever this table is next touched.
+    saved: v.optional(v.boolean()),
     createdAt: v.string(),
     completedAt: v.optional(v.string()),
     // Denormalized on completion so the stats screen doesn't replay every draft.
     summary: v.optional(draftSummary),
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_and_saved", ["userId", "saved"]),
+  }).index("by_user", ["userId"]),
 
   // Frozen on first review so re-reviews are stable. Keyed by position in the
   // session's pick list rather than by a pick row, since picks aren't stored.
