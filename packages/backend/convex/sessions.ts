@@ -1,5 +1,6 @@
 import { ConvexError } from "convex/values";
 import { replayDraft } from "@mtg-tutor/core";
+import type { Card } from "@mtg-tutor/core";
 import type { QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import { toSetData } from "./setData.js";
@@ -42,6 +43,32 @@ export async function setDocFor(
 }
 
 /**
+ * The card pool for a set. Reads the `setCards` row, falling back to the pool
+ * still inline on the `sets` document for rows the split has not reached yet.
+ * The fallback goes away once every row is migrated.
+ */
+export async function setCardsFor(
+  ctx: QueryCtx,
+  setDoc: Doc<"sets">,
+): Promise<Card[]> {
+  const cardsDoc = await ctx.db
+    .query("setCards")
+    .withIndex("by_code_and_format", (q) =>
+      q.eq("code", setDoc.code).eq("format", setDoc.format),
+    )
+    .unique();
+
+  const cards = cardsDoc?.cards ?? setDoc.cards;
+  if (!cards) {
+    throw new ConvexError(
+      `Set "${setDoc.code}" (${setDoc.format}) has no card pool stored. ` +
+        `Run the sets:ingest action for it again.`,
+    );
+  }
+  return cards;
+}
+
+/**
  * Rebuilds the live board for a session. The session stores only the seed and
  * the picked names, so every read replays -- ~0.16ms for a finished draft,
  * which is nothing next to the round trip that got us here.
@@ -60,6 +87,7 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
   }
 
   const setDoc = await setDocFor(ctx, session.setCode, session.format);
+  const cards = await setCardsFor(ctx, setDoc);
 
   // A session is {seed, pickedNames} replayed against whatever the set data
   // says today, so re-ingesting a set whose packs changed strands every draft
@@ -68,7 +96,7 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
   // engine's divergence message as an uncaught server error.
   let engine;
   try {
-    engine = replayDraft(toSetData(setDoc), session.seed, session.pickedNames);
+    engine = replayDraft(toSetData(setDoc, cards), session.seed, session.pickedNames);
   } catch (e) {
     throw new ConvexError(
       `This draft can no longer be rebuilt: the ${session.setCode.toUpperCase()} ` +

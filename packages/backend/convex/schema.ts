@@ -10,16 +10,23 @@ import {
 } from "./validators.js";
 
 export default defineSchema({
-  // One document per (set, format). A whole set of cards measures 126-164KB
-  // for real sets, well inside Convex's 1MB document limit, so a draft
-  // mutation reads exactly one document instead of hundreds of card rows.
+  // One document per (set, format), carrying only what a listing needs. The
+  // card pool lives in `setCards` instead: `list` reads every row in this table
+  // to build the set picker, and Convex charges for every byte a query reads,
+  // not the bytes it returns. With the pool inline that was ~240KB per set --
+  // ~4MB read to return 4KB, on every page that shows the picker.
   sets: defineTable({
     code: v.string(),
     // Scryfall's display name, captured at ingest. Optional because sets
     // ingested before this field existed have none until they are re-ingested.
     name: v.optional(v.string()),
     format: v.string(),
-    cards: v.array(card),
+    // Being split out into `setCards`. Optional during the migration; rows that
+    // still carry it have not been migrated yet.
+    cards: v.optional(v.array(card)),
+    // Denormalized so `list` can report the pool size without reading it.
+    // Optional until every row is migrated.
+    cardCount: v.optional(v.number()),
     // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
     colorPairWinRates: v.array(
       v.object({ pair: v.string(), winRate: v.number() }),
@@ -45,14 +52,25 @@ export default defineSchema({
     packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
 
+  // The card pool, kept apart from the metadata above for the same reason
+  // setStats is: a whole set measures ~240KB, and only the draft engine ever
+  // needs it. Everything that merely lists or names sets reads `sets` alone.
+  // Still one document per (set, format) -- well inside Convex's 1MB limit, so
+  // replaying a draft reads exactly one row rather than hundreds of card rows.
+  setCards: defineTable({
+    code: v.string(),
+    format: v.string(),
+    cards: v.array(card),
+  }).index("by_code_and_format", ["code", "format"]),
+
   // Our own draft statistics, derived from the 17Lands public datasets rather
   // than scraped -- the datasets are the source 17Lands sanctions for outside
   // use, and they carry things no API exposes: archetype-conditional win rates,
   // card synergy, maindeck rate, and what 3-0 drafters took.
   //
-  // A separate table from `sets` on purpose. `sets` is read on every pick, and
-  // none of this belongs on that path; keeping them apart means a 198KB stats
-  // document never slows a draft down.
+  // A separate table from `setCards` on purpose. That table is read on every
+  // pick, and none of this belongs on that path; keeping them apart means a
+  // 198KB stats document never slows a draft down.
   setStats: defineTable({
     code: v.string(),
     format: v.string(),

@@ -472,7 +472,7 @@ export const readIngestState = internalQuery({
       metaRevision: doc.metaRevision,
       result: {
         setId: doc._id,
-        cardCount: doc.cards.length,
+        cardCount: doc.cardCount ?? doc.cards?.length ?? 0,
         ratedCardCount: doc.ratedCardCount,
       },
     };
@@ -567,7 +567,7 @@ export const store = internalMutation({
       // rather than skipping a set that never took.
       return {
         setId: existing._id,
-        cardCount: existing.cards.length,
+        cardCount: existing.cardCount ?? existing.cards?.length ?? 0,
         ratedCardCount: existing.ratedCardCount,
         keptExistingSnapshot: true,
         skipped: false,
@@ -582,6 +582,7 @@ export const store = internalMutation({
       name: args.name ?? existing?.name,
       format: args.format,
       cards: args.cards,
+      cardCount: args.cards.length,
       colorPairWinRates: args.colorPairWinRates,
       ratedCardCount: rated,
       ingestedAt: new Date().toISOString(),
@@ -695,7 +696,7 @@ export const list = query({
         code: s.code,
         name: s.name,
         format: s.format,
-        cardCount: s.cards.length,
+        cardCount: s.cardCount ?? s.cards?.length ?? 0,
         ratedCardCount: s.ratedCardCount,
         ingestedAt: s.ingestedAt,
         releasedAt: s.releasedAt,
