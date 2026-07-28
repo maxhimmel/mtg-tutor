@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useConvex, useConvexAuth, useMutation } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
@@ -28,6 +29,8 @@ import { convexSiteUrl } from "../../lib/convexSite";
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
 
+type DraftState = FunctionReturnType<typeof api.draft.state>;
+
 interface LastPick {
   score: PickScore;
   signal?: string;
@@ -39,9 +42,19 @@ interface LastPick {
 
 export function DraftBoard({ sessionId }: { sessionId: string }) {
   const id = sessionId as Id<"draftSessions">;
-  const state = useQuery(api.draft.state, { sessionId: id });
+  const convex = useConvex();
+  const { isAuthenticated } = useConvexAuth();
   const pickCard = useMutation(api.draft.pick);
   const { getAccessToken } = useAccessToken();
+
+  // Loaded once, then advanced from what `pick` returns, rather than held open
+  // as a live subscription. Replaying a draft costs a ~240KB read of the set's
+  // card pool, and a subscription re-runs on every write to the session -- so
+  // every pick paid for that read twice, once in the mutation and once in the
+  // invalidated query. A draft is single-player and its board only ever changes
+  // because this component changed it, so there is nothing to subscribe to.
+  const [state, setState] = useState<DraftState | undefined>(undefined);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
@@ -52,6 +65,27 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // Guards against an earlier pick's stream overwriting a later one when the
   // player picks faster than the coach can answer.
   const streamRun = useRef(0);
+
+  // Ownership is checked server-side, so this has to wait for the token: the
+  // subscription this replaced re-ran itself once auth arrived, and a one-shot
+  // read fired too early would just fail.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let cancelled = false;
+
+    convex
+      .query(api.draft.state, { sessionId: id })
+      .then((loaded) => {
+        if (!cancelled) setState(loaded);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, id, isAuthenticated]);
 
   const streamCoach = useCallback(
     async (pickIndex: number, score: PickScore, cardsInPack: number, force = false) => {
@@ -142,6 +176,20 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
       const score = result.score as PickScore;
+      // `pick` returns the whole next board, which is the reason this component
+      // needs no subscription. Everything not listed here -- the set's name,
+      // icon and format -- is fixed for the life of the session.
+      setState((prev) =>
+        prev && {
+          ...prev,
+          packNo: result.packNo,
+          pickNo: result.pickNo,
+          complete: result.complete,
+          totalPicks: result.totalPicks,
+          pack: result.pack,
+          pool: result.pool,
+        },
+      );
       setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack });
       void streamCoach(result.pickIndex, score, pack.length);
     } catch (e) {
@@ -149,6 +197,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     } finally {
       setPicking(false);
     }
+  }
+
+  if (loadError) {
+    return (
+      <main className="mx-auto max-w-[1500px] px-6 py-5">
+        <p className="text-error">{loadError}</p>
+      </main>
+    );
   }
 
   if (state === undefined) {
