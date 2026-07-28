@@ -58,11 +58,18 @@ describe("wrapText", () => {
 
 describe("cardDetail", () => {
   it("includes name, P/T, oracle text and stats", () => {
-    const out = plain(cardDetail(card({ gihWinRate: 0.56, alsa: 3.2, winRate: 0.55 }), 60));
+    const out = plain(
+      cardDetail(
+        card({ gihWinRate: 0.56, alsa: 3.2, winRate: 0.55, iwd: 0.042, maindeckRate: 0.91 }),
+        60,
+      ),
+    );
     expect(out).toContain("Test Bear");
     expect(out).toContain("2/2");
     expect(out).toContain("Vigilance");
-    expect(out).toContain("GIH WR 56.0%");
+    expect(out).toContain("GIH 56.0%");
+    expect(out).toContain("IWD +4.2pp");
+    expect(out).toContain("maindecked 91.0%");
   });
   it("shows both faces of a double-faced card", () => {
     const dfc = card({
@@ -74,8 +81,8 @@ describe("cardDetail", () => {
     expect(out).toContain("Back Name");
     expect(out).toContain("T: Add G.");
   });
-  it("notes missing 17Lands data", () => {
+  it("notes missing draft data", () => {
     const out = plain(cardDetail(card(), 60));
-    expect(out).toContain("no 17Lands data");
+    expect(out).toContain("no draft data");
   });
 });

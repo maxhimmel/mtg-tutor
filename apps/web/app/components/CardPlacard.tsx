@@ -26,7 +26,9 @@ import { ManaCost } from "./ManaCost";
 // they reach for it.
 export function CardPlacard({ card, className }: { card: Card; className?: string }) {
   const frame = frameFor(card);
-  const hover = useCardHover(card);
+  // Always with stats: a placard is a review, results or verdict row, and by then
+  // the draft is over and the numbers are the thing being taught.
+  const hover = useCardHover(card, true);
 
   return (
     <div

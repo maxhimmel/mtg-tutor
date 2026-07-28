@@ -30,10 +30,12 @@ export function CardTile({
   label?: string;
 }) {
   const { settings } = useSettings();
-  const hover = useCardHover(card);
-  const hidePreview = useHidePreview();
   const rate = card.gihWinRate != null ? pct(card.gihWinRate) : card.rarity[0].toUpperCase();
   const withRate = showRate ?? settings.guiderails;
+  // The hover panel is gated on exactly what the badge is gated on. Otherwise
+  // hovering would hand back the numbers guiderails-off is there to withhold.
+  const hover = useCardHover(card, withRate);
+  const hidePreview = useHidePreview();
 
   return (
     <button
