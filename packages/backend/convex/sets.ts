@@ -551,6 +551,10 @@ export const store = internalMutation({
       .query("sets")
       .withIndex("by_code_and_format", (q) => q.eq("code", args.code).eq("format", args.format))
       .unique();
+    const existingCards = await ctx.db
+      .query("setCards")
+      .withIndex("by_code_and_format", (q) => q.eq("code", args.code).eq("format", args.format))
+      .unique();
 
     // A set can come back with the full card list and every win rate null --
     // a brand new set with no games yet, or an upstream hiccup. Re-ingesting
@@ -575,22 +579,37 @@ export const store = internalMutation({
       };
     }
 
+    // The draft payload, on its own row. Nothing here may leak back onto the
+    // `sets` document: that row is read once per set by `list` on every page
+    // showing the picker, which is what made the pool expensive in the first
+    // place. See the setCards comment in schema.ts.
+    const cardsDoc = {
+      code: args.code,
+      format: args.format,
+      cards: args.cards,
+      colorPairWinRates: args.colorPairWinRates,
+      // Ingest passes this from setStats; fall back to any existing value so a
+      // bare re-run can't drop the set back to 15-card packs.
+      packComposition: args.packComposition ?? existingCards?.packComposition,
+    };
+
+    if (existingCards) {
+      await ctx.db.replace(existingCards._id, cardsDoc);
+    } else {
+      await ctx.db.insert("setCards", cardsDoc);
+    }
+
     const doc = {
       code: args.code,
       // Fall back to the stored name so a run that could not reach Scryfall's
       // set endpoint cannot blank it out.
       name: args.name ?? existing?.name,
       format: args.format,
-      cards: args.cards,
       cardCount: args.cards.length,
-      colorPairWinRates: args.colorPairWinRates,
       ratedCardCount: rated,
       ingestedAt: new Date().toISOString(),
-      // Ingest passes this from setStats; fall back to any existing value so a
-      // bare re-run can't drop the set back to 15-card packs.
       iconUri: args.iconUri ?? existing?.iconUri,
       releasedAt: args.releasedAt ?? existing?.releasedAt,
-      packComposition: args.packComposition ?? existing?.packComposition,
       sourceHash: args.sourceHash,
       metaRevision: args.metaRevision,
     };
