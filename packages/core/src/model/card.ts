@@ -39,9 +39,26 @@ export interface Card {
   // document. Absent for sets ingested before this, which fall back to
   // RARITY_BASELINE and score exactly as they did.
   rarityBaseline?: number;
-  alsa?: number; // avg_seen — average last seen at
-  avgPick?: number;
-  winRate?: number;
+  // The mean pick number over every time a drafter saw this card in a pack --
+  // 17Lands calls it "average last seen at", but it is a mean over all sightings,
+  // not the last one, which is why it sits BELOW avgPick rather than above it
+  // (a circulating card is seen by many drafters early and taken by one late).
+  // The gap avgPick - alsa is how long it survives once people start seeing it.
+  alsa?: number;
+  avgPick?: number; // ATA — the mean pick number it is actually taken at
+  winRate?: number; // GP WR — games-played win rate
+
+  // gihWinRate minus the win rate of games where the card sat in the deck and was
+  // never drawn. Both halves come from the same decks, so deck quality cancels and
+  // what is left is the card's own contribution -- which raw GIH WR confounds: a
+  // fine card in a strong archetype posts a high GIH because good decks win.
+  // A fraction, like the win rates (0.049 = 4.9 percentage points), and absent
+  // unless both halves cleared the sample floor when the artifact was built.
+  iwd?: number;
+  // Of the drafters who took this card, how many actually played it. A high pick
+  // rate with a low maindeck rate is a trap, and a low rate on its own means the
+  // GIH WR above was measured on a self-selected sample and deserves less trust.
+  maindeckRate?: number;
 }
 
 // The kinds of slot a booster draws from. `bonus` covers whatever sheet the set

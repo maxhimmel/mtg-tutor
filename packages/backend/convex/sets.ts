@@ -64,10 +64,10 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // costs one cheap call.
 //
 // The values are opaque tags whose only job is to differ from their
-// predecessors. POOL_REVISION deliberately keeps the value the combined
-// fingerprint used, so splitting it in two does not itself trigger the global
-// re-crawl this change exists to avoid.
-const POOL_REVISION = "2-set-name";
+// predecessors. Bumping POOL_REVISION re-crawls every set, so it is only worth
+// it when the stored card shape actually changed -- "3-card-stats" added iwd and
+// maindeckRate to the card.
+const POOL_REVISION = "3-card-stats";
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -415,13 +415,26 @@ export const ingest = action({
         .filter((p) => p.openedRate != null)
         .map((p) => [normalizeName(p.name), p.openedRate as number]),
     );
+    // The two stats that make a GIH WR readable, denormalised for the same reason
+    // as the two above. They do not come through statsAsRatings/mergeCards because
+    // that path models the 17Lands API response, which has neither -- see
+    // SeventeenLandsCard. This is where our own derived metrics belong.
+    const readability = new Map(
+      stats.cards.map((c) => [
+        normalizeName(c.name),
+        { iwd: c.iwd, maindeckRate: c.maindeckRate },
+      ]),
+    );
     const cards = draftable.map((c) => {
       const rarityBaseline = baselines.get(c.rarity);
       const packRate = rates.get(normalizeName(c.name));
+      const { iwd, maindeckRate } = readability.get(normalizeName(c.name)) ?? {};
       return {
         ...c,
         ...(rarityBaseline != null ? { rarityBaseline } : {}),
         ...(packRate != null ? { packRate } : {}),
+        ...(iwd != null ? { iwd } : {}),
+        ...(maindeckRate != null ? { maindeckRate } : {}),
       };
     });
 
