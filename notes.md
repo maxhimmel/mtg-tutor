@@ -3,12 +3,15 @@
 1. **The coach invents mana costs.** It called `Nurturing Bristleback` a 3-drop;
    it is `5GG`. Cause found in the code, not guessed: `buildPickContext`
    (`core/tutor/pickCoach.ts`) renders the passed cards as
-   `name (Colour, GIH WR x%)` only — no `cmc`, no type line. Just the _picked_
-   card gets `${picked.cmc} mana`. So every curve/size claim the coach makes
-   about a card it did not pick is invention. Cheap fix: put cmc + type line on
-   the passed cards too. (Roadmap #1 does not fix this — different bug.)
+   `name (Colour, GIH WR x%)` only — no `cmc`, no type line, no oracle text.
+   Just the _picked_ card gets `${picked.cmc} mana`. So every curve/size/effect
+   claim the coach makes about a card it did not pick is invention.
+   `buildReviewContext` (`core/tutor/reviewPrompt.ts`) has the same hole.
+   Cheap fix: put cmc + type line on the passed cards too.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
+   (`setStats.synergies` is computed and stored and read by nothing — it is the
+   data that would fix this.)
 
 3. **"Best pick" is decided by data alone, and the interesting answer needs the
    model.** `scorePick` ranks a pack by `cardValue` and calls the top card the
@@ -49,6 +52,10 @@
    forward-looking guard, not a repair.
 
 5. I've noticed the coach pulling advice about choosing a non-optimal card (probably because the stats are better on the optimal card versus my pick) when I'm on my second/third pack and the first few picks. As if it can't distinguish that once I'm a full pack in I'm not technically at "pick 1" any longer - I'm at all-the-picks-from-pack-1 + pack-2-pick-N.
+   The prompt says `Pack 2, Pick 3` and lists the pool, but never the absolute
+   pick index, how far through the draft it is, or which colours are already
+   committed — `committedColors` exists in `core/scoring/score.ts` and no prompt
+   builder calls it.
 
 # Ideas:
 
@@ -57,13 +64,17 @@
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
 - The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
 - Standalone: its own command and data model, not part of reviewing a draft.
+- Now answerable from data rather than authored: `setStats.archetypes` carries
+  per-card win rate per deck-colour-pair, so "which deck wants this card" has a
+  ground truth.
 
 2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
    publishes three public datasets per set/format; the stats pipeline pulls only
    **draft** and **game**. Replay is the third and by far the largest (431MB
    gzipped for FIN, vs 90-206MB draft and 26-62MB game), and nothing we compute
    today needs it, so downloading it would triple the pipeline's cost for zero
-   current gain.
+   current gain. (`build-set-stats.mjs` cites this item by number — renumber
+   with care.)
 
    It is one row per game — the same 63,987 games as the game dataset, joinable
    1:1 — carrying turn-by-turn board state for 30 turns: cards drawn/discarded,
@@ -100,6 +111,27 @@
    loading page/spinner/state than the faster image lazy loading.
    (`CardTile.tsx` currently uses a plain `<img loading="lazy">`.)
 
+6. **Show the field, not just the win rate.** The draft dataset is every human
+   pick, so we can say "34% of drafters took this card at this pick" instead of
+   only "this card has the higher win rate". A pick-order distribution is a
+   better teacher than a scalar, and it is the same new draft-data pass that
+   roadmap #3 (`human-bots`) needs — the bots consume it, the player sees it.
+
+7. **Sealed mode.** Six packs, no passing, build the 40. `makePack` and
+   `suggestDeck` already exist, so this is mostly a new screen — and it is a
+   different skill (pool evaluation and deck construction rather than pick
+   order).
+
+8. **A deck-building step.** Today `suggestDeck` just shows you the answer on
+   the results screen. Building the 40 is half of Limited and the app currently
+   does it for you; making the player build it and then diffing against the
+   suggestion (and against real winning curves, roadmap #2) is a whole second
+   practice surface on top of data we already have.
+
+9. **Re-serve your own misses.** `stats.overview` already computes
+   `topMistakes`. Storing the seed + pick index and dealing that exact pack back
+   weeks later is spaced repetition on the mistakes you personally make.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
@@ -113,64 +145,13 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    quiz outcomes today — `reviewVerdicts` stores the coach's verdict, not your
    guess.
 
-# Web platform (done, 2026-07-21 to 2026-07-22, deployed):
+# Still open from shipped work:
 
-Decisions worth not re-litigating:
-
-1. **A draft session is stored as `{setCode, format, seed, pickedNames[]}` and
-   nothing else.** No board state is persisted — every read replays. Measured
-   against real set data: replaying a finished 45-pick draft is 0.16ms, and all
-   45 incremental replays together are 3.7ms, i.e. noise next to a network round
-   trip. This is why Deferred #1 (alternate lines) is now nearly free.
-2. **One Convex document per set, not a per-card table.** Real sets serialize to
-   126-164KB against a 1MB document limit, so a draft mutation reads exactly one
-   document. Ingestion refuses anything over 900KB rather than silently failing.
-3. **Ingestion refuses to overwrite rated data with unrated data** — a guard
-   against a re-ingest that comes back all-null (a brand-new set, or an upstream
-   hiccup) wiping a good snapshot.
-4. **The CLI stays a peer client, not a legacy shim.** Both it and the web app
-   drive the same Convex functions, so a feature can't ship to one and skip the
-   other. Cost: the CLI needs a running deployment.
-5. **`packages/core` must stay dependency-free** — no `node:*`, no runtime deps —
-   so the same code runs in Node, Convex's V8 runtime, and the browser. Enforced
-   by `scripts/check-purity.ts` in the package's test script.
-6. **No Convex auth component and no `users` table.** WorkOS AuthKit issues
-   RS256 JWTs that Convex validates directly against WorkOS' JWKS
-   (`convex/auth.config.ts`). `draft.ts` only ever needs an opaque owner key and
-   `identity.tokenIdentifier` already is one, so a user row would be dead weight
-   and a sync webhook would be a second thing to keep correct.
-7. **The ownership check lives in `loadBoard`, not in each function.** Every
-   session read and write funnels through it, so one check covers `state`,
-   `pick`, `results`, `save`, and `coachContext`. Adding a function that reaches
-   into `draftSessions` without going through `loadBoard` is the way this
-   regresses.
-8. **Three WorkOS values are copied by hand from `packages/backend/.env.local`
-   into `apps/web/.env.local`, and that is as good as it gets.** Convex's own
-   schema (`convex/schemas/convex.schema.json`) documents `localEnvVars` as
-   _"writes the given mapping to the local `.env` file"_ with **no path option**,
-   so `convex dev` cannot populate the Next app's file. A `next.config.ts` that
-   read the backend's `.env.local` was tried and reverted: shipped code reaching
-   into a sibling package's gitignored file, to save three lines set once, is a
-   worse trade than the duplication. Re-provisioning AuthKit means updating both
-   files.
-9. **Env vars cross four boundaries and three of them fail silently** — Vercel
-   project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
-   all drop what they were not told about, and only Convex's deployment env
-   errors loudly. Three deploys broke on this. The countermeasures now in place:
-   `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
-   `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
-   list — verified with `turbo run build --dry=json`). Do not add a task-level
-   `env` key; put it in `globalEnv`.
-10. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
-    traces from the project directory by default, and under pnpm 652 of the 653
-    files in `next-server.js.nft.json` resolve outside `apps/web`.
-
-Open / unfinished:
-
-1. **Review and stats are CLI-only _surfaces_.** Their logic already lives in
-   backend functions (`convex/review.ts`, `convex/stats.ts`), so a web version
-   is a UI job rather than a port. The pick-by-pick review walkthrough and its
-   quiz exist only as `mtg-tutor review`; the web app has no route for either.
+1. **Stats is CLI-only.** `convex/stats.ts:overview` already returns overall
+   averages, score-by-pick-number, score-by-pack-number and top mistakes, and
+   the web app has no route for any of it — the largest remaining capability gap
+   between the two clients. Review shipped to the web on 2026-07-22
+   (`/review`, `/review/[id]`, `/review/[id]/breakdown`); this is what is left.
 2. **Headless runs need a token.** `smoke-draft.mjs` cannot talk to the draft
    functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via the
    WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
@@ -181,27 +162,10 @@ Open / unfinished:
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
+4. **`draftSessions.saved` is dead.** Optional only so old rows validate;
+   nothing writes or reads it. Strip it whenever that table is next migrated.
 
-# Own the draft data (done, shipped to production 2026-07-24):
-
-The app scores on statistics we derive ourselves from the 17Lands **public
-datasets** (the sanctioned source), deals boosters that match how sets really
-open (bonus sheets + land slot + observed shapes), and makes **no 17Lands API
-call at runtime** — the API survives only as a testing oracle
-(`pnpm validate-set-stats`). Details live in the `set-stats-pipeline`,
-`play-booster-pack-model`, and `17lands-data-sources` auto-memories.
-
-`main` is pushed and seeding happens inside the Vercel build
-(`apps/web/vercel.json` runs `convex deploy --cmd '... seed-set-stats.mjs &&
-ingest-sets.mjs'`). **A push to `main` is therefore a production deploy.** The
-deploy is non-breaking: a schema-validation failure fails the Vercel build and
-keeps the old site up.
-
-Adding a set is one command — `pnpm new-set <CODE> [format] [--prod]` — which
-runs availability gate → build → seed → ingest → validate-pack-model. 17 set
-artifacts are committed and ship.
-
-## Follow-up roadmap (compressed; pick per future session)
+# Roadmap (pick per future session):
 
 Ordered by value × readiness. Each is a candidate feature branch.
 
@@ -211,33 +175,31 @@ Ordered by value × readiness. Each is a candidate feature branch.
    and surface the metrics we compute but never show (trap warnings from
    `maindeckRate`, synergy hints, archetype fit in explanations). Highest value;
    data is validated and live. `cardValue` (`core/scoring/value.ts`) is the
-   single tuning point.
+   single tuning point — and it takes a bare `Card`, so this is a signature
+   change that ripples to bots and the deck builder for free.
+
+   The one real obstacle: `archetypes` lives on `setStats`, which the draft hot
+   path deliberately never reads (a 270KB document kept off the per-pick path).
+   Either denormalize the splits onto the cards in `setCards` the way
+   `rarityBaseline` already is, or thread a set-level context through
+   `cardValue` — the former keeps every existing call site working.
 2. **`deck-builder`** — replace the `DECK` 23-spell/17-land convention with real
    winning-deck land counts & curves from the data. `core/draft/deck.ts`; `DECK`
    in `core/config.ts` is the single tuning point. Small, self-contained.
 3. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
    data (needs a new draft-data pass) instead of greedy `cardValue` + colour
    bias, so signals/wheeling feel like a real pod. `core/draft/bots.ts` is still
-   `cardValue + colorBias + noise`.
+   `cardValue + colorBias + noise`. Same data pass as Ideas #6.
 4. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
    This is what would re-tighten the availability gate to require replay
    (`USED_KINDS` in `scripts/lib/datasets.mjs`).
 
-Separate track: the **review features** already in "Deferred" above (alternate
-draft lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) —
-unrelated to the data work.
+Separate track: the **review features** in "Deferred" above (alternate draft
+lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated
+to the data work.
 
-# Convex database bandwidth (done, shipped to production 2026-07-28):
-
-The free tier was drained almost entirely under **database I/O**, by `sets.list`:
-it read every set's full card pool (~240KB × 17 ≈ 4MB) to return 4KB of
-metadata, and it was subscribed on four pages including the landing page. Convex
-bills bytes **read out of the database**, not bytes returned. The pool moved to
-its own `setCards` table and a `sets` row is now 433 bytes. Details in the
-`convex-bandwidth-split-rollout` auto-memory.
-
-One trade-off deferred rather than settled:
+# Deferred trade-offs (revisit when the premise changes):
 
 1. **The draft board no longer live-syncs — revisit if we do multiplayer.**
    `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open for the whole
@@ -257,3 +219,34 @@ One trade-off deferred rather than settled:
    that moves. Invalidation then costs a cheap read instead of a full replay.
    Same principle as `setStatsMeta` — if a value is only there to be watched or
    compared, it belongs on a row small enough to read often.
+
+# Decisions worth not re-litigating:
+
+The architecture, the data pipeline and the deploy story are all documented in
+`README.md`; only the decisions that document a road **not** taken live here.
+
+1. **Ingestion refuses to overwrite rated data with unrated data** — a guard
+   against a re-ingest that comes back all-null (a brand-new set, or an upstream
+   hiccup) wiping a good snapshot.
+2. **No Convex auth component and no `users` table.** WorkOS AuthKit issues
+   RS256 JWTs that Convex validates directly against WorkOS' JWKS
+   (`convex/auth.config.ts`). `draft.ts` only ever needs an opaque owner key and
+   `identity.tokenIdentifier` already is one, so a user row would be dead weight
+   and a sync webhook would be a second thing to keep correct.
+3. **One Convex document per (set, format), not a per-card table** — so a draft
+   mutation reads exactly one row rather than hundreds. It is now two documents,
+   `sets` (~433 bytes, what a listing needs) and `setCards` (~240KB, what a
+   replay needs), because Convex bills bytes read out of the database rather
+   than bytes returned and the set picker was reading the whole pool to render a
+   name. Ingestion still refuses anything over 900KB against the 1MB limit.
+4. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
+   traces from the project directory by default, and under pnpm 652 of the 653
+   files in `next-server.js.nft.json` resolve outside `apps/web`.
+5. **A `next.config.ts` that reads the backend's `.env.local` was tried and
+   reverted.** Shipped code reaching into a sibling package's gitignored file,
+   to save three lines set once, is a worse trade than the duplication. Convex's
+   own schema documents `localEnvVars` as writing "to the local `.env` file"
+   with no path option, so `convex dev` cannot populate the Next app's file.
+6. **Do not add a task-level `env` key to `turbo.json`** — it *replaces* rather
+   than merges with `globalEnv` and has already silently dropped a variable
+   once. Verified with `turbo run build --dry=json`.
