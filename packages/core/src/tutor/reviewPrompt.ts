@@ -1,26 +1,11 @@
-import type { Card, ColorCode } from "../model/card.js";
+import type { Card } from "../model/card.js";
 import type { StoredPick } from "../model/review.js";
+import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
 
 // Pure string builders for the review feature (no SDK). Siblings to pickCoach.ts,
 // reusable by a future web frontend. Unlike live coaching, review asks for a
 // structured verdict (context-best + divergence lesson + narrative) and frames
 // the whole draft with archetype/signal bookends.
-
-const COLOR_NAMES: Record<ColorCode, string> = {
-  W: "White",
-  U: "Blue",
-  B: "Black",
-  R: "Red",
-  G: "Green",
-};
-
-const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
-
-function colorLabel(c: Card): string {
-  if (c.colors.length === 0) return "Colorless";
-  if (c.colors.length > 1) return c.colors.map((col) => COLOR_NAMES[col]).join("/");
-  return COLOR_NAMES[c.colors[0]];
-}
 
 function summarizePool(pool: Card[]): string {
   if (pool.length === 0) return "  (empty — this is the first pick)";
@@ -39,10 +24,12 @@ function listPack(pick: StoredPick): string {
   return [...pick.pack]
     .sort((a, b) => (b.gihWinRate ?? 0) - (a.gihWinRate ?? 0))
     .map((c) => {
-      const tags = [colorLabel(c), `GIH ${pct(c.gihWinRate)}`];
-      if (c.name === pick.picked.name) tags.push("YOU TOOK THIS");
-      if (c.name === pick.bestName) tags.push("raw-power best");
-      return `  - ${c.name} (${tags.join(", ")})`;
+      const marks = [
+        c.name === pick.picked.name ? "YOU TOOK THIS" : "",
+        c.name === pick.bestName ? "raw-power best" : "",
+      ].filter(Boolean);
+      const head = marks.length ? `${describeCard(c)}  [${marks.join(", ")}]` : describeCard(c);
+      return `  - ${head}\n    ${statLine(c)}`;
     })
     .join("\n");
 }
@@ -56,7 +43,8 @@ export function buildReviewContext(pick: StoredPick, poolBefore: Card[]): string
     `Pool before this pick (${poolBefore.length} cards):`,
     summarizePool(poolBefore),
     "",
-    `They took: ${pick.picked.name} — ${pick.picked.cmc} mana, ${colorLabel(pick.picked)}, ${pick.picked.typeLine}. GIH WR ${pct(pick.picked.gihWinRate)}.`,
+    `They took: ${describeCard(pick.picked)}`,
+    `  ${statLine(pick.picked)}`,
     "",
     `The raw-power best (highest 17Lands win rate available): ${pick.bestName}.`,
     "",

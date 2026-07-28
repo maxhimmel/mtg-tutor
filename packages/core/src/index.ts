@@ -23,6 +23,7 @@ export * from "./util/rng.js";
 export * from "./tutor/principles.js";
 export * from "./tutor/citations.js";
 export * from "./tutor/cardNames.js";
+export * from "./tutor/cardLine.js";
 export * from "./tutor/prompt.js";
 export * from "./tutor/pickCoach.js";
 export * from "./tutor/reviewPrompt.js";

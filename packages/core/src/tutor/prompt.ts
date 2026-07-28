@@ -1,3 +1,4 @@
+import { STAT_LEGEND } from "./cardLine.js";
 import type { PrinciplesDoc } from "./principles.js";
 
 // Renders the principles corpus into a grounding block, grouped by category.
@@ -36,6 +37,8 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "- If the data verdict and your read disagree, say so briefly and explain why.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
     "",
+    STAT_LEGEND,
+    "",
     "# Principles",
     "",
     principlesBlock(doc),
@@ -67,6 +70,8 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "  off-color card was passed [SIG-01]. Staying open early is correct.",
     "- These principles are set-agnostic; combine them with your general card knowledge.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
+    "",
+    STAT_LEGEND,
     "",
     "# Principles",
     "",

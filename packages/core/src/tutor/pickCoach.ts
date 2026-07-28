@@ -1,24 +1,9 @@
-import type { Card, ColorCode } from "../model/card.js";
+import type { Card } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
+import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
 
 // Renders a single draft pick into a compact prompt for the coach. Pure string
 // work (no SDK), so a future web frontend can reuse it as-is.
-
-const COLOR_NAMES: Record<ColorCode, string> = {
-  W: "White",
-  U: "Blue",
-  B: "Black",
-  R: "Red",
-  G: "Green",
-};
-
-const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
-
-function colorLabel(c: Card): string {
-  if (c.colors.length === 0) return "Colorless";
-  if (c.colors.length > 1) return c.colors.map((col) => COLOR_NAMES[col]).join("/");
-  return COLOR_NAMES[c.colors[0]];
-}
 
 function summarizePool(pool: Card[]): string {
   if (pool.length === 0) return "  (empty — this is your first pick)";
@@ -41,8 +26,8 @@ export function buildPickContext(rec: RecordedPick, pool: Card[]): string {
     .filter((c) => c.name !== picked.name)
     .sort((a, b) => (b.gihWinRate ?? 0) - (a.gihWinRate ?? 0))
     .slice(0, 4)
-    .map((c) => `${c.name} (${colorLabel(c)}, GIH WR ${pct(c.gihWinRate)})`)
-    .join("; ");
+    .map((c) => `  - ${describeCard(c)}\n    ${statLine(c)}`)
+    .join("\n");
 
   const verdict = score.isBest
     ? `${score.score}/100 (${score.grade}) — you took the statistically best card.`
@@ -55,14 +40,18 @@ export function buildPickContext(rec: RecordedPick, pool: Card[]): string {
     `Your pool so far (${pool.length} cards):`,
     summarizePool(pool),
     "",
-    `You picked: ${picked.name} — ${picked.cmc} mana, ${colorLabel(picked)}, ${picked.typeLine}. ` +
-      `GIH WR ${pct(picked.gihWinRate)}.`,
+    `You picked: ${describeCard(picked)}`,
+    `  ${statLine(picked)}`,
     "",
     `Data verdict: ${verdict}`,
-    passed ? `Other cards in the pack: ${passed}.` : "",
+    "",
+    // Null rather than "" so dropping an empty pack list does not also drop the
+    // blank lines above -- each entry now spans two lines, and run together they
+    // read as one block instead of five labelled sections.
+    passed ? `Other cards in the pack:\n${passed}` : null,
     "",
     "Coach this pick.",
   ]
-    .filter((l) => l !== "")
+    .filter((l) => l !== null)
     .join("\n");
 }

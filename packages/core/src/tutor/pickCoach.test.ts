@@ -62,4 +62,14 @@ describe("buildPickContext", () => {
     expect(ctx).toContain("72/100");
     expect(ctx).toContain("Big Bomb"); // best-available card by the numbers
   });
+
+  // The cards the player DIDN'T take used to render as bare names, so every
+  // curve or size claim the coach made about one of them was invention.
+  it("gives the passed cards their cost and type, not just a name", () => {
+    expect(ctx).toContain("Big Bomb — 2 mana, Red, Creature");
+  });
+
+  it("gives the passed cards their stats, not just a win rate", () => {
+    expect(ctx).toContain("ALSA 6.0");
+  });
 });
