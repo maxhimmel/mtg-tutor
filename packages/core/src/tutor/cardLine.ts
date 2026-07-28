@@ -1,4 +1,5 @@
 import type { Card, ColorCode } from "../model/card.js";
+import { CARD_STAT_GLOSSARY } from "./glossary.js";
 
 // How a card is written into a prompt: what it is, and what the data says about
 // it. Shared by pickCoach and reviewPrompt so the live coach and the review
@@ -59,38 +60,47 @@ export function statLine(c: Card): string {
 // What the numbers in statLine mean, for the system prompts. Without this the
 // model recites the stats back at the player instead of reasoning with them --
 // which would make a wider stat line a regression, not an improvement.
+// Greedy wrap to a fixed column, so a definition edited in glossary.ts does not
+// have to be re-wrapped by hand to keep the prompt legible.
+function wrap(text: string, width: number, indent: string): string[] {
+  const out: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if (line && line.length + 1 + word.length > width) {
+      out.push(line);
+      line = indent + word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+// One bullet per stat, straight from the glossary the UI and /glossary page read.
+// Per-stat facts live there; the cross-stat reading rules below do not, because
+// they are relationships between stats rather than definitions of any one.
+const statBullets = CARD_STAT_GLOSSARY.flatMap((s) =>
+  wrap(`- ${s.label} — ${s.short}${s.caveat ? ` ${s.caveat}` : ""}`, 78, "  "),
+);
+
 export const STAT_LEGEND = [
   "# Reading the card data",
   "",
   "Each card is shown with some of the following. They measure different things;",
   "do not read them as one ranking.",
   "",
-  "- GIH — win rate of games where the card was drawn, with its sample size. This is",
-  "  confounded by deck quality: a merely fine card in a strong archetype posts a",
-  "  high GIH because the decks playing it win.",
-  "- IWD — the same decks' win rate with the card drawn minus without it. Deck",
-  "  quality cancels out, so this is the card's own contribution, in percentage",
-  "  points. It runs structurally high for expensive, high-impact cards and near",
-  "  zero for cheap efficient ones and lands, so it is a SECOND AXIS, not a better",
-  "  ranking. A high GIH with a low IWD is a card riding its deck; a high IWD is a",
-  "  card that wins games by itself.",
-  "- ATA / ALSA — the mean pick the field takes it at, and the mean pick drafters",
-  "  see it at. ALSA sits below ATA because a circulating card is seen by many",
-  "  drafters early and taken by one late, so the SIZE OF THE GAP is the signal:",
-  "  wide means it survives the table and can be expected to come back around,",
-  "  near-zero means it is taken the moment it is seen and will not wheel.",
-  "- maindecked — of the drafters who took it, how many played it. A low figure",
-  "  means the GIH above was measured on a self-selected sample and deserves less",
-  "  trust. Taken early AND rarely maindecked is the signature of a trap.",
-  "- GP WR — win rate of decks containing the card, drawn or not. The most deck-",
-  "  dominated number here and the weakest evidence about the card itself; when it",
-  "  disagrees with IWD, believe IWD.",
+  ...statBullets,
   "",
-  "The data verdict ranks the pack on GIH alone, so it can rate a card top of the",
-  "pack while the rest of that card's row argues against it. When the card in",
-  "question is maindecked far less than the others, or its IWD is flat while its",
-  "GIH is high, say so — that disagreement is the most useful thing you can point",
-  "out, and the verdict cannot see it.",
+  "Reading them together:",
+  "- A high GIH with a flat IWD is a card riding its deck; a high IWD is a card",
+  "  that wins games by itself.",
+  "- The SIZE OF THE ATA/ALSA GAP is the signal, not either number alone.",
+  "- The data verdict ranks the pack on GIH alone, so it can rate a card top of",
+  "  the pack while the rest of that card's row argues against it. When the card",
+  "  in question is maindecked far less than the others, or its IWD is flat while",
+  "  its GIH is high, say so — that disagreement is the most useful thing you can",
+  "  point out, and the verdict cannot see it.",
   "",
   "Use these to justify a judgment. Do not recite them back at the player, and do",
   "not quote a number you were not given.",
