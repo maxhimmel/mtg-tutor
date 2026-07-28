@@ -7,7 +7,8 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import type { ReviewVerdict } from "@mtg-tutor/core";
 
 // undefined: never asked. null: asked, and there was no answer -- the deployment
-// has no model key, or the call failed. Callers show the data-only reveal for
+// has no model key, the call failed, or the answer named a card that was not in
+// the pack and the backend refused it. Callers show the data-only reveal for
 // null rather than spinning on a verdict that is not coming.
 export type VerdictState = ReviewVerdict | null | undefined;
 

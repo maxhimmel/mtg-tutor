@@ -139,7 +139,9 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
 
 // The verdict already frozen on the session wins; otherwise the backend action
 // asks the model once and stores it. Returns undefined when the deployment has
-// no Anthropic key or the call fails -- callers show the data-only reveal.
+// no model key, when the call fails, or when the answer named a card that was
+// not in the pack and the backend refused it -- callers show the data-only
+// reveal for all three.
 async function fetchVerdict(
   convex: ConvexHttpClient,
   sessionId: Id<"draftSessions">,
