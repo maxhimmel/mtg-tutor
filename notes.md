@@ -30,6 +30,24 @@
    `isBest` is the honest proxy and the report is named for what it actually
    shows.
 
+4. **Re-ingesting a set strands every draft taken against the old data.** A
+   session is `{seed, pickedNames}` replayed against whatever the set says
+   today, so when a set's card pool or pack model changes the seed deals
+   different packs and `replayDraft` throws
+   (`Replay diverged at P1P1: "X" is not in the pack`). Hit for real on
+   2026-07-27 with EOE, after the bonus-sheet odds rebuild changed `packRate`
+   for six sets. It is not repairable — the packs that draft saw no longer
+   exist.
+
+   `loadBoard` now says so in human terms instead of leaking the engine's
+   message, but `/review` still **lists** those drafts, because `review.list`
+   reads the denormalized summary and never replays — so it cannot know until
+   you click. The cheap fix is a fingerprint: `sets` already carries
+   `sourceHash` over the card pool, so stamping it on `draftSessions` at
+   creation would let the list mark a stale draft without replaying anything.
+   Only helps sessions created after the change, which is fine — it is a
+   forward-looking guard, not a repair.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
