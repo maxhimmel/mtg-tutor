@@ -303,14 +303,17 @@ export function stream(req: Request): ReadableStream<Uint8Array> {
       // These promises reject when the call itself failed, which is why they are
       // caught rather than reported: a call that produced nothing has no usage to
       // record, and the player already has the interrupted-coaching message above.
-      try {
-        const [usage, finishReason] = await Promise.all([
-          result.totalUsage,
-          result.finishReason,
-        ]);
-        await report(req, options.model, started, usage, finishReason);
-      } catch (e) {
-        console.error("Recording model usage failed:", e);
+      // allSettled, not all. When the call produces nothing both of these
+      // reject, and Promise.all only ever hands back the first -- leaving the
+      // second rejection unconsumed, which surfaces as an uncaught error for a
+      // condition handled deliberately right here. That is the same trap
+      // `unavailable` above exists to close, reopened one line at a time.
+      const [usage, finishReason] = await Promise.allSettled([
+        result.totalUsage,
+        result.finishReason,
+      ]);
+      if (usage.status === "fulfilled" && finishReason.status === "fulfilled") {
+        await report(req, options.model, started, usage.value, finishReason.value);
       }
 
       controller.close();

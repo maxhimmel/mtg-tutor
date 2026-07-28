@@ -51,6 +51,10 @@ const flag = (name, fallback) => {
 const has = (name) => process.argv.includes(`--${name}`);
 
 const setCode = flag("set", "fdn");
+// Carried explicitly rather than left to draft.start's default, which is
+// PremierDraft -- the web app reads each set's own format off sets.list for the
+// same reason, and nothing is ingested under the default.
+const format = flag("format", "TradDraft");
 const seed = Number(flag("seed", 42));
 // Caps how many picks get coached and reviewed. For proving the harness works
 // without spending a full draft -- a --limit run is NOT a valid benchmark, and
@@ -72,14 +76,22 @@ const principles = loadPrinciples();
 
 // ---------------------------------------------------------------- drive a draft
 
-const stored = await client.query(api.sets.get, { setCode });
-if (!stored) throw new Error(`Set "${setCode}" is not ingested.`);
+const stored = await client.query(api.sets.get, { setCode, format });
+if (!stored) {
+  // Says what IS available rather than only what is not: the usual cause is a
+  // format mismatch, not a missing set, and the two read identically otherwise.
+  const available = await client.query(api.sets.list, {});
+  throw new Error(
+    `Set "${setCode}" is not ingested for format "${format}". Available: ` +
+      available.map((s) => `${s.code}/${s.format}`).join(", "),
+  );
+}
 
 const namesInSet = stored.cards.map((c) => c.name);
 const setNamePattern = cardNamePattern(namesInSet);
 
-const sessionId = await client.mutation(api.draft.start, { setCode, seed });
-console.log(`set ${setCode}, seed ${seed}, session ${sessionId}`);
+const sessionId = await client.mutation(api.draft.start, { setCode, format, seed });
+console.log(`set ${setCode}/${format}, seed ${seed}, session ${sessionId}`);
 if (limit !== Infinity) console.log(`--limit ${limit}: NOT a valid benchmark run\n`);
 
 /** Streams /coach for one pick. Returns null when the gate declined it (204). */
@@ -298,8 +310,17 @@ console.log(`  rows missing a userId  ${unattributed}`);
 // ------------------------------------------------------------------- baselines
 
 const dir = new URL("../bench/", import.meta.url);
-const file = new URL(`baseline.${setCode}.${seed}.${provider}.json`, dir);
-const record = { setCode, seed, provider, model, minPackCards, areas: byArea, accuracy };
+const file = new URL(`baseline.${setCode}.${format}.${seed}.${provider}.json`, dir);
+const record = {
+  setCode,
+  format,
+  seed,
+  provider,
+  model,
+  minPackCards,
+  areas: byArea,
+  accuracy,
+};
 
 if (limit !== Infinity) {
   console.log("\n--limit run: baseline neither written nor compared.");

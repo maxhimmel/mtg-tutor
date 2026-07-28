@@ -207,8 +207,13 @@ export const verdict = action({
       });
     } catch (e) {
       // Callers show the data-only reveal instead; a missing key should not end
-      // the review.
-      if (e instanceof CoachUnavailableError) return null;
+      // the review. Logged rather than swallowed silently: "the coach said
+      // nothing" and "the coach could not be reached, and here is why" look
+      // identical from the client, and only one of them is worth acting on.
+      if (e instanceof CoachUnavailableError) {
+        console.error(`Review verdict unavailable: ${e.message}`);
+        return null;
+      }
       throw e;
     }
 
@@ -273,7 +278,10 @@ export const frame = action({
           }),
       });
     } catch (e) {
-      if (e instanceof CoachUnavailableError) return null;
+      if (e instanceof CoachUnavailableError) {
+        console.error(`Draft frame (${args.phase}) unavailable: ${e.message}`);
+        return null;
+      }
       throw e;
     }
   },
