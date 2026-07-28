@@ -8,7 +8,7 @@ describe("splitCitations", () => {
 
   it("leaves uncited prose untouched", () => {
     const text = "You took Sunspine Lynx; the data favors Bake into a Pie.";
-    expect(split(text)).toEqual({ prose: text, principles: [] });
+    expect(split(text)).toEqual({ prose: text, principles: [], invented: [] });
   });
 
   it("lifts a trailing citation out of the prose", () => {
@@ -32,6 +32,22 @@ describe("splitCitations", () => {
     const { prose, principles } = split("Trust me on this one. [XYZ-99]");
     expect(prose).toBe("Trust me on this one.");
     expect(principles).toEqual([]);
+  });
+
+  it("reports the invented id it dropped, so the rate can be measured", () => {
+    const { invented } = split("Trust me on this one. [XYZ-99]");
+    expect(invented).toEqual(["XYZ-99"]);
+  });
+
+  it("separates the real citations from the invented ones", () => {
+    const { principles, invented } = split("Bombs win [EVAL-02], trust me [XYZ-99].");
+    expect(principles.map((p) => p.id)).toEqual(["EVAL-02"]);
+    expect(invented).toEqual(["XYZ-99"]);
+  });
+
+  it("deduplicates an invented id cited more than once", () => {
+    const { invented } = split("As [XYZ-99] says, and again [XYZ-99].");
+    expect(invented).toEqual(["XYZ-99"]);
   });
 
   it("repairs the space a mid-sentence citation leaves behind", () => {
@@ -75,7 +91,7 @@ describe("splitCitations", () => {
 
   it("leaves bracketed prose that is not a citation alone", () => {
     const text = "Take the removal [the data disagrees, but only slightly].";
-    expect(split(text)).toEqual({ prose: text, principles: [] });
+    expect(split(text)).toEqual({ prose: text, principles: [], invented: [] });
   });
 
   it("hides a citation still arriving from the stream", () => {
