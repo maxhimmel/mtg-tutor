@@ -31,7 +31,8 @@
     "ingest-sets": "node scripts/ingest-sets.mjs",
     "check-availability": "node scripts/check-set-availability.mjs",
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
-    "validate-pack-model": "node scripts/validate-pack-model.mjs"
+    "validate-pack-model": "node scripts/validate-pack-model.mjs",
+    "bench-llm": "node scripts/bench-llm.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

@@ -25,7 +25,8 @@
     "ingest-sets": "pnpm --filter @mtg-tutor/backend ingest-sets",
     "check-availability": "pnpm --filter @mtg-tutor/backend check-availability",
     "validate-set-stats": "pnpm --filter @mtg-tutor/backend validate-set-stats",
-    "validate-pack-model": "pnpm --filter @mtg-tutor/backend validate-pack-model"
+    "validate-pack-model": "pnpm --filter @mtg-tutor/backend validate-pack-model",
+    "bench-llm": "pnpm --filter @mtg-tutor/backend bench-llm"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

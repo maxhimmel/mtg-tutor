@@ -1,4 +1,6 @@
-import { internalMutation } from "./_generated/server.js";
+import { v } from "convex/values";
+import { internalMutation, query } from "./_generated/server.js";
+import { ownedSession } from "./sessions.js";
 import { llmCall } from "./validators.js";
 
 // What the deployment's model key gets spent on, one row per call.
@@ -23,5 +25,24 @@ export const record = internalMutation({
       userId: identity?.tokenIdentifier,
       createdAt: new Date().toISOString(),
     });
+  },
+});
+
+// Every call one draft spent, for whoever owns that draft. This is how the
+// benchmark reads back the run it just drove -- and why a run needed no
+// benchmark-specific plumbing in the API: it drives the same endpoints a player
+// does, and its rows are simply the rows of its own session.
+export const forSession = query({
+  args: { sessionId: v.id("draftSessions") },
+  handler: async (ctx, args) => {
+    await ownedSession(ctx, args.sessionId);
+
+    // A fully coached and fully reviewed draft is 45 + 45 + 2 calls, so this
+    // bound is roughly 5x the most a session can produce. Taken rather than
+    // collected so a bug that writes per-token could never make this unbounded.
+    return await ctx.db
+      .query("llmUsage")
+      .withIndex("by_sessionId", (q) => q.eq("sessionId", args.sessionId))
+      .take(500);
   },
 });

@@ -75,7 +75,18 @@ export async function setCardsFor(
  * This is the single choke point every session read and write goes through, so
  * the ownership check lives here rather than being repeated in each function.
  */
-export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
+/**
+ * The ownership check on its own, without the replay below it.
+ *
+ * Most reads want the board and should call loadBoard. Anything that only needs
+ * to prove the session is yours -- metrics about it, say -- wants this instead:
+ * replaying costs a read of the ~240KB card pool, which is a lot to spend on a
+ * question about a few hundred bytes of someone else's rows.
+ */
+export async function ownedSession(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+): Promise<Doc<"draftSessions">> {
   const userId = await requireUserId(ctx);
   const session = await ctx.db.get(sessionId);
   if (!session) throw new ConvexError(`No draft session ${sessionId}.`);
@@ -84,6 +95,11 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
   if (session.userId !== userId) {
     throw new ConvexError(`Draft session ${sessionId} does not belong to you.`);
   }
+  return session;
+}
+
+export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
+  const session = await ownedSession(ctx, sessionId);
 
   const setDoc = await setDocFor(ctx, session.setCode, session.format);
   const cardsDoc = await setCardsFor(ctx, setDoc);

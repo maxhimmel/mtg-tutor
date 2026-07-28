@@ -19,7 +19,17 @@ const boardView = (engine: DraftEngine) => ({
 });
 
 export const start = mutation({
-  args: { setCode: v.string(), format: v.optional(v.string()) },
+  args: {
+    setCode: v.string(),
+    format: v.optional(v.string()),
+    /**
+     * Pins the deal. A draft is {seed, pickedNames} replayed, so fixing the seed
+     * and the picks fixes every prompt the run sends -- which is what lets the
+     * token benchmark compare two runs as a paired measurement instead of two
+     * samples of different drafts. Normal play omits it and gets a fresh deal.
+     */
+    seed: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const setCode = args.setCode.toLowerCase();
@@ -31,7 +41,9 @@ export const start = mutation({
       userId,
       setCode,
       format,
-      seed: newSeed(),
+      // Coerced the same way mulberry32 reads it, so a caller cannot pin a seed
+      // that behaves differently from one newSeed would have produced.
+      seed: args.seed === undefined ? newSeed() : args.seed >>> 0,
       pickedNames: [],
       status: "active" as const,
       createdAt: new Date().toISOString(),
