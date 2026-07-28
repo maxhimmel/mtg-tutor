@@ -1,8 +1,8 @@
 import { ConvexError } from "convex/values";
 import { replayDraft } from "@mtg-tutor/core";
-import type { Card } from "@mtg-tutor/core";
 import type { QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
+
 import { toSetData } from "./setData.js";
 
 // Shared session plumbing. Not Convex functions -- plain helpers, so that every
@@ -43,14 +43,15 @@ export async function setDocFor(
 }
 
 /**
- * The card pool for a set. Reads the `setCards` row, falling back to the pool
- * still inline on the `sets` document for rows the split has not reached yet.
- * The fallback goes away once every row is migrated.
+ * Everything a replay needs for a set: the pool, the colour-pair win rates and
+ * the booster shapes. Reads the `setCards` row, falling back to the copies still
+ * inline on the `sets` document for rows the split has not reached yet. The
+ * fallback goes away once every deployment is migrated.
  */
 export async function setCardsFor(
   ctx: QueryCtx,
   setDoc: Doc<"sets">,
-): Promise<Card[]> {
+): Promise<Doc<"setCards">> {
   const cardsDoc = await ctx.db
     .query("setCards")
     .withIndex("by_code_and_format", (q) =>
@@ -58,14 +59,26 @@ export async function setCardsFor(
     )
     .unique();
 
-  const cards = cardsDoc?.cards ?? setDoc.cards;
-  if (!cards) {
+  if (cardsDoc) return cardsDoc;
+
+  if (!setDoc.cards) {
     throw new ConvexError(
       `Set "${setDoc.code}" (${setDoc.format}) has no card pool stored. ` +
         `Run the sets:ingest action for it again.`,
     );
   }
-  return cards;
+
+  // Unmigrated row: shape the inline copies like the document that replaces
+  // them, so no caller has to know which of the two it got.
+  return {
+    _id: setDoc._id as unknown as Id<"setCards">,
+    _creationTime: setDoc._creationTime,
+    code: setDoc.code,
+    format: setDoc.format,
+    cards: setDoc.cards,
+    colorPairWinRates: setDoc.colorPairWinRates ?? [],
+    packComposition: setDoc.packComposition,
+  };
 }
 
 /**
@@ -87,7 +100,7 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
   }
 
   const setDoc = await setDocFor(ctx, session.setCode, session.format);
-  const cards = await setCardsFor(ctx, setDoc);
+  const cardsDoc = await setCardsFor(ctx, setDoc);
 
   // A session is {seed, pickedNames} replayed against whatever the set data
   // says today, so re-ingesting a set whose packs changed strands every draft
@@ -96,7 +109,7 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
   // engine's divergence message as an uncaught server error.
   let engine;
   try {
-    engine = replayDraft(toSetData(setDoc, cards), session.seed, session.pickedNames);
+    engine = replayDraft(toSetData(cardsDoc), session.seed, session.pickedNames);
   } catch (e) {
     throw new ConvexError(
       `This draft can no longer be rebuilt: the ${session.setCode.toUpperCase()} ` +
@@ -105,7 +118,7 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
     );
   }
 
-  return { session, engine, setDoc };
+  return { session, engine, setDoc, cardsDoc };
 }
 
 /** The caller's sessions, newest first. */

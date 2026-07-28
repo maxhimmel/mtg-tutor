@@ -676,15 +676,35 @@ export const getStats = query({
       .unique(),
 });
 
+// The whole set, metadata and draft payload stitched back together. Deliberately
+// fat and deliberately not used by the app: only the validation scripts
+// (smoke-draft, validate-pack-model) call it, and they need the pool. Anything
+// that just lists or names sets must use `list`, which is ~550x cheaper.
 export const get = query({
   args: { setCode: v.string(), format: v.optional(v.string()) },
-  handler: async (ctx, args) =>
-    await ctx.db
+  handler: async (ctx, args) => {
+    const code = args.setCode.toLowerCase();
+    const format = args.format ?? "PremierDraft";
+
+    const setDoc = await ctx.db
       .query("sets")
-      .withIndex("by_code_and_format", (q) =>
-        q.eq("code", args.setCode.toLowerCase()).eq("format", args.format ?? "PremierDraft"),
-      )
-      .unique(),
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", format))
+      .unique();
+    if (!setDoc) return null;
+
+    const cardsDoc = await ctx.db
+      .query("setCards")
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", format))
+      .unique();
+
+    return {
+      ...setDoc,
+      cards: cardsDoc?.cards ?? setDoc.cards ?? [],
+      colorPairWinRates:
+        cardsDoc?.colorPairWinRates ?? setDoc.colorPairWinRates ?? [],
+      packComposition: cardsDoc?.packComposition ?? setDoc.packComposition,
+    };
+  },
 });
 
 export const list = query({

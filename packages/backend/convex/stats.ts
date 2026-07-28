@@ -31,7 +31,7 @@ export const overview = query({
       if (cached) return cached;
       try {
         const setDoc = await setDocFor(ctx, session.setCode, session.format);
-        const set = toSetData(setDoc, await setCardsFor(ctx, setDoc));
+        const set = toSetData(await setCardsFor(ctx, setDoc));
         setCache.set(key, set);
         return set;
       } catch {
