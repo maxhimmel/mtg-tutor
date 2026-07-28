@@ -27,9 +27,9 @@ export default defineSchema({
     // Denormalized so `list` can report the pool size without reading it.
     // Optional until every row is migrated.
     cardCount: v.optional(v.number()),
-    // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
-    colorPairWinRates: v.array(
-      v.object({ pair: v.string(), winRate: v.number() }),
+    // Moving to `setCards` with the pool. Optional during the migration.
+    colorPairWinRates: v.optional(
+      v.array(v.object({ pair: v.string(), winRate: v.number() })),
     ),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
@@ -47,20 +47,31 @@ export default defineSchema({
     // so adding a field like the icon costs one request per set rather than a
     // full re-crawl of every card.
     metaRevision: v.optional(v.string()),
-    // Copied from setStats by `ingest` -- the observed booster shapes, on the
-    // hot-path document so pack generation needs no second read.
+    // Moving to `setCards` with the pool. Was ~4.4KB of booster shapes, by far
+    // the largest thing left on a document whose whole job is to be listed.
     packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
 
-  // The card pool, kept apart from the metadata above for the same reason
-  // setStats is: a whole set measures ~240KB, and only the draft engine ever
-  // needs it. Everything that merely lists or names sets reads `sets` alone.
+  // Everything the draft engine needs and nothing else, kept apart from the
+  // metadata above for the same reason setStats is: this measures ~240KB, and
+  // only a replay ever reads it. Anything that merely lists or names sets reads
+  // `sets` alone, at ~280 bytes a row.
+  //
   // Still one document per (set, format) -- well inside Convex's 1MB limit, so
   // replaying a draft reads exactly one row rather than hundreds of card rows.
   setCards: defineTable({
     code: v.string(),
     format: v.string(),
     cards: v.array(card),
+    // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
+    // Optional only until every deployment has migrated -- rows written by the
+    // first pass of the split moved the pool alone.
+    colorPairWinRates: v.optional(
+      v.array(v.object({ pair: v.string(), winRate: v.number() })),
+    ),
+    // Copied from setStats by `ingest` -- the observed booster shapes, on the
+    // hot-path document so pack generation needs no second read.
+    packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
 
   // Our own draft statistics, derived from the 17Lands public datasets rather
