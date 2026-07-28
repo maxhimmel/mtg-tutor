@@ -656,6 +656,10 @@ export const storeSetStats = mutation({
     ),
     packComposition: v.optional(packComposition),
     packCards: v.optional(v.array(packCard)),
+    // Hash of the artifact file, so an unchanged one is not re-written on every
+    // deploy. Optional: an upload without one always writes.
+    sourceHash: v.optional(v.string()),
+    force: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const bytes = JSON.stringify(args).length;
@@ -670,7 +674,27 @@ export const storeSetStats = mutation({
     }
 
     const code = args.code.toLowerCase();
-    const doc = { ...args, code, builtAt: new Date().toISOString() };
+
+    // Checked before anything touches the stats document itself. Reading that
+    // document is the expensive act, not writing it, so the hash has to be
+    // answerable from somewhere small. See setStatsMeta in schema.ts.
+    const meta = await ctx.db
+      .query("setStatsMeta")
+      .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", args.format))
+      .unique();
+
+    if (args.sourceHash && meta?.sourceHash === args.sourceHash && !args.force) {
+      return {
+        id: null,
+        cards: args.cards.length,
+        bytes,
+        baseWinRate: args.baseWinRate,
+        skipped: true,
+      };
+    }
+
+    const { sourceHash, force: _force, ...rest } = args;
+    const doc = { ...rest, code, builtAt: new Date().toISOString() };
     const existing = await ctx.db
       .query("setStats")
       .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", args.format))
@@ -680,7 +704,28 @@ export const storeSetStats = mutation({
       ? (await ctx.db.replace(existing._id, doc), existing._id)
       : await ctx.db.insert("setStats", doc);
 
-    return { id, cards: args.cards.length, bytes, baseWinRate: args.baseWinRate };
+    // Written last, so a run that dies mid-write leaves a stale-or-absent hash
+    // and the next deploy retries rather than skipping a set that never landed.
+    if (sourceHash) {
+      const metaDoc = { code, format: args.format, sourceHash };
+      if (meta) {
+        await ctx.db.replace(meta._id, metaDoc);
+      } else {
+        await ctx.db.insert("setStatsMeta", metaDoc);
+      }
+    } else if (meta) {
+      // An unhashed upload invalidates the fingerprint rather than leaving one
+      // that describes an artifact this no longer holds.
+      await ctx.db.delete(meta._id);
+    }
+
+    return {
+      id,
+      cards: args.cards.length,
+      bytes,
+      baseWinRate: args.baseWinRate,
+      skipped: false,
+    };
   },
 });
 

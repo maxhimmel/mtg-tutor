@@ -129,6 +129,18 @@ export default defineSchema({
     builtAt: v.string(),
   }).index("by_code_and_format", ["code", "format"]),
 
+  // Which artifact each setStats row was built from, on a row small enough to
+  // ask. Every deploy re-runs seed-set-stats over all 17 artifacts, and they
+  // almost never change -- but Convex charges for bytes read out of the
+  // database, so checking the hash on the ~270KB stats document itself would
+  // cost as much as the write it was trying to avoid. Hence a separate row of
+  // about a hundred bytes. Same hash ingest-sets puts on `sets.sourceHash`.
+  setStatsMeta: defineTable({
+    code: v.string(),
+    format: v.string(),
+    sourceHash: v.string(),
+  }).index("by_code_and_format", ["code", "format"]),
+
   // A draft is fully determined by its seed plus the ordered names the human
   // picked, so that pair IS the session -- no board state is persisted. See
   // replayDraft in @mtg-tutor/core. Replaying a finished draft costs ~0.16ms.

@@ -3,12 +3,19 @@
 // so this is how a fresh deployment gets real numbers without anyone needing the
 // 1.2GB of source CSVs.
 //
-//   node scripts/seed-set-stats.mjs                 # every artifact
+//   node scripts/seed-set-stats.mjs                 # every changed artifact
 //   node scripts/seed-set-stats.mjs sos.TradDraft   # just one
 //   node scripts/seed-set-stats.mjs --prod
+//   node scripts/seed-set-stats.mjs --force         # re-write even if unchanged
 //
 // Artifacts are committed precisely so this step needs no network beyond Convex,
 // and so a change in a set's numbers shows up as a reviewable diff.
+//
+// Each artifact is hashed and the hash travels with the upload, exactly as
+// ingest-sets.mjs does, so an unchanged artifact costs one small read instead of
+// rewriting a ~270KB document. This runs on every deploy over all 17 artifacts,
+// and they change about never; without the check that was ~9MB of database
+// traffic per deploy, whether or not anything had moved.
 //
 // The payload goes over HTTP (ConvexHttpClient), not as a `convex run` argv: a
 // set's stats serialize to ~260KB, and a single argv string is capped near 128KB
@@ -17,6 +24,7 @@
 // `--prod` flag would pick.
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +36,7 @@ const DATA = resolve(HERE, "..", "data");
 
 const argv = process.argv.slice(2);
 const prod = argv.includes("--prod");
+const force = argv.includes("--force");
 const only = argv.filter((a) => !a.startsWith("--"));
 
 if (!existsSync(DATA)) {
@@ -65,10 +74,15 @@ function deploymentUrl() {
 
 const client = new ConvexHttpClient(deploymentUrl());
 
+let seeded = 0;
+let skipped = 0;
+
 for (const file of files) {
-  const artifact = JSON.parse(readFileSync(join(DATA, file), "utf8"));
+  const raw = readFileSync(join(DATA, file), "utf8");
+  const artifact = JSON.parse(raw);
   const { setCode, format, ...rest } = artifact;
   const label = `${setCode}/${format}`;
+  const sourceHash = createHash("sha256").update(raw).digest("hex");
 
   // The whole artifact goes into setStats, pack composition included. `ingest`
   // reads it from there, so there is no separate composition upload.
@@ -84,8 +98,20 @@ for (const file of files) {
     synergies: rest.synergies,
     packComposition: rest.packComposition,
     packCards: rest.packCards,
+    sourceHash,
+    force,
   });
-  process.stderr.write(JSON.stringify(stats) + "\n");
+
+  if (stats.skipped) {
+    skipped++;
+    process.stderr.write("unchanged, skipped\n");
+  } else {
+    seeded++;
+    process.stderr.write(JSON.stringify(stats) + "\n");
+  }
 }
 
-console.error(`\nseeded ${files.length} artifact(s)${prod ? " into production" : ""}`);
+console.error(
+  `\nseeded ${seeded} artifact(s), skipped ${skipped} unchanged` +
+    `${prod ? " (production)" : ""}`,
+);
