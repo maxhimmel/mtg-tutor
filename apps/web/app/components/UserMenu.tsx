@@ -126,7 +126,7 @@ export function UserMenu() {
             <span className="flex flex-col">
               <span>Guiderails</span>
               <span className="text-xs text-base-content/60">
-                Show each card&apos;s win rate while drafting
+                Show a card&apos;s draft data when you hover it, while drafting
               </span>
             </span>
             <input
@@ -134,7 +134,7 @@ export function UserMenu() {
               className="toggle toggle-primary toggle-sm"
               checked={settings.guiderails}
               onChange={(e) => update({ guiderails: e.target.checked })}
-              aria-label="Toggle guiderails (per-card win-rate hints)"
+              aria-label="Toggle guiderails (per-card draft data on hover)"
             />
           </label>
 
