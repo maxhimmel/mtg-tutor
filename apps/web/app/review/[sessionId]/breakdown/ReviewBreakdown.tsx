@@ -30,9 +30,9 @@ const SCOPES: { key: Scope; label: string }[] = [
 ];
 
 // The whole diagnostic at once: no guessing, no stepping. Unlike the
-// walkthrough it does not ask for anything on its own -- one report is ~35
+// walkthrough it does not ask for anything on its own -- one breakdown is ~35
 // model calls, and arriving here by a misclick should not spend them.
-export function ReviewReport({ sessionId }: { sessionId: string }) {
+export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
   const id = sessionId as Id<"draftSessions">;
   const draft = useQuery(api.review.load, { sessionId: id });
   const sets = useQuery(api.sets.list);
@@ -53,14 +53,14 @@ export function ReviewReport({ sessionId }: { sessionId: string }) {
   const pool = useMemo(() => (picks ?? []).map((p) => p.picked), [picks]);
 
   // Already answered, here or on a previous visit -- verdicts are frozen, so
-  // the second read of a report costs nothing.
+  // the second read of a breakdown costs nothing.
   const unasked = shown.filter((p) => get(p.pickIndex) === undefined);
   const resolved = shown.length - unasked.length;
 
   // The frames are the one part of a review that is never cached: review.frame
   // calls the model every time, where verdicts are frozen on first ask. So they
   // wait for the same gate rather than firing two calls at anyone who lands
-  // here -- unless this report was already generated, in which case showing it
+  // here -- unless this breakdown was already generated, in which case showing it
   // whole is the point.
   const complete = shown.length > 0 && unasked.length === 0;
   const showFrames = started || complete;
@@ -108,7 +108,7 @@ export function ReviewReport({ sessionId }: { sessionId: string }) {
           <div
             className="flex rounded-lg bg-base-300 p-0.5"
             role="group"
-            aria-label="Which picks the report covers"
+            aria-label="Which picks the breakdown covers"
           >
             {SCOPES.map((option) => {
               const selected = scope === option.key;

@@ -136,8 +136,8 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
             />
             Quiz
           </label>
-          <Link href={`/review/${sessionId}/report`} className="link link-hover">
-            Full report →
+          <Link href={`/review/${sessionId}/breakdown`} className="link link-hover">
+            Full breakdown →
           </Link>
         </div>
       </AppHeader>

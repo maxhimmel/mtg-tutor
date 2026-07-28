@@ -7,16 +7,16 @@ import { runLogin, runLogout } from "./services/auth/index.js";
 const HELP = `${pc.bold("mtg-tutor")} — practice MTG draft with 17Lands-based scoring
 
 Usage:
-  mtg-tutor draft                  Browse & pick a set from those already ingested
-  mtg-tutor draft <set> [format]   Draft a set by code (ingests it if it's new)
-  mtg-tutor draft --resume <id>    Pick an abandoned draft back up
-  mtg-tutor review [id]            Review a past draft pick-by-pick (quiz yourself)
-  mtg-tutor review [id] --passive  Step through without the guessing prompts
-  mtg-tutor review [id] --report   Print the whole diagnostic at once (no stepping)
-  mtg-tutor stats                  Show your progress and biggest mistakes
-  mtg-tutor login                  Sign in (drafts are stored against your account)
-  mtg-tutor logout                 Forget the stored session
-  mtg-tutor help                   Show this help
+  mtg-tutor draft                    Browse & pick a set from those already ingested
+  mtg-tutor draft <set> [format]     Draft a set by code (ingests it if it's new)
+  mtg-tutor draft --resume <id>      Pick an abandoned draft back up
+  mtg-tutor review [id]              Review a past draft pick-by-pick (quiz yourself)
+  mtg-tutor review [id] --passive    Step through without the guessing prompts
+  mtg-tutor review [id] --breakdown  Print the whole diagnostic at once (no stepping)
+  mtg-tutor stats                    Show your progress and biggest mistakes
+  mtg-tutor login                    Sign in (drafts are stored against your account)
+  mtg-tutor logout                   Forget the stored session
+  mtg-tutor help                     Show this help
 
 Examples:
   mtg-tutor draft fdn

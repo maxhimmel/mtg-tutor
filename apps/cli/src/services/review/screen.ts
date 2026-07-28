@@ -10,9 +10,9 @@ import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 
 // quiz: guess each decision pick, then reveal. passive: reveal each pick in
-// sequence, no guessing. report: resolve everything up front and print the whole
-// diagnostic at once (bookends + per-pick answers), no stepping.
-export type ReviewMode = "quiz" | "passive" | "report";
+// sequence, no guessing. breakdown: resolve everything up front and print the
+// whole diagnostic at once (bookends + per-pick answers), no stepping.
+export type ReviewMode = "quiz" | "passive" | "breakdown";
 
 interface ReviewOpts {
   mode: ReviewMode;
@@ -29,8 +29,8 @@ export async function runReview(
   const sessionId = draft.id as Id<"draftSessions">;
   const finalPool = draft.picks.map((pk) => pk.picked);
 
-  if (opts.mode === "report") {
-    await runReport(convex, sessionId, draft, finalPool);
+  if (opts.mode === "breakdown") {
+    await runBreakdown(convex, sessionId, draft, finalPool);
     return;
   }
 
@@ -89,7 +89,7 @@ export async function runReview(
 
 // Batch "just give me the answers" mode: resolve every decision pick's verdict up
 // front (concurrently), then print the whole diagnostic in one pass.
-async function runReport(
+async function runBreakdown(
   convex: ConvexHttpClient,
   sessionId: Id<"draftSessions">,
   draft: StoredDraft,
@@ -121,7 +121,7 @@ async function runReport(
   });
 
   await showFrame(convex, sessionId, "close");
-  p.outro(pc.green("Report complete."));
+  p.outro(pc.green("Breakdown complete."));
 }
 
 // Resolve a limited number of async tasks at a time so a full draft's worth of

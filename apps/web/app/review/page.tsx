@@ -136,10 +136,10 @@ function DraftList() {
                       Review
                     </Link>
                     <Link
-                      href={`/review/${draft.id}/report`}
+                      href={`/review/${draft.id}/breakdown`}
                       className="btn btn-sm btn-ghost ml-1.5"
                     >
-                      Report
+                      Breakdown
                     </Link>
                   </td>
                 </tr>
