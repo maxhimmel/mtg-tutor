@@ -200,12 +200,24 @@ let densitySum = 0;
 let emptyAnswers = 0;
 let offTopic = 0;
 
+// Distinct principles reached for across the WHOLE run, which density cannot
+// see. Density counts citations per answer; this counts how much of the corpus
+// the coach can actually use. The two come apart under the cheapest-looking
+// saving there is: condense every principle to its id plus a one-liner, keeping
+// all 66 ids, and ~80% of the system prompt goes away while density, invented
+// rate and divergence all hold -- the model still cites [EVAL-02], it just no
+// longer knows why EVAL-02 says what it does. What gives that away is the coach
+// falling back on the handful of one-liners that stayed actionable and ignoring
+// the rest, which is a drop here and nowhere else.
+const distinctPrinciples = new Set();
+
 for (const { text, ...pick } of coached) {
   if (text.trim() === "") emptyAnswers++;
   const { principles: cited, invented } = splitCitations(text, principles);
   citedTotal += cited.length + invented.length;
   inventedTotal += invented.length;
   densitySum += cited.length;
+  for (const p of cited) distinctPrinciples.add(p.id);
   offTopic += offTopicNames(text, pick).length;
 }
 
@@ -214,6 +226,7 @@ for (const { verdict, ...pick } of verdicts) {
   const { principles: cited, invented } = splitCitations(verdict.narrative, principles);
   citedTotal += cited.length + invented.length;
   inventedTotal += invented.length;
+  for (const p of cited) distinctPrinciples.add(p.id);
   offTopic += offTopicNames(verdict.narrative, pick).length;
 }
 
@@ -231,6 +244,8 @@ const accuracy = {
   inventedCitations: inventedTotal,
   inventedCitationRate: citedTotal === 0 ? 0 : inventedTotal / citedTotal,
   citationDensity: coached.length === 0 ? 0 : densitySum / coached.length,
+  distinctPrinciples: distinctPrinciples.size,
+  corpusSize: principles.principles.length,
   verdictsAsked: verdicts.length,
   refusedVerdicts,
   divergenceRate: answered.length === 0 ? 0 : diverged.length / answered.length,
@@ -268,6 +283,9 @@ console.log(
     ` (${pct(accuracy.inventedCitationRate)})`,
 );
 console.log(`  citations per answer   ${accuracy.citationDensity.toFixed(2)}`);
+console.log(
+  `  distinct principles    ${accuracy.distinctPrinciples} of ${accuracy.corpusSize}`,
+);
 console.log(`  refused verdicts       ${accuracy.refusedVerdicts} / ${accuracy.verdictsAsked}`);
 console.log(`  context-best diverged  ${pct(accuracy.divergenceRate)}`);
 console.log(`  empty frames           ${accuracy.emptyFrames}`);
@@ -330,44 +348,61 @@ for (const [area, a] of Object.entries(byArea)) {
   }
 }
 
-const bad = (label, actual, limitValue, worseWhen) => {
-  if (worseWhen) failures.push(`${label}: ${limitValue} -> ${actual}`);
+// Two different questions, so two different helpers. An invariant is never
+// allowed to be non-zero whatever the baseline said -- reporting those as
+// "3 -> 1" would read as a regression when it is an improvement, and would
+// quietly bless a baseline that was recorded broken.
+const invariant = (label, actual) => {
+  if (actual > 0) failures.push(`${label}: ${actual} (must be 0)`);
+};
+const regression = (label, before, after, worse) => {
+  if (worse) failures.push(`${label}: ${before} -> ${after}`);
 };
 
-bad("empty answers", accuracy.emptyAnswers, base.accuracy.emptyAnswers, accuracy.emptyAnswers > 0);
-bad("empty frames", accuracy.emptyFrames, base.accuracy.emptyFrames, accuracy.emptyFrames > 0);
-bad("truncated answers", truncated, 0, truncated > 0);
-bad(
+invariant("empty answers", accuracy.emptyAnswers);
+invariant("empty frames", accuracy.emptyFrames);
+invariant("truncated answers", truncated);
+
+regression(
   "refused verdicts",
-  accuracy.refusedVerdicts,
   base.accuracy.refusedVerdicts,
+  accuracy.refusedVerdicts,
   accuracy.refusedVerdicts > base.accuracy.refusedVerdicts,
 );
-bad(
+regression(
   "off-topic card names",
-  accuracy.offTopicCardNames,
   base.accuracy.offTopicCardNames,
+  accuracy.offTopicCardNames,
   accuracy.offTopicCardNames > base.accuracy.offTopicCardNames,
 );
-bad(
+regression(
   "invented citation rate",
-  pct(accuracy.inventedCitationRate),
   pct(base.accuracy.inventedCitationRate),
+  pct(accuracy.inventedCitationRate),
   accuracy.inventedCitationRate > base.accuracy.inventedCitationRate + 0.02,
 );
-bad(
+regression(
   "citation density",
-  accuracy.citationDensity.toFixed(2),
   base.accuracy.citationDensity.toFixed(2),
+  accuracy.citationDensity.toFixed(2),
   accuracy.citationDensity < base.accuracy.citationDensity * 0.85,
+);
+// The guard against condensing the corpus rather than cutting it. Keeping every
+// id while stripping the depth behind it leaves density flat -- the coach still
+// cites -- but narrows what it can find to say, and that shows up here.
+regression(
+  "distinct principles used",
+  base.accuracy.distinctPrinciples,
+  accuracy.distinctPrinciples,
+  accuracy.distinctPrinciples < base.accuracy.distinctPrinciples * 0.85,
 );
 // Both directions are degradation: toward 1 the coach stopped reasoning about
 // the pool and is echoing the data verdict it was handed, toward 0 it is
 // guessing. Neither shows up as a token regression.
-bad(
+regression(
   "divergence rate",
-  pct(accuracy.divergenceRate),
   pct(base.accuracy.divergenceRate),
+  pct(accuracy.divergenceRate),
   Math.abs(accuracy.divergenceRate - base.accuracy.divergenceRate) > 0.15,
 );
 
