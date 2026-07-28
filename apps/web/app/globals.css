@@ -88,9 +88,10 @@
   @apply text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-base-content/60;
 }
 
-/* The only animation in the app, and it fires in the only place worth marking:
-   a graded pick landing. Applied through motion-safe:, so a reduced-motion
-   reader gets the verdict with no movement at all. */
+/* Animation is rationed to moments worth marking, of which there are two: a
+   graded pick landing, and the win-rate gap opening in the glossary's opening
+   figure -- which is that page's whole argument. Both go through motion-safe:,
+   so a reduced-motion reader gets the result with no movement at all. */
 @keyframes verdict-in {
   from {
     opacity: 0;
@@ -104,4 +105,21 @@
 
 @utility animate-verdict {
   animation: verdict-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* The glossary's dumbbell connector, drawn left to right from the "without it"
+   end -- so the gap is something the reader watches open rather than arrives at.
+   Paired with animate-verdict on the far dot, which lands as the line reaches it. */
+@keyframes gap-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@utility animate-gap {
+  animation: gap-draw 620ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transform-origin: left center;
 }

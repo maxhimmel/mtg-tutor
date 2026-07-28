@@ -11,6 +11,7 @@ import {
 } from "react";
 import { type Card, keywordsOf } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
+import { useHeldKey } from "../lib/useHeldKey";
 import { CardStats, hasStats } from "./CardStats";
 
 interface HoverState {
@@ -102,6 +103,10 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // the panel gets no position and never appears.
   const stats = hover != null && hover.showStats && hasStats(hover.card);
   const panel = keywords.length > 0 || stats;
+  // Hold Shift to swap the stat rows for what they mean. A key rather than a
+  // click because the panel is pointer-events:none -- it sits under the cursor
+  // and must stay unclickable, or moving toward it would dismiss the hover.
+  const explain = useHeldKey("Shift") && stats;
 
   const show = useCallback((card: Card, el: HTMLElement, showStats: boolean) => {
     setHover({ card, anchor: el.getBoundingClientRect(), showStats });
@@ -153,11 +158,17 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
             >
               {/* Data first: it is what the player is hovering to check. The
                   keyword reminders are reference material and can scroll away. */}
-              {stats && <CardStats card={hover.card} />}
+              {stats && <CardStats card={hover.card} expanded={explain} />}
 
-              {stats && keywords.length > 0 && <hr className="border-base-300" />}
+              {/* Explaining costs about the height the keywords occupy, and the
+                  panel cannot be scrolled (pointer-events:none). Someone holding
+                  Shift is asking what the numbers mean, not what Flying does, so
+                  the reminders yield rather than overflow out of reach. */}
+              {!explain && stats && keywords.length > 0 && (
+                <hr className="border-base-300" />
+              )}
 
-              {keywords.length > 0 && (
+              {!explain && keywords.length > 0 && (
                 <ul className="flex flex-col gap-2.5">
                   {keywords.map((k) => (
                     <li key={k.name}>
@@ -166,6 +177,12 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {stats && !explain && (
+                <p className="text-[11px] text-base-content/45">
+                  Hold <kbd className="kbd kbd-xs">shift</kbd> for what these mean
+                </p>
               )}
             </div>
           )}

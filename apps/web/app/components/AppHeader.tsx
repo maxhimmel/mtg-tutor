@@ -29,6 +29,12 @@ export function AppHeader({ children }: { children?: ReactNode }) {
         >
           Draft principles
         </Link>
+        <Link
+          href="/glossary"
+          className="text-sm text-base-content/60 transition-colors hover:text-primary"
+        >
+          Glossary
+        </Link>
       </div>
       {children}
       <UserMenu />
