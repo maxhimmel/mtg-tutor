@@ -193,6 +193,13 @@ export const verdict = action({
         // surface as "verdict was missing required fields".
         maxTokens: 1024,
         schema: VERDICT_SCHEMA,
+        onUsage: (usage) =>
+          ctx.runMutation(internal.metrics.record, {
+            ...usage,
+            area: "verdict",
+            sessionId: args.sessionId,
+            pickIndex: args.pickIndex,
+          }),
       });
     } catch (e) {
       // Callers show the data-only reveal instead; a missing key should not end
@@ -233,7 +240,18 @@ export const frame = action({
   handler: async (ctx, args): Promise<string | null> => {
     const userContent = await ctx.runQuery(internal.review.framePrompt, args);
     try {
-      return await text({ system: system(), userContent, maxTokens: 500 });
+      return await text({
+        system: system(),
+        userContent,
+        maxTokens: 500,
+        onUsage: (usage) =>
+          ctx.runMutation(internal.metrics.record, {
+            ...usage,
+            area: "frame",
+            sessionId: args.sessionId,
+            phase: args.phase,
+          }),
+      });
     } catch (e) {
       if (e instanceof CoachUnavailableError) return null;
       throw e;

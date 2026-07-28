@@ -4,6 +4,7 @@ import {
   card,
   cardStats,
   draftSummary,
+  llmCall,
   packCard,
   packComposition,
   reviewVerdict,
@@ -157,4 +158,33 @@ export default defineSchema({
     pickIndex: v.number(),
     verdict: reviewVerdict,
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
+  // One row per model call, appended by every path that spends the deployment's
+  // key.
+  //
+  // There is no benchmark/real-traffic flag, because a benchmark run drives the
+  // same endpoints a player does and so already groups under its own session --
+  // which is the point: a measured run is only worth anything if it went the way
+  // real traffic goes. `by_sessionId` is how the harness reads back its own run,
+  // and it is why nothing benchmark-shaped had to leak into the public API.
+  //
+  // Raw rows, no rollup. A row is ~150 bytes against the ~240KB documents that
+  // made `sets.list` expensive, so folding them at read time costs nothing until
+  // months of traffic accumulate; notes.md records the trigger for revisiting.
+  //
+  // No prompt or completion text is stored. The benchmark scores answer quality
+  // on the responses it already holds in-process, so nothing here needs to carry
+  // user prose -- which keeps the row small and the retention question boring.
+  llmUsage: defineTable(
+    llmCall.extend({
+      // The same identity key draftSessions.userId holds -- tokenIdentifier, via
+      // requireUserId. Optional because usage is worth recording even when the
+      // caller could not be attributed.
+      userId: v.optional(v.string()),
+      createdAt: v.string(),
+    }).fields,
+  )
+    .index("by_sessionId", ["sessionId"])
+    .index("by_userId_and_createdAt", ["userId", "createdAt"])
+    .index("by_area_and_createdAt", ["area", "createdAt"]),
 });
