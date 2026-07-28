@@ -8,10 +8,10 @@ import { spinner } from "../../core/ui/spinner.js";
 import { runReview } from "./screen.js";
 
 // Review service entrypoint. `argv` is [sessionId?] with optional `--passive`
-// or `--report`. With no id we show a picker of completed drafts.
+// or `--breakdown`. With no id we show a picker of completed drafts.
 export async function run(argv: string[]): Promise<void> {
-  const mode = argv.includes("--report")
-    ? "report"
+  const mode = argv.includes("--breakdown")
+    ? "breakdown"
     : argv.includes("--passive")
       ? "passive"
       : "quiz";

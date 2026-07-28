@@ -21,7 +21,7 @@ interface Seeded {
  *
  * `api.review.verdict` is an action, not a stream: it arrives whole after a
  * couple of seconds, so the walkthrough asks for the pick being revealed and
- * warms the next one, and only the report asks for everything at once.
+ * warms the next one, and only the breakdown asks for everything at once.
  *
  * Verdicts are frozen server-side on first request, so `review.load` already
  * carries every one earned on a previous pass -- seeding from those is what
@@ -77,7 +77,7 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
     [askVerdict, sessionId],
   );
 
-  // Bounded concurrency, the same shape the CLI's --report uses: a full draft
+  // Bounded concurrency, the same shape the CLI's --breakdown uses: a full draft
   // is ~17 decision picks, and firing seventeen model calls at once is a way to
   // get rate limited rather than a way to go faster.
   const requestMany = useCallback(

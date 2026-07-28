@@ -64,7 +64,7 @@ function Marks({
 }
 
 /**
- * One pick, explained. Shared by the walkthrough and the report so the two
+ * One pick, explained. Shared by the walkthrough and the breakdown so the two
  * cannot drift into telling the same story differently.
  *
  * `contextBest` falls back to the deterministic raw-power best when there is no
@@ -81,7 +81,7 @@ export function PickReveal({
   pick: ReviewPick;
   verdict: VerdictState;
   // Whether a verdict is actually on its way. Without this, "no verdict" and
-  // "verdict coming" look identical, and the report -- which deliberately does
+  // "verdict coming" look identical, and the breakdown -- which deliberately does
   // not ask until told to -- would spin forever on picks nobody asked about.
   pending: boolean;
   guess?: string | null;
