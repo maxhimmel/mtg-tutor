@@ -61,6 +61,37 @@
    committed — `committedColors` exists in `core/scoring/score.ts` and no prompt
    builder calls it.
 
+6. **A failed coach stream logs an uncaught `AI_NoOutputGeneratedError`.** When
+   `/coach` calls the model and nothing comes back — a rate limit is the easy way
+   to see it — the deployment logs:
+
+   ```
+   [CONVEX H(POST /coach)] [ERROR] Uncaught AI_NoOutputGeneratedError:
+     No output generated. Check the stream for errors.
+       at flush [as flush] (ai/src/generate-text/stream-text.ts:1388:27)
+   ```
+
+   Nothing is broken for the player: `onError` in `llm.ts` catches the stream
+   failure, the interrupted-coaching message is appended to the body, and both
+   clients fall back to the deterministic explanation. The problem is that this
+   is precisely the condition `unavailable()` was written to stop shouting
+   about — "a daily token cap on the dev provider" is the example in its own
+   comment — and it is shouting again through a different door.
+
+   **Confirmed pre-existing, not caused by the usage instrumentation.** Verified
+   2026-07-28 by stripping the `Promise.allSettled` usage read out of `stream()`
+   entirely and re-running: the uncaught error still appeared. It comes from
+   `streamText`'s internal flush rejecting a promise the pump never consumes.
+   (The *separate* `Promise.all` bug that instrumentation did introduce — the
+   second rejection going unconsumed — is fixed.)
+
+   The likely fix is to consume the result promises the pump currently ignores,
+   the same way `totalUsage` and `finishReason` are now consumed via
+   `allSettled` — probably `result.text` or `result.finalStep`, whichever the
+   SDK rejects on this path. Worth confirming which one rather than defensively
+   awaiting all of them. Easy to reproduce: exhaust the Groq daily cap, or point
+   `LLM_BASE_URL` at something that refuses.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
