@@ -48,6 +48,8 @@
    Only helps sessions created after the change, which is fine — it is a
    forward-looking guard, not a repair.
 
+5. I've noticed the coach pulling advice about choosing a non-optimal card (probably because the stats are better on the optimal card versus my pick) when I'm on my second/third pack and the first few picks. As if it can't distinguish that once I'm a full pack in I'm not technically at "pick 1" any longer - I'm at all-the-picks-from-pack-1 + pack-2-pick-N.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
@@ -225,3 +227,33 @@ Ordered by value × readiness. Each is a candidate feature branch.
 Separate track: the **review features** already in "Deferred" above (alternate
 draft lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) —
 unrelated to the data work.
+
+# Convex database bandwidth (done, shipped to production 2026-07-28):
+
+The free tier was drained almost entirely under **database I/O**, by `sets.list`:
+it read every set's full card pool (~240KB × 17 ≈ 4MB) to return 4KB of
+metadata, and it was subscribed on four pages including the landing page. Convex
+bills bytes **read out of the database**, not bytes returned. The pool moved to
+its own `setCards` table and a `sets` row is now 433 bytes. Details in the
+`convex-bandwidth-split-rollout` auto-memory.
+
+One trade-off deferred rather than settled:
+
+1. **The draft board no longer live-syncs — revisit if we do multiplayer.**
+   `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open for the whole
+   draft. Answering that query replays the session, which reads the ~240KB pool,
+   and every pick patches `draftSessions` and so invalidated it — meaning each
+   pick paid for that read twice, once in the mutation and once in the re-run
+   query. It now loads the board once and advances it from what `pick` already
+   returns.
+
+   That is only sound because a draft is single-player and nothing but this
+   component ever changes the board. **A shared pod, a spectator view, or
+   drafting from two devices needs a subscription back** — and naively restoring
+   the old one restores the double read with it.
+
+   The shape that would keep both: subscribe to something small and derived (a
+   pick counter, or a session revision number) and fetch the board only when
+   that moves. Invalidation then costs a cheap read instead of a full replay.
+   Same principle as `setStatsMeta` — if a value is only there to be watched or
+   compared, it belongs on a row small enough to read often.
