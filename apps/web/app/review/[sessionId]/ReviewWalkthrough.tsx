@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isCorrectGuess, isDecisionPick } from "@mtg-tutor/core";
-import { AppHeader } from "../../components/AppHeader";
+import { PageNotice, PageShell } from "../../components/PageShell";
 import { CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
 import { SetIcon } from "../../components/SetIcon";
@@ -92,11 +92,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
   }, [decisions, guesses, get]);
 
   if (draft === undefined) {
-    return (
-      <main className="mx-auto max-w-[1500px] px-6 py-5">
-        <p className="text-base-content/60">Rebuilding the draft…</p>
-      </main>
-    );
+    return <PageNotice>Rebuilding the draft…</PageNotice>;
   }
 
   const set = (sets ?? []).find((s) => s.code === draft.setCode && s.format === draft.format);
@@ -107,8 +103,8 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
       : null;
 
   return (
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader>
+    <PageShell
+      headerAside={
         <div className="flex flex-wrap items-center gap-3 text-sm text-base-content/60">
           <span className="flex items-center gap-1.5 text-base-content/80" title={set?.name}>
             <SetIcon uri={set?.iconUri} name={set?.name} className="size-4" />
@@ -140,8 +136,8 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
             Full breakdown →
           </Link>
         </div>
-      </AppHeader>
-
+      }
+    >
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-4">
           {skipped.length > 0 && (
@@ -293,6 +289,6 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
           </Panel>
         </aside>
       </div>
-    </main>
+    </PageShell>
   );
 }

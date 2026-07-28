@@ -5,15 +5,13 @@ import { useMemo } from "react";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { gradeFor } from "@mtg-tutor/core";
-import { AppHeader } from "../components/AppHeader";
+import { PageShell } from "../components/PageShell";
 import { SetIcon } from "../components/SetIcon";
 import { gradeColor, pct, releaseDate } from "../lib/format";
 
 export default function ReviewIndex() {
   return (
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader />
-
+    <PageShell>
       <Unauthenticated>
         <section className="max-w-2xl py-6">
           <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight">
@@ -32,7 +30,7 @@ export default function ReviewIndex() {
       <Authenticated>
         <DraftList />
       </Authenticated>
-    </main>
+    </PageShell>
   );
 }
 

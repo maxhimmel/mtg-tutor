@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CARD_STAT_GLOSSARY, SCORING_GLOSSARY, type GlossaryEntry } from "@mtg-tutor/core";
-import { AppHeader } from "../components/AppHeader";
+import { PageShell } from "../components/PageShell";
 import { Dumbbell } from "./Dumbbell";
 
 export const metadata: Metadata = {
@@ -102,14 +102,10 @@ function Entry({ entry }: { entry: GlossaryEntry }) {
 
 export default function GlossaryPage() {
   return (
-    // The shell every page in the app shares, AppHeader included. Without it the
-    // page has no gutter at all and runs to both edges of the viewport.
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader />
-
-      {/* 1500px is the app's outer bound, not a reading measure. This is a page
-          of prose and one figure, so the column stops at 5xl -- which leaves the
-          entries at 3xl once the term rail takes its 13rem on the left. */}
+    <PageShell>
+      {/* PageShell caps at the app's outer 1500px, which is not a reading
+          measure. This is a page of prose and one figure, so the column stops at
+          5xl -- leaving the entries at 3xl once the rail takes its 13rem. */}
       <div className="max-w-5xl">
         <div className="max-w-3xl">
           {/* Says "Glossary" because that is what the nav link says. The h1 is a
@@ -185,6 +181,6 @@ export default function GlossaryPage() {
           </div>
         </div>
       </div>
-    </main>
+    </PageShell>
   );
 }

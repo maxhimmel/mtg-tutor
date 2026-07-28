@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isDecisionPick } from "@mtg-tutor/core";
-import { AppHeader } from "../../../components/AppHeader";
+import { PageNotice, PageShell } from "../../../components/PageShell";
 import { Panel } from "../../../components/Panel";
 import { SetIcon } from "../../../components/SetIcon";
 import { PickReveal } from "../../PickReveal";
@@ -76,18 +76,14 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
   }
 
   if (draft === undefined) {
-    return (
-      <main className="mx-auto max-w-[1500px] px-6 py-5">
-        <p className="text-base-content/60">Rebuilding the draft…</p>
-      </main>
-    );
+    return <PageNotice>Rebuilding the draft…</PageNotice>;
   }
 
   const set = (sets ?? []).find((s) => s.code === draft.setCode && s.format === draft.format);
 
   return (
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader>
+    <PageShell
+      headerAside={
         <div className="flex flex-wrap items-center gap-3 text-sm text-base-content/60">
           <span className="flex items-center gap-1.5 text-base-content/80" title={set?.name}>
             <SetIcon uri={set?.iconUri} name={set?.name} className="size-4" />
@@ -101,8 +97,8 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
             ← Step through instead
           </Link>
         </div>
-      </AppHeader>
-
+      }
+    >
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
         <Panel bodyClassName="gap-3">
           <div
@@ -203,6 +199,6 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
           </Link>
         </div>
       </div>
-    </main>
+    </PageShell>
   );
 }
