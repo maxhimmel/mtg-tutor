@@ -10,6 +10,12 @@ export const pct = (v?: number | null): string =>
 export const pctPoints = (a?: number | null, b?: number | null): string | undefined =>
   a == null || b == null ? undefined : `${((a - b) * 100).toFixed(1)}%`;
 
+// A value that is ALREADY a difference between two rates -- IWD is stored
+// pre-differenced, so it has no second operand for pctPoints. Signed and labelled
+// "pp" because rendering it like the win rates beside it would read as one.
+export const points = (v?: number | null): string =>
+  v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}pp`;
+
 // "{2}{U}{U}" -> "2UU". The spoken form of a cost the ManaCost component draws
 // as symbols, so a screen reader gets something better than a row of icons.
 export const manaText = (cost?: string): string =>

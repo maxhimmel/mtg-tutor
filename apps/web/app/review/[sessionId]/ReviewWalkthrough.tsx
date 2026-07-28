@@ -224,8 +224,8 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
                       <CardTile
                         key={card.name}
                         card={card}
-                        // The badge is the win rate, which is the answer.
-                        showRate={false}
+                        // The hover panel leads with the win rate, which is the answer.
+                        showStats={false}
                         label={`Guess ${card.name}`}
                         onPick={(picked) =>
                           setGuesses((prev) =>

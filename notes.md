@@ -1,13 +1,17 @@
 # Issues:
 
-1. **The coach invents mana costs.** It called `Nurturing Bristleback` a 3-drop;
-   it is `5GG`. Cause found in the code, not guessed: `buildPickContext`
-   (`core/tutor/pickCoach.ts`) renders the passed cards as
-   `name (Colour, GIH WR x%)` only — no `cmc`, no type line, no oracle text.
-   Just the _picked_ card gets `${picked.cmc} mana`. So every curve/size/effect
-   claim the coach makes about a card it did not pick is invention.
-   `buildReviewContext` (`core/tutor/reviewPrompt.ts`) has the same hole.
-   Cheap fix: put cmc + type line on the passed cards too.
+0. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
+
+- "Adventure" type (see: "Picklock Prankster")
+- Bargain
+
+1. ~~**The coach invents mana costs.**~~ **RESOLVED 2026-07-28.** It called
+   `Nurturing Bristleback` a 3-drop; it is `5GG`. The cause was that
+   `buildPickContext` / `buildReviewContext` rendered every card the player did
+   NOT pick as `name (Colour, GIH WR x%)` — no cmc, no type line — so every
+   curve/size claim about those cards was invention. Both now render through
+   `describeCard` (`core/tutor/cardLine.ts`), which carries cmc and type line for
+   every card in the pack. (Numbering kept so the items below keep their ids.)
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -183,6 +187,21 @@ Ordered by value × readiness. Each is a candidate feature branch.
    Either denormalize the splits onto the cards in `setCards` the way
    `rarityBaseline` already is, or thread a set-level context through
    `cardValue` — the former keeps every existing call site working.
+
+   **That question is now settled in favour of denormalizing.** 2026-07-28 put
+   `iwd` and `maindeckRate` on `setCards` the same way, measured at +5-6% on the
+   document (~13KB/set) and confirmed harmless to existing sessions — a re-ingest
+   left the replayed deal byte-identical, because the deal depends only on pool
+   membership, order and `packRate`. Archetype splits are a bigger payload than
+   two scalars per card (~119KB/set unpruned), so they need pruning to the set's
+   real archetypes before they go the same way, but the pattern and the cost
+   model are established. `sets.ts` `ingest` has the denormalise loop; add to it.
+
+   Note the display and prompt work is already done: `core/tutor/cardLine.ts`
+   renders a card's stat line for both prompt builders and the CLI, and
+   `web/app/components/CardStats.tsx` is the hover panel. Archetype fit is a new
+   row in each, not new plumbing.
+
 2. **`deck-builder`** — replace the `DECK` 23-spell/17-land convention with real
    winning-deck land counts & curves from the data. `core/draft/deck.ts`; `DECK`
    in `core/config.ts` is the single tuning point. Small, self-contained.
@@ -247,6 +266,6 @@ The architecture, the data pipeline and the deploy story are all documented in
    to save three lines set once, is a worse trade than the duplication. Convex's
    own schema documents `localEnvVars` as writing "to the local `.env` file"
    with no path option, so `convex dev` cannot populate the Next app's file.
-6. **Do not add a task-level `env` key to `turbo.json`** — it *replaces* rather
+6. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.

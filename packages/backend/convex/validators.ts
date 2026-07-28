@@ -39,6 +39,11 @@ export const card = v.object({
   alsa: v.optional(v.number()),
   avgPick: v.optional(v.number()),
   winRate: v.optional(v.number()),
+  // Denormalised from setStats by `ingest`, for the same reason rarityBaseline is:
+  // the stats table is deliberately off the per-pick path, and these two are what
+  // make the GIH WR beside them readable. ~13KB per set. See Card.iwd.
+  iwd: v.optional(v.number()),
+  maindeckRate: v.optional(v.number()),
   setCode: v.optional(v.string()),
   rarityBaseline: v.optional(v.number()),
   packRate: v.optional(v.number()),

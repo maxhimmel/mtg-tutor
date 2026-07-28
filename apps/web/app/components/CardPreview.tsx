@@ -11,14 +11,16 @@ import {
 } from "react";
 import { type Card, keywordsOf } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
+import { CardStats, hasStats } from "./CardStats";
 
 interface HoverState {
   card: Card;
   anchor: DOMRect;
+  showStats: boolean;
 }
 
 interface HoverPreviewValue {
-  show: (card: Card, el: HTMLElement) => void;
+  show: (card: Card, el: HTMLElement, showStats: boolean) => void;
   hide: () => void;
 }
 
@@ -26,10 +28,16 @@ const HoverPreviewContext = createContext<HoverPreviewValue | null>(null);
 
 // Handlers to spread onto any hoverable card element. Covers mouse and keyboard
 // focus so the preview is reachable without a pointer.
-export function useCardHover(card: Card | undefined) {
+//
+// `showStats` is the caller's call because the answer differs by surface: during
+// a live draft it follows the guiderails setting, which is the whole of what
+// guiderails now controls. After the draft the numbers ARE the lesson, so review
+// and results pass true.
+export function useCardHover(card: Card | undefined, showStats = false) {
   const ctx = useContext(HoverPreviewContext);
   if (!ctx || !card?.imageUrl) return {};
-  const onEnter = (e: { currentTarget: HTMLElement }) => ctx.show(card, e.currentTarget);
+  const onEnter = (e: { currentTarget: HTMLElement }) =>
+    ctx.show(card, e.currentTarget, showStats);
   return {
     onMouseEnter: onEnter,
     onFocus: onEnter,
@@ -89,9 +97,14 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   const [pos, setPos] = useState<Placement | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const keywords = useMemo(() => (hover ? keywordsOf(hover.card) : []), [hover]);
+  // Stats can be the panel's only content -- a vanilla creature with no keywords
+  // still has draft data worth reading -- so placement has to count them too, or
+  // the panel gets no position and never appears.
+  const stats = hover != null && hover.showStats && hasStats(hover.card);
+  const panel = keywords.length > 0 || stats;
 
-  const show = useCallback((card: Card, el: HTMLElement) => {
-    setHover({ card, anchor: el.getBoundingClientRect() });
+  const show = useCallback((card: Card, el: HTMLElement, showStats: boolean) => {
+    setHover({ card, anchor: el.getBoundingClientRect(), showStats });
   }, []);
   const hide = useCallback(() => {
     setHover(null);
@@ -102,8 +115,8 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // useEffect (not layout) keeps this off the server render; the box stays at
   // opacity 0 until a position is set, so there is no visible flash.
   useEffect(() => {
-    if (hover) setPos(place(hover.anchor, keywords.length > 0));
-  }, [hover, keywords]);
+    if (hover) setPos(place(hover.anchor, panel));
+  }, [hover, panel]);
 
   return (
     <HoverPreviewContext.Provider value={{ show, hide }}>
@@ -128,9 +141,9 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
             />
           </div>
 
-          {keywords.length > 0 && pos?.panelLeft != null && (
+          {panel && pos?.panelLeft != null && (
             <div
-              className="popup-surface pointer-events-none fixed z-50 overflow-y-auto p-3"
+              className="popup-surface pointer-events-none fixed z-50 flex flex-col gap-3 overflow-y-auto p-3"
               style={{
                 left: pos.panelLeft,
                 top: pos.top,
@@ -138,14 +151,22 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                 maxHeight: PREVIEW_H,
               }}
             >
-              <ul className="flex flex-col gap-2.5">
-                {keywords.map((k) => (
-                  <li key={k.name}>
-                    <span className="text-sm font-semibold">{k.name}</span>
-                    <p className="text-xs leading-snug text-base-content/70">{k.reminder}</p>
-                  </li>
-                ))}
-              </ul>
+              {/* Data first: it is what the player is hovering to check. The
+                  keyword reminders are reference material and can scroll away. */}
+              {stats && <CardStats card={hover.card} />}
+
+              {stats && keywords.length > 0 && <hr className="border-base-300" />}
+
+              {keywords.length > 0 && (
+                <ul className="flex flex-col gap-2.5">
+                  {keywords.map((k) => (
+                    <li key={k.name}>
+                      <span className="text-sm font-semibold">{k.name}</span>
+                      <p className="text-xs leading-snug text-base-content/70">{k.reminder}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </>

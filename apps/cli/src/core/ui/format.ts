@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { Card } from "@mtg-tutor/core";
+import { type Card, statLine } from "@mtg-tutor/core";
 
 export const pct = (v?: number | null) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
 
@@ -93,11 +93,9 @@ export function cardDetail(card: Card, width = (process.stdout.columns ?? 80) - 
     for (const l of wrapText(card.oracleText, w)) lines.push(l);
   }
   lines.push("");
-  const stats =
-    card.gihWinRate != null
-      ? `GIH WR ${pct(card.gihWinRate)}  ·  ALSA ${card.alsa?.toFixed(1) ?? "—"}  ·  WR ${pct(card.winRate)}`
-      : "no 17Lands data";
-  lines.push(pc.dim(stats));
+  // The same line the coach is shown, so the terminal and the prompt do not name
+  // the same numbers two different ways.
+  lines.push(pc.dim(statLine(card)));
   return lines.join("\n");
 }
 
