@@ -18,6 +18,12 @@ export function AppHeader({ children }: { children?: ReactNode }) {
           mtg<span className="text-primary">-</span>tutor
         </Link>
         <Link
+          href="/review"
+          className="text-sm text-base-content/60 transition-colors hover:text-primary"
+        >
+          Review
+        </Link>
+        <Link
           href="/principles"
           className="text-sm text-base-content/60 transition-colors hover:text-primary"
         >

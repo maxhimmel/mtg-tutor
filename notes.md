@@ -3,10 +3,50 @@
 1. **The coach invents mana costs.** It called `Nurturing Bristleback` a 3-drop;
    it is `5GG`. Cause found in the code, not guessed: `buildPickContext`
    (`core/tutor/pickCoach.ts`) renders the passed cards as
-   `name (Colour, GIH WR x%)` only — no `cmc`, no type line. Just the *picked*
+   `name (Colour, GIH WR x%)` only — no `cmc`, no type line. Just the _picked_
    card gets `${picked.cmc} mana`. So every curve/size claim the coach makes
    about a card it did not pick is invention. Cheap fix: put cmc + type line on
    the passed cards too. (Roadmap #1 does not fix this — different bug.)
+
+2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
+
+3. **"Best pick" is decided by data alone, and the interesting answer needs the
+   model.** `scorePick` ranks a pack by `cardValue` and calls the top card the
+   best — pure 17Lands win rate, blind to what is already in your pool. The
+   review then has a second, better idea of best: the **context-best**, the card
+   that serves _this_ deck, and the lesson the whole feature is built around is
+   the gap between the two.
+
+   The problem is that context-best only exists after a model call, so nothing
+   can filter, sort or flag picks by it up front. Concretely: the missed-picks
+   report has to filter on `isBest` (did you take the data's top card), which
+   silently drops every pick where you took the raw best and the coach would
+   still have taken something else — exactly the divergence worth teaching.
+
+   What would fix it is a deterministic context-aware value: `cardValue` reading
+   the archetype splits and synergies we already own, so scoring knows your
+   colours. That is roadmap #1 (`archetype-aware-scoring`) — this is a second
+   reason to do it, and the place it would pay off beyond scoring. Until then
+   `isBest` is the honest proxy and the report is named for what it actually
+   shows.
+
+4. **Re-ingesting a set strands every draft taken against the old data.** A
+   session is `{seed, pickedNames}` replayed against whatever the set says
+   today, so when a set's card pool or pack model changes the seed deals
+   different packs and `replayDraft` throws
+   (`Replay diverged at P1P1: "X" is not in the pack`). Hit for real on
+   2026-07-27 with EOE, after the bonus-sheet odds rebuild changed `packRate`
+   for six sets. It is not repairable — the packs that draft saw no longer
+   exist.
+
+   `loadBoard` now says so in human terms instead of leaking the engine's
+   message, but `/review` still **lists** those drafts, because `review.list`
+   reads the denormalized summary and never replays — so it cannot know until
+   you click. The cheap fix is a fingerprint: `sets` already carries
+   `sourceHash` over the card pool, so stamping it on `draftSessions` at
+   creation would let the list mark a stale draft without replaying anything.
+   Only helps sessions created after the change, which is fine — it is a
+   forward-looking guard, not a repair.
 
 # Ideas:
 
@@ -112,13 +152,13 @@ Decisions worth not re-litigating:
    worse trade than the duplication. Re-provisioning AuthKit means updating both
    files.
 9. **Env vars cross four boundaries and three of them fail silently** — Vercel
-    project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
-    all drop what they were not told about, and only Convex's deployment env
-    errors loudly. Three deploys broke on this. The countermeasures now in place:
-    `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
-    `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
-    list — verified with `turbo run build --dry=json`). Do not add a task-level
-    `env` key; put it in `globalEnv`.
+   project scoping, Turborepo strict mode, and Next's `NEXT_PUBLIC_` inlining
+   all drop what they were not told about, and only Convex's deployment env
+   errors loudly. Three deploys broke on this. The countermeasures now in place:
+   `apps/web/app/env.ts` validates at build start, and `turbo.json` declares in
+   `globalEnv` rather than per-task (a task-level `env` _replaces_ the general
+   list — verified with `turbo run build --dry=json`). Do not add a task-level
+   `env` key; put it in `globalEnv`.
 10. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
     traces from the project directory by default, and under pnpm 652 of the 653
     files in `next-server.js.nft.json` resolve outside `apps/web`.

@@ -15,15 +15,25 @@ export function CardTile({
   card,
   onPick,
   disabled,
+  showRate,
+  label,
 }: {
   card: Card;
   onPick: (card: Card) => void;
   disabled?: boolean;
+  // Overrides the guiderails setting when given. The review quiz passes false:
+  // the badge is the card's win rate, which is the answer to the question the
+  // quiz is asking.
+  showRate?: boolean;
+  // The accessible name defaults to "Pick <card>", which is a lie anywhere the
+  // click is a guess rather than a pick.
+  label?: string;
 }) {
   const { settings } = useSettings();
   const hover = useCardHover(card);
   const hidePreview = useHidePreview();
   const rate = card.gihWinRate != null ? pct(card.gihWinRate) : card.rarity[0].toUpperCase();
+  const withRate = showRate ?? settings.guiderails;
 
   return (
     <button
@@ -34,7 +44,7 @@ export function CardTile({
         onPick(card);
       }}
       disabled={disabled}
-      aria-label={`Pick ${card.name}`}
+      aria-label={label ?? `Pick ${card.name}`}
       {...hover}
     >
       {/* First child is the face that tilts; hover-3d clips it and applies the shine. */}
@@ -50,7 +60,7 @@ export function CardTile({
           </span>
         )}
 
-        {settings.guiderails && (
+        {withRate && (
           <span className="badge badge-sm absolute bottom-1.5 right-1.5 border-base-300 bg-base-100/90 font-mono text-base-content/80">
             {rate}
           </span>

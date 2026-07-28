@@ -10,7 +10,9 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
+  APICallError,
   Output,
+  RetryError,
   generateText,
   streamText,
   type JSONValue,
@@ -121,9 +123,27 @@ function common(req: Request) {
   };
 }
 
+// A rate limit, an upstream 5xx or a timeout is the coach being unavailable,
+// which is a state every caller already renders: the review actions turn it
+// into a null and the clients show the data-only answer. Letting the provider's
+// own error through instead logged an uncaught stack trace for a condition we
+// handle deliberately -- which is what a daily token cap on the dev provider
+// looks like. Anything else still throws, because a bad schema or a broken
+// prompt is a bug and should read as one.
+function unavailable(e: unknown): never {
+  if (RetryError.isInstance(e) || APICallError.isInstance(e)) {
+    throw new CoachUnavailableError(e.message);
+  }
+  throw e;
+}
+
 export async function text(req: Request): Promise<string> {
-  const { text: out } = await generateText(common(req));
-  return out.trim();
+  try {
+    const { text: out } = await generateText(common(req));
+    return out.trim();
+  } catch (e) {
+    unavailable(e);
+  }
 }
 
 /**
@@ -132,11 +152,15 @@ export async function text(req: Request): Promise<string> {
  * cannot do tool-shaped structured output.
  */
 export async function object<T>(req: Request & { schema: z.ZodType<T> }): Promise<T> {
-  const { output } = await generateText({
-    ...common(req),
-    output: Output.object({ schema: req.schema }),
-  });
-  return output;
+  try {
+    const { output } = await generateText({
+      ...common(req),
+      output: Output.object({ schema: req.schema }),
+    });
+    return output;
+  } catch (e) {
+    unavailable(e);
+  }
 }
 
 /**
