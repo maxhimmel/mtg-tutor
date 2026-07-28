@@ -265,7 +265,23 @@ Ordered by value × readiness. Each is a candidate feature branch.
      own noise. For release candidates, not for every run.
    - **A dashboard / live query over accumulated `llmUsage`.** The table is
      written from the first pass; nothing reads it yet except the benchmark
-     harness filtering by `runId`. Needs prod traffic to be worth building.
+     harness filtering by session. Needs prod traffic to be worth building.
+   - **The verdict prompt asks for 2-4 sentences and gets ~6x that.** First
+     measured run against `claude-sonnet-5` (2026-07-28, fdn/TradDraft seed 42):
+     17 of 30 verdicts hit the 1024-token ceiling exactly and returned nothing,
+     and the 13 that fit averaged ~615 output tokens for three fields the schema
+     describes as a sentence or two each. Raising the ceiling to 2048 took that
+     to 5 of 30, and the 25 that now fit average ~1,016 output tokens — about
+     ten times the length asked for. The ceiling bought correctness and nothing
+     else; raising it again would just buy the verbosity more room.
+
+     Verdict output is the single largest output line in the budget — 25.4k of
+     the run's 30.8k output tokens — so tightening `VERDICT_SCHEMA`'s field
+     descriptions, or giving the model a length budget it will actually respect,
+     is the first real saving available. It is also exactly the change the
+     quality metrics exist to police: shorter is only better if divergence rate,
+     citation density and breadth hold. Regenerate the baseline first, change
+     the prompt second, compare third.
 
 Separate track: the **review features** in "Deferred" above (alternate draft
 lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated

@@ -193,9 +193,15 @@ export const verdict = action({
       input = await object({
         system: system(),
         userContent: context.userContent,
-        // Headroom so the JSON isn't truncated mid-object, which used to
-        // surface as "verdict was missing required fields".
-        maxTokens: 1024,
+        // Headroom so the JSON isn't truncated mid-object. 1024 was not enough:
+        // measured against claude-sonnet-5, 17 of 30 verdicts hit exactly that
+        // ceiling and came back as NoOutputGeneratedError, i.e. the review
+        // feature failed 57% of the time. The ones that fit averaged ~615
+        // output tokens for three fields the schema asks to be a sentence or
+        // two each -- so this ceiling buys correctness, and the prompt being
+        // ~6x more verbose than it was asked to be is the real saving, now
+        // measurable. See notes.md.
+        maxTokens: 2048,
         schema: VERDICT_SCHEMA,
         onUsage: (usage) =>
           ctx.runMutation(internal.metrics.record, {
@@ -268,7 +274,9 @@ export const frame = action({
       return await text({
         system: system(),
         userContent,
-        maxTokens: 500,
+        // 500 truncated the closing frame against claude-sonnet-5 while the
+        // opening frame fit in 320. Same story as the verdict above.
+        maxTokens: 900,
         onUsage: (usage) =>
           ctx.runMutation(internal.metrics.record, {
             ...usage,

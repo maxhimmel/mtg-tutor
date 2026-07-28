@@ -11,6 +11,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   APICallError,
+  NoOutputGeneratedError,
   Output,
   RetryError,
   generateText,
@@ -204,7 +205,17 @@ async function report(
 // looks like. Anything else still throws, because a bad schema or a broken
 // prompt is a bug and should read as one.
 function unavailable(e: unknown): never {
-  if (RetryError.isInstance(e) || APICallError.isInstance(e)) {
+  if (
+    RetryError.isInstance(e) ||
+    APICallError.isInstance(e) ||
+    // The model answered, but with nothing usable -- structured output whose
+    // JSON was cut off mid-object by maxTokens is the way this actually
+    // happens. It reads as a bug because it arrives as an error class rather
+    // than an empty string, but "no answer" is the state every caller already
+    // renders, and letting it through instead turned one over-long verdict into
+    // a 500 that ended the review for that pick.
+    NoOutputGeneratedError.isInstance(e)
+  ) {
     throw new CoachUnavailableError(e.message);
   }
   throw e;
