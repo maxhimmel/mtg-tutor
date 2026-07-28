@@ -472,7 +472,7 @@ export const readIngestState = internalQuery({
       metaRevision: doc.metaRevision,
       result: {
         setId: doc._id,
-        cardCount: doc.cardCount ?? doc.cards?.length ?? 0,
+        cardCount: doc.cardCount,
         ratedCardCount: doc.ratedCardCount,
       },
     };
@@ -571,7 +571,7 @@ export const store = internalMutation({
       // rather than skipping a set that never took.
       return {
         setId: existing._id,
-        cardCount: existing.cardCount ?? existing.cards?.length ?? 0,
+        cardCount: existing.cardCount,
         ratedCardCount: existing.ratedCardCount,
         keptExistingSnapshot: true,
         skipped: false,
@@ -763,10 +763,9 @@ export const get = query({
 
     return {
       ...setDoc,
-      cards: cardsDoc?.cards ?? setDoc.cards ?? [],
-      colorPairWinRates:
-        cardsDoc?.colorPairWinRates ?? setDoc.colorPairWinRates ?? [],
-      packComposition: cardsDoc?.packComposition ?? setDoc.packComposition,
+      cards: cardsDoc?.cards ?? [],
+      colorPairWinRates: cardsDoc?.colorPairWinRates ?? [],
+      packComposition: cardsDoc?.packComposition,
     };
   },
 });
@@ -780,7 +779,7 @@ export const list = query({
         code: s.code,
         name: s.name,
         format: s.format,
-        cardCount: s.cardCount ?? s.cards?.length ?? 0,
+        cardCount: s.cardCount,
         ratedCardCount: s.ratedCardCount,
         ingestedAt: s.ingestedAt,
         releasedAt: s.releasedAt,

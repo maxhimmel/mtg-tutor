@@ -60,7 +60,7 @@ export const load = query({
       seed: String(session.seed),
       createdAt: session.createdAt,
       colorPair: session.summary?.colorPair ?? "",
-      colorPairWinRates: cardsDoc.colorPairWinRates ?? [],
+      colorPairWinRates: cardsDoc.colorPairWinRates,
       picks: engine.history.map((h, pickIndex) => ({
         pickIndex,
         packNo: h.packNo,
@@ -222,9 +222,7 @@ export const framePrompt = internalQuery({
   args: { sessionId: v.id("draftSessions"), phase: v.union(v.literal("open"), v.literal("close")) },
   handler: async (ctx, args) => {
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
-    const winRates = new Map(
-      (cardsDoc.colorPairWinRates ?? []).map((r) => [r.pair, r.winRate]),
-    );
+    const winRates = new Map(cardsDoc.colorPairWinRates.map((r) => [r.pair, r.winRate]));
     return buildDraftFrame(args.phase, engine.humanPool, winRates);
   },
 });

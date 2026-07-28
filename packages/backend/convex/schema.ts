@@ -21,16 +21,8 @@ export default defineSchema({
     // ingested before this field existed have none until they are re-ingested.
     name: v.optional(v.string()),
     format: v.string(),
-    // Being split out into `setCards`. Optional during the migration; rows that
-    // still carry it have not been migrated yet.
-    cards: v.optional(v.array(card)),
     // Denormalized so `list` can report the pool size without reading it.
-    // Optional until every row is migrated.
-    cardCount: v.optional(v.number()),
-    // Moving to `setCards` with the pool. Optional during the migration.
-    colorPairWinRates: v.optional(
-      v.array(v.object({ pair: v.string(), winRate: v.number() })),
-    ),
+    cardCount: v.number(),
     ratedCardCount: v.number(),
     ingestedAt: v.string(),
     // Scryfall's icon for the set, an SVG URL. Set-level metadata like `name`:
@@ -47,9 +39,6 @@ export default defineSchema({
     // so adding a field like the icon costs one request per set rather than a
     // full re-crawl of every card.
     metaRevision: v.optional(v.string()),
-    // Moving to `setCards` with the pool. Was ~4.4KB of booster shapes, by far
-    // the largest thing left on a document whose whole job is to be listed.
-    packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
 
   // Everything the draft engine needs and nothing else, kept apart from the
@@ -64,10 +53,8 @@ export default defineSchema({
     format: v.string(),
     cards: v.array(card),
     // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
-    // Optional only until every deployment has migrated -- rows written by the
-    // first pass of the split moved the pool alone.
-    colorPairWinRates: v.optional(
-      v.array(v.object({ pair: v.string(), winRate: v.number() })),
+    colorPairWinRates: v.array(
+      v.object({ pair: v.string(), winRate: v.number() }),
     ),
     // Copied from setStats by `ingest` -- the observed booster shapes, on the
     // hot-path document so pack generation needs no second read.

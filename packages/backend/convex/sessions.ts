@@ -44,9 +44,8 @@ export async function setDocFor(
 
 /**
  * Everything a replay needs for a set: the pool, the colour-pair win rates and
- * the booster shapes. Reads the `setCards` row, falling back to the copies still
- * inline on the `sets` document for rows the split has not reached yet. The
- * fallback goes away once every deployment is migrated.
+ * the booster shapes. A separate row from the metadata in `sets`, which is what
+ * keeps listing sets cheap -- see schema.ts.
  */
 export async function setCardsFor(
   ctx: QueryCtx,
@@ -59,26 +58,13 @@ export async function setCardsFor(
     )
     .unique();
 
-  if (cardsDoc) return cardsDoc;
-
-  if (!setDoc.cards) {
+  if (!cardsDoc) {
     throw new ConvexError(
       `Set "${setDoc.code}" (${setDoc.format}) has no card pool stored. ` +
         `Run the sets:ingest action for it again.`,
     );
   }
-
-  // Unmigrated row: shape the inline copies like the document that replaces
-  // them, so no caller has to know which of the two it got.
-  return {
-    _id: setDoc._id as unknown as Id<"setCards">,
-    _creationTime: setDoc._creationTime,
-    code: setDoc.code,
-    format: setDoc.format,
-    cards: setDoc.cards,
-    colorPairWinRates: setDoc.colorPairWinRates ?? [],
-    packComposition: setDoc.packComposition,
-  };
+  return cardsDoc;
 }
 
 /**
