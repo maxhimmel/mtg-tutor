@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Principle, PrincipleSource, PrinciplesDoc } from "@mtg-tutor/core";
-import { AppHeader } from "../components/AppHeader";
+import { PageShell } from "../components/PageShell";
 
 const label = (category: string) => category.replace(/-/g, " ");
 
@@ -58,9 +58,7 @@ export function PrinciplesExplorer({
   };
 
   return (
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader />
-
+    <PageShell>
       <div className="max-w-3xl">
         <h1 className="mb-2 font-display text-3xl font-semibold tracking-tight">
           {doc.meta.title}
@@ -191,6 +189,6 @@ export function PrinciplesExplorer({
           ))}
         </ol>
       </section>
-    </main>
+    </PageShell>
   );
 }

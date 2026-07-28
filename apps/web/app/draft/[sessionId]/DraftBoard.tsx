@@ -14,7 +14,7 @@ import {
   loadPrinciples,
   splitCitations,
 } from "@mtg-tutor/core";
-import { AppHeader } from "../../components/AppHeader";
+import { PageNotice, PageShell } from "../../components/PageShell";
 import { CardText } from "../../components/CardText";
 import { CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
@@ -200,24 +200,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   }
 
   if (loadError) {
-    return (
-      <main className="mx-auto max-w-[1500px] px-6 py-5">
-        <p className="text-error">{loadError}</p>
-      </main>
-    );
+    return <PageNotice tone="error">{loadError}</PageNotice>;
   }
 
   if (state === undefined) {
-    return (
-      <main className="mx-auto max-w-[1500px] px-6 py-5">
-        <p className="text-base-content/60">Loading draft…</p>
-      </main>
-    );
+    return <PageNotice>Loading draft…</PageNotice>;
   }
 
   return (
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader>
+    <PageShell
+      headerAside={
         <div className="flex items-center gap-2.5 text-sm tabular-nums text-base-content/60">
           <span className="flex items-center gap-1.5 text-base-content/80" title={state.setName}>
             <SetIcon uri={state.setIcon} name={state.setName} className="size-4" />
@@ -235,8 +227,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             </span>
           )}
         </div>
-      </AppHeader>
-
+      }
+    >
       {state.complete ? (
         <Results sessionId={id} />
       ) : (
@@ -293,6 +285,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           </aside>
         </div>
       )}
-    </main>
+    </PageShell>
   );
 }

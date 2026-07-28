@@ -5,16 +5,14 @@ import { useRouter } from "next/navigation";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { useState } from "react";
-import { AppHeader } from "./components/AppHeader";
+import { PageShell } from "./components/PageShell";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
 import { useSettings, type SetView } from "./lib/useSettings";
 
 export default function Home() {
   return (
-    <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader />
-
+    <PageShell>
       <Unauthenticated>
         <section className="max-w-2xl py-6">
           <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
@@ -40,7 +38,7 @@ export default function Home() {
       <Authenticated>
         <SetPicker />
       </Authenticated>
-    </main>
+    </PageShell>
   );
 }
 
