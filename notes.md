@@ -214,6 +214,28 @@ Ordered by value × readiness. Each is a candidate feature branch.
    This is what would re-tighten the availability gate to require replay
    (`USED_KINDS` in `scripts/lib/datasets.mjs`).
 
+5. **Follow-ups to token metrics** (spec:
+   `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
+   the first pass, each for its own reason:
+
+   - **Static token assertions in vitest, no API calls.** Input tokens,
+     call frequency and the cache split are pure functions of the prompt
+     builders and `isDecisionPick` — a draft replays in 0.16ms, so all 45 picks
+     can be evaluated exactly and for free, no provider involved. That would
+     catch corpus growth on every commit instead of only when someone pays for a
+     benchmark run. It is not in the first pass only because *accuracy* cannot be
+     computed statically and forces a live harness anyway; this is the cheap
+     fast-feedback half, worth adding once the harness proves the metrics are the
+     right ones.
+   - **LLM-as-judge pairwise quality tier.** The mechanical and distributional
+     accuracy metrics catch hallucination, truncation and context-blindness, but
+     not "is this advice actually good". A blind, order-randomized pairwise judge
+     over baseline-vs-candidate answers would — at real token cost and with its
+     own noise. For release candidates, not for every run.
+   - **A dashboard / live query over accumulated `llmUsage`.** The table is
+     written from the first pass; nothing reads it yet except the benchmark
+     harness filtering by `runId`. Needs prod traffic to be worth building.
+
 Separate track: the **review features** in "Deferred" above (alternate draft
 lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated
 to the data work.
@@ -238,6 +260,18 @@ to the data work.
    that moves. Invalidation then costs a cheap read instead of a full replay.
    Same principle as `setStatsMeta` — if a value is only there to be watched or
    compared, it belongs on a row small enough to read often.
+
+2. **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
+   a full-table read expensive.** Every model call appends one ~150-byte row.
+   That is nothing next to the ~240KB documents that drained the tier, so
+   aggregating at read time is free at current volume and a rollup cron would be
+   moving parts bought against a cost that does not exist yet.
+
+   The premise changes when months of real traffic accumulate: "total tokens
+   ever" then reads every row, which is exactly the `sets.list` pattern. At that
+   point fold raw rows into daily per-area totals and prune the raw rows on a
+   retention window. The benchmark harness is unaffected either way — it filters
+   by `runId` and only ever reads one run.
 
 # Decisions worth not re-litigating:
 
