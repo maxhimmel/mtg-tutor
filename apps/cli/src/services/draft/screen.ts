@@ -165,11 +165,10 @@ async function showResults(convex: ConvexHttpClient, sessionId: Id<"draftSession
     );
   }
 
-  const save = await p.confirm({ message: "Save this draft to your stats?" });
-  if (!p.isCancel(save) && save) {
-    await convex.mutation(api.draft.save, { sessionId, saved: true });
-    p.outro(pc.green(`Saved (${summary.colorPair || "—"}). Run "mtg-tutor stats" to track progress.`));
-  } else {
-    p.outro("Not saved.");
-  }
+  p.outro(
+    pc.green(
+      `Recorded (${summary.colorPair || "—"}). ` +
+        `Run "mtg-tutor stats" to track progress, or "mtg-tutor review" to go through it pick by pick.`,
+    ),
+  );
 }

@@ -34,7 +34,6 @@ export const start = mutation({
       seed: newSeed(),
       pickedNames: [],
       status: "active" as const,
-      saved: false,
       createdAt: new Date().toISOString(),
     });
   },
@@ -53,7 +52,6 @@ export const state = query({
       setIcon: setDoc.iconUri,
       format: session.format,
       status: session.status,
-      saved: session.saved,
       summary: session.summary,
       ...boardView(engine),
     };
@@ -124,28 +122,11 @@ export const results = query({
       deck: suggestDeck(engine.humanPool),
       mistakes,
       status: session.status,
-      saved: session.saved,
       // Without 17Lands data every card scores off its rarity baseline, so a
       // pick can rarely be "wrong" and the score is close to meaningless.
       // Surfaced so the UI can say that rather than imply a perfect draft.
       ratedCardCount: setDoc.ratedCardCount,
     };
-  },
-});
-
-export const save = mutation({
-  args: { sessionId: v.id("draftSessions"), saved: v.optional(v.boolean()) },
-  handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
-    const saved = args.saved ?? true;
-
-    await ctx.db.patch(args.sessionId, {
-      saved,
-      // A draft can be saved mid-way; make sure the summary reflects what exists.
-      summary: session.summary ?? summarizeDraft(engine.history, engine.humanPool),
-    });
-
-    return { sessionId: args.sessionId, saved };
   },
 });
 
@@ -178,24 +159,3 @@ export const coachContext = internalQuery({
   },
 });
 
-export const listSaved = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
-
-    const sessions = await ctx.db
-      .query("draftSessions")
-      .withIndex("by_user_and_saved", (q) => q.eq("userId", userId).eq("saved", true))
-      .order("desc")
-      .take(args.limit ?? 25);
-
-    return sessions.map((s) => ({
-      sessionId: s._id,
-      setCode: s.setCode,
-      format: s.format,
-      createdAt: s.createdAt,
-      status: s.status,
-      summary: s.summary,
-    }));
-  },
-});
