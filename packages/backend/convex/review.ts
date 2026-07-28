@@ -3,6 +3,7 @@ import {
   buildDraftFrame,
   buildReviewContext,
   buildReviewSystemPrompt,
+  canonicalName,
   loadPrinciples,
   summarizeDraft,
 } from "@mtg-tutor/core";
@@ -157,6 +158,9 @@ export const verdictContext = internalQuery({
 
     return {
       cached: existing?.verdict,
+      // The only cards a context-best may name. The prompt lists these, but
+      // nothing made the model stay inside the list -- see `verdict`.
+      packNames: record.pack.map((c) => c.name),
       userContent: buildReviewContext(
         {
           pickIndex: args.pickIndex,
@@ -213,6 +217,22 @@ export const verdict = action({
     // defaulted so a clipped narrative still teaches something.
     if (!input.contextBestName) {
       throw new Error("Review verdict was missing the context-best card.");
+    }
+
+    // ...nor does the schema guarantee the name is a card that was on offer. A
+    // context-best from outside the pack is not a lesson, it is a hallucination
+    // the walkthrough would render as a real alternative -- so it is refused
+    // rather than shown, and deliberately not frozen: a verdict is cached on
+    // first success, and caching this one would make the invention permanent.
+    // Matched through canonicalName because models reach for typographic
+    // apostrophes and hyphens that the pack spells with ASCII.
+    const key = (name: string) => canonicalName(name).toLowerCase();
+    const offered = new Set(context.packNames.map(key));
+    if (!offered.has(key(input.contextBestName))) {
+      console.error(
+        `Review verdict named "${input.contextBestName}", which was not in the pack.`,
+      );
+      return null;
     }
     const result: ReviewVerdict = {
       contextBestName: input.contextBestName,
