@@ -11,7 +11,7 @@ import type { ReviewVerdict } from "@mtg-tutor/core";
 import { z } from "zod";
 import { action, internalQuery, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
-import { loadBoard, ownSessions } from "./sessions.js";
+import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -88,10 +88,15 @@ export const saveVerdict = mutation({
   },
   handler: async (ctx, args) => {
     // Establishes ownership before writing anything keyed to this session.
-    const { engine } = await loadBoard(ctx, args.sessionId);
-    if (!engine.history[args.pickIndex]) {
+    //
+    // Deliberately not loadBoard: this needs to know the session is yours and
+    // that the pick exists, and replaying to learn either costs a read of the
+    // set's whole card pool. A pick index is in range exactly when the session
+    // has a name at it -- history and pickedNames are the same list.
+    const session = await ownedSession(ctx, args.sessionId);
+    if (args.pickIndex < 0 || args.pickIndex >= session.pickedNames.length) {
       throw new Error(
-        `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
+        `Session has ${session.pickedNames.length} picks; no pick at index ${args.pickIndex}.`,
       );
     }
 

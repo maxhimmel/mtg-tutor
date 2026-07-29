@@ -3,7 +3,6 @@
   "format": "TradDraft",
   "seed": 42,
   "minPackCards": 5,
-  "label": "before: replay reads the whole pool",
   "picks": 42,
   "decisionPicks": 30,
   "paths": {
@@ -58,18 +57,18 @@
     },
     "stats.overview": {
       "sampled": 1,
-      "meanBytesRead": 777172,
-      "maxBytesRead": 777172,
+      "meanBytesRead": 778305,
+      "maxBytesRead": 778305,
       "callsPerDraft": null,
       "totalBytesPerDraft": null
     },
     "review.saveVerdict": {
       "sampled": 30,
-      "meanBytesRead": 173687,
-      "maxBytesRead": 173687,
+      "meanBytesRead": 1133,
+      "maxBytesRead": 1133,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 5210610
+      "totalBytesPerDraft": 33990
     }
   },
-  "totalBytesPerDraft": 23801822
+  "totalBytesPerDraft": 18625202
 }
