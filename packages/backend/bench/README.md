@@ -69,38 +69,72 @@ pnpm bench-report --open          # renders the result, free and instant
    moves the numbers and the reference prose forward together. Reverting costs
    nothing but the run.
 
-   A partial run **cannot** become a baseline, and the script refuses. Merging a
-   verdict-only run into an existing baseline would leave its blended accuracy
-   metrics describing a mixture of two runs against two different prompts — a
-   number with no meaning that every later comparison would trust. Iterate with
-   `--area`, then re-baseline with one full run.
+   A partial run gets **its own baseline**, keyed by the areas it covers:
+
+   ```
+   baseline.fdn.TradDraft.42.local.coach.json     # --area coach
+   baseline.fdn.TradDraft.42.local.json           # full run
+   ```
+
+   They never overwrite each other, and a coach-only run is only ever compared
+   against a coach-only baseline.
 
 6. **Repeat from 3.**
 
-## What a partial run does not tell you
+## Scoping a benchmark to one feature
 
-Several accuracy metrics are computed across more than one area — citations and
-principle ids are counted over coach **and** verdict answers. So a verdict-only
-run collects fewer of them for no reason but the flag, and comparing that against
-a full baseline would report a regression the prompt did not cause.
+Working on the coach — the feedback after a pick — means you only need a
+coach baseline:
 
-Rather than compare them anyway, both tools skip those checks and say so:
-`not compared: distinct principles used (needs coach + verdict)` on the console,
-and a dashed `not measured` chip in the report.
+```bash
+pnpm bench-llm --area coach --update-baseline   # once
+# ...change buildSystemPrompt or the coach prompt...
+pnpm bench-llm --area coach                     # compare
+pnpm bench-report --area coach --open
+```
 
-| Metric | Needs |
+Every metric compares, because both sides counted over the same answers. About
+140k tokens per iteration instead of 355k.
+
+**Comparisons only happen between runs that measured the same thing.** Several
+accuracy metrics are counted across more than one area — citations and principle
+ids come from coach **and** verdict answers — so what matters is not whether a
+run collected every area a metric reads, but whether both sides collected the
+same ones:
+
+| Candidate | Baseline | Blended metrics |
+|---|---|---|
+| coach only | coach only | compared — same population both sides |
+| coach only | full run | skipped — counted over different populations |
+| full run | full run | compared |
+
+A skipped check is printed rather than passed silently: `not compared: distinct
+principles used (counted over coach here, coach+verdict in the baseline)`, and a
+dashed `not measured` chip carrying the same reason.
+
+| Metric | Counted from |
 |---|---|
 | citations per answer, empty answers | `coach` |
 | context-best divergence, unanswered verdicts | `verdict` |
 | empty frames | `frame` |
 | off-topic card names, invented citation rate, distinct principles used | `coach` + `verdict` |
-| truncated answers | any area the run and the baseline share |
+| truncated answers | any area the two runs share |
 
-The practical consequence: **`--area` is for iterating, a full run is for
-deciding.** A verdict-only run can tell you the verdict prompt got cheaper
-without breaking divergence or truncation. It cannot tell you whether the corpus
-is still being reached for across the system, because that is a coach + verdict
-question.
+### The one thing a scoped baseline will not catch
+
+Coach and the review features build their system prompts separately —
+`buildSystemPrompt` in `convex/http.ts` against `buildReviewSystemPrompt` in
+`convex/review.ts` — but both are built from the same `loadPrinciples()` corpus.
+
+So the rule is about **what you are changing**, not about which feature you care
+about:
+
+- Changing something coach-specific — the coach prompt, the coach gate,
+  `buildSystemPrompt` — a coach baseline measures all of it.
+- Changing the **principles corpus**, which all three areas read — a coach
+  baseline measures a third of the blast radius. Cutting a principle could leave
+  the coach fine and quietly strip what the verdict had to say. Use a full run
+  for corpus changes.
 
 ## What "held" means
 
@@ -130,12 +164,19 @@ step 4, which is why the report exists rather than a pass/fail number.
 
 ## The files
 
+Names carry the area set when a run is partial, so scoped and full baselines
+coexist: `baseline.fdn.TradDraft.42.local.coach.json` against
+`baseline.fdn.TradDraft.42.local.json`. Below, `<stem>` is
+`<set>.<format>.<seed>.<provider>` plus `.<areas>` for a partial run.
+
 | File | Written by | Committed |
 |---|---|---|
-| `baseline.<set>.<format>.<seed>.<provider>.json` | `--update-baseline` | yes — the gate |
-| `run.<...>.baseline.json` | `--update-baseline` | yes — the reference prose |
-| `run.<...>.json` | every full run | yes — see below |
-| `report.<...>.html` | `bench-report` | no — derived, rebuilt for free |
+| `baseline.<stem>.json` | `--update-baseline` | yes — the gate |
+| `run.<stem>.baseline.json` | `--update-baseline` | yes — the reference prose |
+| `run.<stem>.json` | every run | yes — see below |
+| `report.<stem>.html` | `bench-report` | no — derived, rebuilt for free |
+
+`bench-report` takes the same `--area`, and needs it to find a scoped run.
 
 Transcripts are committed because they cannot be reproduced. The seed pins the
 deal and the prompts byte-for-byte, but not the model's generation: re-running

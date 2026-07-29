@@ -395,7 +395,12 @@ if (callErrors.length > 5) console.log(`    ...and ${callErrors.length - 5} more
 // ------------------------------------------------------------------- baselines
 
 const dir = new URL("../bench/", import.meta.url);
-const stem = `${setCode}.${format}.${seed}.${provider}`;
+// A partial run gets its own baseline rather than merging into the full one.
+// Both sides then measure the same areas, which is what makes every metric --
+// including the blended ones -- comparable again. Canonical order, so
+// --area frame,coach and --area coach,frame are the same baseline.
+const areaTag = partial ? `.${ALL_AREAS.filter((a) => areasRun.includes(a)).join("+")}` : "";
+const stem = `${setCode}.${format}.${seed}.${provider}${areaTag}`;
 const file = new URL(`baseline.${stem}.json`, dir);
 const runFile = new URL(`run.${stem}.json`, dir);
 const runBaselineFile = new URL(`run.${stem}.baseline.json`, dir);
@@ -477,19 +482,6 @@ writeFileSync(runFile, `${JSON.stringify(transcript, null, 2)}\n`);
 console.log(`\nwrote run ${runFile.pathname.split("/").pop()}`);
 
 if (has("update-baseline")) {
-  // A baseline has to describe one coherent run. Merging a coach-only run into
-  // an existing file would leave its blended accuracy metrics -- invented
-  // citation rate, distinct principles, off-topic names -- describing a mixture
-  // of two runs against two different prompts, which is a number with no
-  // meaning that every later comparison would trust.
-  if (partial) {
-    console.log(
-      `\n--area ${areasRun.join(",")} cannot become a baseline: a partial run measures ` +
-        "part of the system, and a baseline has to describe all of it. Iterate with " +
-        "--area, then re-baseline with a full run.",
-    );
-    process.exit(0);
-  }
   writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
   // The reference prose, versioned beside the reference numbers. Without this
   // twin, accepting a saving would move the numbers forward and leave the next
@@ -529,17 +521,33 @@ const SCOPE = {
 };
 
 const comparedAreas = areasRun.filter((a) => baseAreas.includes(a));
-/** Runs the check only if both this run and the baseline covered every area it reads. */
+
+/**
+ * Whether a metric means the same thing on both sides.
+ *
+ * The question is NOT "did this run collect every area the metric reads" -- that
+ * would reject a coach-only run against a coach-only baseline, where distinct
+ * principles is counted over coach answers on both sides and is perfectly
+ * comparable. The question is whether the two runs computed it over the same
+ * areas. Same areas, same population, same meaning.
+ */
+const sameScope = (scope) => {
+  const mine = scope.filter((a) => areasRun.includes(a));
+  const theirs = scope.filter((a) => baseAreas.includes(a));
+  return mine.length > 0 && mine.length === theirs.length && mine.every((a) => theirs.includes(a));
+};
+
 const scoped = (label, check) => {
-  if (comparedAreas.length === 0) {
+  // Truncation is a per-area count summed after the fact, so it stays comparable
+  // over whatever the two runs have in common rather than needing a full match.
+  if (label === "truncated answers") {
+    if (comparedAreas.length > 0) return check();
     skipped.push(`${label} (this run and the baseline share no areas)`);
     return;
   }
-  // Truncation is summed over whatever the two runs have in common, so any
-  // overlap makes it comparable. Everything else needs its specific areas.
-  const needs = label === "truncated answers" ? comparedAreas : SCOPE[label];
-  if (needs.every((a) => comparedAreas.includes(a))) return check();
-  skipped.push(`${label} (needs ${SCOPE[label].join(" + ")})`);
+  if (sameScope(SCOPE[label])) return check();
+  const side = (areas) => SCOPE[label].filter((a) => areas.includes(a)).join("+") || "nothing";
+  skipped.push(`${label} (counted over ${side(areasRun)} here, ${side(baseAreas)} in the baseline)`);
 };
 
 // Deterministic, so any drift is real and worth the exact comparison. A band

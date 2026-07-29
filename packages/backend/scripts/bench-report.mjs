@@ -35,7 +35,17 @@ const setCode = flag("set", "fdn");
 const format = flag("format", "TradDraft");
 const seed = flag("seed", "42");
 const provider = flag("provider", "anthropic");
-const stem = `${setCode}.${format}.${seed}.${provider}`;
+// Mirrors bench-llm's naming: a partial run keeps its own baseline, so the area
+// set is part of the filename. Canonical order, so --area frame,coach finds the
+// file --area coach,frame wrote.
+const AREA_ORDER = ["coach", "verdict", "frame"];
+const areaArg = flag("area", null);
+const areaTag = (() => {
+  if (!areaArg) return "";
+  const picked = AREA_ORDER.filter((a) => areaArg.split(",").some((s) => s.trim() === a));
+  return picked.length === 0 || picked.length === AREA_ORDER.length ? "" : `.${picked.join("+")}`;
+})();
+const stem = `${setCode}.${format}.${seed}.${provider}${areaTag}`;
 
 const dir = new URL("../bench/", import.meta.url);
 const runFile = new URL(flag("run", `run.${stem}.json`), dir);
@@ -138,12 +148,25 @@ const METRICS = [
   },
 ];
 
-const ALL_AREAS = ["coach", "verdict", "frame"];
+const ALL_AREAS = AREA_ORDER;
 // Transcripts written before --area existed described a full run.
 const runAreas = run.areasRun ?? ALL_AREAS;
 const baseAreas = base?.areasRun ?? ALL_AREAS;
 const measured = base ? runAreas.filter((a) => baseAreas.includes(a)) : runAreas;
-const covers = (scope) => scope.every((a) => measured.includes(a));
+
+/**
+ * Whether a metric means the same thing on both sides -- same areas, same
+ * population. A coach-only run against a coach-only baseline compares
+ * everything, because both counted over coach answers. A coach-only run against
+ * a full baseline compares only the coach-scoped metrics, because the blended
+ * ones were counted over different populations.
+ */
+const covers = (scope) => {
+  if (!base) return scope.some((a) => runAreas.includes(a));
+  const mine = scope.filter((a) => runAreas.includes(a));
+  const theirs = scope.filter((a) => baseAreas.includes(a));
+  return mine.length > 0 && mine.length === theirs.length && mine.every((a) => theirs.includes(a));
+};
 
 const sumArea = (r, field) => Object.values(r.areas).reduce((n, a) => n + a[field], 0);
 
@@ -243,11 +266,20 @@ function deltaBar(label, after, before) {
     </div>`;
 }
 
-const unmeasured = (m) => `<div class="chip skipped">
+function unmeasured(m) {
+  const side = (areas) => m.scope.filter((a) => areas.includes(a)).join("+") || "nothing";
+  // Two different reasons to skip, and conflating them would send you looking
+  // for the wrong fix: either this run never collected the area, or both runs
+  // collected different ones and the numbers are not the same measurement.
+  const why = !base
+    ? `needs ${m.scope.join(" + ")}`
+    : `${side(runAreas)} here, ${side(baseAreas)} in baseline`;
+  return `<div class="chip skipped">
       <span class="chip-label">${esc(m.label)}</span>
-      <span class="chip-val muted">needs ${esc(m.scope.join(" + "))}</span>
+      <span class="chip-val muted">${esc(why)}</span>
       <span class="chip-tag">not measured</span>
     </div>`;
+}
 
 function metricChips() {
   if (!base) {
