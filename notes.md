@@ -1,17 +1,9 @@
 # Issues:
 
-0. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
+1. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
 
-- "Adventure" type (see: "Picklock Prankster")
+- "Adventure" sub-card/split-card type (see: "Picklock Prankster")
 - Bargain
-
-1. ~~**The coach invents mana costs.**~~ **RESOLVED 2026-07-28.** It called
-   `Nurturing Bristleback` a 3-drop; it is `5GG`. The cause was that
-   `buildPickContext` / `buildReviewContext` rendered every card the player did
-   NOT pick as `name (Colour, GIH WR x%)` — no cmc, no type line — so every
-   curve/size claim about those cards was invention. Both now render through
-   `describeCard` (`core/tutor/cardLine.ts`), which carries cmc and type line for
-   every card in the pack. (Numbering kept so the items below keep their ids.)
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -82,7 +74,7 @@
    2026-07-28 by stripping the `Promise.allSettled` usage read out of `stream()`
    entirely and re-running: the uncaught error still appeared. It comes from
    `streamText`'s internal flush rejecting a promise the pump never consumes.
-   (The *separate* `Promise.all` bug that instrumentation did introduce — the
+   (The _separate_ `Promise.all` bug that instrumentation did introduce — the
    second rejection going unconsumed — is fixed.)
 
    The likely fix is to consume the result promises the pump currently ignores,
@@ -248,13 +240,12 @@ Ordered by value × readiness. Each is a candidate feature branch.
 5. **Follow-ups to token metrics** (spec:
    `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
    the first pass, each for its own reason:
-
    - **Static token assertions in vitest, no API calls.** Input tokens,
      call frequency and the cache split are pure functions of the prompt
      builders and `isDecisionPick` — a draft replays in 0.16ms, so all 45 picks
      can be evaluated exactly and for free, no provider involved. That would
      catch corpus growth on every commit instead of only when someone pays for a
-     benchmark run. It is not in the first pass only because *accuracy* cannot be
+     benchmark run. It is not in the first pass only because _accuracy_ cannot be
      computed statically and forces a live harness anyway; this is the cheap
      fast-feedback half, worth adding once the harness proves the metrics are the
      right ones.
