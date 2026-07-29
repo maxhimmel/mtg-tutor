@@ -19,7 +19,10 @@ function summarizePool(pool: Card[]): string {
     .join("\n");
 }
 
-export function buildPickContext(rec: RecordedPick, pool: Card[]): string {
+// Writes cards into a prompt, so it wants them whole: describeCard names the
+// mana value and type line, and statLine reads the numbers that sit beside a
+// win rate. Hydrated from the text table before it gets here.
+export function buildPickContext(rec: RecordedPick<Card>, pool: Card[]): string {
   const { picked, score, pack } = rec;
 
   const passed = pack

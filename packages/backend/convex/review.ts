@@ -12,6 +12,7 @@ import { z } from "zod";
 import { action, internalQuery, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
+import { hydrate, hydrateCard, hydratePick, textIndex } from "./cardText.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -53,6 +54,7 @@ export const load = query({
       .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", args.sessionId))
       .collect();
     const byIndex = new Map(verdicts.map((v) => [v.pickIndex, v.verdict]));
+    const text = textIndex(cardsDoc.cards);
 
     return {
       id: session._id,
@@ -66,8 +68,10 @@ export const load = query({
         pickIndex,
         packNo: h.packNo,
         pickNo: h.pickNo,
-        pack: h.pack,
-        picked: h.picked,
+        // The walkthrough re-renders every pack the player saw, so these go out
+        // whole rather than as the engine's half of a card.
+        pack: hydrate(h.pack, text),
+        picked: hydrateCard(h.picked, text),
         bestName: h.score.best.name,
         score: h.score.score,
         isBest: h.score.isBest,
@@ -146,13 +150,14 @@ const VERDICT_SCHEMA = z.object({
 export const verdictContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { engine } = await loadBoard(ctx, args.sessionId);
+    const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
     const record = engine.history[args.pickIndex];
     if (!record) {
       throw new Error(
         `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
       );
     }
+    const text = textIndex(cardsDoc.cards);
 
     const existing = await ctx.db
       .query("reviewVerdicts")
@@ -171,14 +176,16 @@ export const verdictContext = internalQuery({
           pickIndex: args.pickIndex,
           packNo: record.packNo,
           pickNo: record.pickNo,
-          pack: record.pack,
-          picked: record.picked,
+          // Whole cards: the review prompt describes each one and reads the
+          // statistics beside its win rate.
+          pack: hydrate(record.pack, text),
+          picked: hydrateCard(record.picked, text),
           bestName: record.score.best.name,
           score: record.score.score,
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
-        engine.humanPool.slice(0, args.pickIndex),
+        hydrate(engine.humanPool.slice(0, args.pickIndex), text),
       ),
     };
   },
@@ -266,7 +273,11 @@ export const framePrompt = internalQuery({
   handler: async (ctx, args) => {
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
     const winRates = new Map(cardsDoc.colorPairWinRates.map((r) => [r.pair, r.winRate]));
-    return buildDraftFrame(args.phase, engine.humanPool, winRates);
+    return buildDraftFrame(
+      args.phase,
+      hydrate(engine.humanPool, textIndex(cardsDoc.cards)),
+      winRates,
+    );
   },
 });
 

@@ -1,4 +1,4 @@
-import type { Card } from "../model/card.js";
+import type { EngineCard } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
 
 export interface DraftSummary {
@@ -9,7 +9,7 @@ export interface DraftSummary {
 }
 
 // The two colours the pool leans on hardest, in WUBRG order.
-export function deckColorPair(pool: Card[]): string {
+export function deckColorPair(pool: EngineCard[]): string {
   const counts = new Map<string, number>();
   for (const c of pool) {
     for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
@@ -24,7 +24,7 @@ export function deckColorPair(pool: Card[]): string {
     .join("");
 }
 
-export function summarizeDraft(history: RecordedPick[], pool: Card[]): DraftSummary {
+export function summarizeDraft(history: RecordedPick[], pool: EngineCard[]): DraftSummary {
   if (history.length === 0) {
     return { overallScore: 0, accuracy: 0, colorPair: "", pickCount: 0 };
   }

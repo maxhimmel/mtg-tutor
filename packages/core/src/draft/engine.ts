@@ -1,4 +1,4 @@
-import type { Card, SetData } from "../model/card.js";
+import type { EngineCard, SetData } from "../model/card.js";
 import { DRAFT, PACK } from "../config.js";
 import { makePacks, packSizeFor } from "./pack.js";
 import { Bot } from "./bots.js";
@@ -11,10 +11,10 @@ export type { RecordedPick };
 export class DraftEngine {
   packNo = 1;
   pickNo = 1;
-  readonly humanPool: Card[] = [];
+  readonly humanPool: EngineCard[] = [];
   readonly history: RecordedPick[] = [];
 
-  private hands: Card[][] = []; // hands[0] = human, seat index = position
+  private hands: EngineCard[][] = []; // hands[0] = human, seat index = position
   private bots: Bot[];
   private set: SetData;
   private rng: () => number;
@@ -31,7 +31,7 @@ export class DraftEngine {
     this.pickNo = 1;
   }
 
-  get currentPack(): Card[] {
+  get currentPack(): EngineCard[] {
     return this.hands[DRAFT.humanSeat];
   }
 
@@ -40,7 +40,7 @@ export class DraftEngine {
   }
 
   // Human picks a card; bots pick from their hands; packs rotate; state advances.
-  humanPick(card: Card): RecordedPick {
+  humanPick(card: EngineCard): RecordedPick {
     const pack = this.currentPack;
     const score = scorePick(pack, card, this.humanPool);
     const signal = readSignals(pack, this.pickNo);
@@ -81,7 +81,7 @@ export class DraftEngine {
   private rotate() {
     const n = DRAFT.seats;
     const passLeft = this.packNo % 2 === 1;
-    const next: Card[][] = new Array(n);
+    const next: EngineCard[][] = new Array(n);
     for (let j = 0; j < n; j++) {
       next[j] = passLeft ? this.hands[(j - 1 + n) % n] : this.hands[(j + 1) % n];
     }

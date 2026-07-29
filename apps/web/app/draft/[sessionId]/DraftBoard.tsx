@@ -32,7 +32,7 @@ const PRINCIPLES = loadPrinciples();
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
 interface LastPick {
-  score: PickScore;
+  score: PickScore<Card>;
   signal?: string;
   pickIndex: number;
   // The pack this pick chose from, captured before the mutation swaps it for
@@ -88,7 +88,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   }, [convex, id, isAuthenticated]);
 
   const streamCoach = useCallback(
-    async (pickIndex: number, score: PickScore, cardsInPack: number, force = false) => {
+    async (pickIndex: number, score: PickScore<Card>, cardsInPack: number, force = false) => {
       const run = ++streamRun.current;
       const fallback = () => {
         if (run === streamRun.current) setCoach(explainPick(score).join("\n"));
@@ -175,7 +175,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     const pack = state?.pack ?? [];
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
-      const score = result.score as PickScore;
+      const score = result.score as PickScore<Card>;
       // `pick` returns the whole next board, which is the reason this component
       // needs no subscription. Everything not listed here -- the set's name,
       // icon and format -- is fixed for the life of the session.

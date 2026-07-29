@@ -8,14 +8,18 @@ import {
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import { loadBoard, requireUserId, setDocFor } from "./sessions.js";
+import { type TextIndex, hydrate, hydrateCard, hydratePick, textIndex } from "./cardText.js";
 
-const boardView = (engine: DraftEngine) => ({
+// The board as a person sees it, so the cards go out whole: the engine deals in
+// its own half of a card, and a tile with no art or type line on it is not a
+// board. See cardText.ts.
+const boardView = (engine: DraftEngine, text: TextIndex) => ({
   packNo: engine.packNo,
   pickNo: engine.pickNo,
   complete: engine.isComplete(),
   totalPicks: engine.totalPicks(),
-  pack: engine.isComplete() ? [] : engine.currentPack,
-  pool: engine.humanPool,
+  pack: engine.isComplete() ? [] : hydrate(engine.currentPack, text),
+  pool: hydrate(engine.humanPool, text),
 });
 
 export const start = mutation({
@@ -54,7 +58,7 @@ export const start = mutation({
 export const state = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
     return {
       sessionId: session._id,
       setCode: session.setCode,
@@ -65,7 +69,7 @@ export const state = query({
       format: session.format,
       status: session.status,
       summary: session.summary,
-      ...boardView(engine),
+      ...boardView(engine, textIndex(cardsDoc.cards)),
     };
   },
 });
@@ -73,7 +77,7 @@ export const state = query({
 export const pick = mutation({
   args: { sessionId: v.id("draftSessions"), cardName: v.string() },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
 
     if (engine.isComplete()) {
       throw new Error("This draft is already finished.");
@@ -100,11 +104,12 @@ export const pick = mutation({
         : {}),
     });
 
+    const text = textIndex(cardsDoc.cards);
     return {
-      score: record.score,
+      score: hydratePick(record, text).score,
       signal: record.signal,
       pickIndex: session.pickedNames.length,
-      ...boardView(engine),
+      ...boardView(engine, text),
     };
   },
 });
@@ -113,7 +118,8 @@ export const pick = mutation({
 export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const text = textIndex(cardsDoc.cards);
 
     const mistakes = engine.history
       .filter(
@@ -122,8 +128,8 @@ export const results = query({
       .map((h) => ({
         packNo: h.packNo,
         pickNo: h.pickNo,
-        picked: h.picked,
-        best: h.score.best,
+        picked: hydrateCard(h.picked, text),
+        best: hydrateCard(h.score.best, text),
         cost: h.score.best.gihWinRate! - h.picked.gihWinRate!,
       }))
       .sort((a, b) => b.cost - a.cost)
@@ -131,7 +137,9 @@ export const results = query({
 
     return {
       summary: summarizeDraft(engine.history, engine.humanPool),
-      deck: suggestDeck(engine.humanPool),
+      // The deck builder reads type lines and colour identity to tell a land
+      // from a spell and a splash from a lane, so it wants whole cards.
+      deck: suggestDeck(hydrate(engine.humanPool, text)),
       mistakes,
       status: session.status,
       // Without 17Lands data every card scores off its rarity baseline, so a
@@ -147,7 +155,7 @@ export const results = query({
 export const coachContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
 
     const record = engine.history[args.pickIndex];
     if (!record) {
@@ -158,9 +166,10 @@ export const coachContext = internalQuery({
 
     // The pool as it stood just after this pick, not the final pool.
     const poolAtPick = engine.humanPool.slice(0, args.pickIndex + 1);
+    const text = textIndex(cardsDoc.cards);
 
     return {
-      userContent: buildPickContext(record, poolAtPick),
+      userContent: buildPickContext(hydratePick(record, text), hydrate(poolAtPick, text)),
       setCode: session.setCode,
       packNo: record.packNo,
       pickNo: record.pickNo,

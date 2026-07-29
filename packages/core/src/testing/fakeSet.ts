@@ -2,8 +2,7 @@
 // so it never ships in dist.
 
 import type { Card, ColorCode, PackComposition, Rarity, SetData } from "../model/card.js";
-import { buildSetData } from "../model/setData.js";
-import { normalizeName } from "../model/card.js";
+import { buildSetData, withPackSlots } from "../model/setData.js";
 
 export function mkCard(
   name: string,
@@ -47,20 +46,11 @@ export function fakeSet(): SetData {
     cards.push(mkCard(`M${i}`, "mythic", [colors[i % 5]], 0.58));
   }
 
-  return {
-    code: "tst",
-    cards,
-    byName: new Map(cards.map((c) => [normalizeName(c.name), c])),
-    pools: {
-      common: cards.filter((c) => c.rarity === "common"),
-      uncommon: cards.filter((c) => c.rarity === "uncommon"),
-      rare: cards.filter((c) => c.rarity === "rare"),
-      mythic: cards.filter((c) => c.rarity === "mythic"),
-      bonus: [],
-      land: [],
-    },
-    colorPairWinRates: new Map(),
-  };
+  // Through withPackSlots and buildSetData rather than assembling the pools by
+  // hand, so a fixture cannot drift from how ingestion actually partitions a
+  // set. None of these carry a setCode or a land type line, so every one lands
+  // in its own rarity and the bonus and land pools come out empty.
+  return buildSetData("tst", withPackSlots("tst", cards));
 }
 
 // A Play Booster-shaped set: a bonus sheet from another set code, basic lands,
@@ -85,7 +75,7 @@ export function fakePlayBoosterSet(composition?: PackComposition): SetData {
 
   return buildSetData(
     "tst",
-    cards,
+    withPackSlots("tst", cards),
     new Map(),
     composition ?? {
       size: 14,

@@ -1,12 +1,20 @@
-import type { Card } from "../model/card.js";
+import type { Card, EngineCard } from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
 
-export interface PickScore {
+/**
+ * Generic in the card, because scoring runs on both halves of one.
+ *
+ * The engine scores a pick from what it has -- the engine's fields, which is
+ * all a value comparison needs. Anything that then WRITES that score for a
+ * person, or for a prompt, needs the rules text too, and says so by asking for
+ * a `PickScore<Card>`. Hydrating fills the difference.
+ */
+export interface PickScore<C extends EngineCard = EngineCard> {
   score: number; // 0-100
   grade: string; // A+ .. F
-  picked: Card;
-  best: Card;
+  picked: C;
+  best: C;
   pickedValue: number;
   bestValue: number;
   isBest: boolean;
@@ -26,7 +34,7 @@ export function gradeFor(score: number): string {
 }
 
 // Committed colors: colors with >=2 cards in the current pool.
-export function committedColors(pool: Card[]): Set<string> {
+export function committedColors(pool: EngineCard[]): Set<string> {
   const counts = new Map<string, number>();
   for (const c of pool) for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
@@ -52,7 +60,7 @@ export function isCorrectGuess(
   return guessName === rawBestName || guessName === contextBestName;
 }
 
-export function scorePick(pack: Card[], picked: Card, pool: Card[]): PickScore {
+export function scorePick<C extends EngineCard>(pack: C[], picked: C, pool: C[]): PickScore<C> {
   const ranked = [...pack].sort((a, b) => cardValue(b) - cardValue(a));
   const best = ranked[0];
   const bestValue = cardValue(best);

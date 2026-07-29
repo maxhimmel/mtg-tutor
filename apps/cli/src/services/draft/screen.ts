@@ -43,7 +43,7 @@ export async function runDraft(
     await showPickFeedback(
       sessionId,
       result.pickIndex,
-      result.score as PickScore,
+      result.score as PickScore<Card>,
       result.signal,
       pack.length,
     );
@@ -64,7 +64,7 @@ export async function runDraft(
 async function showPickFeedback(
   sessionId: Id<"draftSessions">,
   pickIndex: number,
-  score: PickScore,
+  score: PickScore<Card>,
   signal: string | undefined,
   cardsInPack: number,
 ) {

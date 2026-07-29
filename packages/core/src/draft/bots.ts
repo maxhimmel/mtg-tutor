@@ -1,4 +1,4 @@
-import type { Card } from "../model/card.js";
+import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
@@ -6,11 +6,11 @@ import { cardValue } from "../scoring/value.js";
 // signals (open colors flow downstream) and meaningful wheels.
 export class Bot {
   private colorValue = new Map<string, number>();
-  readonly pool: Card[] = [];
+  readonly pool: EngineCard[] = [];
 
   constructor(private readonly noise: number = 0.01, private readonly rng: () => number = Math.random) {}
 
-  private colorBias(card: Card): number {
+  private colorBias(card: EngineCard): number {
     if (card.colors.length === 0) return 0;
     // Reward the bot's strongest matching color; cap so a real bomb can still
     // pull the bot off its lane, but committed colors are clearly preferred.
@@ -19,7 +19,7 @@ export class Bot {
     return Math.min(0.05, best * 0.3);
   }
 
-  pick(pack: Card[]): Card {
+  pick(pack: EngineCard[]): EngineCard {
     let best = pack[0];
     let bestScore = -Infinity;
     for (const card of pack) {
@@ -33,7 +33,7 @@ export class Bot {
     return best;
   }
 
-  private take(card: Card) {
+  private take(card: EngineCard) {
     this.pool.push(card);
     const q = Math.max(0, cardValue(card) - 0.5);
     for (const c of card.colors) this.colorValue.set(c, (this.colorValue.get(c) ?? 0) + q);

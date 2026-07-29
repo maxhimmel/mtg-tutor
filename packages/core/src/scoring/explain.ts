@@ -1,4 +1,4 @@
-import type { Card } from "../model/card.js";
+import type { Card, EngineCard } from "../model/card.js";
 import type { PickScore } from "./score.js";
 
 const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
@@ -22,7 +22,9 @@ function wheelNote(alsa?: number): string {
   return `often wheels (last seen ~pick ${Math.round(alsa)})`;
 }
 
-export function explainPick(ps: PickScore): string[] {
+// Reads the rules text to name what the best card actually does, so it wants a
+// hydrated score rather than the engine's.
+export function explainPick(ps: PickScore<Card>): string[] {
   const lines: string[] = [];
   const { picked, best } = ps;
 
@@ -46,7 +48,7 @@ export function explainPick(ps: PickScore): string[] {
 }
 
 // Signal reading: which colors are over-represented with strong cards late in a pack.
-export function readSignals(pack: Card[], pickNumber: number): string | undefined {
+export function readSignals(pack: EngineCard[], pickNumber: number): string | undefined {
   if (pickNumber < 4) return undefined;
   const strengthByColor = new Map<string, number>();
   for (const c of pack) {

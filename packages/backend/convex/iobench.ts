@@ -54,7 +54,7 @@ export const stateCost = query({
 // and TypeScript answers that by widening the whole `api` object to `any`,
 // which surfaces as a pile of implicit-any errors in unrelated modules.
 interface PickOutcome {
-  score: PickScore;
+  score: PickScore<Card>;
   signal?: string;
   pickIndex: number;
   packNo: number;

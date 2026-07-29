@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as cardText from "../cardText.js";
 import type * as draft from "../draft.js";
 import type * as http from "../http.js";
 import type * as iobench from "../iobench.js";
@@ -29,6 +30,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  cardText: typeof cardText;
   draft: typeof draft;
   http: typeof http;
   iobench: typeof iobench;
