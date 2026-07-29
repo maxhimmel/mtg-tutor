@@ -148,6 +148,7 @@
    `suggestDeck` already exist, so this is mostly a new screen — and it is a
    different skill (pool evaluation and deck construction rather than pick
    order).
+   - Not too interested in this format. Low priority.
 
 8. **A deck-building step.** Today `suggestDeck` just shows you the answer on
    the results screen. Building the 40 is half of Limited and the app currently
@@ -185,6 +186,7 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    deployment's `WORKOS_CLIENT_ID`/`WORKOS_API_KEY` — which only works if the
    environment has password auth enabled. Now that the device flow exists it
    could instead read `~/.mtg-tutor/credentials.json`.
+   - Think we solved this?
 3. **Draft sessions created before auth have `userId: undefined` and are now
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
