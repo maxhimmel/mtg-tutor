@@ -100,6 +100,8 @@
 
 7. When rendering the card placard for cards that have a sub-card we should render the placard's mana cost with a "//" divider.
 
+8. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
@@ -196,19 +198,10 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    the web app has no route for any of it — the largest remaining capability gap
    between the two clients. Review shipped to the web on 2026-07-22
    (`/review`, `/review/[id]`, `/review/[id]/breakdown`); this is what is left.
-2. **Headless runs need a token.** `smoke-draft.mjs` cannot talk to the draft
-   functions anonymously. It takes `MTG_TUTOR_TOKEN`, or mints one via the
-   WorkOS password grant from `SMOKE_EMAIL`/`SMOKE_PASSWORD` plus the
-   deployment's `WORKOS_CLIENT_ID`/`WORKOS_API_KEY` — which only works if the
-   environment has password auth enabled. Now that the device flow exists it
-   could instead read `~/.mtg-tutor/credentials.json`.
-   - Think we solved this?
-3. **Draft sessions created before auth have `userId: undefined` and are now
+2. **Draft sessions created before auth have `userId: undefined` and are now
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
-4. ~~**`draftSessions.saved` is dead.**~~ Stripped 2026-07-29 by
-   `migrations:dropSavedFlag`, off the rows and off the schema.
 
 # Roadmap (pick per future session):
 
