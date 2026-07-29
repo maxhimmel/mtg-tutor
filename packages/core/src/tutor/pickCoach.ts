@@ -1,6 +1,7 @@
 import type { Card, PoolCard } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
+import { commitmentLine, situationLine } from "./situation.js";
 
 // Renders a single draft pick into a compact prompt for the coach. Pure string
 // work (no SDK), so a future web frontend can reuse it as-is.
@@ -22,8 +23,12 @@ function summarizePool(pool: readonly PoolCard[]): string {
 // Writes cards into a prompt, so it wants them whole: describeCard names the
 // mana value and type line, and statLine reads the numbers that sit beside a
 // win rate. Hydrated from the text table before it gets here.
-export function buildPickContext(rec: RecordedPick<Card>, pool: readonly PoolCard[]): string {
+export function buildPickContext(rec: RecordedPick<Card>, poolBefore: readonly PoolCard[]): string {
   const { picked, score, pack } = rec;
+  // The pool the player is looking at includes what they just took; the
+  // commitments they were judged against do not. Both come from `poolBefore` so
+  // the two cannot drift apart.
+  const pool = [...poolBefore, picked];
 
   const passed = pack
     .filter((c) => c.name !== picked.name)
@@ -38,7 +43,8 @@ export function buildPickContext(rec: RecordedPick<Card>, pool: readonly PoolCar
       `Best by the numbers: ${score.best.name} (GIH WR ${pct(score.best.gihWinRate)}).`;
 
   return [
-    `Situation: Pack ${rec.packNo}, Pick ${rec.pickNo}.`,
+    situationLine(rec.packNo, rec.pickNo, pack.length),
+    commitmentLine(poolBefore, score.onColor),
     "",
     `Your pool so far (${pool.length} cards):`,
     summarizePool(pool),

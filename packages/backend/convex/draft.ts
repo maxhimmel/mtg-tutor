@@ -196,12 +196,10 @@ export const coachContext = internalQuery({
     );
     const record = toRecordedPick(row, text);
 
-    // The pool as it stood just AFTER this pick, which is what the player had
-    // in front of them when the coach spoke.
-    const poolAtPick = [...row.poolBefore, { name: row.pickedName, colors: record.picked.colors }];
-
     return {
-      userContent: buildPickContext(record, poolAtPick),
+      // The pool as it stood BEFORE this pick: the prompt shows it with the pick
+      // added back, and judges the pick's colors against it without.
+      userContent: buildPickContext(record, row.poolBefore),
       setCode: session.setCode,
       packNo: row.packNo,
       pickNo: row.pickNo,

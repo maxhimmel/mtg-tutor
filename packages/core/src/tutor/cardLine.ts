@@ -16,10 +16,20 @@ const COLOR_NAMES: Record<ColorCode, string> = {
 
 export const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 
+const WUBRG = "WUBRG";
+
+// Colors as prose, in WUBRG order -- a set of committed colors comes out in pool
+// order otherwise, so the same two colors would be written two ways across a draft.
+export function colorNames(colors: readonly ColorCode[]): string {
+  return [...colors]
+    .sort((a, b) => WUBRG.indexOf(a) - WUBRG.indexOf(b))
+    .map((col) => COLOR_NAMES[col])
+    .join("/");
+}
+
 export function colorLabel(c: PoolCard): string {
   if (c.colors.length === 0) return "Colorless";
-  if (c.colors.length > 1) return c.colors.map((col) => COLOR_NAMES[col]).join("/");
-  return COLOR_NAMES[c.colors[0]];
+  return colorNames(c.colors);
 }
 
 // "3.8k" -- sample sizes only have to convey an order of magnitude, and four

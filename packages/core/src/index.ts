@@ -27,6 +27,7 @@ export * from "./tutor/cardNames.js";
 export * from "./tutor/cardLine.js";
 export * from "./tutor/glossary.js";
 export * from "./tutor/prompt.js";
+export * from "./tutor/situation.js";
 export * from "./tutor/pickCoach.js";
 export * from "./tutor/reviewPrompt.js";
 

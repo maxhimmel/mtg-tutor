@@ -61,13 +61,7 @@
    session successfully. A re-crawl from unchanged artifacts is safe; it was the
    `packRate` rebuild that broke EOE, not re-ingestion as such.
 
-5. I've noticed the coach pulling advice about choosing a non-optimal card (probably because the stats are better on the optimal card versus my pick) when I'm on my second/third pack and the first few picks. As if it can't distinguish that once I'm a full pack in I'm not technically at "pick 1" any longer - I'm at all-the-picks-from-pack-1 + pack-2-pick-N.
-   The prompt says `Pack 2, Pick 3` and lists the pool, but never the absolute
-   pick index, how far through the draft it is, or which colours are already
-   committed — `committedColors` exists in `core/scoring/score.ts` and no prompt
-   builder calls it.
-
-6. **A failed coach stream logs an uncaught `AI_NoOutputGeneratedError`.** When
+5. **A failed coach stream logs an uncaught `AI_NoOutputGeneratedError`.** When
    `/coach` calls the model and nothing comes back — a rate limit is the easy way
    to see it — the deployment logs:
 
@@ -98,9 +92,9 @@
    awaiting all of them. Easy to reproduce: exhaust the Groq daily cap, or point
    `LLM_BASE_URL` at something that refuses.
 
-7. When rendering the card placard for cards that have a sub-card we should render the placard's mana cost with a "//" divider.
+6. When rendering the card placard for cards that have a sub-card we should render the placard's mana cost with a "//" divider.
 
-8. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
+7. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
 # Ideas:
 

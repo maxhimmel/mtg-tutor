@@ -1,4 +1,4 @@
-import type { Card, EngineCard } from "../model/card.js";
+import type { Card, ColorCode, EngineCard, PoolCard } from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
 
@@ -33,9 +33,10 @@ export function gradeFor(score: number): string {
   return "F";
 }
 
-// Committed colors: colors with >=2 cards in the current pool.
-export function committedColors(pool: EngineCard[]): Set<string> {
-  const counts = new Map<string, number>();
+// Committed colors: colors with >=2 cards in the current pool. Only reads the
+// colors, so a stored pool row is as good an argument as a whole card.
+export function committedColors(pool: readonly PoolCard[]): Set<ColorCode> {
+  const counts = new Map<ColorCode, number>();
   for (const c of pool) for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
 }
@@ -70,7 +71,7 @@ export function scorePick<C extends EngineCard>(pack: C[], picked: C, pool: C[])
   const committed = committedColors(pool);
   // You can't be "off-color" before committing to any colors — early picks are
   // expendable and staying open is correct. Fixes the bogus P1P1 "off your
-  // colors" warning (notes.md #1); partial credit below stays gated on committed.
+  // colors" warning; partial credit below stays gated on committed.
   const onColor =
     committed.size === 0 ||
     picked.colors.length === 0 ||

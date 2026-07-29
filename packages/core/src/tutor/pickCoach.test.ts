@@ -47,15 +47,27 @@ describe("buildPickContext", () => {
     score,
   };
 
-  const ctx = buildPickContext(rec, [poolMate, picked]);
+  // The pool BEFORE the pick; buildPickContext adds the picked card back for display.
+  const ctx = buildPickContext(rec, [poolMate]);
 
   it("names the picked card and the pick position", () => {
     expect(ctx).toContain("Lightning Strike");
     expect(ctx).toContain("Pack 1, Pick 3");
   });
 
-  it("includes the running pool", () => {
+  // Pack and pick number alone left the coach unable to tell an early pick from
+  // a late one, so it advised staying open at pick 40.
+  it("places the pick in the whole draft", () => {
+    expect(ctx).toContain("pick 3 of 12 in the draft");
+  });
+
+  it("states the colors the pool has committed to", () => {
+    expect(ctx).toContain("Committed colors: none yet");
+  });
+
+  it("includes the running pool, with the pick in it", () => {
     expect(ctx).toContain("Storm Fox");
+    expect(ctx).toContain("Your pool so far (2 cards)");
   });
 
   it("includes the numeric data verdict", () => {
