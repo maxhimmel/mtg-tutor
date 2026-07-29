@@ -32,7 +32,8 @@
     "check-availability": "node scripts/check-set-availability.mjs",
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
-    "bench-llm": "node scripts/bench-llm.mjs"
+    "bench-llm": "node scripts/bench-llm.mjs",
+    "bench-report": "node scripts/bench-report.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

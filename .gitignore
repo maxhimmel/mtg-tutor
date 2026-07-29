@@ -16,3 +16,13 @@ scratch/
 # reduced to a ~270KB artifact under packages/backend/data, which IS committed.
 # Caching them here just saves re-downloading while tuning metric definitions.
 datasets/
+
+# Benchmark output, and only the derived half. `pnpm bench-report` rebuilds the
+# page from a transcript in milliseconds for free, so it is build output.
+#
+# The transcripts under bench/ are NOT ignored, and the distinction is not
+# "how often does it change". A seed pins the deal and the prompts byte-for-byte
+# but not the model's generation, so a run costs ~350k tokens and its prose can
+# never be reproduced -- least of all the runs whose cut got REJECTED, which
+# never become a baseline and would otherwise leave no record of why.
+packages/backend/bench/report.*.html
