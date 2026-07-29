@@ -9,6 +9,49 @@ import { replayFor } from "./sessions.js";
 import type { StoredCard } from "./validators.js";
 
 /**
+ * Removes `draftSessions.saved`, which has been dead for a while.
+ *
+ * A draft was never opt-in -- the row is inserted before the first pick and
+ * nothing is ever deleted -- so nothing has written it since, and no query has
+ * read it since stats and review moved to ownSessions. It stayed on the schema
+ * as an optional field purely so the rows still carrying it would validate.
+ * notes.md called it a migration for whenever this table was next touched.
+ *
+ * Patching a field to undefined is how Convex removes it.
+ */
+export const dropSavedFlag = internalMutation({
+  args: { after: v.optional(v.number()), dropped: v.optional(v.number()) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ dropped: number; complete: boolean; after?: number }> => {
+    const dropped = args.dropped ?? 0;
+
+    const batch = await ctx.db
+      .query("draftSessions")
+      .withIndex("by_creation_time", (q) => q.gt("_creationTime", args.after ?? 0))
+      .take(200);
+
+    if (batch.length === 0) {
+      console.log(`dropSavedFlag: complete, ${dropped} row(s)`);
+      return { dropped, complete: true };
+    }
+
+    let n = dropped;
+    for (const row of batch) {
+      if (row.saved !== undefined) {
+        await ctx.db.patch(row._id, { saved: undefined });
+        n++;
+      }
+    }
+
+    const next = { after: batch[batch.length - 1]._creationTime, dropped: n };
+    await ctx.scheduler.runAfter(0, internal.migrations.dropSavedFlag, next);
+    return { ...next, complete: false };
+  },
+});
+
+/**
  * Writes the pick records for sessions drafted before draftPicks existed.
  *
  * Replays each session once -- which is exactly what the coach and the review
