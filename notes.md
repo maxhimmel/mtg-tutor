@@ -98,6 +98,8 @@
    awaiting all of them. Easy to reproduce: exhaust the Groq daily cap, or point
    `LLM_BASE_URL` at something that refuses.
 
+7. When rendering the card placard for cards that have a sub-card we should render the placard's mana cost with a "//" divider.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
@@ -350,7 +352,6 @@ The architecture, the data pipeline and the deploy story are all documented in
    bills the bytes a function moves and charges for the whole document it
    retrieved, so the question is never "document or table" in the abstract — it
    is what each reader asks for.
-
    - `sets` (~433 bytes) — what a listing needs. Split out because the set
      picker was reading the whole pool to render a name.
    - `setCards` (~46KB) — **one document**, because dealing a pack samples every
