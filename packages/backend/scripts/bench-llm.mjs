@@ -22,6 +22,13 @@
 // takes the highest-value card, so baseline and candidate see byte-identical
 // prompts and the diff is per-pick rather than between two different drafts.
 //
+// A full run writes two things. The baseline holds the numbers and is the gate.
+// The transcript -- run.<set>.<format>.<seed>.<provider>.json -- holds those same
+// numbers plus every answer that produced them, because llmUsage stores counts
+// and nothing else keeps the prose: once this process exits, what the coach
+// actually said is gone. `pnpm bench-report` renders one or two transcripts into
+// a page. A saving is accepted by reading that page, not by reading the diff.
+//
 // A full run spends ~92 model calls against whatever LLM_PROVIDER the deployment
 // is set to. Baselines are stored per provider and are never comparable across
 // providers: Groq reports no cache signal at all and tokenizes differently, so a
@@ -361,7 +368,10 @@ if (callErrors.length > 5) console.log(`    ...and ${callErrors.length - 5} more
 // ------------------------------------------------------------------- baselines
 
 const dir = new URL("../bench/", import.meta.url);
-const file = new URL(`baseline.${setCode}.${format}.${seed}.${provider}.json`, dir);
+const stem = `${setCode}.${format}.${seed}.${provider}`;
+const file = new URL(`baseline.${stem}.json`, dir);
+const runFile = new URL(`run.${stem}.json`, dir);
+const runBaselineFile = new URL(`run.${stem}.baseline.json`, dir);
 const record = {
   setCode,
   format,
@@ -379,10 +389,69 @@ if (limit !== Infinity) {
   process.exit(0);
 }
 
+// ----------------------------------------------------------------- transcript
+
+// The record above says a saving happened; only the answers say what it cost.
+// They are written together because a token delta with no prose beside it
+// cannot be accepted or rejected -- and the prose exists nowhere else. llmUsage
+// stores counts, so once this process exits the generations are gone.
+const costOf = (area, id) => {
+  const rows = usage.filter(
+    (r) => r.area === area && (area === "frame" ? r.phase === id : r.pickIndex === id),
+  );
+  // Last wins. A retried call leaves two rows, and the second is the one whose
+  // answer was kept.
+  const row = rows[rows.length - 1];
+  if (!row) return null;
+  return {
+    surface: (row.inputTokens ?? 0) + (row.cacheReadTokens ?? 0) + (row.cacheWriteTokens ?? 0),
+    inputTokens: row.inputTokens ?? 0,
+    cacheReadTokens: row.cacheReadTokens ?? 0,
+    cacheWriteTokens: row.cacheWriteTokens ?? 0,
+    outputTokens: row.outputTokens ?? 0,
+    finishReason: row.finishReason,
+    ms: row.ms,
+  };
+};
+
+const coachByPick = new Map(coached.map((c) => [c.pickIndex, c]));
+const verdictByPick = new Map(verdicts.map((v) => [v.pickIndex, v]));
+
+const transcript = {
+  ...record,
+  picks: [...new Set([...coachByPick.keys(), ...verdictByPick.keys()])]
+    .sort((a, b) => a - b)
+    .map((pickIndex) => {
+      const pick = coachByPick.get(pickIndex) ?? verdictByPick.get(pickIndex);
+      const reviewed = verdictByPick.get(pickIndex);
+      return {
+        pickIndex,
+        cardsInPack: pick.cardsInPack,
+        bestName: pick.bestName,
+        packNames: pick.packNames,
+        coach: coachByPick.has(pickIndex)
+          ? { text: coachByPick.get(pickIndex).text, cost: costOf("coach", pickIndex) }
+          : null,
+        verdict: reviewed
+          ? { answer: reviewed.verdict, cost: costOf("verdict", pickIndex) }
+          : null,
+      };
+    }),
+  frames: frames.map((f) => ({ phase: f.phase, text: f.text, cost: costOf("frame", f.phase) })),
+};
+
+mkdirSync(dir, { recursive: true });
+writeFileSync(runFile, `${JSON.stringify(transcript, null, 2)}\n`);
+console.log(`\nwrote run ${runFile.pathname.split("/").pop()}`);
+
 if (has("update-baseline")) {
-  mkdirSync(dir, { recursive: true });
   writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
-  console.log(`\nwrote baseline ${file.pathname.split("/").pop()}`);
+  // The reference prose, versioned beside the reference numbers. Without this
+  // twin, accepting a saving would move the numbers forward and leave the next
+  // comparison with nothing to read against.
+  writeFileSync(runBaselineFile, `${JSON.stringify(transcript, null, 2)}\n`);
+  console.log(`wrote baseline ${file.pathname.split("/").pop()}`);
+  console.log(`wrote baseline run ${runBaselineFile.pathname.split("/").pop()}`);
   process.exit(0);
 }
 
