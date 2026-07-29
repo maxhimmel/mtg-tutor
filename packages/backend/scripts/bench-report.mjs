@@ -323,18 +323,18 @@ function areaTable() {
       ? `<span class="muted">${n(b)}</span> &rarr; ${n(a)}`
       : n(a);
   return `<table class="areas">
-    <thead><tr><th>area</th><th>calls</th><th>input surface</th><th>output</th><th>truncated</th></tr></thead>
+    <thead><tr><th>area</th><th>calls</th><th>input</th><th>uncached</th><th>output</th><th>truncated</th></tr></thead>
     <tbody>${areas
       .map((k) => {
         const a = run.areas[k] ?? {};
         const b = base?.areas?.[k] ?? {};
         return `<tr><td>${esc(k)}</td><td>${cell(a.calls, b.calls)}</td><td>${cell(
-          a.inputSurface,
-          b.inputSurface,
-        )}</td><td>${cell(a.outputTokens, b.outputTokens)}</td><td>${cell(
-          a.truncated,
-          b.truncated,
-        )}</td></tr>`;
+          a.inputTokens,
+          b.inputTokens,
+        )}</td><td>${cell(a.noCacheInputTokens, b.noCacheInputTokens)}</td><td>${cell(
+          a.outputTokens,
+          b.outputTokens,
+        )}</td><td>${cell(a.truncated, b.truncated)}</td></tr>`;
       })
       .join("")}</tbody>
   </table>`;
@@ -346,7 +346,7 @@ function slot(title, text, cost) {
   return `<div class="slot">
     <div class="slot-head">
       <span class="slot-title">${esc(title)}</span>
-      <span class="slot-cost">${n(cost?.surface)} in / <strong>${n(cost?.outputTokens)}</strong> out${
+      <span class="slot-cost">${n(cost?.inputTokens)} in / <strong>${n(cost?.outputTokens)}</strong> out${
         trunc ? ' <span class="warn">TRUNCATED</span>' : ""
       }</span>
     </div>
@@ -405,8 +405,10 @@ function pickSection(p) {
 
 const totalOutNow = sumArea(run, "outputTokens");
 const totalOutThen = base ? sumArea(base, "outputTokens") : null;
-const totalSurfNow = sumArea(run, "inputSurface");
-const totalSurfThen = base ? sumArea(base, "inputSurface") : null;
+const totalInNow = sumArea(run, "inputTokens");
+const totalInThen = base ? sumArea(base, "inputTokens") : null;
+const totalUncachedNow = sumArea(run, "noCacheInputTokens");
+const totalUncachedThen = base ? sumArea(base, "noCacheInputTokens") : null;
 
 const html = `<!doctype html>
 <html lang="en"><head>
@@ -504,7 +506,8 @@ const html = `<!doctype html>
 <h2>Tokens</h2>
 <div class="card">
   ${deltaBar("output", totalOutNow, totalOutThen)}
-  ${deltaBar("input surface", totalSurfNow, totalSurfThen)}
+  ${deltaBar("input (total)", totalInNow, totalInThen)}
+  ${deltaBar("input (uncached)", totalUncachedNow, totalUncachedThen)}
   ${Object.keys(run.areas)
     .map((k) => deltaBar(`${k} output`, run.areas[k].outputTokens, base?.areas?.[k]?.outputTokens ?? null))
     .join("")}

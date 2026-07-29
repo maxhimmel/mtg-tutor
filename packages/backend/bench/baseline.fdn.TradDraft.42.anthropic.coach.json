@@ -12,13 +12,13 @@
   "areas": {
     "coach": {
       "calls": 30,
-      "inputSurface": 301486,
       "inputTokens": 162376,
       "cacheReadTokens": 134473,
       "cacheWriteTokens": 4637,
       "outputTokens": 4897,
       "truncated": 0,
-      "unattributed": 0
+      "unattributed": 0,
+      "noCacheInputTokens": 23266
     }
   },
   "accuracy": {

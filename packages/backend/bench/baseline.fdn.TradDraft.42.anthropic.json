@@ -9,33 +9,33 @@
   "areas": {
     "coach": {
       "calls": 30,
-      "inputSurface": 301486,
       "inputTokens": 162376,
       "cacheReadTokens": 134473,
       "cacheWriteTokens": 4637,
       "outputTokens": 4501,
       "truncated": 0,
-      "unattributed": 0
+      "unattributed": 0,
+      "noCacheInputTokens": 23266
     },
     "verdict": {
       "calls": 30,
-      "inputSurface": 346334,
       "inputTokens": 193424,
       "cacheReadTokens": 152910,
       "cacheWriteTokens": 0,
       "outputTokens": 35648,
       "truncated": 5,
-      "unattributed": 0
+      "unattributed": 0,
+      "noCacheInputTokens": 40514
     },
     "frame": {
       "calls": 2,
-      "inputSurface": 19960,
       "inputTokens": 10556,
       "cacheReadTokens": 4702,
       "cacheWriteTokens": 4702,
       "outputTokens": 782,
       "truncated": 0,
-      "unattributed": 0
+      "unattributed": 0,
+      "noCacheInputTokens": 1152
     }
   },
   "accuracy": {

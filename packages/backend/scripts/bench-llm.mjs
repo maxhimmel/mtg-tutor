@@ -10,9 +10,11 @@
 //
 // Two halves, and only one of them needs a model:
 //
-//   Tokens. Input size, call frequency and the cache split are pure functions of
-//   the prompt builders and the coach gate, so they are not sampled -- every
-//   pick of the fixture is measured, and the totals are exact.
+//   Tokens. Input size and call frequency are pure functions of the prompt
+//   builders and the coach gate, so they are not sampled -- every pick of the
+//   fixture is measured, and the totals are exact. The cache SPLIT is not: how
+//   much of that input was served from cache depends on how many calls landed
+//   inside the provider's TTL, so it is reported and never asserted.
 //
 //   Accuracy. Cannot be computed without real generations, and its metrics are
 //   rates: an invented-citation rate, a divergence rate. One pick cannot
@@ -249,12 +251,21 @@ for (const area of ["coach", "verdict", "frame"]) {
   if (rows.length === 0) continue;
   byArea[area] = {
     calls: rows.length,
-    // The deterministic quantity. inputTokens excludes whatever was served from
-    // cache, so the surface a prompt actually presents is the three summed --
-    // and unlike the split between them, that total does not move between runs.
-    inputSurface:
-      sum(rows, "inputTokens") + sum(rows, "cacheReadTokens") + sum(rows, "cacheWriteTokens"),
+    // The whole prompt, cached parts included, and the quantity the gate asserts
+    // on: it is a pure function of the prompt builders, so it cannot move unless
+    // a prompt did.
+    //
+    // This used to be summed with the two cache lines, on the belief that
+    // inputTokens counted only what was NOT served from cache. It counts
+    // everything -- a call reading 4,637 cached tokens and 552 fresh ones
+    // reports inputTokens 5,189 -- so adding the cache lines counted every
+    // cached token twice and published a figure near double the truth.
     inputTokens: sum(rows, "inputTokens"),
+    // The part billed at full input price, which is where the money in an input
+    // budget actually is: cache reads cost a tenth as much. Reported, never
+    // asserted -- it moves with how many calls landed inside the cache TTL,
+    // which is timing rather than anything a prompt change controls.
+    noCacheInputTokens: sum(rows, "noCacheInputTokens"),
     cacheReadTokens: sum(rows, "cacheReadTokens"),
     cacheWriteTokens: sum(rows, "cacheWriteTokens"),
     outputTokens: sum(rows, "outputTokens"),
@@ -346,19 +357,23 @@ const model = usage[0].model;
 const pct = (n) => `${(n * 100).toFixed(1)}%`;
 
 console.log(`provider ${provider}, model ${model}\n`);
-console.log("area     calls   input  cache_r  cache_w   output   surface");
+// `input` is the whole prompt; `uncached` is the slice of it billed at full
+// price. They are printed side by side because the gap between them is the
+// entire value of the cache, and a single "input" column hid it.
+console.log("area     calls   input  uncached  cache_r  cache_w   output");
 for (const [area, a] of Object.entries(byArea)) {
   console.log(
     `${area.padEnd(8)} ${String(a.calls).padStart(4)} ${String(a.inputTokens).padStart(7)} ` +
-      `${String(a.cacheReadTokens).padStart(8)} ${String(a.cacheWriteTokens).padStart(8)} ` +
-      `${String(a.outputTokens).padStart(8)} ${String(a.inputSurface).padStart(9)}`,
+      `${String(a.noCacheInputTokens).padStart(9)} ${String(a.cacheReadTokens).padStart(8)} ` +
+      `${String(a.cacheWriteTokens).padStart(8)} ${String(a.outputTokens).padStart(8)}`,
   );
 }
 
-const totalSurface = Object.values(byArea).reduce((n, a) => n + a.inputSurface, 0);
+const totalInput = Object.values(byArea).reduce((n, a) => n + a.inputTokens, 0);
+const totalUncached = Object.values(byArea).reduce((n, a) => n + a.noCacheInputTokens, 0);
 const totalOutput = Object.values(byArea).reduce((n, a) => n + a.outputTokens, 0);
-console.log(`\ntotal input surface ${totalSurface}, output ${totalOutput}`);
-if (totalSurface > 0 && Object.values(byArea).every((a) => a.cacheReadTokens === 0)) {
+console.log(`\ntotal input ${totalInput} (${totalUncached} uncached), output ${totalOutput}`);
+if (totalInput > 0 && Object.values(byArea).every((a) => a.cacheReadTokens === 0)) {
   console.log("no cache signal from this provider -- these totals cannot price anything");
 }
 
@@ -441,8 +456,11 @@ const costOf = (area, id) => {
   const row = rows[rows.length - 1];
   if (!row) return null;
   return {
-    surface: (row.inputTokens ?? 0) + (row.cacheReadTokens ?? 0) + (row.cacheWriteTokens ?? 0),
+    // inputTokens is the whole prompt; noCacheInputTokens is the part that was
+    // not served from cache. The first is what a prompt change moves, the
+    // second is what it costs.
     inputTokens: row.inputTokens ?? 0,
+    noCacheInputTokens: row.noCacheInputTokens ?? 0,
     cacheReadTokens: row.cacheReadTokens ?? 0,
     cacheWriteTokens: row.cacheWriteTokens ?? 0,
     outputTokens: row.outputTokens ?? 0,
@@ -559,20 +577,26 @@ for (const [area, a] of Object.entries(byArea)) {
     continue;
   }
   if (a.calls !== b.calls) failures.push(`${area}: ${b.calls} calls -> ${a.calls}`);
-  if (a.inputSurface !== b.inputSurface) {
-    const delta = a.inputSurface - b.inputSurface;
+  if (a.inputTokens !== b.inputTokens) {
+    const delta = a.inputTokens - b.inputTokens;
     failures.push(
-      `${area}: input surface ${b.inputSurface} -> ${a.inputSurface} (${delta > 0 ? "+" : ""}${delta})`,
+      `${area}: input ${b.inputTokens} -> ${a.inputTokens} (${delta > 0 ? "+" : ""}${delta})`,
     );
   }
   // Model-dependent, so a band rather than equality.
   if (b.outputTokens > 0 && Math.abs(a.outputTokens - b.outputTokens) / b.outputTokens > 0.2) {
     failures.push(`${area}: output ${b.outputTokens} -> ${a.outputTokens} (>20%)`);
   }
-  // Depends on how fast the calls happened to land inside the cache TTL, not on
-  // anything in the code, so it is reported and never asserted.
+  // Both depend on how fast the calls happened to land inside the cache TTL,
+  // not on anything in the code, so they are reported and never asserted. The
+  // uncached line is the one that moves the bill, which is exactly why it must
+  // not gate: a run that merely went slower would fail on it while presenting
+  // byte-identical prompts.
   if (a.cacheWriteTokens !== b.cacheWriteTokens) {
     notes.push(`${area}: cache writes ${b.cacheWriteTokens} -> ${a.cacheWriteTokens}`);
+  }
+  if (a.noCacheInputTokens !== b.noCacheInputTokens) {
+    notes.push(`${area}: uncached input ${b.noCacheInputTokens} -> ${a.noCacheInputTokens}`);
   }
 }
 

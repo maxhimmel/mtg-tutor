@@ -12,13 +12,13 @@
   "areas": {
     "coach": {
       "calls": 30,
-      "inputSurface": 301486,
       "inputTokens": 162376,
       "cacheReadTokens": 134473,
       "cacheWriteTokens": 4637,
       "outputTokens": 4897,
       "truncated": 0,
-      "unattributed": 0
+      "unattributed": 0,
+      "noCacheInputTokens": 23266
     }
   },
   "accuracy": {
@@ -60,13 +60,13 @@
       "coach": {
         "text": "Reasonable P1P1 given the numbers, but this is a synergy-dependent build-around, not a bomb or removal spell — its high GIH is likely riding a strong graveyard/reanimator shell rather than winning games alone [EVAL-08]. Stab is the safer, more universally castable pick (cheap removal fits any black deck), so don't be surprised if you pivot away from this by pick 3-5 [SIG-02][SIG-07].",
         "cost": {
-          "surface": 9826,
           "inputTokens": 5189,
           "cacheReadTokens": 0,
           "cacheWriteTokens": 4637,
           "outputTokens": 149,
           "finishReason": "stop",
-          "ms": 3664
+          "ms": 3664,
+          "noCacheInputTokens": 552
         }
       },
       "verdict": null
@@ -93,13 +93,13 @@
       "coach": {
         "text": "Solid pick — Bigfin Bouncer is a strong tempo creature with a real card-power boost, and it's early enough (pick 2) that you're not committed to anything yet [SIG-01]. Note that Hero's Downfall going this late (ATA 1.9) despite premium removal-level power is a real signal black may be flowing — worth tracking, but no need to react yet [SIG-05][SIG-08].",
         "cost": {
-          "surface": 9879,
           "inputTokens": 5242,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 137,
           "finishReason": "stop",
-          "ms": 3060
+          "ms": 3060,
+          "noCacheInputTokens": 605
         }
       },
       "verdict": null
@@ -125,13 +125,13 @@
       "coach": {
         "text": "Reasonable pick — Ruby is a strong two-drop that leans into your existing green, and its low maindeck rate (54%) suggests it's build-around dependent rather than an auto-include, so watch whether your deck actually supports it [EVAL-09]. Note Strix Lookout is right there with comparable stats and a much higher maindeck rate, meaning it's the more consistently good card if you end up in blue instead of red [EVAL-11]. Still only pick 3, so don't worry about the green/red vs blue tension yet [SIG-01].",
         "cost": {
-          "surface": 9881,
           "inputTokens": 5244,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 181,
           "finishReason": "stop",
-          "ms": 3774
+          "ms": 3774,
+          "noCacheInputTokens": 607
         }
       },
       "verdict": null
@@ -156,13 +156,13 @@
       "coach": {
         "text": "Solid pick that reinforces green early [SIG-02]. Note Hidetsugu's Second Rite's huge IWD but tiny maindeck rate flags it as a trap card, not a real signal despite the flashy number [EVAL-08]; your Trufflesnout's high maindeck rate and solid IWD make it the trustworthy choice here.",
         "cost": {
-          "surface": 9895,
           "inputTokens": 5258,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 117,
           "finishReason": "stop",
-          "ms": 2731
+          "ms": 2731,
+          "noCacheInputTokens": 621
         }
       },
       "verdict": null
@@ -186,13 +186,13 @@
       "coach": {
         "text": "Involuntary Employment's low maindeck rate (33%) against a flat-ish IWD is a real red flag — it's a situational card that many drafters end up cutting, unlike Vanguard Seraph which is played by nearly 60% of its drafters and posts a comparable GIH with the same GP WR [EVAL-08]. It fits your Green/Red shell so far, but note this pick leans further into red on top of your green base — fine this early, just keep evaluating [SIG-02].",
         "cost": {
-          "surface": 9910,
           "inputTokens": 5273,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 159,
           "finishReason": "stop",
-          "ms": 3550
+          "ms": 3550,
+          "noCacheInputTokens": 636
         }
       },
       "verdict": null
@@ -215,13 +215,13 @@
       "coach": {
         "text": "Solid removal pickup, but you're spreading across four colors already with nothing but Ruby tying green/red together — this is the pick where you should start narrowing [SIG-02]. Luminous Rebuke's quality justifies taking it even though it's white, but note Dazzling Angel was actually seen later relative to its ATA and offers a maindeck-rate that's more trustworthy as a board-affecting creature [EVAL-08]; keep an eye on whether white or red/green is your real lane soon [SIG-07].",
         "cost": {
-          "surface": 9904,
           "inputTokens": 5267,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 170,
           "finishReason": "stop",
-          "ms": 5735
+          "ms": 5735,
+          "noCacheInputTokens": 630
         }
       },
       "verdict": null
@@ -243,13 +243,13 @@
       "coach": {
         "text": "Solid pick — a repeatable 6/6 body that's clearly the strongest card here, and it fits your green base nicely [EVAL-08]. Note the modest IWD relative to its GIH suggests some of that win rate is the strong green decks carrying it, not pure standalone power, so don't overrate it as a bomb [EVAL-02]; still, at this point in the pack it's the right take and reinforces your green commitment [SIG-02].",
         "cost": {
-          "surface": 9954,
           "inputTokens": 5317,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 146,
           "finishReason": "stop",
-          "ms": 3497
+          "ms": 3497,
+          "noCacheInputTokens": 680
         }
       },
       "verdict": null
@@ -270,13 +270,13 @@
       "coach": {
         "text": "Solid pick on power alone, but note you're now spread across four colors with no clear pair yet — G/R looks like your emerging base given Ruby and Daring Tracker, so this white pickup is speculative [SIG-01]. By pick 8 you should be narrowing toward two colors soon [SIG-02], so keep an eye on whether white or your green/red cards firm up faster before pack 2 [SIG-11].",
         "cost": {
-          "surface": 9925,
           "inputTokens": 5288,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 137,
           "finishReason": "stop",
-          "ms": 3216
+          "ms": 3216,
+          "noCacheInputTokens": 651
         }
       },
       "verdict": null
@@ -296,13 +296,13 @@
       "coach": {
         "text": "Fixing land is fine but low-upside for a 49% maindeck rate — with a pool already leaning R/G, Wildwood Scourge was actually the more useful pick here since it's an on-color one-drop with a high maindeck rate [EVAL-09][CURVE-01]. Bloodfell Caves only matters if you're actually in R/G or splashing, which your pool suggests, so it's a reasonable pick, but don't over-trust the raw GIH number since gold fixing lands inflate it structurally.",
         "cost": {
-          "surface": 9960,
           "inputTokens": 5323,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 169,
           "finishReason": "stop",
-          "ms": 4350
+          "ms": 4350,
+          "noCacheInputTokens": 686
         }
       },
       "verdict": null
@@ -321,13 +321,13 @@
       "coach": {
         "text": "Giant Growth is fine but note the flat IWD and low maindeck rate here undercut the flashy GIH — it's a role-player trick, not a bomb, so don't overrate it going forward [EVAL-11]. It fits your green base fine, and nothing else in this pack (all low-maindecked fringe cards) was better [EVAL-08]. You're clearly green-based with Rakdos/Selesnya-adjacent splashes forming — keep taking best-available and lock your second color soon [SIG-02].",
         "cost": {
-          "surface": 9957,
           "inputTokens": 5320,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 169,
           "finishReason": "stop",
-          "ms": 4468
+          "ms": 4468,
+          "noCacheInputTokens": 683
         }
       },
       "verdict": null
@@ -355,13 +355,13 @@
       "coach": {
         "text": "Good pick — a strong two-drop with real IWD backing, and it fits your green-heavy pool with a blue splash already forming (Bigfin Bouncer, Ruby fixing lands) [EVAL-09]. With this much green already invested, keep an eye on whether blue keeps flowing or if you should pivot to green/red, since your fixing lands lean that way too [SIG-07].",
         "cost": {
-          "surface": 10024,
           "inputTokens": 5387,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 129,
           "finishReason": "stop",
-          "ms": 3384
+          "ms": 3384,
+          "noCacheInputTokens": 750
         }
       },
       "verdict": null
@@ -388,13 +388,13 @@
       "coach": {
         "text": "Good pick — Ashroot Animist fits your Gruul-leaning pool (Ruby, Daring Tracker, plus the green base) and its ramp-into-value profile matches your green midrange direction perfectly [SIG-16]. The strong IWD backs up the high GIH, so this isn't just a card riding a good deck — it's genuinely pulling weight [EVAL-08]. You're solidly Gruul now with a heavy green core and enough red support to commit going into pack 2 [SIG-02].",
         "cost": {
-          "surface": 10039,
           "inputTokens": 5402,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 169,
           "finishReason": "stop",
-          "ms": 4210
+          "ms": 4210,
+          "noCacheInputTokens": 765
         }
       },
       "verdict": null
@@ -420,13 +420,13 @@
       "coach": {
         "text": "Correct pick — Exuberant Explorer is a green staple that fits your deep green base and fixes into red/blue, and its GIH/IWD numbers back it as genuinely strong, not just deck-riding [EVAL-08]. You're clearly green with Gruul leanings (Ruby, Daring Tracker, Ashroot Animist); by pick 3 of pack 2 you should be solidifying that second color rather than drifting toward white or black [SIG-11].",
         "cost": {
-          "surface": 10036,
           "inputTokens": 5399,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 155,
           "finishReason": "stop",
-          "ms": 3443
+          "ms": 3443,
+          "noCacheInputTokens": 762
         }
       },
       "verdict": null
@@ -451,13 +451,13 @@
       "coach": {
         "text": "Colorless artifact creature slots into any deck, and your pool's already Green-based with a possible Red or Blue second color still undecided, so this keeps you flexible [SIG-01]. The numbers back it up — strong GIH with a real IWD bump and near-universal maindeck rate, unlike Treetop Snarespinner or Dwynen which are more color-committal [EVAL-09]. Good value pick that doesn't box you in this early.",
         "cost": {
-          "surface": 10085,
           "inputTokens": 5448,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 146,
           "finishReason": "stop",
-          "ms": 3704
+          "ms": 3704,
+          "noCacheInputTokens": 811
         }
       },
       "verdict": null
@@ -481,13 +481,13 @@
       "coach": {
         "text": "Your pool is heavily green with a Gruul lean (Ruby, Daring Tracker, Ashroot Animist), and Dismal Backwater doesn't even fix for those colors — it's a U/B land you have no other support for. Balmor is a much stronger pick here on raw power (higher IWD, bomb-adjacent rate-boosting effect), and even though it's off your current colors, a fixing land that doesn't match your deck is close to a wasted pick at this stage [MISTAKE-03]. If you're truly locked into Gruul, neither card fits well, but Balmor at least has standalone power worth stealing away from an opponent; otherwise a Sylvan/Naya fixer would've served you better than a UB dual.",
         "cost": {
-          "surface": 10073,
           "inputTokens": 5436,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 240,
           "finishReason": "stop",
-          "ms": 5039
+          "ms": 5039,
+          "noCacheInputTokens": 799
         }
       },
       "verdict": null
@@ -510,13 +510,13 @@
       "coach": {
         "text": "Soul-Shackled Zombie is a fine grab, but note it's only maindecked at ~48% — half the field cuts it, likely because it needs board development to shine, so don't assume the top GIH number is free value [MISTAKE-07]. Your pool is heavily green with a light black/red splash forming (Ruby, Ashroot Animist, Daring Tracker); Gnarlid Colony was actually the safer, more consistent pick given its much higher maindeck rate and cheap curve slot [CURVE-01]. Still fine, but keep leaning green-based and treat black as your likely second color rather than red given this zombie plus your fixing lands [SIG-16].",
         "cost": {
-          "surface": 10076,
           "inputTokens": 5439,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 221,
           "finishReason": "stop",
-          "ms": 5210
+          "ms": 5210,
+          "noCacheInputTokens": 802
         }
       },
       "verdict": null
@@ -538,13 +538,13 @@
       "coach": {
         "text": "Fine pick given your Gruul-leaning pool with fixing already thin — Evolving Wilds smooths your Ruby/Ashroot/Daring Tracker deck without costing a card slot [MANA-01]. That said, nothing else here (Vengeful Bloodwitch aside) was pulling you off-plan anyway, so this was a low-opportunity-cost slot to grab fixing [SIG-16].",
         "cost": {
-          "surface": 10084,
           "inputTokens": 5447,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 139,
           "finishReason": "stop",
-          "ms": 3859
+          "ms": 3859,
+          "noCacheInputTokens": 810
         }
       },
       "verdict": null
@@ -565,13 +565,13 @@
       "coach": {
         "text": "Arcane Epiphany fits your existing blue splash and grades out as a real card-quality bomb here, but at pick 8 of pack 2 you're deep into Green with a light Blue/Red presence — make sure you're actually settling into Sultai/Bant-style blue-green rather than diluting a third color [SIG-11]. Cackling Prowler was the more on-color, curve-filling body for your Green base, so this pick only pays off if Blue is truly your second color going forward [MISTAKE-03].",
         "cost": {
-          "surface": 10092,
           "inputTokens": 5455,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 167,
           "finishReason": "stop",
-          "ms": 3660
+          "ms": 3660,
+          "noCacheInputTokens": 818
         }
       },
       "verdict": null
@@ -591,13 +591,13 @@
       "coach": {
         "text": "Fine but low-impact pick this late — you're clearly Green-X with a Blue/Red lean, so a fixing land is reasonable, but Tranquil Cove only helps if White sticks around, and White is thin in your pool [MANA-01]. Given your pool leans Green/Red/Blue, Evolving Wilds would've been the more flexible fixer since it supports any two colors rather than committing toward White [MANA-03]. Not a mistake, just note you still haven't locked your second color and should prioritize on-color playables next few picks [SIG-11].",
         "cost": {
-          "surface": 10083,
           "inputTokens": 5446,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 184,
           "finishReason": "stop",
-          "ms": 4231
+          "ms": 4231,
+          "noCacheInputTokens": 809
         }
       },
       "verdict": null
@@ -616,13 +616,13 @@
       "coach": {
         "text": "Fine late-pick pure hate-draft — you already have plenty of fixing (Bloodfell Caves, Thornwood Falls, Blossoming Sands, Dismal Backwater, Evolving Wilds, Tranquil Cove, Grow from the Ashes) so another Island fills a real gap over marginal spells you won't play [DECK-05]. Scoured Barrens would've actually been the stronger pickup here since it fixes for a likely third color while gaining life, but taking a basic instead of a low-maindeck-rate filler spell like Boltwave or Inspiring Call is still reasonable at this stage [MISTAKE-07].",
         "cost": {
-          "surface": 10008,
           "inputTokens": 5371,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 216,
           "finishReason": "stop",
-          "ms": 4792
+          "ms": 4792,
+          "noCacheInputTokens": 734
         }
       },
       "verdict": null
@@ -650,13 +650,13 @@
       "coach": {
         "text": "Correct pick — a flying, card-advantage sphinx with high IWD is exactly the kind of bomb-tier finisher you build a deck around, and it slots straight into your existing blue/green base [EVAL-02]. Your pool is trending Simic/Bant with plenty of fixing already, so leaning into blue-green with this as the top-end payoff makes sense [SIG-02].",
         "cost": {
-          "surface": 10169,
           "inputTokens": 5532,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 128,
           "finishReason": "stop",
-          "ms": 3401
+          "ms": 3401,
+          "noCacheInputTokens": 895
         }
       },
       "verdict": null
@@ -683,13 +683,13 @@
       "coach": {
         "text": "Correct pick — you already have a second copy of Ruby, Daring Tracker plus a Green/Red base building around it (Ashroot Animist, Exuberant Explorer), so this is both the objectively strong card and a perfect fit [SIG-16]. Cathar Commando's higher maindeck rate is worth noting for future reference, but it's off-color for you right now and irrelevant to this pick [EVAL-10].",
         "cost": {
-          "surface": 10168,
           "inputTokens": 5531,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 140,
           "finishReason": "stop",
-          "ms": 2886
+          "ms": 2886,
+          "noCacheInputTokens": 894
         }
       },
       "verdict": null
@@ -715,13 +715,13 @@
       "coach": {
         "text": "Reasonable pick given your two Felidar Saviors already, but you're heavily green/blue/red with only splash-level white so far — third copy of a white card is starting to pull you toward a fourth color [MISTAKE-03]. Wary Thespian would've fit your green base more cleanly with similar power, so watch that you're not drafting good cards instead of a good deck [MISTAKE-07]. Not urgent yet, but by mid-pack 2 you need to pick a lane between Simic/Gruul base and this white splash [SIG-11].",
         "cost": {
-          "surface": 10170,
           "inputTokens": 5533,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 179,
           "finishReason": "stop",
-          "ms": 4272
+          "ms": 4272,
+          "noCacheInputTokens": 896
         }
       },
       "verdict": null
@@ -746,13 +746,13 @@
       "coach": {
         "text": "Cheap efficient removal is exactly what your Green/Blue/Red pile needs [EVAL-03], and the strong IWD plus high maindeck rate confirms it wins games on its own rather than riding a deck [SIG-01]. That said, you're heavily Simic/Gruul-leaning already (Ruby x2, Ashroot Animist, Sylvan Scavenging) with only splashy black — treat this as a speculative splash piece, not a full color commitment yet [MANA-04].",
         "cost": {
-          "surface": 10158,
           "inputTokens": 5521,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 165,
           "finishReason": "stop",
-          "ms": 4053
+          "ms": 4053,
+          "noCacheInputTokens": 884
         }
       },
       "verdict": null
@@ -776,13 +776,13 @@
       "coach": {
         "text": "Solid pick — you're clearly Green/Red with a light blue splash lurking, and Strongbox Raider fits your colors and is a genuine four-mana value creature [EVAL-08]. Note Ambush Wolf's flat IWD despite similar GIH means it's more deck-carried, so Raider was the sharper choice for a card that wins on its own [EVAL-02]; with your curve already RG-heavy, this cements the pair nicely by pick 5 of pack 3 [SIG-11].",
         "cost": {
-          "surface": 10198,
           "inputTokens": 5561,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 167,
           "finishReason": "stop",
-          "ms": 3777
+          "ms": 3777,
+          "noCacheInputTokens": 924
         }
       },
       "verdict": null
@@ -805,13 +805,13 @@
       "coach": {
         "text": "Solid pick — a good green creature that fits your Green/Red base [EVAL-08]. Note Muldrotha's IWD is the standout number here, but its off-color splash (three colors deep) and low sample size make it a poor fit for your established GR pool [MANA-08]; correctly passed.",
         "cost": {
-          "surface": 10224,
           "inputTokens": 5587,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 98,
           "finishReason": "stop",
-          "ms": 2563
+          "ms": 2563,
+          "noCacheInputTokens": 950
         }
       },
       "verdict": null
@@ -833,13 +833,13 @@
       "coach": {
         "text": "You're deep in Green/Blue/Red with only a light white splash speculatively (two Felidar Saviors), and Make Your Move is only maindecked in about half its decks — a sign it's often a cut, not a slam-dunk include [MISTAKE-07]. Given your actual pool, Cackling Prowler is a cleaner fit for your Green base and its IWD edges out Make Your Move's, suggesting real standalone impact rather than riding a strong deck [EVAL-08]. Since you haven't committed to white at all yet, don't let the data verdict pull you into a third color prematurely — take the card that fits your established lanes [SIG-01][MISTAKE-03].",
         "cost": {
-          "surface": 10202,
           "inputTokens": 5565,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 224,
           "finishReason": "stop",
-          "ms": 4110
+          "ms": 4110,
+          "noCacheInputTokens": 928
         }
       },
       "verdict": null
@@ -860,13 +860,13 @@
       "coach": {
         "text": "A basic land this late is a free throwaway pick — nothing here fits your green/red-leaning pool anyway. Tolarian Terror is the strongest card left but needs a heavy blue base you don't clearly have; fine to pass at pick 8 with only a few picks remaining [EVAL-11].",
         "cost": {
-          "surface": 10146,
           "inputTokens": 5509,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 99,
           "finishReason": "stop",
-          "ms": 2841
+          "ms": 2841,
+          "noCacheInputTokens": 872
         }
       },
       "verdict": null
@@ -886,13 +886,13 @@
       "coach": {
         "text": "Basic lands are freely available at every table, so taking a Plains here is a wasted pick — Scoured Barrens would've fixed your G/W/U/R mess and actually enters your pool as a real card [MANA-03]. With this many colors sprawling in your pool, you badly need fixing lands like Scoured Barrens or Rugged Highlands, not a snagged basic you could've gotten for free [MISTAKE-03].",
         "cost": {
-          "surface": 10153,
           "inputTokens": 5516,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 141,
           "finishReason": "stop",
-          "ms": 3195
+          "ms": 3195,
+          "noCacheInputTokens": 879
         }
       },
       "verdict": null
@@ -911,13 +911,13 @@
       "coach": {
         "text": "Fine but low-impact pick this late — you already have plenty of fixing (Tranquil Cove, Bloodfell Caves, Thornwood Falls, Dismal Backwater, Blossoming Sands, Evolving Wilds), and your pool's core is clearly GW/GR with a blue splash sprawling into too many colors [MISTAKE-03]. At pick 10 of pack 3 you should be shoring up playables in your actual colors rather than taking another duplicate fixer; Rogue's Passage or even Firebrand Archer (if red is a real color for you) would've done more for a settled deck [MISTAKE-07]. Given how many lands you already have, this pick is low-cost, but make sure you're not still floating three-plus colors this late [SIG-11].",
         "cost": {
-          "surface": 10207,
           "inputTokens": 5570,
           "cacheReadTokens": 4637,
           "cacheWriteTokens": 0,
           "outputTokens": 256,
           "finishReason": "stop",
-          "ms": 5296
+          "ms": 5296,
+          "noCacheInputTokens": 933
         }
       },
       "verdict": null

@@ -46,7 +46,7 @@ pnpm bench-report --open          # renders the result, free and instant
    pnpm bench-llm --area verdict && pnpm bench-report --open
    ```
 
-   A full run is ~355k tokens. Tuning the verdict prompt does not need thirty
+   A full run is ~366k input tokens and ~41k output. Tuning the verdict prompt does not need thirty
    coach calls, and paying for them means a daily allowance buys fewer
    iterations of the thing you are actually changing. `--area` takes any of
    `coach`, `verdict`, `frame`, comma-separated; the default is all three.
@@ -94,7 +94,7 @@ pnpm bench-report --area coach --open
 ```
 
 Every metric compares, because both sides counted over the same answers. About
-140k tokens per iteration instead of 355k.
+~167k tokens per iteration instead of ~407k.
 
 **Comparisons only happen between runs that measured the same thing.** Several
 accuracy metrics are counted across more than one area — citations and principle
@@ -135,6 +135,43 @@ about:
   baseline measures a third of the blast radius. Cutting a principle could leave
   the coach fine and quietly strip what the verdict had to say. Use a full run
   for corpus changes.
+
+## Reading the token numbers
+
+Three input figures, and they are not interchangeable:
+
+| Figure | What it is | Asserted? |
+|---|---|---|
+| `inputTokens` | the whole prompt — cached and uncached together | **yes**, exactly |
+| `noCacheInputTokens` | the slice billed at full input price | no — reported |
+| `cacheReadTokens` / `cacheWriteTokens` | the slice served from / written to cache | no — reported |
+
+`inputTokens` is the **total**, not the uncached remainder. A coach call that
+reads 4,637 cached tokens and adds 552 fresh ones reports `inputTokens` 5,189.
+Summing it with the cache lines counts every cached token twice — that is a real
+bug this harness shipped, and it published an input figure near double the truth
+until 2026-07-29.
+
+Only `inputTokens` gates. The split beneath it moves with how quickly calls
+landed inside the provider's cache TTL, which is timing, not prompt content — a
+slower run would fail a gate on the uncached line while sending byte-identical
+prompts.
+
+**Tokens are not money, and the gap is large.** For the committed coach
+baseline, priced at Sonnet 5's introductory rate:
+
+| Line | Tokens | Share of tokens | Cost | Share of cost |
+|---|---|---|---|---|
+| Cache read | 134,473 | 82% | $0.027 | 20% |
+| Uncached input | 23,266 | 14% | $0.047 | 35% |
+| Cache write | 4,637 | 3% | $0.012 | 9% |
+| Output | 4,897 | 3% | $0.049 | **37%** |
+
+The system prompt is 86% of every call's input and a fifth of the bill, because
+cache reads cost a tenth of fresh input. Output is 3% of the tokens and the
+single largest cost line, because output is priced 5x input and 50x a cache
+read. Cutting the biggest token count is usually not cutting the biggest cost —
+check which line the money is on before editing a prompt.
 
 ## What "held" means
 
@@ -203,8 +240,9 @@ the provider it used and the filename carries it.
 - **Anything openai-compatible** — Groq, Ollama, vLLM, OpenRouter — records
   itself as `local`, because that is the name the provider seam registers. Its
   baseline is valid for output length, call frequency and accuracy, and says
-  nothing about what a saving is worth. Groq sends no cache signal at all; the
-  report shows the input surface but the split is meaningless.
+  much less about what a saving is worth: Groq reports a cache split, but it
+  tokenizes differently and prices differently, so its uncached line does not
+  convert into money the way Anthropic's does.
 
   Because they all record as `local`, a Groq baseline and an Ollama baseline
   would collide under one filename. Only keep one openai-compatible baseline at
