@@ -1,6 +1,6 @@
 "use client";
 
-import type { PickScore } from "@mtg-tutor/core";
+import type { Card, PickScore } from "@mtg-tutor/core";
 import { gradeColor, pctPoints } from "../lib/format";
 import { CardPlacard } from "./CardPlacard";
 
@@ -9,7 +9,7 @@ import { CardPlacard } from "./CardPlacard";
 // player is actually waiting for, and both cards are drawn as the same Arena
 // placards the pool uses -- so a miss reads as two rows to compare rather than
 // a sentence to parse.
-export function Verdict({ score }: { score: PickScore }) {
+export function Verdict({ score }: { score: PickScore<Card> }) {
   const lost = pctPoints(score.best.gihWinRate, score.picked.gihWinRate);
 
   return (

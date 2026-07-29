@@ -11,7 +11,10 @@ import type { ReviewVerdict } from "@mtg-tutor/core";
 import { z } from "zod";
 import { action, internalQuery, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
-import { loadBoard, ownSessions } from "./sessions.js";
+import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
+import { cardTextFor } from "./cardText.js";
+import { hydrate, hydrateCard } from "@mtg-tutor/core";
+import { storedPick, toRecordedPick } from "./draftPicks.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -41,8 +44,12 @@ export const list = query({
 // The whole draft rehydrated for the walkthrough: every pack as the player saw
 // it, the deterministic scoring, and any verdict already frozen.
 //
-// Picks are not stored, so a pick is identified by its index in the session's
-// pick list -- that is what reviewVerdicts keys on.
+// A pick is identified by its index in the session's pick list -- that is what
+// reviewVerdicts and draftPicks both key on.
+//
+// This one still replays. It wants every pack of the draft at once, and reading
+// them as rows is no cheaper than rebuilding them from a pool it has to read
+// anyway for the colour-pair rates.
 export const load = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
@@ -53,6 +60,10 @@ export const load = query({
       .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", args.sessionId))
       .collect();
     const byIndex = new Map(verdicts.map((v) => [v.pickIndex, v.verdict]));
+    // The walkthrough re-renders every pack of the draft, which between them
+    // hold most of the set -- so this is the one read that genuinely wants all
+    // of it, and it happens once when the review opens.
+    const text = await cardTextFor(ctx, session.setCode, session.format);
 
     return {
       id: session._id,
@@ -66,8 +77,10 @@ export const load = query({
         pickIndex,
         packNo: h.packNo,
         pickNo: h.pickNo,
-        pack: h.pack,
-        picked: h.picked,
+        // The walkthrough re-renders every pack the player saw, so these go out
+        // whole rather than as the engine's half of a card.
+        pack: hydrate(h.pack, text),
+        picked: hydrateCard(h.picked, text),
         bestName: h.score.best.name,
         score: h.score.score,
         isBest: h.score.isBest,
@@ -88,10 +101,15 @@ export const saveVerdict = mutation({
   },
   handler: async (ctx, args) => {
     // Establishes ownership before writing anything keyed to this session.
-    const { engine } = await loadBoard(ctx, args.sessionId);
-    if (!engine.history[args.pickIndex]) {
+    //
+    // Deliberately not loadBoard: this needs to know the session is yours and
+    // that the pick exists, and replaying to learn either costs a read of the
+    // set's whole card pool. A pick index is in range exactly when the session
+    // has a name at it -- history and pickedNames are the same list.
+    const session = await ownedSession(ctx, args.sessionId);
+    if (args.pickIndex < 0 || args.pickIndex >= session.pickedNames.length) {
       throw new Error(
-        `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
+        `Session has ${session.pickedNames.length} picks; no pick at index ${args.pickIndex}.`,
       );
     }
 
@@ -136,18 +154,30 @@ const VERDICT_SCHEMA = z.object({
     .describe("2-4 sentences coaching the pick, citing principle ids in brackets."),
 });
 
-// Replay gives the pack and the pool as it stood BEFORE the pick, which is what
-// makes "context-best" mean anything.
+// The pick recorded the pool as it stood BEFORE it, which is what makes
+// "context-best" mean anything: judged against the commitments the player had
+// actually made, not the ones they went on to make.
 export const verdictContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { engine } = await loadBoard(ctx, args.sessionId);
-    const record = engine.history[args.pickIndex];
-    if (!record) {
+    // No replay: the pick recorded its own pack and the pool it was judged
+    // against, so this reads one row and the text for the cards on it.
+    const session = await ownedSession(ctx, args.sessionId);
+    const row = await storedPick(ctx, args.sessionId, args.pickIndex);
+    if (!row) {
       throw new Error(
-        `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
+        `Session has ${session.pickedNames.length} picks; no stored pick at index ${args.pickIndex}.`,
       );
     }
+    // The pack, and nothing else: the pool before the pick goes into the prompt
+    // as names grouped by colour.
+    const text = await cardTextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      row.pack.map((c) => c.name),
+    );
+    const record = toRecordedPick(row, text);
 
     const existing = await ctx.db
       .query("reviewVerdicts")
@@ -166,6 +196,8 @@ export const verdictContext = internalQuery({
           pickIndex: args.pickIndex,
           packNo: record.packNo,
           pickNo: record.pickNo,
+          // Whole cards: the review prompt describes each one and reads the
+          // statistics beside its win rate.
           pack: record.pack,
           picked: record.picked,
           bestName: record.score.best.name,
@@ -173,7 +205,7 @@ export const verdictContext = internalQuery({
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
-        engine.humanPool.slice(0, args.pickIndex),
+        row.poolBefore,
       ),
     };
   },
@@ -261,6 +293,8 @@ export const framePrompt = internalQuery({
   handler: async (ctx, args) => {
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
     const winRates = new Map(cardsDoc.colorPairWinRates.map((r) => [r.pair, r.winRate]));
+    // No card text read at all: a frame lists the pool as names grouped by
+    // colour and ranks the set's archetypes, and neither needs rules text.
     return buildDraftFrame(args.phase, engine.humanPool, winRates);
   },
 });

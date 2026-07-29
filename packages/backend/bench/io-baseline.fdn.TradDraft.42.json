@@ -1,0 +1,75 @@
+{
+  "setCode": "fdn",
+  "format": "TradDraft",
+  "seed": 42,
+  "minPackCards": 5,
+  "label": "before: replay reads the whole pool",
+  "picks": 42,
+  "decisionPicks": 30,
+  "paths": {
+    "draft.state": {
+      "sampled": 1,
+      "meanBytesRead": 172840,
+      "maxBytesRead": 172840,
+      "callsPerDraft": 1,
+      "totalBytesPerDraft": 172840
+    },
+    "draft.pick": {
+      "sampled": 42,
+      "meanBytesRead": 173867,
+      "maxBytesRead": 174556,
+      "callsPerDraft": 42,
+      "totalBytesPerDraft": 7302404
+    },
+    "draft.coachContext": {
+      "sampled": 30,
+      "meanBytesRead": 173687,
+      "maxBytesRead": 173687,
+      "callsPerDraft": 30,
+      "totalBytesPerDraft": 5210610
+    },
+    "review.verdictContext": {
+      "sampled": 30,
+      "meanBytesRead": 173687,
+      "maxBytesRead": 173687,
+      "callsPerDraft": 30,
+      "totalBytesPerDraft": 5210610
+    },
+    "draft.results": {
+      "sampled": 1,
+      "meanBytesRead": 173687,
+      "maxBytesRead": 173687,
+      "callsPerDraft": 1,
+      "totalBytesPerDraft": 173687
+    },
+    "review.load": {
+      "sampled": 1,
+      "meanBytesRead": 173687,
+      "maxBytesRead": 173687,
+      "callsPerDraft": 1,
+      "totalBytesPerDraft": 173687
+    },
+    "review.framePrompt": {
+      "sampled": 2,
+      "meanBytesRead": 173687,
+      "maxBytesRead": 173687,
+      "callsPerDraft": 2,
+      "totalBytesPerDraft": 347374
+    },
+    "stats.overview": {
+      "sampled": 1,
+      "meanBytesRead": 777172,
+      "maxBytesRead": 777172,
+      "callsPerDraft": null,
+      "totalBytesPerDraft": null
+    },
+    "review.saveVerdict": {
+      "sampled": 30,
+      "meanBytesRead": 173687,
+      "maxBytesRead": 173687,
+      "callsPerDraft": 30,
+      "totalBytesPerDraft": 5210610
+    }
+  },
+  "totalBytesPerDraft": 23801822
+}

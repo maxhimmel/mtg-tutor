@@ -2,24 +2,36 @@ export type Rarity = "common" | "uncommon" | "rare" | "mythic" | "special" | "bo
 
 export type ColorCode = "W" | "U" | "B" | "R" | "G";
 
-export interface Card {
+// The kinds of slot a booster draws from. `bonus` covers whatever sheet the set
+// pairs with (Mystical Archive, Special Guests); `land` is the Play Booster land
+// slot, which is a real pick and not filler.
+export type PackSlot = "common" | "uncommon" | "rare" | "mythic" | "bonus" | "land";
+
+/**
+ * What the draft engine reads: everything dealing a pack, running the bots and
+ * scoring a pick needs, and nothing else.
+ *
+ * Split from the rest of a card because Convex bills for the whole document a
+ * function retrieved rather than the fields it used, and replaying a draft
+ * reads the set's ENTIRE card list on every pick. Two thirds of that list was
+ * rules text and image URLs the engine never looks at. Keeping the split in the
+ * type system rather than only in the schema means the compiler refuses an
+ * engine that reaches for a field the engine's document does not carry --
+ * otherwise the saving would quietly decay the first time scoring wanted a
+ * type line.
+ */
+export interface EngineCard {
   name: string;
   rarity: Rarity;
   colors: ColorCode[];
-  colorIdentity: ColorCode[];
-  manaCost: string;
-  cmc: number;
-  typeLine: string;
-  oracleText: string;
-  power?: string;
-  toughness?: string;
-  loyalty?: string;
-  imageUrl?: string;
-  collectorNumber: string;
-  // Scryfall set code. Differs from the set being drafted for bonus-sheet and
-  // Special Guest cards, which appear in packs without belonging to the set.
-  // Absent on sets ingested before those were modelled; treated as main-set.
-  setCode?: string;
+  // Which pool this card is dealt from, decided at ingest rather than derived
+  // from the type line on every replay. It is also the last thing that needed
+  // `typeLine` and `setCode` on the engine's half of a card.
+  //
+  // Absent for a card that belongs to no pool -- a main-set card of an odd
+  // rarity is never dealt, and was never dealt before this field existed
+  // either.
+  slot?: PackSlot;
   // How often this card was actually opened, as a fraction of observed packs.
   // Cards within a slot are NOT equally likely: a real bonus sheet is weighted
   // by rarity, and SOS's Mystical Archive runs 18:2:1 across uncommon/rare/
@@ -44,7 +56,32 @@ export interface Card {
   // not the last one, which is why it sits BELOW avgPick rather than above it
   // (a circulating card is seen by many drafters early and taken by one late).
   // The gap avgPick - alsa is how long it survives once people start seeing it.
+  //
+  // On this half of the card because cardValue nudges an unrated card by it.
   alsa?: number;
+}
+
+/**
+ * What a person reads: rules text, art, and the statistics that make a win rate
+ * legible next to it. Read when a card is rendered or written into a prompt,
+ * which is a handful of cards at a time -- never the whole set on a pick.
+ */
+export interface CardText {
+  name: string;
+  colorIdentity: ColorCode[];
+  manaCost: string;
+  cmc: number;
+  typeLine: string;
+  oracleText: string;
+  power?: string;
+  toughness?: string;
+  loyalty?: string;
+  imageUrl?: string;
+  collectorNumber: string;
+  // Scryfall set code. Differs from the set being drafted for bonus-sheet and
+  // Special Guest cards, which appear in packs without belonging to the set.
+  // Absent on sets ingested before those were modelled; treated as main-set.
+  setCode?: string;
   avgPick?: number; // ATA — the mean pick number it is actually taken at
   winRate?: number; // GP WR — games-played win rate
 
@@ -61,10 +98,17 @@ export interface Card {
   maindeckRate?: number;
 }
 
-// The kinds of slot a booster draws from. `bonus` covers whatever sheet the set
-// pairs with (Mystical Archive, Special Guests); `land` is the Play Booster land
-// slot, which is a real pick and not filler.
-export type PackSlot = "common" | "uncommon" | "rare" | "mythic" | "bonus" | "land";
+/** A whole card: what the engine reads, plus what a person reads. */
+export type Card = EngineCard & CardText;
+
+/**
+ * The least a pool needs to be worth summarising.
+ *
+ * A prompt renders a pool as names grouped by colour and nothing else, so this
+ * is the entire dependency -- which is what lets a stored pick carry its own
+ * pool in ~30 bytes a card instead of reading the set to rebuild one.
+ */
+export type PoolCard = Pick<EngineCard, "name" | "colors">;
 
 // One observed booster shape and how often it was seen. Real Play Boosters have
 // a wildcard slot, so a set has no single fixed rarity mix -- SOS packs range
@@ -82,17 +126,17 @@ export interface PackComposition {
 
 export interface SetData {
   code: string;
-  cards: Card[];
-  byName: Map<string, Card>;
+  cards: EngineCard[];
+  byName: Map<string, EngineCard>;
   // Cards partitioned by the slot they fill. `common`..`mythic` hold main-set
   // cards only, so a bonus sheet cannot leak into an ordinary rarity slot.
   pools: {
-    common: Card[];
-    uncommon: Card[];
-    rare: Card[];
-    mythic: Card[];
-    bonus: Card[];
-    land: Card[];
+    common: EngineCard[];
+    uncommon: EngineCard[];
+    rare: EngineCard[];
+    mythic: EngineCard[];
+    bonus: EngineCard[];
+    land: EngineCard[];
   };
   // Archetype color-pair win rates from 17Lands color_ratings, keyed like "WU".
   colorPairWinRates: Map<string, number>;

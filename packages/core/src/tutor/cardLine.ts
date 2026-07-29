@@ -1,4 +1,4 @@
-import type { Card, ColorCode } from "../model/card.js";
+import type { Card, ColorCode, PoolCard } from "../model/card.js";
 import { CARD_STAT_GLOSSARY } from "./glossary.js";
 
 // How a card is written into a prompt: what it is, and what the data says about
@@ -16,7 +16,7 @@ const COLOR_NAMES: Record<ColorCode, string> = {
 
 export const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 
-export function colorLabel(c: Card): string {
+export function colorLabel(c: PoolCard): string {
   if (c.colors.length === 0) return "Colorless";
   if (c.colors.length > 1) return c.colors.map((col) => COLOR_NAMES[col]).join("/");
   return COLOR_NAMES[c.colors[0]];

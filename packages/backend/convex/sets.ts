@@ -7,7 +7,9 @@ import {
   mergeCards,
   normalizeName,
   observedRarityBaselines,
+  withPackSlots,
 } from "@mtg-tutor/core";
+import { cardTextFor, hydrate, textHalf } from "./cardText.js";
 import {
   action,
   internalMutation,
@@ -66,8 +68,9 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // The values are opaque tags whose only job is to differ from their
 // predecessors. Bumping POOL_REVISION re-crawls every set, so it is only worth
 // it when the stored card shape actually changed -- "3-card-stats" added iwd and
-// maindeckRate to the card.
-const POOL_REVISION = "3-card-stats";
+// maindeckRate to the card, and "4-card-split" put the pack slot on it and moved
+// the rules text, art and reading statistics out to setCardText.
+const POOL_REVISION = "4-card-split";
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -596,10 +599,14 @@ export const store = internalMutation({
     // `sets` document: that row is read once per set by `list` on every page
     // showing the picker, which is what made the pool expensive in the first
     // place. See the setCards comment in schema.ts.
+    // Which pool each card is dealt from, settled once here instead of being
+    // re-derived from the type line on every replay of every draft.
+    const slotted = withPackSlots(args.code, args.cards);
+
     const cardsDoc = {
       code: args.code,
       format: args.format,
-      cards: args.cards,
+      cards: slotted,
       colorPairWinRates: args.colorPairWinRates,
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
@@ -610,6 +617,27 @@ export const store = internalMutation({
       await ctx.db.replace(existingCards._id, cardsDoc);
     } else {
       await ctx.db.insert("setCards", cardsDoc);
+    }
+
+    // The other half of every card, one row each. Replaced wholesale rather
+    // than diffed: a re-ingest is rare and rewriting a few hundred small rows
+    // costs less than working out which of them changed. Bounded by the set's
+    // card count, so it is nowhere near a transaction's write limits.
+    const staleText = await ctx.db
+      .query("setCardText")
+      .withIndex("by_code_format_and_key", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .collect();
+    for (const row of staleText) await ctx.db.delete(row._id);
+
+    for (const c of slotted) {
+      await ctx.db.insert("setCardText", {
+        code: args.code,
+        format: args.format,
+        key: normalizeName(c.name),
+        text: textHalf(c),
+      });
     }
 
     const doc = {
@@ -774,12 +802,38 @@ export const get = query({
       .withIndex("by_code_and_format", (q) => q.eq("code", code).eq("format", format))
       .unique();
 
+    // Both halves put back together. This is the scripts' view of a set --
+    // validate-pack-model, bench-llm, smoke-draft -- and they are run by hand a
+    // few times a release, so the whole-set text read that costs is exactly the
+    // read they came for. Nothing on a draft's hot path calls this.
+    const text = cardsDoc ? await cardTextFor(ctx, code, format) : new Map();
+
     return {
       ...setDoc,
-      cards: cardsDoc?.cards ?? [],
+      cards: cardsDoc ? hydrate(cardsDoc.cards, text) : [],
       colorPairWinRates: cardsDoc?.colorPairWinRates ?? [],
       packComposition: cardsDoc?.packComposition,
     };
+  },
+});
+
+// The rules text, art and reading statistics for one set's cards.
+//
+// Read once when a draft board mounts, and joined by name against every board
+// the session returns after that. A set's text does not change between picks,
+// so sending it back with each of the 42 picks is 42 copies of the same ~180KB
+// -- which is what the pool document used to do implicitly, and the single
+// biggest thing this split undoes. See draft.boardView.
+export const cardText = query({
+  args: { setCode: v.string(), format: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("setCardText")
+      .withIndex("by_code_format_and_key", (q) =>
+        q.eq("code", args.setCode.toLowerCase()).eq("format", args.format ?? "PremierDraft"),
+      )
+      .collect();
+    return rows.map((r) => r.text);
   },
 });
 

@@ -8,11 +8,15 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import {
   type Card,
+  type TextIndex,
   type PickScore,
   explainPick,
+  hydrate,
+  hydrateScore,
   isDecisionPick,
   loadPrinciples,
   splitCitations,
+  textIndex,
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
 import { CardText } from "../../components/CardText";
@@ -37,7 +41,7 @@ interface LastPick {
   pickIndex: number;
   // The pack this pick chose from, captured before the mutation swaps it for
   // the next one. The coach talks about these cards and nothing else holds them.
-  pack: Card[];
+  pack: DraftState["pack"];
 }
 
 export function DraftBoard({ sessionId }: { sessionId: string }) {
@@ -55,6 +59,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // because this component changed it, so there is nothing to subscribe to.
   const [state, setState] = useState<DraftState | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // The set's rules text and art, read once for the session. The board that
+  // comes back from every pick carries only what the engine deals in, so this
+  // is the other half of a card and it is joined in below. It cannot change
+  // while a draft is being played -- re-ingesting a set is what breaks a draft,
+  // not what updates one -- so once is exactly right.
+  const [text, setText] = useState<TextIndex | undefined>(undefined);
 
   const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
@@ -87,8 +98,30 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     };
   }, [convex, id, isAuthenticated]);
 
+  // Chained off the board rather than fired alongside it, because the set this
+  // session is drafting is not known until the board says so.
+  const setCode = state?.setCode;
+  const format = state?.format;
+  useEffect(() => {
+    if (!setCode || !format) return;
+    let cancelled = false;
+
+    convex
+      .query(api.sets.cardText, { setCode, format })
+      .then((rows) => {
+        if (!cancelled) setText(textIndex(rows));
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, setCode, format]);
+
   const streamCoach = useCallback(
-    async (pickIndex: number, score: PickScore, cardsInPack: number, force = false) => {
+    async (pickIndex: number, score: PickScore<Card>, cardsInPack: number, force = false) => {
       const run = ++streamRun.current;
       const fallback = () => {
         if (run === streamRun.current) setCoach(explainPick(score).join("\n"));
@@ -135,7 +168,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
-        let text = "";
+        let prose = "";
 
         for (;;) {
           const { done, value } = await reader.read();
@@ -144,8 +177,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             await reader.cancel();
             return;
           }
-          text += decoder.decode(value, { stream: true });
-          setCoach(text);
+          prose += decoder.decode(value, { stream: true });
+          setCoach(prose);
         }
       } catch {
         fallback();
@@ -159,9 +192,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // pack in front of you, since picking advanced the board. Without that last
   // one only the pick and the data's pick could ever be matched, and the rest of
   // the pack the coach compared them against rendered as plain text.
+  // Whole cards, joined from the text read once above. Everything below this
+  // point works in Card; everything the server sent works in EngineCard.
+  const pack = useMemo(() => (text ? hydrate(state?.pack ?? [], text) : []), [state?.pack, text]);
+  const pool = useMemo(() => (text ? hydrate(state?.pool ?? [], text) : []), [state?.pool, text]);
+  const lastView = useMemo(
+    () =>
+      last &&
+      text && {
+        ...last,
+        score: hydrateScore(last.score, text),
+        pack: hydrate(last.pack, text),
+      },
+    [last, text],
+  );
+
   const boardCards = useMemo(
-    () => [...(state?.pack ?? []), ...(state?.pool ?? []), ...(last?.pack ?? [])],
-    [state?.pack, state?.pool, last],
+    () => [...pack, ...pool, ...(lastView?.pack ?? [])],
+    [pack, pool, lastView],
   );
 
   // Recomputed on every streamed chunk, which is why splitCitations tolerates a
@@ -169,10 +217,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
 
   async function onPick(card: Card) {
-    if (picking) return;
+    if (picking || !text) return;
     setPicking(true);
     // Read before the mutation returns: `result` already holds the next pack.
-    const pack = state?.pack ?? [];
+    const packBefore = state?.pack ?? [];
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
       const score = result.score as PickScore;
@@ -190,8 +238,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           pool: result.pool,
         },
       );
-      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack });
-      void streamCoach(result.pickIndex, score, pack.length);
+      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
+      void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     } finally {
@@ -203,7 +251,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     return <PageNotice tone="error">{loadError}</PageNotice>;
   }
 
-  if (state === undefined) {
+  if (state === undefined || text === undefined) {
     return <PageNotice>Loading draft…</PageNotice>;
   }
 
@@ -222,8 +270,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             <span>
               Pack <strong className="font-semibold text-base-content">{state.packNo}</strong> ·
               Pick <strong className="font-semibold text-base-content">{state.pickNo}</strong> ·{" "}
-              {state.pack.length} in pack · pool{" "}
-              <strong className="font-semibold text-base-content">{state.pool.length}</strong>
+              {pack.length} in pack · pool{" "}
+              <strong className="font-semibold text-base-content">{pool.length}</strong>
             </span>
           )}
         </div>
@@ -234,23 +282,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5">
-            {state.pack.map((card) => (
+            {pack.map((card) => (
               <CardTile key={card.name} card={card} onPick={onPick} disabled={picking} />
             ))}
           </div>
 
           <aside className="flex flex-col gap-4">
             <Panel title="Last pick" bodyClassName="gap-3">
-              {last ? (
+              {lastView ? (
                 <>
                   {/* Keyed by pick so each new verdict re-mounts and replays the
                       entrance -- the one animation in the app, on the one moment
                       the player is waiting for. */}
-                  <div key={last.pickIndex} className="motion-safe:animate-verdict">
-                    <Verdict score={last.score} />
+                  <div key={lastView.pickIndex} className="motion-safe:animate-verdict">
+                    <Verdict score={lastView.score} />
                   </div>
 
-                  {last.signal && <p className="text-sm text-info">{last.signal}</p>}
+                  {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
 
                   <div className="border-t border-base-300 pt-3">
                     <div className="eyebrow mb-1.5">
@@ -268,7 +316,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       <button
                         className="btn btn-outline btn-xs mt-3"
                         onClick={() =>
-                          void streamCoach(last.pickIndex, last.score, last.pack.length, true)
+                          void streamCoach(lastView.pickIndex, lastView.score, lastView.pack.length, true)
                         }
                       >
                         Coach this pick anyway
@@ -281,7 +329,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               )}
             </Panel>
 
-            <PicksColumn pool={state.pool} />
+            <PicksColumn pool={pool} />
           </aside>
         </div>
       )}

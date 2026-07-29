@@ -1,4 +1,4 @@
-import type { Card, Rarity } from "../model/card.js";
+import type { EngineCard, Rarity } from "../model/card.js";
 import { RARITY_BASELINE, SCORING } from "../config.js";
 
 // Enough rated cards of a rarity for its median to mean anything.
@@ -20,7 +20,7 @@ function median(xs: number[]): number {
 // alone, every unrated rare scores as though it were the worst card in the set.
 //
 // Medians, not means, so one absurd bomb does not drag a whole rarity up.
-export function observedRarityBaselines(cards: readonly Card[]): Map<Rarity, number> {
+export function observedRarityBaselines(cards: readonly EngineCard[]): Map<Rarity, number> {
   const rated = cards.filter(
     (c) => c.gihWinRate != null && (c.gihGames ?? 0) >= SCORING.minSampleForWinRate,
   );
@@ -48,10 +48,10 @@ export function observedRarityBaselines(cards: readonly Card[]): Map<Rarity, num
 // nudge so obscure/low-data cards still order sensibly.
 //
 // Win rates are used raw. Rated and unrated cards are made comparable by moving
-// the baseline onto the format's scale (see Card.rarityBaseline), not by
+// the baseline onto the format's scale (see EngineCard.rarityBaseline), not by
 // shifting the win rates -- so a gap between two cards stays in real win-rate
 // points and SCORING.winRateGapK keeps its meaning.
-export function cardValue(card: Card): number {
+export function cardValue(card: EngineCard): number {
   const games = card.gihGames ?? 0;
   if (card.gihWinRate != null && games >= SCORING.minSampleForWinRate) {
     return card.gihWinRate;

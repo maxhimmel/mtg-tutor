@@ -7,8 +7,19 @@ import {
   summarizeDraft,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
-import { loadBoard, requireUserId, setDocFor } from "./sessions.js";
+import { loadBoard, ownedSession, requireUserId, setDocFor } from "./sessions.js";
+import { cardTextFor } from "./cardText.js";
+import { hydrate, hydrateCard } from "@mtg-tutor/core";
+import { recordPick, storedPick, toRecordedPick } from "./draftPicks.js";
 
+// The board in the engine's half of a card: names, colours, rarity and the
+// numbers a score is made of.
+//
+// The rules text and art are NOT put back on here, and that is the point. This
+// is the response a client gets 42 times a draft, and the text half of a set is
+// ~180KB that does not change between picks -- so the client reads it once for
+// the session and joins by name, rather than being sent it again on every pick.
+// See sets.cardText and the hydration in DraftBoard.
 const boardView = (engine: DraftEngine) => ({
   packNo: engine.packNo,
   pickNo: engine.pickNo,
@@ -86,8 +97,16 @@ export const pick = mutation({
       );
     }
 
+    // Captured before the pick, because humanPick appends to the pool it is
+    // about to be compared against.
+    const poolBefore = engine.humanPool.map((c) => ({ name: c.name, colors: c.colors }));
     const record = engine.humanPick(chosen);
     const complete = engine.isComplete();
+
+    // What this pick saw, written as it happens. Nothing recomputes it: the
+    // coach and the review verdict read this instead of replaying the draft to
+    // rebuild one pick out of the set's whole card pool.
+    await recordPick(ctx, args.sessionId, session.pickedNames.length, record, poolBefore);
 
     await ctx.db.patch(args.sessionId, {
       pickedNames: [...session.pickedNames, chosen.name],
@@ -114,6 +133,14 @@ export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    // Once per finished draft, for the pool the deck is built from and the few
+    // cards the mistakes name -- not the whole set.
+    const text = await cardTextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      engine.history.flatMap((h) => [h.picked.name, h.score.best.name]),
+    );
 
     const mistakes = engine.history
       .filter(
@@ -122,8 +149,8 @@ export const results = query({
       .map((h) => ({
         packNo: h.packNo,
         pickNo: h.pickNo,
-        picked: h.picked,
-        best: h.score.best,
+        picked: hydrateCard(h.picked, text),
+        best: hydrateCard(h.score.best, text),
         cost: h.score.best.gihWinRate! - h.picked.gihWinRate!,
       }))
       .sort((a, b) => b.cost - a.cost)
@@ -131,7 +158,9 @@ export const results = query({
 
     return {
       summary: summarizeDraft(engine.history, engine.humanPool),
-      deck: suggestDeck(engine.humanPool),
+      // The deck builder reads type lines and colour identity to tell a land
+      // from a spell and a splash from a lane, so it wants whole cards.
+      deck: suggestDeck(hydrate(engine.humanPool, text)),
       mistakes,
       status: session.status,
       // Without 17Lands data every card scores off its rarity baseline, so a
@@ -142,31 +171,43 @@ export const results = query({
   },
 });
 
-// The grounded prompt for one pick, rebuilt by replay. Internal: it exists only
-// so the coach HTTP action can fetch what it needs in a single transaction.
+// The grounded prompt for one pick, read from what that pick recorded. Internal:
+// it exists only so the coach HTTP action can fetch what it needs in a single
+// transaction.
 export const coachContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
-
-    const record = engine.history[args.pickIndex];
-    if (!record) {
+    // No replay. The pick recorded what it saw; this reads that row and the
+    // text for the cards in it, which is a few KB against the ~50KB a rebuilt
+    // board costs.
+    const session = await ownedSession(ctx, args.sessionId);
+    const row = await storedPick(ctx, args.sessionId, args.pickIndex);
+    if (!row) {
       throw new Error(
-        `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
+        `Session has ${session.pickedNames.length} picks; no stored pick at index ${args.pickIndex}.`,
       );
     }
 
-    // The pool as it stood just after this pick, not the final pool.
-    const poolAtPick = engine.humanPool.slice(0, args.pickIndex + 1);
+    const text = await cardTextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      row.pack.map((c) => c.name),
+    );
+    const record = toRecordedPick(row, text);
+
+    // The pool as it stood just AFTER this pick, which is what the player had
+    // in front of them when the coach spoke.
+    const poolAtPick = [...row.poolBefore, { name: row.pickedName, colors: record.picked.colors }];
 
     return {
       userContent: buildPickContext(record, poolAtPick),
       setCode: session.setCode,
-      packNo: record.packNo,
-      pickNo: record.pickNo,
+      packNo: row.packNo,
+      pickNo: row.pickNo,
       // How many cards this pick chose between, so /coach can refuse to spend
       // tokens on a pack that was picking for you.
-      cardsInPack: record.pack.length,
+      cardsInPack: row.pack.length,
     };
   },
 });

@@ -1,4 +1,4 @@
-import type { Card } from "../model/card.js";
+import type { Card, PoolCard } from "../model/card.js";
 import type { StoredPick } from "../model/review.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
 
@@ -7,7 +7,7 @@ import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
 // structured verdict (context-best + divergence lesson + narrative) and frames
 // the whole draft with archetype/signal bookends.
 
-function summarizePool(pool: Card[]): string {
+function summarizePool(pool: readonly PoolCard[]): string {
   if (pool.length === 0) return "  (empty — this is the first pick)";
   const groups = new Map<string, string[]>();
   for (const c of pool) {
@@ -36,7 +36,7 @@ function listPack(pick: StoredPick): string {
 
 // Context for a single reviewed pick. The player's pool is what they had BEFORE
 // this pick, so "context-best" is judged against their commitments at the time.
-export function buildReviewContext(pick: StoredPick, poolBefore: Card[]): string {
+export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCard[]): string {
   return [
     `Situation: Pack ${pick.packNo}, Pick ${pick.pickNo}.`,
     "",
@@ -61,7 +61,7 @@ export function buildReviewContext(pick: StoredPick, poolBefore: Card[]): string
 // final pool; colorPairWinRates is 17Lands archetype data keyed like "WU".
 export function buildDraftFrame(
   phase: "open" | "close",
-  pool: Card[],
+  pool: readonly PoolCard[],
   colorPairWinRates: Map<string, number>,
 ): string {
   const archetypes = [...colorPairWinRates]

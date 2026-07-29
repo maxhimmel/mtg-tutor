@@ -6,11 +6,15 @@ import type { Doc } from "./_generated/dataModel.js";
 import { ownSessions, setCardsFor, setDocFor } from "./sessions.js";
 import { toSetData } from "./setData.js";
 
-// Per-draft numbers come from the denormalized summary, but the per-pick
-// breakdowns (score by pick number, biggest misses) have no denormalized form --
-// picks are not stored. They come from replay, which is ~0.16ms per finished
-// draft. The cost that actually matters is the set documents: 126-164KB each,
-// so they are loaded once per (setCode, format) rather than once per session.
+// Per-draft numbers come from the denormalized summary; the per-pick breakdowns
+// (score by pick number, biggest misses) come from replay, at ~0.16ms per
+// finished draft.
+//
+// Deliberately still replay, even though draftPicks now holds every pick. This
+// reads a hundred sessions at once and caches one pool per (setCode, format),
+// so replaying costs a handful of pool reads where reading the rows would cost
+// four thousand. The coach and the review verdict want ONE pick and go to the
+// rows; this wants all of them and does not.
 const DEFAULT_SESSION_LIMIT = 100;
 
 export const overview = query({

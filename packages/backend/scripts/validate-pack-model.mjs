@@ -39,7 +39,15 @@ const prod = argv.includes("--prod");
 const noOracle = argv.includes("--no-oracle");
 const packsArg = argv.indexOf("--packs");
 const PACKS = packsArg >= 0 ? Number(argv[packsArg + 1]) : 200_000;
-const positional = argv.filter((a, i) => !a.startsWith("--") && i !== packsArg + 1);
+// The guard is on packsArg being present, not just on the index: with no
+// --packs flag indexOf returns -1, and dropping index packsArg + 1 would drop
+// index 0 -- the set code. That silently made the set code the format and the
+// format nothing, so the run died looking for an artifact named after the
+// format. Which is to say this gate did not run at all unless --packs was
+// passed, and said so in a way that read like a missing artifact.
+const positional = argv.filter(
+  (a, i) => !a.startsWith("--") && !(packsArg >= 0 && i === packsArg + 1),
+);
 const [setArg, formatArg] = positional;
 
 if (!setArg) {
@@ -185,6 +193,8 @@ if (packCards.length) {
     : ok(`all ${packCards.length} declared pack cards are in the pool`);
 }
 
+// The cards already carry their pack slot -- ingest decides it once, rather
+// than it being re-derived from the type line on every replay.
 const set = buildSetData(doc.code, doc.cards, new Map(), doc.packComposition);
 const poolSizes = Object.fromEntries(
   Object.entries(set.pools).map(([k, v]) => [k, v.length]),

@@ -1,13 +1,17 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
-  card,
   cardStats,
+  cardText,
+  colorCode,
   draftSummary,
+  engineCard,
   llmCall,
+  migratingCard,
   packCard,
   packComposition,
   reviewVerdict,
+  storedPickScore,
 } from "./validators.js";
 
 export default defineSchema({
@@ -52,7 +56,18 @@ export default defineSchema({
   setCards: defineTable({
     code: v.string(),
     format: v.string(),
-    cards: v.array(card),
+    // The engine's half of a card. The rules text, the art and the statistics
+    // only a reader needs are gone to setCardText -- two thirds of what a replay
+    // used to drag in on every pick.
+    //
+    // Still `migratingCard` rather than `engineCard`, which accepts both shapes.
+    // A deployment whose pools predate the split cannot take the strict
+    // validator: Convex checks every existing document on push, so the narrow
+    // schema is rejected until migrations:splitStoredCards has run there. Dev
+    // has run it and deploys clean under `v.array(engineCard)`; the swap is a
+    // one-line follow-up once production has migrated too, and it changes no
+    // bytes -- the saving is in the documents, not the validator.
+    cards: v.array(migratingCard),
     // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
     colorPairWinRates: v.array(
       v.object({ pair: v.string(), winRate: v.number() }),
@@ -61,6 +76,30 @@ export default defineSchema({
     // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),
   }).index("by_code_and_format", ["code", "format"]),
+
+  // The half of a card a person reads: rules text, art, mana cost, and the
+  // statistics that make a win rate legible beside it.
+  //
+  // One row per card, where the pool above is one document for the whole set,
+  // and the difference is not taste -- it is what each side's readers ask for.
+  // Dealing a pack samples every rarity pool, so the engine always wants the
+  // whole set and a row-per-card would only add per-row overhead to a read it
+  // was going to do anyway. This side is the opposite: buildPickContext
+  // describes the picked card and the four best it passed, so the coach wants
+  // FIVE of these. Five rows is ~3.5KB; five out of one blob is the whole blob.
+  //
+  // Keyed on normalizeName rather than the raw name, because that is what every
+  // other name match here uses and a DFC's two halves must not miss each other
+  // over a `//`. The display name is still on the row, inside the text itself.
+  // Nested rather than spread flat, so `row.text` IS a CardText and hydrating
+  // needs no projection: spreading the row itself would put `_id`, `code` and
+  // `key` onto every card handed to a client.
+  setCardText: defineTable({
+    code: v.string(),
+    format: v.string(),
+    key: v.string(),
+    text: cardText,
+  }).index("by_code_format_and_key", ["code", "format", "key"]),
 
   // Our own draft statistics, derived from the 17Lands public datasets rather
   // than scraped -- the datasets are the source 17Lands sanctions for outside
@@ -151,8 +190,41 @@ export default defineSchema({
     summary: v.optional(draftSummary),
   }).index("by_user", ["userId"]),
 
+  // What one pick actually saw and scored, written as it happens.
+  //
+  // A draft is still {seed, pickedNames} replayed -- that is what deals the
+  // packs, and this changes nothing about it. What this removes is REPLAYING TO
+  // READ ONE PICK. The coach and the review verdict each want a single
+  // historical pick, and rebuilding one by replaying the whole draft meant
+  // reading the set's entire card pool to answer a question about fourteen
+  // cards: 51.5KB a call, sixty times over a drafted-and-reviewed session.
+  //
+  // Not a second source of truth. The engine still produces the pick; this is
+  // the record of what it produced, written in the same transaction. Nothing
+  // recomputes it and nothing may disagree with it.
+  //
+  // stats.overview deliberately keeps replaying. It reads a hundred sessions at
+  // once and caches one pool per set, so reading rows instead would turn a
+  // handful of pool reads into four thousand row reads.
+  draftPicks: defineTable({
+    sessionId: v.id("draftSessions"),
+    pickIndex: v.number(),
+    packNo: v.number(),
+    pickNo: v.number(),
+    // The pack as it was offered, in the engine's half of a card. The rules text
+    // is joined from setCardText when a prompt needs it.
+    pack: v.array(engineCard),
+    pickedName: v.string(),
+    // The pool as it stood BEFORE this pick, as the prompts consume it: names
+    // grouped by colour, and nothing else. ~30 bytes a card, which is what lets
+    // a pick carry its own history instead of reading the set to rebuild one.
+    poolBefore: v.array(v.object({ name: v.string(), colors: v.array(colorCode) })),
+    score: storedPickScore,
+    signal: v.optional(v.string()),
+  }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
   // Frozen on first review so re-reviews are stable. Keyed by position in the
-  // session's pick list rather than by a pick row, since picks aren't stored.
+  // session's pick list, which is what draftPicks keys on too.
   reviewVerdicts: defineTable({
     sessionId: v.id("draftSessions"),
     pickIndex: v.number(),

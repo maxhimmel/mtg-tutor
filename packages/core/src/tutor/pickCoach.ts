@@ -1,11 +1,11 @@
-import type { Card } from "../model/card.js";
+import type { Card, PoolCard } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
 
 // Renders a single draft pick into a compact prompt for the coach. Pure string
 // work (no SDK), so a future web frontend can reuse it as-is.
 
-function summarizePool(pool: Card[]): string {
+function summarizePool(pool: readonly PoolCard[]): string {
   if (pool.length === 0) return "  (empty — this is your first pick)";
   const groups = new Map<string, string[]>();
   for (const c of pool) {
@@ -19,7 +19,10 @@ function summarizePool(pool: Card[]): string {
     .join("\n");
 }
 
-export function buildPickContext(rec: RecordedPick, pool: Card[]): string {
+// Writes cards into a prompt, so it wants them whole: describeCard names the
+// mana value and type line, and statLine reads the numbers that sit beside a
+// win rate. Hydrated from the text table before it gets here.
+export function buildPickContext(rec: RecordedPick<Card>, pool: readonly PoolCard[]): string {
   const { picked, score, pack } = rec;
 
   const passed = pack
