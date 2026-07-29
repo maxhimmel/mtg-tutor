@@ -27,6 +27,10 @@ import { reviewVerdict } from "./validators.js";
 
 export interface IoCost {
   bytesRead: number;
+  // Billed as well as the reads, and a saving that only moves work from one to
+  // the other is not a saving. Storing what a pick saw trades a read on every
+  // coach call for a write on every pick, so the trade has to be visible.
+  bytesWritten: number;
   documentsRead: number;
   databaseQueries: number;
 }
@@ -35,6 +39,7 @@ async function cost(ctx: QueryCtx | MutationCtx): Promise<IoCost> {
   const m = await ctx.meta.getTransactionMetrics();
   return {
     bytesRead: m.bytesRead.used,
+    bytesWritten: m.bytesWritten.used,
     documentsRead: m.documentsRead.used,
     databaseQueries: m.databaseQueries.used,
   };

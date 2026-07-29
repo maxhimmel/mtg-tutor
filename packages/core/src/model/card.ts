@@ -101,6 +101,15 @@ export interface CardText {
 /** A whole card: what the engine reads, plus what a person reads. */
 export type Card = EngineCard & CardText;
 
+/**
+ * The least a pool needs to be worth summarising.
+ *
+ * A prompt renders a pool as names grouped by colour and nothing else, so this
+ * is the entire dependency -- which is what lets a stored pick carry its own
+ * pool in ~30 bytes a card instead of reading the set to rebuild one.
+ */
+export type PoolCard = Pick<EngineCard, "name" | "colors">;
+
 // One observed booster shape and how often it was seen. Real Play Boosters have
 // a wildcard slot, so a set has no single fixed rarity mix -- SOS packs range
 // over 5-9 commons and 0-3 rares across 66 distinct shapes. Sampling the

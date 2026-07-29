@@ -3,11 +3,16 @@
 //   pnpm --filter @mtg-tutor/backend bench-io [--set fdn] [--format TradDraft]
 //                                             [--seed 42] [--update-baseline]
 //
-// Convex prices database I/O by `database_io_read_bytes`, and charges for the
-// whole document a function retrieved rather than the fields it used. So the
-// only honest way to judge a change to a read path is to read the byte counter
-// on either side of it -- which is what convex/iobench.ts exposes, by wrapping
-// the real functions and reporting their transaction metrics.
+// Convex prices database I/O by the bytes a function moves, and charges for the
+// whole document it retrieved rather than the fields it used. So the only honest
+// way to judge a change to a read path is to read the byte counter on either
+// side of it -- which is what convex/iobench.ts exposes, by wrapping the real
+// functions and reporting their transaction metrics.
+//
+// Reads AND writes, because a saving that only moves work from one to the other
+// is not a saving. Storing what a pick saw buys back a read on every coach call
+// by paying a write on every pick; the per-draft total is the sum, so that trade
+// cannot hide in it.
 //
 // This drives the same fixture bench-llm does -- a full draft, fixed seed,
 // always take the highest-value card -- so the two measure the same run from
@@ -74,7 +79,7 @@ console.log(`set ${setCode}/${format}, seed ${seed}, session ${sessionId}`);
 const samples = new Map();
 const record = (path, io) => {
   const list = samples.get(path) ?? [];
-  list.push(io.bytesRead);
+  list.push(io);
   samples.set(path, list);
   return io;
 };
@@ -101,7 +106,11 @@ while (!state.complete) {
 
   if (picks.length % 10 === 0) console.log(`  picked ${picks.length}...`);
 }
-console.log(`drafted ${picks.length} picks, ${kb(samples.get("draft.pick").at(-1))} on the last one`);
+const lastPick = samples.get("draft.pick").at(-1);
+console.log(
+  `drafted ${picks.length} picks, ${kb(lastPick.bytesRead)} read / ` +
+    `${kb(lastPick.bytesWritten)} written on the last one`,
+);
 
 // The gate the coach and the review walkthrough both apply. Derived from the
 // packs this draft actually dealt rather than assumed from a pack size.
@@ -170,15 +179,18 @@ const CALLS_PER_DRAFT = {
 };
 
 const paths = {};
-for (const [path, bytes] of samples) {
-  const mean = bytes.reduce((a, b) => a + b, 0) / bytes.length;
+for (const [path, ios] of samples) {
+  const meanOf = (field) => ios.reduce((a, io) => a + io[field], 0) / ios.length;
+  const read = meanOf("bytesRead");
+  const written = meanOf("bytesWritten");
+  const calls = CALLS_PER_DRAFT[path] ?? null;
   paths[path] = {
-    sampled: bytes.length,
-    meanBytesRead: Math.round(mean),
-    maxBytesRead: Math.max(...bytes),
-    callsPerDraft: CALLS_PER_DRAFT[path] ?? null,
-    totalBytesPerDraft:
-      CALLS_PER_DRAFT[path] == null ? null : Math.round(mean * CALLS_PER_DRAFT[path]),
+    sampled: ios.length,
+    meanBytesRead: Math.round(read),
+    meanBytesWritten: Math.round(written),
+    maxBytesRead: Math.max(...ios.map((io) => io.bytesRead)),
+    callsPerDraft: calls,
+    totalBytesPerDraft: calls == null ? null : Math.round((read + written) * calls),
   };
 }
 
@@ -213,17 +225,24 @@ const rows = Object.entries(paths).sort(
 );
 
 console.log("");
-console.log("path".padEnd(24) + "per call".padStart(12) + "calls".padStart(8) + "per draft".padStart(13));
+console.log(
+  "path".padEnd(24) +
+    "read".padStart(11) +
+    "write".padStart(10) +
+    "calls".padStart(7) +
+    "per draft".padStart(12),
+);
 for (const [path, p] of rows) {
   console.log(
     path.padEnd(24) +
-      kb(p.meanBytesRead).padStart(12) +
-      String(p.callsPerDraft ?? "—").padStart(8) +
-      (p.totalBytesPerDraft == null ? "—" : mb(p.totalBytesPerDraft)).padStart(13),
+      kb(p.meanBytesRead).padStart(11) +
+      kb(p.meanBytesWritten).padStart(10) +
+      String(p.callsPerDraft ?? "—").padStart(7) +
+      (p.totalBytesPerDraft == null ? "—" : mb(p.totalBytesPerDraft)).padStart(12),
   );
 }
-console.log("".padEnd(24) + "".padStart(12) + "".padStart(8) + "─".repeat(13));
-console.log("total per draft".padEnd(44) + mb(totalBytesPerDraft).padStart(13));
+console.log(" ".repeat(42) + "─".repeat(12));
+console.log("total per draft".padEnd(42) + mb(totalBytesPerDraft).padStart(12));
 
 if (has("update-baseline")) {
   writeFileSync(baselinePath, `${JSON.stringify(report, null, 2)}\n`);

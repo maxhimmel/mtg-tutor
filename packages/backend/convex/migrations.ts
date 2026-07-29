@@ -1,9 +1,93 @@
 import { v } from "convex/values";
+import type { PoolCard } from "@mtg-tutor/core";
 import { normalizeName, withPackSlots } from "@mtg-tutor/core";
 import { internalMutation } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import { engineHalf, textHalf } from "./cardText.js";
+import { recordPick } from "./draftPicks.js";
+import { replayFor } from "./sessions.js";
 import type { StoredCard } from "./validators.js";
+
+/**
+ * Writes the pick records for sessions drafted before draftPicks existed.
+ *
+ * Replays each session once -- which is exactly what the coach and the review
+ * verdict used to do on every call -- and keeps the result. One session per
+ * transaction: a replay reads the set's pool, and doing a hundred of those
+ * together would not fit.
+ *
+ * Walks every session by creation time, skipping those already recorded and
+ * those that can no longer be rebuilt at all.
+ */
+export const backfillDraftPicks = internalMutation({
+  args: { after: v.optional(v.number()), done: v.optional(v.number()) },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ done: number; complete: boolean; after?: number }> => {
+    const done = args.done ?? 0;
+    const after = args.after ?? 0;
+
+    // A creation-time cursor rather than "the first session missing rows",
+    // because a session that cannot be replayed can never get rows and would be
+    // picked again forever.
+    const target = await ctx.db
+      .query("draftSessions")
+      .withIndex("by_creation_time", (q) => q.gt("_creationTime", after))
+      .first();
+
+    if (!target) {
+      console.log(`backfillDraftPicks: complete, ${done} session(s)`);
+      return { done, complete: true };
+    }
+
+    const next = { after: target._creationTime, done };
+
+    const existing = await ctx.db
+      .query("draftPicks")
+      .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", target._id))
+      .collect();
+
+    if (target.pickedNames.length === 0 || existing.length === target.pickedNames.length) {
+      await ctx.scheduler.runAfter(0, internal.migrations.backfillDraftPicks, next);
+      return { ...next, complete: false };
+    }
+
+    // Partially written means an earlier run died mid-session; start it over
+    // rather than guess which indexes are missing.
+    for (const row of existing) await ctx.db.delete(row._id);
+
+    let engine;
+    try {
+      engine = (await replayFor(ctx, target)).engine;
+    } catch (e) {
+      // A draft taken against set data that has since been re-ingested cannot
+      // be rebuilt: the packs it saw no longer exist. Those sessions were
+      // already unreadable before this table existed, and nothing here can
+      // repair them -- so the cursor steps past rather than dying on the first
+      // one and stranding every session behind it.
+      console.warn(
+        `backfillDraftPicks: ${target._id} cannot be rebuilt, skipping -- ` +
+          `${e instanceof Error ? e.message : String(e)}`,
+      );
+      await ctx.scheduler.runAfter(0, internal.migrations.backfillDraftPicks, next);
+      return { ...next, complete: false };
+    }
+
+    const pool: PoolCard[] = [];
+    for (const [pickIndex, rec] of engine.history.entries()) {
+      await recordPick(ctx, target._id, pickIndex, rec, [...pool]);
+      pool.push({ name: rec.picked.name, colors: rec.picked.colors });
+    }
+    console.log(`backfillDraftPicks: ${target._id}, ${engine.history.length} picks`);
+
+    await ctx.scheduler.runAfter(0, internal.migrations.backfillDraftPicks, {
+      ...next,
+      done: done + 1,
+    });
+    return { ...next, done: done + 1, complete: false };
+  },
+});
 
 /**
  * Splits the card pools that predate setCardText.

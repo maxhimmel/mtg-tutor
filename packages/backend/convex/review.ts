@@ -12,7 +12,9 @@ import { z } from "zod";
 import { action, internalQuery, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
-import { cardTextFor, hydrate, hydrateCard } from "./cardText.js";
+import { cardTextFor } from "./cardText.js";
+import { hydrate, hydrateCard } from "@mtg-tutor/core";
+import { storedPick, toRecordedPick } from "./draftPicks.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -42,8 +44,12 @@ export const list = query({
 // The whole draft rehydrated for the walkthrough: every pack as the player saw
 // it, the deterministic scoring, and any verdict already frozen.
 //
-// Picks are not stored, so a pick is identified by its index in the session's
-// pick list -- that is what reviewVerdicts keys on.
+// A pick is identified by its index in the session's pick list -- that is what
+// reviewVerdicts and draftPicks both key on.
+//
+// This one still replays. It wants every pack of the draft at once, and reading
+// them as rows is no cheaper than rebuilding them from a pool it has to read
+// anyway for the colour-pair rates.
 export const load = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
@@ -148,16 +154,19 @@ const VERDICT_SCHEMA = z.object({
     .describe("2-4 sentences coaching the pick, citing principle ids in brackets."),
 });
 
-// Replay gives the pack and the pool as it stood BEFORE the pick, which is what
-// makes "context-best" mean anything.
+// The pick recorded the pool as it stood BEFORE it, which is what makes
+// "context-best" mean anything: judged against the commitments the player had
+// actually made, not the ones they went on to make.
 export const verdictContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
-    const record = engine.history[args.pickIndex];
-    if (!record) {
+    // No replay: the pick recorded its own pack and the pool it was judged
+    // against, so this reads one row and the text for the cards on it.
+    const session = await ownedSession(ctx, args.sessionId);
+    const row = await storedPick(ctx, args.sessionId, args.pickIndex);
+    if (!row) {
       throw new Error(
-        `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
+        `Session has ${session.pickedNames.length} picks; no stored pick at index ${args.pickIndex}.`,
       );
     }
     // The pack, and nothing else: the pool before the pick goes into the prompt
@@ -166,8 +175,9 @@ export const verdictContext = internalQuery({
       ctx,
       session.setCode,
       session.format,
-      record.pack.map((c) => c.name),
+      row.pack.map((c) => c.name),
     );
+    const record = toRecordedPick(row, text);
 
     const existing = await ctx.db
       .query("reviewVerdicts")
@@ -188,14 +198,14 @@ export const verdictContext = internalQuery({
           pickNo: record.pickNo,
           // Whole cards: the review prompt describes each one and reads the
           // statistics beside its win rate.
-          pack: hydrate(record.pack, text),
-          picked: hydrateCard(record.picked, text),
+          pack: record.pack,
+          picked: record.picked,
           bestName: record.score.best.name,
           score: record.score.score,
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
-        engine.humanPool.slice(0, args.pickIndex),
+        row.poolBefore,
       ),
     };
   },

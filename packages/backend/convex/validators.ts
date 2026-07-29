@@ -183,6 +183,21 @@ export const cardStats = v.object({
   trophyPickRate: v.optional(v.number()),
 });
 
+// What one pick scored, with the two cards it names carried as names rather
+// than embedded. Both are in the pack stored beside it, so embedding them would
+// store every card twice and read it twice.
+export const storedPickScore = v.object({
+  score: v.number(),
+  grade: v.string(),
+  pickedName: v.string(),
+  bestName: v.string(),
+  pickedValue: v.number(),
+  bestValue: v.number(),
+  isBest: v.boolean(),
+  onColor: v.boolean(),
+  rankInPack: v.number(),
+});
+
 export const draftSummary = v.object({
   overallScore: v.number(),
   accuracy: v.number(),

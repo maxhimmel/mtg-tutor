@@ -3,12 +3,15 @@ import { v } from "convex/values";
 import {
   cardStats,
   cardText,
+  colorCode,
   draftSummary,
+  engineCard,
   llmCall,
   migratingCard,
   packCard,
   packComposition,
   reviewVerdict,
+  storedPickScore,
 } from "./validators.js";
 
 export default defineSchema({
@@ -187,8 +190,41 @@ export default defineSchema({
     summary: v.optional(draftSummary),
   }).index("by_user", ["userId"]),
 
+  // What one pick actually saw and scored, written as it happens.
+  //
+  // A draft is still {seed, pickedNames} replayed -- that is what deals the
+  // packs, and this changes nothing about it. What this removes is REPLAYING TO
+  // READ ONE PICK. The coach and the review verdict each want a single
+  // historical pick, and rebuilding one by replaying the whole draft meant
+  // reading the set's entire card pool to answer a question about fourteen
+  // cards: 51.5KB a call, sixty times over a drafted-and-reviewed session.
+  //
+  // Not a second source of truth. The engine still produces the pick; this is
+  // the record of what it produced, written in the same transaction. Nothing
+  // recomputes it and nothing may disagree with it.
+  //
+  // stats.overview deliberately keeps replaying. It reads a hundred sessions at
+  // once and caches one pool per set, so reading rows instead would turn a
+  // handful of pool reads into four thousand row reads.
+  draftPicks: defineTable({
+    sessionId: v.id("draftSessions"),
+    pickIndex: v.number(),
+    packNo: v.number(),
+    pickNo: v.number(),
+    // The pack as it was offered, in the engine's half of a card. The rules text
+    // is joined from setCardText when a prompt needs it.
+    pack: v.array(engineCard),
+    pickedName: v.string(),
+    // The pool as it stood BEFORE this pick, as the prompts consume it: names
+    // grouped by colour, and nothing else. ~30 bytes a card, which is what lets
+    // a pick carry its own history instead of reading the set to rebuild one.
+    poolBefore: v.array(v.object({ name: v.string(), colors: v.array(colorCode) })),
+    score: storedPickScore,
+    signal: v.optional(v.string()),
+  }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
   // Frozen on first review so re-reviews are stable. Keyed by position in the
-  // session's pick list rather than by a pick row, since picks aren't stored.
+  // session's pick list, which is what draftPicks keys on too.
   reviewVerdicts: defineTable({
     sessionId: v.id("draftSessions"),
     pickIndex: v.number(),

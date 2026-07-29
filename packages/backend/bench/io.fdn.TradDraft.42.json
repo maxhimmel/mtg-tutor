@@ -9,6 +9,7 @@
     "draft.state": {
       "sampled": 1,
       "meanBytesRead": 46458,
+      "meanBytesWritten": 0,
       "maxBytesRead": 46458,
       "callsPerDraft": 1,
       "totalBytesPerDraft": 46458
@@ -16,27 +17,31 @@
     "draft.pick": {
       "sampled": 42,
       "meanBytesRead": 47485,
+      "meanBytesWritten": 2845,
       "maxBytesRead": 48174,
       "callsPerDraft": 42,
-      "totalBytesPerDraft": 1994360
+      "totalBytesPerDraft": 2113837
     },
     "draft.coachContext": {
       "sampled": 30,
-      "meanBytesRead": 52739,
-      "maxBytesRead": 55516,
+      "meanBytesRead": 8949,
+      "meanBytesWritten": 0,
+      "maxBytesRead": 12647,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 1582176
+      "totalBytesPerDraft": 268475
     },
     "review.verdictContext": {
       "sampled": 30,
-      "meanBytesRead": 52739,
-      "maxBytesRead": 55516,
+      "meanBytesRead": 8949,
+      "meanBytesWritten": 0,
+      "maxBytesRead": 12647,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 1582176
+      "totalBytesPerDraft": 268475
     },
     "draft.results": {
       "sampled": 1,
       "meanBytesRead": 69261,
+      "meanBytesWritten": 0,
       "maxBytesRead": 69261,
       "callsPerDraft": 1,
       "totalBytesPerDraft": 69261
@@ -44,6 +49,7 @@
     "review.load": {
       "sampled": 1,
       "meanBytesRead": 218218,
+      "meanBytesWritten": 0,
       "maxBytesRead": 218218,
       "callsPerDraft": 1,
       "totalBytesPerDraft": 218218
@@ -51,24 +57,27 @@
     "review.framePrompt": {
       "sampled": 2,
       "meanBytesRead": 47305,
+      "meanBytesWritten": 0,
       "maxBytesRead": 47305,
       "callsPerDraft": 2,
       "totalBytesPerDraft": 94610
     },
     "stats.overview": {
       "sampled": 1,
-      "meanBytesRead": 227273,
-      "maxBytesRead": 227273,
+      "meanBytesRead": 228406,
+      "meanBytesWritten": 0,
+      "maxBytesRead": 228406,
       "callsPerDraft": null,
       "totalBytesPerDraft": null
     },
     "review.saveVerdict": {
       "sampled": 30,
       "meanBytesRead": 1133,
+      "meanBytesWritten": 215,
       "maxBytesRead": 1133,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 33990
+      "totalBytesPerDraft": 40440
     }
   },
-  "totalBytesPerDraft": 5621249
+  "totalBytesPerDraft": 3119774
 }

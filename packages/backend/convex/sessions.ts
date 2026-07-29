@@ -99,8 +99,18 @@ export async function ownedSession(
 }
 
 export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
-  const session = await ownedSession(ctx, sessionId);
+  return await replayFor(ctx, await ownedSession(ctx, sessionId));
+}
 
+/**
+ * The replay on its own, for a session already in hand.
+ *
+ * Split from loadBoard because ownership is a question about the CALLER, and a
+ * migration has none -- it runs as the system, over everyone's sessions. Every
+ * request path goes through loadBoard and is checked; this is the one door that
+ * is deliberately not, and it is not exported to any Convex function.
+ */
+export async function replayFor(ctx: QueryCtx, session: Doc<"draftSessions">) {
   const setDoc = await setDocFor(ctx, session.setCode, session.format);
   const cardsDoc = await setCardsFor(ctx, setDoc);
 
