@@ -7,7 +7,6 @@ import {
   draftSummary,
   engineCard,
   llmCall,
-  migratingCard,
   packCard,
   packComposition,
   reviewVerdict,
@@ -47,27 +46,26 @@ export default defineSchema({
   }).index("by_code_and_format", ["code", "format"]),
 
   // Everything the draft engine needs and nothing else, kept apart from the
-  // metadata above for the same reason setStats is: this measures ~240KB, and
-  // only a replay ever reads it. Anything that merely lists or names sets reads
-  // `sets` alone, at ~280 bytes a row.
+  // metadata above for the same reason setStats is: only a replay ever reads it.
+  // Anything that merely lists or names sets reads `sets` alone, at ~280 bytes.
   //
-  // Still one document per (set, format) -- well inside Convex's 1MB limit, so
-  // replaying a draft reads exactly one row rather than hundreds of card rows.
+  // ~46KB, down from ~240KB before the rules text moved to setCardText.
+  //
+  // One document per (set, format), and deliberately so: dealing a pack samples
+  // every rarity pool, so the engine always wants the whole thing and a row per
+  // card would only add per-row overhead to a read it was going to do anyway.
+  // The opposite call from setCardText below, for the opposite reason.
   setCards: defineTable({
     code: v.string(),
     format: v.string(),
     // The engine's half of a card. The rules text, the art and the statistics
-    // only a reader needs are gone to setCardText -- two thirds of what a replay
+    // only a reader needs live in setCardText -- two thirds of what a replay
     // used to drag in on every pick.
     //
-    // Still `migratingCard` rather than `engineCard`, which accepts both shapes.
-    // A deployment whose pools predate the split cannot take the strict
-    // validator: Convex checks every existing document on push, so the narrow
-    // schema is rejected until migrations:splitStoredCards has run there. Dev
-    // has run it and deploys clean under `v.array(engineCard)`; the swap is a
-    // one-line follow-up once production has migrated too, and it changes no
-    // bytes -- the saving is in the documents, not the validator.
-    cards: v.array(migratingCard),
+    // Strict rather than permissive, which is the point: a push validates every
+    // existing document, so this deploying at all is proof that no pool anywhere
+    // still carries the old shape.
+    cards: v.array(engineCard),
     // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
     colorPairWinRates: v.array(
       v.object({ pair: v.string(), winRate: v.number() }),
@@ -171,6 +169,10 @@ export default defineSchema({
   // A draft is fully determined by its seed plus the ordered names the human
   // picked, so that pair IS the session -- no board state is persisted. See
   // replayDraft in @mtg-tutor/core. Replaying a finished draft costs ~0.16ms.
+  //
+  // draftPicks does not change that. It records what each pick SAW, so a reader
+  // after one pick need not rebuild the whole draft to find it; the packs are
+  // still dealt from the seed and nothing reads a board back.
   draftSessions: defineTable({
     userId: v.optional(v.string()), // set once auth lands
     setCode: v.string(),
@@ -178,12 +180,6 @@ export default defineSchema({
     seed: v.number(),
     pickedNames: v.array(v.string()),
     status: v.union(v.literal("active"), v.literal("complete")),
-    // Dead, and optional only so the rows that still carry it keep validating.
-    // A draft was never opt-in -- the row is inserted before the first pick and
-    // nothing is ever deleted -- and no query has read this since stats and
-    // review moved to ownSessions. Nothing writes it now; stripping it from the
-    // old rows is a migration for whenever this table is next touched.
-    saved: v.optional(v.boolean()),
     createdAt: v.string(),
     completedAt: v.optional(v.string()),
     // Denormalized on completion so the stats screen doesn't replay every draft.

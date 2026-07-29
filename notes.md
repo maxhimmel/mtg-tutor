@@ -47,6 +47,20 @@
    Only helps sessions created after the change, which is fine — it is a
    forward-looking guard, not a repair.
 
+   **`draftPicks` (2026-07-29) shrinks this from "unreadable" to "unreplayable".**
+   Every pick now stores the pack it saw, so a stranded draft keeps its own
+   history: `coachContext` and `verdictContext` read the row and never replay,
+   and work fine on a session whose set has moved on. Only `review.load` still
+   replays and so still fails, which makes it the one thing left to fix — and it
+   could be fixed by reading the rows too, at the cost of the whole-set text read
+   it already does. Sessions drafted before that date have rows only if the
+   backfill could replay them, which by definition excludes the stranded ones.
+
+   Worth knowing: the 2026-07-29 `POOL_REVISION` bump re-ingested all 17 sets on
+   both deployments and stranded **nothing** — the backfill replayed every prod
+   session successfully. A re-crawl from unchanged artifacts is safe; it was the
+   `packRate` rebuild that broke EOE, not re-ingestion as such.
+
 5. I've noticed the coach pulling advice about choosing a non-optimal card (probably because the stats are better on the optimal card versus my pick) when I'm on my second/third pack and the first few picks. As if it can't distinguish that once I'm a full pack in I'm not technically at "pick 1" any longer - I'm at all-the-picks-from-pack-1 + pack-2-pick-N.
    The prompt says `Pack 2, Pick 3` and lists the pool, but never the absolute
    pick index, how far through the draft it is, or which colours are already
@@ -191,8 +205,8 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
-4. **`draftSessions.saved` is dead.** Optional only so old rows validate;
-   nothing writes or reads it. Strip it whenever that table is next migrated.
+4. ~~**`draftSessions.saved` is dead.**~~ Stripped 2026-07-29 by
+   `migrations:dropSavedFlag`, off the rows and off the schema.
 
 # Roadmap (pick per future session):
 
@@ -282,24 +296,30 @@ to the data work.
 
 # Deferred trade-offs (revisit when the premise changes):
 
-1. **The draft board no longer live-syncs — revisit if we do multiplayer.**
-   `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open for the whole
-   draft. Answering that query replays the session, which reads the ~240KB pool,
-   and every pick patches `draftSessions` and so invalidated it — meaning each
-   pick paid for that read twice, once in the mutation and once in the re-run
-   query. It now loads the board once and advances it from what `pick` already
-   returns.
+1. **The draft board no longer live-syncs — and it is now cheap enough to
+   reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
+   for the whole draft. Answering that query replays the session, which then read
+   the ~240KB pool, and every pick patches `draftSessions` and so invalidated it
+   — meaning each pick paid for that read twice, once in the mutation and once in
+   the re-run query. It now loads the board once and advances it from what `pick`
+   already returns.
 
    That is only sound because a draft is single-player and nothing but this
    component ever changes the board. **A shared pod, a spectator view, or
-   drafting from two devices needs a subscription back** — and naively restoring
-   the old one restores the double read with it.
+   drafting from two devices needs a subscription back.**
 
-   The shape that would keep both: subscribe to something small and derived (a
-   pick counter, or a session revision number) and fetch the board only when
-   that moves. Invalidation then costs a cheap read instead of a full replay.
-   Same principle as `setStatsMeta` — if a value is only there to be watched or
-   compared, it belongs on a row small enough to read often.
+   **The premise has changed.** `draft.state` is 45KB, not 240KB, since the pool
+   split — so naively restoring the subscription now costs ~45KB per pick rather
+   than 240KB. That is roughly doubling the pick path (1.9MB → 3.8MB per draft),
+   which is affordable but not free, and it buys tab-sync for a single player
+   who is unlikely to have two tabs open.
+
+   The shape that would keep both is unchanged and still better: subscribe to
+   something small and derived (a pick counter, or a session revision number) and
+   fetch the board only when that moves. Invalidation then costs a cheap read
+   instead of a whole board. Same principle as `setStatsMeta` — if a value is
+   only there to be watched or compared, it belongs on a row small enough to read
+   often.
 
 2. **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
    a full-table read expensive.** Every model call appends one ~150-byte row.
@@ -326,20 +346,48 @@ The architecture, the data pipeline and the deploy story are all documented in
    (`convex/auth.config.ts`). `draft.ts` only ever needs an opaque owner key and
    `identity.tokenIdentifier` already is one, so a user row would be dead weight
    and a sync webhook would be a second thing to keep correct.
-3. **One Convex document per (set, format), not a per-card table** — so a draft
-   mutation reads exactly one row rather than hundreds. It is now two documents,
-   `sets` (~433 bytes, what a listing needs) and `setCards` (~240KB, what a
-   replay needs), because Convex bills bytes read out of the database rather
-   than bytes returned and the set picker was reading the whole pool to render a
-   name. Ingestion still refuses anything over 900KB against the 1MB limit.
-4. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
+3. **A set's storage shape is chosen per reader, not once for the set.** Convex
+   bills the bytes a function moves and charges for the whole document it
+   retrieved, so the question is never "document or table" in the abstract — it
+   is what each reader asks for.
+
+   - `sets` (~433 bytes) — what a listing needs. Split out because the set
+     picker was reading the whole pool to render a name.
+   - `setCards` (~46KB) — **one document**, because dealing a pack samples every
+     rarity pool. The engine always wants all of it, so a per-card table would
+     only add per-row overhead to a read it was going to do anyway.
+   - `setCardText` — **one row per card**, because its readers want subsets.
+     `buildPickContext` describes the card taken and the four best it passed, so
+     the coach reads five rows (~3.5KB) where a blob would be ~180KB.
+
+   The two shapes are the same decision applied to different access patterns,
+   and getting it backwards either way is expensive. The one place the row shape
+   loses is `review.load`, which wants every pack of the draft and so pays ~13%
+   row overhead — accepted, it runs once per review.
+
+   Ingestion still refuses anything over 900KB against the 1MB limit.
+
+   Measured 2026-07-29: 22.70MB → 2.98MB of database I/O per draft + review.
+   `pnpm bench-io` is the harness; it wraps the real functions and reads their
+   transaction metrics, so it measures what ships rather than a model of it.
+   `npx convex insights` will never show this — it reports problem classes, and
+   a 240KB read through a perfect index is healthy by its definition.
+
+4. **Persisting the board was considered and rejected.** Having `draft.pick`
+   advance a stored board instead of replaying was the headline of the I/O plan,
+   and the pool split above ate its value: a board row averages ~11KB against
+   the 46KB pool it would replace, and has to be rewritten on every pick. That
+   is ~1.65x for the one change that carries real divergence risk — a stored
+   board must advance bit-identically to replay, forever, or drafts silently
+   diverge. The premise changes only if the pool grows a lot; it shrank.
+5. **`outputFileTracingRoot` must stay set** in `apps/web/next.config.ts`. Next
    traces from the project directory by default, and under pnpm 652 of the 653
    files in `next-server.js.nft.json` resolve outside `apps/web`.
-5. **A `next.config.ts` that reads the backend's `.env.local` was tried and
+6. **A `next.config.ts` that reads the backend's `.env.local` was tried and
    reverted.** Shipped code reaching into a sibling package's gitignored file,
    to save three lines set once, is a worse trade than the duplication. Convex's
    own schema documents `localEnvVars` as writing "to the local `.env` file"
    with no path option, so `convex dev` cannot populate the Next app's file.
-6. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
+7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.

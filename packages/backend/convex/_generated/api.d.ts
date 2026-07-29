@@ -16,7 +16,6 @@ import type * as http from "../http.js";
 import type * as iobench from "../iobench.js";
 import type * as llm from "../llm.js";
 import type * as metrics from "../metrics.js";
-import type * as migrations from "../migrations.js";
 import type * as review from "../review.js";
 import type * as sessions from "../sessions.js";
 import type * as setData from "../setData.js";
@@ -39,7 +38,6 @@ declare const fullApi: ApiFromModules<{
   iobench: typeof iobench;
   llm: typeof llm;
   metrics: typeof metrics;
-  migrations: typeof migrations;
   review: typeof review;
   sessions: typeof sessions;
   setData: typeof setData;

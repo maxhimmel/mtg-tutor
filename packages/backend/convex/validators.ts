@@ -82,23 +82,6 @@ export const cardText = v.object({
 // shape and never a stored one.
 export const card = v.object({ ...engineCard.fields, ...cardText.fields });
 
-// Transitional: validates a whole card AND the engine's half of one, so a pool
-// document can be rewritten in place while some rows are split and some are
-// not. Only the six fields a CardText requires need relaxing; the rest were
-// optional already.
-//
-// Deleted when migrations:splitStoredCards has run everywhere and setCards.cards
-// narrows to v.array(engineCard).
-export const migratingCard = v.object({
-  ...card.fields,
-  colorIdentity: v.optional(v.array(colorCode)),
-  manaCost: v.optional(v.string()),
-  cmc: v.optional(v.number()),
-  typeLine: v.optional(v.string()),
-  oracleText: v.optional(v.string()),
-  collectorNumber: v.optional(v.string()),
-});
-
 export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;
 export type StoredCardText = Infer<typeof cardText>;
