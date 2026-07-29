@@ -9,7 +9,7 @@ import {
   observedRarityBaselines,
   withPackSlots,
 } from "@mtg-tutor/core";
-import { cardTextFor, hydrate, textHalf } from "./cardText.js";
+import { cardTextFor, engineHalf, hydrate, textHalf } from "./cardText.js";
 import {
   action,
   internalMutation,
@@ -606,7 +606,13 @@ export const store = internalMutation({
     const cardsDoc = {
       code: args.code,
       format: args.format,
-      cards: slotted,
+      // The engine's half only. `slotted` is whole cards -- that is what the
+      // action built from Scryfall and what the text rows below are written
+      // from -- and storing them whole here is exactly the cost the split
+      // exists to remove. It silently did, for as long as the pool validator
+      // still accepted a whole card: every ingest undid the split for that set
+      // and nothing failed. The strict validator is what makes it impossible.
+      cards: slotted.map(engineHalf),
       colorPairWinRates: args.colorPairWinRates,
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
