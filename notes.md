@@ -1,17 +1,9 @@
 # Issues:
 
-0. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
+1. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
 
-- "Adventure" type (see: "Picklock Prankster")
+- "Adventure" sub-card/split-card type (see: "Picklock Prankster")
 - Bargain
-
-1. ~~**The coach invents mana costs.**~~ **RESOLVED 2026-07-28.** It called
-   `Nurturing Bristleback` a 3-drop; it is `5GG`. The cause was that
-   `buildPickContext` / `buildReviewContext` rendered every card the player did
-   NOT pick as `name (Colour, GIH WR x%)` — no cmc, no type line — so every
-   curve/size claim about those cards was invention. Both now render through
-   `describeCard` (`core/tutor/cardLine.ts`), which carries cmc and type line for
-   every card in the pack. (Numbering kept so the items below keep their ids.)
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -60,6 +52,37 @@
    pick index, how far through the draft it is, or which colours are already
    committed — `committedColors` exists in `core/scoring/score.ts` and no prompt
    builder calls it.
+
+6. **A failed coach stream logs an uncaught `AI_NoOutputGeneratedError`.** When
+   `/coach` calls the model and nothing comes back — a rate limit is the easy way
+   to see it — the deployment logs:
+
+   ```
+   [CONVEX H(POST /coach)] [ERROR] Uncaught AI_NoOutputGeneratedError:
+     No output generated. Check the stream for errors.
+       at flush [as flush] (ai/src/generate-text/stream-text.ts:1388:27)
+   ```
+
+   Nothing is broken for the player: `onError` in `llm.ts` catches the stream
+   failure, the interrupted-coaching message is appended to the body, and both
+   clients fall back to the deterministic explanation. The problem is that this
+   is precisely the condition `unavailable()` was written to stop shouting
+   about — "a daily token cap on the dev provider" is the example in its own
+   comment — and it is shouting again through a different door.
+
+   **Confirmed pre-existing, not caused by the usage instrumentation.** Verified
+   2026-07-28 by stripping the `Promise.allSettled` usage read out of `stream()`
+   entirely and re-running: the uncaught error still appeared. It comes from
+   `streamText`'s internal flush rejecting a promise the pump never consumes.
+   (The _separate_ `Promise.all` bug that instrumentation did introduce — the
+   second rejection going unconsumed — is fixed.)
+
+   The likely fix is to consume the result promises the pump currently ignores,
+   the same way `totalUsage` and `finishReason` are now consumed via
+   `allSettled` — probably `result.text` or `result.finalStep`, whichever the
+   SDK rejects on this path. Worth confirming which one rather than defensively
+   awaiting all of them. Easy to reproduce: exhaust the Groq daily cap, or point
+   `LLM_BASE_URL` at something that refuses.
 
 # Ideas:
 
@@ -125,6 +148,7 @@
    `suggestDeck` already exist, so this is mostly a new screen — and it is a
    different skill (pool evaluation and deck construction rather than pick
    order).
+   - Not too interested in this format. Low priority.
 
 8. **A deck-building step.** Today `suggestDeck` just shows you the answer on
    the results screen. Building the 40 is half of Limited and the app currently
@@ -162,6 +186,7 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    deployment's `WORKOS_CLIENT_ID`/`WORKOS_API_KEY` — which only works if the
    environment has password auth enabled. Now that the device flow exists it
    could instead read `~/.mtg-tutor/credentials.json`.
+   - Think we solved this?
 3. **Draft sessions created before auth have `userId: undefined` and are now
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
@@ -214,6 +239,43 @@ Ordered by value × readiness. Each is a candidate feature branch.
    This is what would re-tighten the availability gate to require replay
    (`USED_KINDS` in `scripts/lib/datasets.mjs`).
 
+5. **Follow-ups to token metrics** (spec:
+   `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
+   the first pass, each for its own reason:
+   - **Static token assertions in vitest, no API calls.** Input tokens,
+     call frequency and the cache split are pure functions of the prompt
+     builders and `isDecisionPick` — a draft replays in 0.16ms, so all 45 picks
+     can be evaluated exactly and for free, no provider involved. That would
+     catch corpus growth on every commit instead of only when someone pays for a
+     benchmark run. It is not in the first pass only because _accuracy_ cannot be
+     computed statically and forces a live harness anyway; this is the cheap
+     fast-feedback half, worth adding once the harness proves the metrics are the
+     right ones.
+   - **LLM-as-judge pairwise quality tier.** The mechanical and distributional
+     accuracy metrics catch hallucination, truncation and context-blindness, but
+     not "is this advice actually good". A blind, order-randomized pairwise judge
+     over baseline-vs-candidate answers would — at real token cost and with its
+     own noise. For release candidates, not for every run.
+   - **A dashboard / live query over accumulated `llmUsage`.** The table is
+     written from the first pass; nothing reads it yet except the benchmark
+     harness filtering by session. Needs prod traffic to be worth building.
+   - **The verdict prompt asks for 2-4 sentences and gets ~6x that.** First
+     measured run against `claude-sonnet-5` (2026-07-28, fdn/TradDraft seed 42):
+     17 of 30 verdicts hit the 1024-token ceiling exactly and returned nothing,
+     and the 13 that fit averaged ~615 output tokens for three fields the schema
+     describes as a sentence or two each. Raising the ceiling to 2048 took that
+     to 5 of 30, and the 25 that now fit average ~1,016 output tokens — about
+     ten times the length asked for. The ceiling bought correctness and nothing
+     else; raising it again would just buy the verbosity more room.
+
+     Verdict output is the single largest output line in the budget — 25.4k of
+     the run's 30.8k output tokens — so tightening `VERDICT_SCHEMA`'s field
+     descriptions, or giving the model a length budget it will actually respect,
+     is the first real saving available. It is also exactly the change the
+     quality metrics exist to police: shorter is only better if divergence rate,
+     citation density and breadth hold. Regenerate the baseline first, change
+     the prompt second, compare third.
+
 Separate track: the **review features** in "Deferred" above (alternate draft
 lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated
 to the data work.
@@ -238,6 +300,18 @@ to the data work.
    that moves. Invalidation then costs a cheap read instead of a full replay.
    Same principle as `setStatsMeta` — if a value is only there to be watched or
    compared, it belongs on a row small enough to read often.
+
+2. **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
+   a full-table read expensive.** Every model call appends one ~150-byte row.
+   That is nothing next to the ~240KB documents that drained the tier, so
+   aggregating at read time is free at current volume and a rollup cron would be
+   moving parts bought against a cost that does not exist yet.
+
+   The premise changes when months of real traffic accumulate: "total tokens
+   ever" then reads every row, which is exactly the `sets.list` pattern. At that
+   point fold raw rows into daily per-area totals and prune the raw rows on a
+   retention window. The benchmark harness is unaffected either way — it filters
+   by `runId` and only ever reads one run.
 
 # Decisions worth not re-litigating:
 

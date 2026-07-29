@@ -1,0 +1,39 @@
+{
+  "setCode": "fdn",
+  "format": "TradDraft",
+  "callErrors": 0,
+  "seed": 42,
+  "provider": "anthropic",
+  "model": "claude-sonnet-5",
+  "minPackCards": 5,
+  "areasRun": [
+    "coach"
+  ],
+  "areas": {
+    "coach": {
+      "calls": 30,
+      "inputTokens": 162376,
+      "cacheReadTokens": 134473,
+      "cacheWriteTokens": 4637,
+      "outputTokens": 4897,
+      "truncated": 0,
+      "unattributed": 0,
+      "noCacheInputTokens": 23266
+    }
+  },
+  "accuracy": {
+    "coachedCalls": 30,
+    "emptyAnswers": 0,
+    "offTopicCardNames": 0,
+    "citationsTotal": 74,
+    "inventedCitations": 0,
+    "inventedCitationRate": 0,
+    "citationDensity": 2.466666666666667,
+    "distinctPrinciples": 21,
+    "corpusSize": 66,
+    "verdictsAsked": 0,
+    "unansweredVerdicts": 0,
+    "divergenceRate": 0,
+    "emptyFrames": 0
+  }
+}

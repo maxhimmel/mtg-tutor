@@ -4,6 +4,16 @@ import { ANY_HYPHEN, HYPHEN_CLASS } from "./typography.js";
 export interface SplitCitations {
   prose: string;
   principles: Principle[];
+  /**
+   * Ids the model cited that no principle answers to.
+   *
+   * Rendering does not care -- an invented id has no reference sheet entry to
+   * show, so it comes out of the prose either way. Measurement does: a coach
+   * that cites a corpus it is no longer being given starts inventing plausible
+   * ids rather than saying less, and the rate this reports is what makes that
+   * visible instead of silent.
+   */
+  invented: string[];
 }
 
 // How the model actually writes citations varies run to run: "[EVAL-02]",
@@ -53,11 +63,13 @@ function tidy(text: string): string {
 export function splitCitations(text: string, doc: PrinciplesDoc): SplitCitations {
   const index = indexOf(doc);
   const cited = new Map<string, Principle>();
+  const invented = new Set<string>();
 
   const take = (raw: string) => {
     const id = raw.replace(ANY_HYPHEN, "-");
     const principle = index.get(id);
     if (principle) cited.set(id, principle);
+    else invented.add(id);
   };
 
   const stripped = text
@@ -71,5 +83,9 @@ export function splitCitations(text: string, doc: PrinciplesDoc): SplitCitations
     })
     .replace(PARTIAL_CITATION, "");
 
-  return { prose: tidy(stripped), principles: [...cited.values()] };
+  return {
+    prose: tidy(stripped),
+    principles: [...cited.values()],
+    invented: [...invented],
+  };
 }

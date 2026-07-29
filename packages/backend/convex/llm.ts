@@ -11,12 +11,15 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import {
   APICallError,
+  NoOutputGeneratedError,
   Output,
   RetryError,
   generateText,
   streamText,
+  type FinishReason,
   type JSONValue,
   type LanguageModel,
+  type LanguageModelUsage,
   type SystemModelMessage,
 } from "ai";
 import type { z } from "zod";
@@ -71,6 +74,32 @@ function resolve(): LanguageModel {
   );
 }
 
+/**
+ * What one call cost, in the AI SDK's own vocabulary.
+ *
+ * The cache split is the reason any of this is recorded: the system prompt is
+ * ~3.4k byte-identical tokens on every call, so whether it was read from cache
+ * or written to it swings the bill by more than the prompt is worth arguing
+ * about. v7 reports that split portably under `inputTokenDetails`, so nothing
+ * here has to reach into provider-specific metadata.
+ *
+ * Every count past the first two is optional because reporting them is a
+ * provider's choice -- Groq sends no cache signal at all.
+ */
+export interface UsageReport {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens?: number;
+  noCacheInputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  finishReason: string;
+  provider: string;
+  model: string;
+  ms: number;
+}
+
 interface Request {
   system: string;
   userContent: string;
@@ -82,6 +111,17 @@ interface Request {
    * and returned an empty string.
    */
   fast?: boolean;
+  /**
+   * Called once the cost of this call is known. This file stays ignorant of
+   * where the number goes -- the caller owns that, which is what keeps Convex
+   * out of the provider seam.
+   *
+   * The return is deliberately unconstrained: every caller hands back a
+   * `ctx.runMutation`, which resolves to null rather than void. It is awaited
+   * when it is thenable, so a caller that needs the write to land before its
+   * own context ends gets that for free.
+   */
+  onUsage?: (usage: UsageReport) => void | Promise<unknown>;
 }
 
 /**
@@ -123,6 +163,40 @@ function common(req: Request) {
   };
 }
 
+/**
+ * Hands the cost of a call to whoever asked for it.
+ *
+ * Never throws. A metrics sink that fails is not a reason to fail a draft, and
+ * on the coach path this runs after the answer has already been streamed to the
+ * player -- there is nothing left to fail into.
+ */
+async function report(
+  req: Request,
+  model: LanguageModel,
+  started: number,
+  usage: LanguageModelUsage,
+  finishReason: FinishReason,
+): Promise<void> {
+  if (!req.onUsage) return;
+  try {
+    await req.onUsage({
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      totalTokens: usage.totalTokens,
+      noCacheInputTokens: usage.inputTokenDetails.noCacheTokens,
+      cacheReadTokens: usage.inputTokenDetails.cacheReadTokens,
+      cacheWriteTokens: usage.inputTokenDetails.cacheWriteTokens,
+      reasoningTokens: usage.outputTokenDetails.reasoningTokens,
+      finishReason,
+      provider: isAnthropic() ? "anthropic" : COMPATIBLE_NAME,
+      model: typeof model === "string" ? model : model.modelId,
+      ms: Date.now() - started,
+    });
+  } catch (e) {
+    console.error("Recording model usage failed:", e);
+  }
+}
+
 // A rate limit, an upstream 5xx or a timeout is the coach being unavailable,
 // which is a state every caller already renders: the review actions turn it
 // into a null and the clients show the data-only answer. Letting the provider's
@@ -131,16 +205,35 @@ function common(req: Request) {
 // looks like. Anything else still throws, because a bad schema or a broken
 // prompt is a bug and should read as one.
 function unavailable(e: unknown): never {
-  if (RetryError.isInstance(e) || APICallError.isInstance(e)) {
+  if (
+    RetryError.isInstance(e) ||
+    APICallError.isInstance(e) ||
+    // The model answered, but with nothing usable -- structured output whose
+    // JSON was cut off mid-object by maxTokens is the way this actually
+    // happens. It reads as a bug because it arrives as an error class rather
+    // than an empty string, but "no answer" is the state every caller already
+    // renders, and letting it through instead turned one over-long verdict into
+    // a 500 that ended the review for that pick.
+    NoOutputGeneratedError.isInstance(e)
+  ) {
     throw new CoachUnavailableError(e.message);
   }
   throw e;
 }
 
 export async function text(req: Request): Promise<string> {
+  const options = common(req);
+  const started = Date.now();
   try {
-    const { text: out } = await generateText(common(req));
-    return out.trim();
+    const result = await generateText(options);
+    await report(
+      req,
+      options.model,
+      started,
+      result.usage,
+      result.finishReason,
+    );
+    return result.text.trim();
   } catch (e) {
     unavailable(e);
   }
@@ -152,12 +245,21 @@ export async function text(req: Request): Promise<string> {
  * cannot do tool-shaped structured output.
  */
 export async function object<T>(req: Request & { schema: z.ZodType<T> }): Promise<T> {
+  const options = common(req);
+  const started = Date.now();
   try {
-    const { output } = await generateText({
-      ...common(req),
+    const result = await generateText({
+      ...options,
       output: Output.object({ schema: req.schema }),
     });
-    return output;
+    await report(
+      req,
+      options.model,
+      started,
+      result.usage,
+      result.finishReason,
+    );
+    return result.output;
   } catch (e) {
     unavailable(e);
   }
@@ -172,14 +274,17 @@ export function stream(req: Request): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let failure: unknown;
 
-  const { textStream } = streamText({
-    ...common(req),
+  const options = common(req);
+  const started = Date.now();
+  const result = streamText({
+    ...options,
     // streamText suppresses errors instead of throwing, so a failure has to be
     // caught here or it becomes a silently truncated answer.
     onError: ({ error }) => {
       failure = error;
     },
   });
+  const { textStream } = result;
 
   // Drained with an explicit pump in start() rather than pull(). With pull(),
   // the response body reached the client but the stream never terminated and
@@ -198,6 +303,30 @@ export function stream(req: Request): ReadableStream<Uint8Array> {
         const message = failure instanceof Error ? failure.message : String(failure);
         controller.enqueue(encoder.encode(`\n[coaching interrupted: ${message}]`));
       }
+
+      // What this call cost is only knowable now, once the stream has drained --
+      // which is well after the Response went back to the caller. Awaited rather
+      // than left to float on purpose: the Convex action lives exactly as long as
+      // this pump does, so an un-awaited write would race its own shutdown.
+      // Verified against the dev deployment that a mutation does commit from
+      // here.
+      //
+      // These promises reject when the call itself failed, which is why they are
+      // caught rather than reported: a call that produced nothing has no usage to
+      // record, and the player already has the interrupted-coaching message above.
+      // allSettled, not all. When the call produces nothing both of these
+      // reject, and Promise.all only ever hands back the first -- leaving the
+      // second rejection unconsumed, which surfaces as an uncaught error for a
+      // condition handled deliberately right here. That is the same trap
+      // `unavailable` above exists to close, reopened one line at a time.
+      const [usage, finishReason] = await Promise.allSettled([
+        result.totalUsage,
+        result.finishReason,
+      ]);
+      if (usage.status === "fulfilled" && finishReason.status === "fulfilled") {
+        await report(req, options.model, started, usage.value, finishReason.value);
+      }
+
       controller.close();
     },
   });

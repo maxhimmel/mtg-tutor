@@ -94,6 +94,17 @@ http.route({
         userContent: context.userContent,
         maxTokens: MAX_TOKENS,
         fast: true,
+        // Runs from inside the stream pump, after this handler has already
+        // returned its Response -- the only moment the cost of a streamed call
+        // is knowable. Verified against the dev deployment that the action
+        // context survives that far and the write commits.
+        onUsage: (usage) =>
+          ctx.runMutation(internal.metrics.record, {
+            ...usage,
+            area: "coach",
+            sessionId: sessionId as Id<"draftSessions">,
+            pickIndex,
+          }),
       });
     } catch (e) {
       // Callers already fall back to the deterministic explanation, so say so

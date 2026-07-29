@@ -1,0 +1,1203 @@
+{
+  "setCode": "fdn",
+  "format": "TradDraft",
+  "callErrors": 0,
+  "seed": 42,
+  "provider": "local",
+  "model": "openai/gpt-oss-120b",
+  "minPackCards": 5,
+  "areas": {
+    "coach": {
+      "calls": 30,
+      "inputTokens": 109610,
+      "cacheReadTokens": 30720,
+      "cacheWriteTokens": 0,
+      "outputTokens": 5256,
+      "truncated": 0,
+      "unattributed": 0,
+      "noCacheInputTokens": 78890
+    },
+    "verdict": {
+      "calls": 14,
+      "inputTokens": 60613,
+      "cacheReadTokens": 13312,
+      "cacheWriteTokens": 0,
+      "outputTokens": 19627,
+      "truncated": 0,
+      "unattributed": 0,
+      "noCacheInputTokens": 47301
+    }
+  },
+  "accuracy": {
+    "coachedCalls": 30,
+    "emptyAnswers": 0,
+    "offTopicCardNames": 0,
+    "citationsTotal": 131,
+    "inventedCitations": 1,
+    "inventedCitationRate": 0.007633587786259542,
+    "citationDensity": 2.4,
+    "distinctPrinciples": 28,
+    "corpusSize": 66,
+    "verdictsAsked": 30,
+    "unansweredVerdicts": 16,
+    "divergenceRate": 0.6428571428571429,
+    "emptyFrames": 2
+  },
+  "picks": [
+    {
+      "pickIndex": 0,
+      "cardsInPack": 14,
+      "bestName": "Sylvan Scavenging",
+      "packNames": [
+        "Sylvan Scavenging",
+        "Wildwood Scourge",
+        "Zombify",
+        "Arbiter of Woe",
+        "Run Away Together",
+        "Stab",
+        "Marauding Blight-Priest",
+        "Gleaming Barrier",
+        "Make Your Move",
+        "Sanguine Syphoner",
+        "Bloodfell Caves",
+        "Bite Down",
+        "Crackling Cyclops",
+        "Uncharted Voyage"
+      ],
+      "coach": {
+        "text": "Solid first pick – a three‑drop that’s a clear bomb and lets you stay open on colors. [EVAL-02] [SIG-01]",
+        "cost": {
+          "inputTokens": 3537,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 69,
+          "finishReason": "stop",
+          "ms": 529,
+          "noCacheInputTokens": 3537
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Sylvan Scavenging",
+          "divergenceLesson": "The context-best matches the raw‑power best, showing that early picks should prioritize the strongest absolute card to stay open for later signals.",
+          "narrative": "With an empty pool you have no color commitment, so you should grab the highest‑power card in the pack; Sylvan Scavenging tops the pack’s win‑rate and fits that rule [SIG-14][SIG-02]. It also counts as a bomb‑type card that can generate early board advantage, aligning with the BREAD priority of bombs over removal or cheap tricks [EVAL-01][EVAL-02]. By taking the best card now you stay flexible and will be able to read the colors that open in later packs [SIG-01]."
+        },
+        "cost": {
+          "inputTokens": 4558,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 756,
+          "finishReason": "stop",
+          "ms": 37036,
+          "noCacheInputTokens": 4558
+        }
+      }
+    },
+    {
+      "pickIndex": 1,
+      "cardsInPack": 13,
+      "bestName": "Bigfin Bouncer",
+      "packNames": [
+        "High Fae Trickster",
+        "Strongbox Raider",
+        "Midnight Snack",
+        "Hero's Downfall",
+        "Good-Fortune Unicorn",
+        "Gorehorn Raider",
+        "Giant Growth",
+        "Cackling Prowler",
+        "Bigfin Bouncer",
+        "Gleaming Barrier",
+        "Apothecary Stomper",
+        "Armasaur Guide",
+        "Mountain"
+      ],
+      "coach": {
+        "text": "Bigfin Bouncer is a solid 4‑drop creature that hits a decent IWD and is likely a mid‑range bomb, so it fits the “Bomb” priority nicely [EVAL-02]. It isn’t a clear removal pick like Hero’s Downfall, but its higher maindeck rate and comparable win‑rate make it the stronger immediate play in this pack. Staying open is still fine at pick 2, but keep an eye on blue’s curve and removal needs as you draft.",
+        "cost": {
+          "inputTokens": 3559,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 212,
+          "finishReason": "stop",
+          "ms": 766,
+          "noCacheInputTokens": 3559
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Bigfin Bouncer",
+          "divergenceLesson": "The raw-power best and the context-best are the same, showing that taking the strongest absolute card early is correct and also signals that blue is likely open, reinforcing the strategy of staying open before committing.",
+          "narrative": "Bigfin Bouncer is a solid 4‑mana creature with a good win‑rate and a high maindecked percentage, making it a strong early pick on pure power [SIG-14]. At pick 2 the card appears earlier than typical for a bomb, signaling that blue is still open and you can safely add a second color [SIG-05][SIG-02]. Keeping your options open early is key, so you don’t lock yourself into green before seeing more signals [SIG-01]."
+        },
+        "cost": {
+          "inputTokens": 4444,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1318,
+          "finishReason": "stop",
+          "ms": 42307,
+          "noCacheInputTokens": 4444
+        }
+      }
+    },
+    {
+      "pickIndex": 2,
+      "cardsInPack": 12,
+      "bestName": "Ruby, Daring Tracker",
+      "packNames": [
+        "Archmage of Runes",
+        "Firespitter Whelp",
+        "Goblin Negotiation",
+        "Garruk's Uprising",
+        "Ruby, Daring Tracker",
+        "Prideful Parent",
+        "Make Your Move",
+        "Grow from the Ashes",
+        "Thornwood Falls",
+        "Strix Lookout",
+        "Involuntary Employment",
+        "Goblin Surprise"
+      ],
+      "coach": {
+        "text": "Ruby Daring Tracker is a solid 2‑drop scout that fits a green‑red aggressive curve and gives you early pressure, making it a good Bomb‑Aggro pick for your current pool. It’s slightly less maindecked than Strix Lookout, but its power level is comparable and it keeps your options open while you still haven’t committed to colors. [ EVAL-05 ][ SIG-14 ]",
+        "cost": {
+          "inputTokens": 3566,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 175,
+          "finishReason": "stop",
+          "ms": 30767,
+          "noCacheInputTokens": 3566
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Ruby, Daring Tracker",
+          "divergenceLesson": "The raw‑power best and the context‑best are the same; taking the strongest 2‑drop now follows the “take the best card early” rule and keeps you open for later color decisions.",
+          "narrative": "Ruby, Daring Tracker is a solid 2‑mana bomb that adds early board presence and works well with Sylvan Scavenging’s green synergies, while still leaving you open to pivot to a green‑red or green‑blue deck later. Picking the top card in the pack for the first five picks follows the signal‑reading guideline to stay flexible before committing to a two‑color pair [SIG-02][SIG-14], and it also satisfies the BREAD priority of a bomb over removal or evasion [EVAL-02][EVAL-01]."
+        },
+        "cost": {
+          "inputTokens": 4429,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1055,
+          "finishReason": "stop",
+          "ms": 41712,
+          "noCacheInputTokens": 4429
+        }
+      }
+    },
+    {
+      "pickIndex": 3,
+      "cardsInPack": 11,
+      "bestName": "Eager Trufflesnout",
+      "packNames": [
+        "Eager Trufflesnout",
+        "Slumbering Cerberus",
+        "Hidetsugu's Second Rite",
+        "Courageous Goblin",
+        "Cathar Commando",
+        "Wary Thespian",
+        "Goblin Surprise",
+        "Wind-Scarred Crag",
+        "Blossoming Sands",
+        "Quick-Draw Katana",
+        "Swamp"
+      ],
+      "coach": {
+        "text": "Eager Trufflesnout is a solid 3‑drop creature that consistently hits the board early and fits the green curve, making it a clear bomb‑type pick at this stage [SIG-02][EVAL-02].",
+        "cost": {
+          "inputTokens": 3577,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 150,
+          "finishReason": "stop",
+          "ms": 27733,
+          "noCacheInputTokens": 505
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Wary Thespian",
+          "divergenceLesson": "The raw‑power best (Eager Trufflesnout) is a solid 3‑drop bomb, but the context‑best is the 2‑drop Wary Thespian because it improves early curve, keeps the deck flexible on green‑red or green‑blue, and avoids over‑committing to a single mid‑cost threat, illustrating the need to balance raw power with deck consistency.",
+          "narrative": "At pick 4 you’re still in the “stay open” phase, so you want the strongest card overall but also one that fits your developing curve and signals a viable second color. While Eager Trufflesnout is a solid 3‑drop bomb, Wary Thespian gives you a 2‑drop green creature that improves early tempo, lets you stay flexible on a green‑red or green‑blue plan, and avoids over‑loading on a single 3‑mana threat. Taking the 2‑drop also follows the BREAD priority of securing early board presence (Aggro) before committing to bigger bombs, and it respects the curve guideline of keeping many 1‑2‑drop creatures. If later packs open white or more red, you can pivot; otherwise you’ll have a smoother curve and a safer mana base, preventing the common mistake of sticking with an early bomb at the expense of consistency."
+        },
+        "cost": {
+          "inputTokens": 4323,
+          "cacheReadTokens": 3328,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1522,
+          "finishReason": "stop",
+          "ms": 45851,
+          "noCacheInputTokens": 995
+        }
+      }
+    },
+    {
+      "pickIndex": 4,
+      "cardsInPack": 10,
+      "bestName": "Involuntary Employment",
+      "packNames": [
+        "Anthem of Champions",
+        "Diregraf Ghoul",
+        "Heroic Reinforcements",
+        "Twinblade Blessing",
+        "Burnished Hart",
+        "Involuntary Employment",
+        "Grow from the Ashes",
+        "Vanguard Seraph",
+        "Wind-Scarred Crag",
+        "Swamp"
+      ],
+      "coach": {
+        "text": "Involuntary Employment is a 4‑mana sorcery that isn’t a clear bomb and has a low maindecked rate, so it’s a weaker pick than the cheap creature or the higher‑maindecked Angel; you’d be better off taking a creature that improves board presence and early tempo. [EVAL-02] [EVAL-05] [EVAL-11]",
+        "cost": {
+          "inputTokens": 3582,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 187,
+          "finishReason": "stop",
+          "ms": 7865,
+          "noCacheInputTokens": 3582
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Diregraf Ghoul",
+          "divergenceLesson": "Involuntary Employment has the highest raw win‑rate, but it doesn’t fit our current curve or mana base; a cheap 1‑drop like Diregraf Ghoul gives early tempo and signals that black is open, making it the better pick for this deck.",
+          "narrative": "At pick 5 you should pass the red sorcery and take Diregraf Ghoul, a 1‑drop that shores up your early curve and adds a solid aggressive threat. [EVAL-05][CURVE-01] Because you have no black cards yet, the appearance of this cheap black creature is a clear signal that black is still open, letting you pivot to a black‑red or black‑green plan while keeping red as a possible splash. [SIG-05][SIG-06] Holding onto Involuntary Employment would force you into a two‑color deck with limited early pressure and a shaky mana base, which is why raw‑power win rates can be misleading when the card doesn’t mesh with your developing deck. [MISTAKE-01][EVAL-11]"
+        },
+        "cost": {
+          "inputTokens": 4250,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1672,
+          "finishReason": "stop",
+          "ms": 12919,
+          "noCacheInputTokens": 4250
+        }
+      }
+    },
+    {
+      "pickIndex": 5,
+      "cardsInPack": 9,
+      "bestName": "Luminous Rebuke",
+      "packNames": [
+        "Bulk Up",
+        "Twinblade Blessing",
+        "Goblin Surprise",
+        "Jungle Hollow",
+        "Luminous Rebuke",
+        "Rugged Highlands",
+        "Quick-Draw Katana",
+        "Squad Rallier",
+        "Dazzling Angel"
+      ],
+      "coach": {
+        "text": "Luminous Rebuke is a high‑cost removal spell that won’t help you hit the early curve you need, and its low IWD suggests it’s not a bomb on its own; Dazzling Angel’s cheaper 3‑drop and higher maindeck rate would generally be a stronger pick for building a functional deck. The data verdict over‑emphasizes raw win rate without accounting for the weak impact and late cost, so the pick is sub‑optimal here. [ EVAL-05, EVAL-07, MISTAKE-06 ]",
+        "cost": {
+          "inputTokens": 3582,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 172,
+          "finishReason": "stop",
+          "ms": 30661,
+          "noCacheInputTokens": 3582
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Dazzling Angel",
+          "divergenceLesson": "The raw‑power best (Luminous Rebuke) is a high‑cost removal that fits a white‑heavy deck, but your pool lacks white support and the card would hurt your curve, so the context‑best is a cheap 3‑drop creature that gives early board presence.",
+          "narrative": "At pack 1 pick 6 you should have taken Dazzling Angel instead of Luminous Rebuke. While Luminous Rebuke has the highest win‑rate, its 5‑mana cost and lack of other white cards make it a poor fit for your current green‑red‑blue pool and would push your curve too high [EVAL-02][CURVE-07]. Dazzling Angel is a cheap 3‑drop creature that provides early pressure and keeps you open to either stay in green/red or pivot to white if more signals appear [SIG-14][ARCH-04]."
+        },
+        "cost": {
+          "inputTokens": 4217,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1262,
+          "finishReason": "stop",
+          "ms": 50187,
+          "noCacheInputTokens": 4217
+        }
+      }
+    },
+    {
+      "pickIndex": 6,
+      "cardsInPack": 8,
+      "bestName": "Quilled Greatwurm",
+      "packNames": [
+        "Quilled Greatwurm",
+        "Divine Resilience",
+        "Hare Apparent",
+        "Sanguine Syphoner",
+        "Axgard Cavalry",
+        "Crypt Feaster",
+        "Crackling Cyclops",
+        "Forest"
+      ],
+      "coach": {
+        "text": "Quilled Greatwurm is a solid bomb that can win on its own, but at six mana it risks falling behind on tempo unless you’re already shaping a ramp‑heavy, midrange plan. Since you haven’t committed to colors yet, taking the strongest card now is fine, but watch for later signals that green may be opening or closed and be ready to pivot if cheap threats don’t appear. [EVAL-02] [SIG-02]",
+        "cost": {
+          "inputTokens": 3606,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 144,
+          "finishReason": "stop",
+          "ms": 26766,
+          "noCacheInputTokens": 3606
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Quilled Greatwurm",
+          "divergenceLesson": "The raw-power best and the context-best are the same; a late‑appearing green bomb both signals that green is still open and fits the green‑heavy pool you already have, reinforcing that taking the strongest card early is still correct here.",
+          "narrative": "At pick 7 you’re just past the window where you grab the absolute strongest card in each pack (SIG‑02) and should start reading signals. The 6‑mana Quilled Greatwurm showing up this late is a classic open‑color signal (SIG‑05), and you already have three green cards, so green is clearly your primary hue. As a bomb it wins games on its own (EVAL‑02) and dovetails with your existing green threats, making it the best choice for your deck’s development."
+        },
+        "cost": {
+          "inputTokens": 4131,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1475,
+          "finishReason": "stop",
+          "ms": 49720,
+          "noCacheInputTokens": 4131
+        }
+      }
+    },
+    {
+      "pickIndex": 7,
+      "cardsInPack": 7,
+      "bestName": "Felidar Savior",
+      "packNames": [
+        "Time Stop",
+        "Diregraf Ghoul",
+        "Mischievous Pup",
+        "Reclamation Sage",
+        "Felidar Savior",
+        "Strix Lookout",
+        "Run Away Together"
+      ],
+      "coach": {
+        "text": "Felidar Savior is a solid 4‑drop but not a bomb; its power level is below the earlier 1‑ and 2‑drops in the pack and it doesn’t give you a clear signal to commit to white yet [EVAL-02][SIG-01]. You’d likely be better off taking the 1‑mana Diregraf Ghoul (cheap aggressive threat) or the 2‑mana Strix Lookout (early evasion) to shore up your curve and keep your options open [EVAL-04][EVAL-05].",
+        "cost": {
+          "inputTokens": 3588,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 209,
+          "finishReason": "stop",
+          "ms": 27792,
+          "noCacheInputTokens": 3588
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Strix Lookout",
+          "divergenceLesson": "Felidar Savior is the raw‑power best, but Strix Lookout better fits the green‑blue curve, gives early tempo, and avoids over‑committing to a white splash you lack sources for.",
+          "narrative": "Your pool is green‑heavy with a single blue and only two white cards, so a cheap blue flyer like Strix Lookout strengthens a blue‑green tempo plan and keeps the curve low, whereas Felidar Savior would push you toward a white splash without enough mana support. This follows SIG-14 (evaluate each pick on absolute power) and SIG-06 (a strong late‑passed card signals an open lane), and aligns with EVAL-01 (creatures with evasion rank high in priority)."
+        },
+        "cost": {
+          "inputTokens": 4095,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1822,
+          "finishReason": "stop",
+          "ms": 42432,
+          "noCacheInputTokens": 4095
+        }
+      }
+    },
+    {
+      "pickIndex": 8,
+      "cardsInPack": 6,
+      "bestName": "Bloodfell Caves",
+      "packNames": [
+        "Wildwood Scourge",
+        "Zombify",
+        "Marauding Blight-Priest",
+        "Gleaming Barrier",
+        "Bloodfell Caves",
+        "Crackling Cyclops"
+      ],
+      "coach": {
+        "text": "Taking a land now leaves you open but passes up a likely 1‑drop bomb that can drive early tempo; the Hydra’s cheap cost and board impact outweigh the statistical edge of a colorless land whose IWD is flat and maindecked under 50% [ EVAL-02 ][ EVAL-05 ]. You should have kept the best card in the pack for your first five picks and used the land later as a signal that green is still open [ SIG-02 ].",
+        "cost": {
+          "inputTokens": 3612,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 228,
+          "finishReason": "stop",
+          "ms": 28844,
+          "noCacheInputTokens": 3612
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Wildwood Scourge",
+          "divergenceLesson": "The raw‑power best was a land (Bloodfell Caves) but the card that actually strengthens your deck is the 1‑drop creature Wildwood Scourge; the lesson is that early cheap threats beat generic lands when you already have enough mana sources.",
+          "narrative": "At pick 9 the optimal choice is Wildwood Scourge, a 1‑mana green creature that bolsters your curve and board presence while fitting the green core you already drafted. Bloodfell Caves, despite its high win rate as a land, does not advance your plan and would lock you into a color you don’t need yet. This shows why you should evaluate each pick on absolute power (SIG-14) and prioritize low‑cost threats early (EVAL-05, EVAL-08), following the guideline to take the best card in the first few picks (SIG-02)."
+        },
+        "cost": {
+          "inputTokens": 4042,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1070,
+          "finishReason": "stop",
+          "ms": 49241,
+          "noCacheInputTokens": 4042
+        }
+      }
+    },
+    {
+      "pickIndex": 9,
+      "cardsInPack": 5,
+      "bestName": "Giant Growth",
+      "packNames": [
+        "Midnight Snack",
+        "Giant Growth",
+        "Gleaming Barrier",
+        "Apothecary Stomper",
+        "Armasaur Guide"
+      ],
+      "coach": {
+        "text": "Giant Growth is a cheap pump that can help tempo but isn’t a bomb and its low maindecked rate suggests it rarely carries decks on its own; a solid 5‑drop creature like Apothecary Stomper would give you board presence and a more reliable mid‑game threat. [EVAL-02][EVAL-08][MISTAKE-07]",
+        "cost": {
+          "inputTokens": 3603,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 152,
+          "finishReason": "stop",
+          "ms": 27665,
+          "noCacheInputTokens": 3603
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Giant Growth",
+          "divergenceLesson": "The raw‑power best and the context‑best are the same, showing that the highest win‑rate card also fits your current green‑heavy, low‑curve deck and provides a cheap combat trick you need.",
+          "narrative": "At pick 10 you correctly took the strongest card in the pack, which is exactly what SIG‑02 advises for the first few picks and SIG‑14 says you should evaluate in a vacuum to stay open [SIG-02][SIG-14]. Giant Growth is a classic combat trick (EVAL‑04) that smooths out a green‑centric curve and lets you push damage through early threats, matching the tempo feel of your existing green creatures. Keeping green open early also signals that the lane is still viable, and taking this instant now gives you a tool to finish games without sacrificing curve or mana consistency."
+        },
+        "cost": {
+          "inputTokens": 3961,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1002,
+          "finishReason": "stop",
+          "ms": 32499,
+          "noCacheInputTokens": 3961
+        }
+      }
+    },
+    {
+      "pickIndex": 14,
+      "cardsInPack": 14,
+      "bestName": "Mischievous Mystic",
+      "packNames": [
+        "Genesis Wave",
+        "Elvish Archdruid",
+        "Savannah Lions",
+        "Dwynen, Gilt-Leaf Daen",
+        "Mischievous Mystic",
+        "Healer's Hawk",
+        "Axgard Cavalry",
+        "Elfsworn Giant",
+        "Uncharted Voyage",
+        "Tranquil Cove",
+        "Evolving Wilds",
+        "Quick-Draw Katana",
+        "Jungle Hollow",
+        "Dismal Backwater"
+      ],
+      "coach": {
+        "text": "Mischievous Mystic is a solid, low‑cost creature that adds early board presence and keeps you open, but Healer’s Hawk’s one‑mana flying threat typically gives a better curve and immediate pressure for an aggro/tempo plan. Since you already have a blue creature and a red splash, taking the 2‑drop wizard is fine as a flexible pick, but consider whether you’d rather solidify an early tempo engine now [EVAL-04] [EVAL-05] [SIG-14].",
+        "cost": {
+          "inputTokens": 3641,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 209,
+          "finishReason": "stop",
+          "ms": 28771,
+          "noCacheInputTokens": 3641
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Healer's Hawk",
+          "divergenceLesson": "Mischievous Mystic wins raw‑power stats, but Healer's Hawk fits the emerging white (or green‑white) plan, gives immediate tempo, and avoids over‑committing to a thin blue base – showing that the strongest card isn’t always the best for your deck.",
+          "narrative": "In pack 2 you should still prioritize the highest‑impact pick, but now the priority shifts to cards that reinforce the colors you already have [SIG-02]. Healer's Hawk is a 1‑drop evasion creature that bolsters a white‑green tempo deck and fits the BREAD evasion slot, while your blue pool is thin and unlikely to sustain another blue bomb [EVAL-04][EVAL-01]. Taking the cheap flyer also signals that white is still open, letting you pivot if later packs deliver green or white threats [SIG-06][SIG-04]."
+        },
+        "cost": {
+          "inputTokens": 4650,
+          "cacheReadTokens": 3328,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1437,
+          "finishReason": "stop",
+          "ms": 42785,
+          "noCacheInputTokens": 1322
+        }
+      }
+    },
+    {
+      "pickIndex": 15,
+      "cardsInPack": 13,
+      "bestName": "Ashroot Animist",
+      "packNames": [
+        "Ashroot Animist",
+        "Balmor, Battlemage Captain",
+        "Boltwave",
+        "Savannah Lions",
+        "Inspiring Call",
+        "Incinerating Blast",
+        "Sure Strike",
+        "Sower of Chaos",
+        "Swiftwater Cliffs",
+        "Scoured Barrens",
+        "Thrill of Possibility",
+        "Healer's Hawk",
+        "Island"
+      ],
+      "coach": {
+        "text": "Ashroot Animist is a solid midrange creature but it’s not a bomb and it costs four mana, so you’re trading an early drop and a potential two‑color signal for a slower threat that doesn’t dramatically improve your curve or signal openness [EVAL-02][EVAL-05][SIG-01]. Consider that Healer’s Hawk gives you a one‑drop flyer that fits aggressive/tempo curves and keeps your options open, while Balmor offers a cheap two‑drop that could have opened a red‑blue lane later [EVAL-05][CURVE-01][SIG-01]. In pack 2 you should aim for the strongest early‑game card unless you’ve already secured a clear two‑color plan, so Ashroot Animist was a weaker pick than the available cheaper threats [EVAL-11][MISTAKE-01].",
+        "cost": {
+          "inputTokens": 3651,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 311,
+          "finishReason": "stop",
+          "ms": 28967,
+          "noCacheInputTokens": 3651
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Healer's Hawk",
+          "divergenceLesson": "Ashroot Animist wins the raw-power ranking, but Healer's Hawk fits the current pool better, gives a cheap 1‑drop to smooth the curve, and aligns with the developing green‑white tempo, illustrating that the best statistical pick isn’t always the best contextual pick.",
+          "narrative": "Healer's Hawk is a 1‑mana creature that shoves early pressure onto the board and plugs the gap in your curve, which is crucial in a green‑white plan that already has several 2‑ and 3‑drops ([EVAL-05], [CURVE-07]). While Ashroot Animist has the highest GIH, green cards are drying up in this pack, a signal that green may be closing and you should consider pivoting away from a pure green focus ([SIG-07]). By taking the cheap white bird you stay flexible, keep your white removal (Luminous Rebuke) and Felidar Savior useful, and you maintain a solid two‑color base without over‑loading your mana (meeting the 8‑source rule for white) ([MANA-01], [MANA-02]). This choice follows the BREAD priority of taking the strongest early drop when the bomb quality isn’t clear ([EVAL-01]), and it shows why evaluating each pick in a vacuum and then fitting it to your evolving deck is essential ([SIG-14])."
+        },
+        "cost": {
+          "inputTokens": 4523,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1393,
+          "finishReason": "stop",
+          "ms": 24847,
+          "noCacheInputTokens": 4523
+        }
+      }
+    },
+    {
+      "pickIndex": 16,
+      "cardsInPack": 12,
+      "bestName": "Loot, Exuberant Explorer",
+      "packNames": [
+        "Loot, Exuberant Explorer",
+        "Boltwave",
+        "Midnight Snack",
+        "Dauntless Veteran",
+        "Frenzied Goblin",
+        "Erudite Wizard",
+        "Soul-Shackled Zombie",
+        "Giant Growth",
+        "Prideful Parent",
+        "Thrill of Possibility",
+        "Tolarian Terror",
+        "Incinerating Blast"
+      ],
+      "coach": {
+        "text": "Loot is a solid bomb: it has the highest IWD and strong maindecking rate, making it the most reliably powerful card in the pack. It also keeps you open to any color, which is ideal at this early stage [SIG-01][EVAL-02].",
+        "cost": {
+          "inputTokens": 3646,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 145,
+          "finishReason": "stop",
+          "ms": 29787,
+          "noCacheInputTokens": 3646
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Prideful Parent",
+          "divergenceLesson": "Loot is a solid green bomb, but your pool is already green‑heavy; adding a white 3‑drop improves color balance and deck consistency, so Prideful Parent is the context‑best. The lesson is to prioritize deck cohesion and signal‑based color choices over a single raw‑power pick.",
+          "narrative": "Loot is a strong midrange bomb, yet you’ve already drafted a suite of green threats and a green removal spell, so green is becoming saturated. Prideful Parent gives you a reliable white creature that fits the 3‑drop curve, adds a second color for removal (Luminous Rebuke) and synergistic white cards, and follows the BREAD priority of a good creature bomb [EVAL-01]. By pack‑2 pick‑3 you should start leaning toward a two‑color plan; the presence of a solid white 3‑drop signals that white is still open, while green is less promising now [SIG-04][SIG-07]. Choosing Prideful Parent keeps your curve low, improves consistency, and lets you lock in a green‑white midrange archetype [ARCH-03][CURVE-01][DECK-06]."
+        },
+        "cost": {
+          "inputTokens": 4512,
+          "cacheReadTokens": 3328,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1984,
+          "finishReason": "stop",
+          "ms": 44882,
+          "noCacheInputTokens": 1184
+        }
+      }
+    },
+    {
+      "pickIndex": 17,
+      "cardsInPack": 11,
+      "bestName": "Scrawling Crawler",
+      "packNames": [
+        "Scrawling Crawler",
+        "Zul Ashur, Lich Lord",
+        "Dwynen, Gilt-Leaf Daen",
+        "Seismic Rupture",
+        "Aegis Turtle",
+        "Apothecary Stomper",
+        "Tranquil Cove",
+        "Courageous Goblin",
+        "Elfsworn Giant",
+        "Treetop Snarespinner",
+        "Firebrand Archer"
+      ],
+      "coach": {
+        "text": "Scrawling Crawler is a solid 3‑mana creature that fits the early‑game curve and is colorless, keeping you open while adding board presence [EVAL-05][SIG-01]. It isn’t a true bomb, but its high maindeck rate and positive IWD make it a reliable pick over the slightly slower green options in this pack.",
+        "cost": {
+          "inputTokens": 3676,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 232,
+          "finishReason": "stop",
+          "ms": 28865,
+          "noCacheInputTokens": 3676
+        }
+      },
+      "verdict": {
+        "answer": {
+          "contextBestName": "Treetop Snarespinner",
+          "divergenceLesson": "The raw‑power best is a neutral bomb (Scrawling Crawler), but in a green‑heavy pool a green evasion creature fits the emerging deck better, showing that the strongest card for your deck isn’t always the highest win‑rate card overall.",
+          "narrative": "Your pool is already green‑heavy and the pack shows several strong green options, indicating green is an open lane (SIG-07). Treetop Snarespinner provides evasion and solid board presence at a reasonable cost, aligning with your curve and midrange tempo plan better than the generic Scrawling Crawler (EVAL-01, EVAL-04, CURVE-01)."
+        },
+        "cost": {
+          "inputTokens": 4478,
+          "cacheReadTokens": 3328,
+          "cacheWriteTokens": 0,
+          "outputTokens": 1859,
+          "finishReason": "stop",
+          "ms": 37839,
+          "noCacheInputTokens": 1150
+        }
+      }
+    },
+    {
+      "pickIndex": 18,
+      "cardsInPack": 10,
+      "bestName": "Dismal Backwater",
+      "packNames": [
+        "Stromkirk Bloodthief",
+        "Garruk's Uprising",
+        "Imprisoned in the Moon",
+        "Rogue's Passage",
+        "Balmor, Battlemage Captain",
+        "Dismal Backwater",
+        "Lightshell Duo",
+        "Campus Guide",
+        "Sanguine Syphoner",
+        "Mountain"
+      ],
+      "coach": {
+        "text": "Taking Dismal Backwater is a safe, open‑color move that keeps you flexible and gives you a solid land with decent maindecking rate, which is fine this early in pack 2. Just be aware you passed several decent 2‑/3‑mana creatures (Balmor, Lightshell Duo, Stromkirk Bloodthief) that could have helped solidify a color or curve, so you’ll want to look for strong early drops soon to avoid falling behind on tempo. [SIG-01] [EVAL-05]",
+        "cost": {
+          "inputTokens": 3668,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 199,
+          "finishReason": "stop",
+          "ms": 28683,
+          "noCacheInputTokens": 596
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 19,
+      "cardsInPack": 9,
+      "bestName": "Soul-Shackled Zombie",
+      "packNames": [
+        "Quakestrider Ceratops",
+        "Thornwood Falls",
+        "Aegis Turtle",
+        "Spitfire Lagac",
+        "Gleaming Barrier",
+        "Gnarlid Colony",
+        "Soul-Shackled Zombie",
+        "Ambush Wolf",
+        "Island"
+      ],
+      "coach": {
+        "text": "Soul‑Shackled Zombie is a mediocre 4‑drop with a modest IWD and low maindecked rate; it’s not a bomb and offers little early tempo compared to the cheap creatures in the pack. You’d likely have stronger board presence and curve consistency by taking Gnarlid Colony or Ambush Wolf instead. [EVAL-02] [MISTAKE-01]",
+        "cost": {
+          "inputTokens": 3669,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 167,
+          "finishReason": "stop",
+          "ms": 4850,
+          "noCacheInputTokens": 597
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 20,
+      "cardsInPack": 8,
+      "bestName": "Evolving Wilds",
+      "packNames": [
+        "Shivan Dragon",
+        "Savannah Lions",
+        "Vengeful Bloodwitch",
+        "Macabre Waltz",
+        "Blossoming Sands",
+        "Marauding Blight-Priest",
+        "Evolving Wilds",
+        "Swamp"
+      ],
+      "coach": {
+        "text": "Taking a basic land at pick 7 is fine—early picks stay open and you’re still evaluating power in a vacuum, so you haven’t over‑committed to a color yet [SIG-01][DECK-05].",
+        "cost": {
+          "inputTokens": 3677,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 135,
+          "finishReason": "stop",
+          "ms": 5696,
+          "noCacheInputTokens": 3677
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 21,
+      "cardsInPack": 7,
+      "bestName": "Arcane Epiphany",
+      "packNames": [
+        "Arcane Epiphany",
+        "Cackling Prowler",
+        "Witness Protection",
+        "Gleaming Barrier",
+        "Elfsworn Giant",
+        "Apothecary Stomper",
+        "Plains"
+      ],
+      "coach": {
+        "text": "Arcane Epiphany is a solid, high‑impact card but at pick 8 it’s a late‑pick bomb that signals blue is likely open, and you already have three blue spells in a relatively thin blue column, so you’re over‑committing to a color you may not be able to support; a cheaper, more immediate removal or creature would have kept your curve smoother and left you freer to pivot [EVAL-02][SIG-06][CURVE-07].",
+        "cost": {
+          "inputTokens": 3684,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 210,
+          "finishReason": "stop",
+          "ms": 28785,
+          "noCacheInputTokens": 612
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 22,
+      "cardsInPack": 6,
+      "bestName": "Tranquil Cove",
+      "packNames": [
+        "Genesis Wave",
+        "Elvish Archdruid",
+        "Tranquil Cove",
+        "Evolving Wilds",
+        "Quick-Draw Katana",
+        "Jungle Hollow"
+      ],
+      "coach": {
+        "text": "Taking Tranquil Cove is fine as a solid land that keeps you open and doesn’t lock you into a color early — early picks can be expendable and staying flexible is key [SIG-01]. It’s marginally better than Jungle Hollow and comparable to Evolving Wilds, but note that Evolving Wilds has higher maindecked rate, so you might want to prioritize it if you need fixing later [SIG-14].",
+        "cost": {
+          "inputTokens": 3677,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 154,
+          "finishReason": "stop",
+          "ms": 5636,
+          "noCacheInputTokens": 605
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 23,
+      "cardsInPack": 5,
+      "bestName": "Island",
+      "packNames": [
+        "Boltwave",
+        "Inspiring Call",
+        "Sure Strike",
+        "Scoured Barrens",
+        "Island"
+      ],
+      "coach": {
+        "text": "Taking a basic Island is fine as an early pick to stay open and keep mana flexibility while you assess the rest of the pack. [SIG-01]",
+        "cost": {
+          "inputTokens": 3619,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 67,
+          "finishReason": "stop",
+          "ms": 5297,
+          "noCacheInputTokens": 547
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 28,
+      "cardsInPack": 14,
+      "bestName": "Sphinx of Forgotten Lore",
+      "packNames": [
+        "Sphinx of Forgotten Lore",
+        "Guarded Heir",
+        "Claws Out",
+        "Secluded Courtyard",
+        "Seismic Rupture",
+        "Goldvein Pick",
+        "Rugged Highlands",
+        "Beast-Kin Ranger",
+        "Gleaming Barrier",
+        "Scoured Barrens",
+        "Fanatical Firebrand",
+        "Strix Lookout",
+        "Dwynen's Elite",
+        "Plains"
+      ],
+      "coach": {
+        "text": "Sphinx is a solid mid‑range bomb with a clear win‑rate bump (+3.9 pp) and high maindecked percentage, so it’s a strong early pick on its own power [EVAL-02]. Keep the deck open for now rather than committing to blue just yet, since your pool is still very mixed and early flexibility is key [SIG-01].",
+        "cost": {
+          "inputTokens": 3716,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 150,
+          "finishReason": "stop",
+          "ms": 4542,
+          "noCacheInputTokens": 644
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 29,
+      "cardsInPack": 13,
+      "bestName": "Ruby, Daring Tracker",
+      "packNames": [
+        "Time Stop",
+        "Rogue's Passage",
+        "Ruby, Daring Tracker",
+        "Seeker's Folly",
+        "Tranquil Cove",
+        "Incinerating Blast",
+        "Vampire Soulcaller",
+        "Hungry Ghoul",
+        "Make Your Move",
+        "Elementalist Adept",
+        "Firebrand Archer",
+        "Cathar Commando",
+        "Crypt Feaster"
+      ],
+      "coach": {
+        "text": "Ruby Daring Tracker is a solid 2‑drop creature that hits the bomb tier (high IWD and good win rate) and keeps you open in the green‑red lane, which fits your existing pool well. Its maindecked rate is lower than Hungry Ghoul’s, but the creature’s consistency and early mana cost outweigh that slight risk. [​EVAL-02] [​SIG-01]",
+        "cost": {
+          "inputTokens": 3718,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 184,
+          "finishReason": "stop",
+          "ms": 7168,
+          "noCacheInputTokens": 3718
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 30,
+      "cardsInPack": 12,
+      "bestName": "Felidar Savior",
+      "packNames": [
+        "Homunculus Horde",
+        "Midnight Snack",
+        "Affectionate Indrik",
+        "Rogue's Passage",
+        "Strix Lookout",
+        "Wary Thespian",
+        "Firebrand Archer",
+        "Marauding Blight-Priest",
+        "Quick-Draw Katana",
+        "Dismal Backwater",
+        "Felidar Savior",
+        "Axgard Cavalry"
+      ],
+      "coach": {
+        "text": "Felidar Savior is a solid midrange creature, but at four mana it’s slower than the 2‑drop Wary Thespian, which would have helped you lock in a tighter curve and early board presence—a key priority in Limited drafts [EVAL-05][CURVE-01].",
+        "cost": {
+          "inputTokens": 3724,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 193,
+          "finishReason": "stop",
+          "ms": 27875,
+          "noCacheInputTokens": 3724
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 31,
+      "cardsInPack": 11,
+      "bestName": "Stab",
+      "packNames": [
+        "Inspiration from Beyond",
+        "Overrun",
+        "Clinquant Skymage",
+        "Grappling Kraken",
+        "Courageous Goblin",
+        "Spitfire Lagac",
+        "Hungry Ghoul",
+        "Incinerating Blast",
+        "Stab",
+        "Dismal Backwater",
+        "Island"
+      ],
+      "coach": {
+        "text": "Stab is a classic removal bomb that wins games on its own and fits the BREAD priority of removal, so the data and its high IWD line up with a solid pick. [EVAL-02][EVAL-03]",
+        "cost": {
+          "inputTokens": 3713,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 122,
+          "finishReason": "stop",
+          "ms": 28682,
+          "noCacheInputTokens": 3713
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 32,
+      "cardsInPack": 10,
+      "bestName": "Strongbox Raider",
+      "packNames": [
+        "Swiftfoot Boots",
+        "Strongbox Raider",
+        "An Offer You Can't Refuse",
+        "Fanatical Firebrand",
+        "Erudite Wizard",
+        "Sanguine Syphoner",
+        "Spitfire Lagac",
+        "Axgard Cavalry",
+        "Thornwood Falls",
+        "Ambush Wolf"
+      ],
+      "coach": {
+        "text": "Strongbox Raider is a midrange 4‑drop that offers little impact versus the cheaper, more efficient Ambush Wolf, so it’s more of a dud than a bomb [EVAL-06]. Its high GIH is driven by decks that already have a strong red plan, yet its IWD is flat and maindecked rate is only moderate, indicating it’s not a reliable pick on its own. Consider swapping it for Ambush Wolf to keep the curve tight and improve early board presence [EVAL-05][CURVE-01].",
+        "cost": {
+          "inputTokens": 3731,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 198,
+          "finishReason": "stop",
+          "ms": 30024,
+          "noCacheInputTokens": 659
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 33,
+      "cardsInPack": 9,
+      "bestName": "Beast-Kin Ranger",
+      "packNames": [
+        "Muldrotha, the Gravetide",
+        "Snakeskin Veil",
+        "Savannah Lions",
+        "Strongbox Raider",
+        "Zombify",
+        "Lightshell Duo",
+        "Fanatical Firebrand",
+        "Beast-Kin Ranger",
+        "Elementalist Adept"
+      ],
+      "coach": {
+        "text": "Beast‑Kin Ranger is a solid 3‑drop that gives you early board presence and fits well with your green curve, making it a stronger pick than the slower Strongbox Raider or the niche Muldrotha at this stage [EVAL-05][EVAL-08]. Its high maindecked rate (70 %) and consistent win‑rate bump confirm it’s a reliable creature rather than a gamble, so you’re right to take it and stay color‑open for now [SIG-01].",
+        "cost": {
+          "inputTokens": 3742,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 279,
+          "finishReason": "stop",
+          "ms": 6000,
+          "noCacheInputTokens": 670
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 34,
+      "cardsInPack": 8,
+      "bestName": "Make Your Move",
+      "packNames": [
+        "Grappling Kraken",
+        "Blossoming Sands",
+        "Cackling Prowler",
+        "Goblin Surprise",
+        "Make Your Move",
+        "Campus Guide",
+        "Goldvein Pick",
+        "Plains"
+      ],
+      "coach": {
+        "text": "Make Your Move is a solid tempo tool that fits the BREAD priority of evasion/combat tricks and helps keep your curve smooth, so it’s a good early pick even though you have few whites yet [EVAL-04][EVAL-14]. However, note that you still have open colors and should stay flexible; the green Cackling Prowler is a slightly stronger creature bomb that could signal a green lane, so keep an eye on future green signals before committing heavily to white [SIG-01][SIG-06].",
+        "cost": {
+          "inputTokens": 3735,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 204,
+          "finishReason": "stop",
+          "ms": 5774,
+          "noCacheInputTokens": 3735
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 35,
+      "cardsInPack": 7,
+      "bestName": "Swamp",
+      "packNames": [
+        "Banner of Kinship",
+        "Fanatical Firebrand",
+        "Firebrand Archer",
+        "Run Away Together",
+        "Marauding Blight-Priest",
+        "Tolarian Terror",
+        "Swamp"
+      ],
+      "coach": {
+        "text": "Taking a basic land at pick 8 is perfectly reasonable—early lands are essential to keep your curve smooth and you’re still open to colors [SIG-01]. If you already have enough sources for your current colors, consider grabbing a cheap creature or removal next instead of a land, but the land itself isn’t a mistake.",
+        "cost": {
+          "inputTokens": 3687,
+          "cacheReadTokens": 3072,
+          "cacheWriteTokens": 0,
+          "outputTokens": 133,
+          "finishReason": "stop",
+          "ms": 29886,
+          "noCacheInputTokens": 615
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 36,
+      "cardsInPack": 6,
+      "bestName": "Plains",
+      "packNames": [
+        "Secluded Courtyard",
+        "Goldvein Pick",
+        "Rugged Highlands",
+        "Gleaming Barrier",
+        "Scoured Barrens",
+        "Plains"
+      ],
+      "coach": {
+        "text": "Taking a basic land is safe and keeps your mana base flexible without committing to a color, which is exactly what you want this early in the draft [SIG-01].",
+        "cost": {
+          "inputTokens": 3689,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 88,
+          "finishReason": "stop",
+          "ms": 5556,
+          "noCacheInputTokens": 3689
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    },
+    {
+      "pickIndex": 37,
+      "cardsInPack": 5,
+      "bestName": "Tranquil Cove",
+      "packNames": [
+        "Time Stop",
+        "Rogue's Passage",
+        "Tranquil Cove",
+        "Firebrand Archer",
+        "Crypt Feaster"
+      ],
+      "coach": {
+        "text": "Taking the land is safe and keeps your mana base flexible, especially since you still lack a reliable source for blue and you’ve already drafted several green and white lands. The 6‑mana Time Stop is a potential bomb (high IWD) but its high cost, low maindecked rate, and your current curve make it a risky early grab; prioritize solid mana now and revisit bombs later. [SIG-01] [EVAL-02] [DECK-02]",
+        "cost": {
+          "inputTokens": 3735,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "outputTokens": 178,
+          "finishReason": "stop",
+          "ms": 28763,
+          "noCacheInputTokens": 3735
+        }
+      },
+      "verdict": {
+        "answer": null,
+        "cost": null
+      }
+    }
+  ],
+  "frames": [
+    {
+      "phase": "open",
+      "text": null,
+      "cost": null
+    },
+    {
+      "phase": "close",
+      "text": null,
+      "cost": null
+    }
+  ]
+}

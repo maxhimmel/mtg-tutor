@@ -64,7 +64,12 @@ pnpm build             # build every package in dependency order
 pnpm verify-data       # sanity-check the live 17Lands + Scryfall response shapes
 pnpm smoke-draft fdn   # headless full-draft smoke test, against Convex
 pnpm login             # sign in; the CLI needs a session to reach the backend
+pnpm bench-llm         # what one draft costs in tokens, and whether the advice held
+pnpm bench-report      # render that run as a page: cost, quality, and the answers
 ```
+
+Cutting AI token usage without quietly making the coaching worse is a procedure,
+not a diff — `packages/backend/bench/README.md` has it, numbered.
 
 `pnpm dev:web` fans out to the `dev` tasks of `@mtg-tutor/backend` (`convex dev`)
 and `@mtg-tutor/web` (`next dev`) as persistent, uncached turbo tasks, so both

@@ -139,3 +139,35 @@ export const reviewVerdict = v.object({
   divergenceLesson: v.string(),
   narrative: v.string(),
 });
+
+// What one model call cost. Split out so the table and the mutation that writes
+// it derive from one shape and cannot drift.
+//
+// The token fields mirror the AI SDK's own vocabulary rather than a normalised
+// one of our own, and mirror core/llm.ts's UsageReport one-for-one. The cache
+// split is the reason any of this is recorded: the system prompt is ~3.4k
+// byte-identical tokens on every call, so whether it was read from cache or
+// written to it moves the bill more than the prompt's contents do. Every count
+// past the first two is optional because reporting them is a provider's
+// choice -- Groq sends no cache signal at all.
+export const llmCall = v.object({
+  area: v.union(v.literal("coach"), v.literal("verdict"), v.literal("frame")),
+  sessionId: v.optional(v.id("draftSessions")),
+  // Identifies the call within its session: pickIndex for coach and verdict,
+  // phase for the two review frames.
+  pickIndex: v.optional(v.number()),
+  phase: v.optional(v.string()),
+  provider: v.string(),
+  model: v.string(),
+  inputTokens: v.number(),
+  outputTokens: v.number(),
+  totalTokens: v.optional(v.number()),
+  noCacheInputTokens: v.optional(v.number()),
+  cacheReadTokens: v.optional(v.number()),
+  cacheWriteTokens: v.optional(v.number()),
+  reasoningTokens: v.optional(v.number()),
+  // "stop" is the healthy case; "length" means the answer was truncated, which
+  // the benchmark treats as a quality failure rather than a cheap call.
+  finishReason: v.string(),
+  ms: v.number(),
+});

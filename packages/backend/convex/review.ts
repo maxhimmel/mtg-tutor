@@ -3,6 +3,7 @@ import {
   buildDraftFrame,
   buildReviewContext,
   buildReviewSystemPrompt,
+  canonicalName,
   loadPrinciples,
   summarizeDraft,
 } from "@mtg-tutor/core";
@@ -157,6 +158,9 @@ export const verdictContext = internalQuery({
 
     return {
       cached: existing?.verdict,
+      // The only cards a context-best may name. The prompt lists these, but
+      // nothing made the model stay inside the list -- see `verdict`.
+      packNames: record.pack.map((c) => c.name),
       userContent: buildReviewContext(
         {
           pickIndex: args.pickIndex,
@@ -189,15 +193,33 @@ export const verdict = action({
       input = await object({
         system: system(),
         userContent: context.userContent,
-        // Headroom so the JSON isn't truncated mid-object, which used to
-        // surface as "verdict was missing required fields".
-        maxTokens: 1024,
+        // Headroom so the JSON isn't truncated mid-object. 1024 was not enough:
+        // measured against claude-sonnet-5, 17 of 30 verdicts hit exactly that
+        // ceiling and came back as NoOutputGeneratedError, i.e. the review
+        // feature failed 57% of the time. The ones that fit averaged ~615
+        // output tokens for three fields the schema asks to be a sentence or
+        // two each -- so this ceiling buys correctness, and the prompt being
+        // ~6x more verbose than it was asked to be is the real saving, now
+        // measurable. See notes.md.
+        maxTokens: 2048,
         schema: VERDICT_SCHEMA,
+        onUsage: (usage) =>
+          ctx.runMutation(internal.metrics.record, {
+            ...usage,
+            area: "verdict",
+            sessionId: args.sessionId,
+            pickIndex: args.pickIndex,
+          }),
       });
     } catch (e) {
       // Callers show the data-only reveal instead; a missing key should not end
-      // the review.
-      if (e instanceof CoachUnavailableError) return null;
+      // the review. Logged rather than swallowed silently: "the coach said
+      // nothing" and "the coach could not be reached, and here is why" look
+      // identical from the client, and only one of them is worth acting on.
+      if (e instanceof CoachUnavailableError) {
+        console.error(`Review verdict unavailable: ${e.message}`);
+        return null;
+      }
       throw e;
     }
 
@@ -206,6 +228,22 @@ export const verdict = action({
     // defaulted so a clipped narrative still teaches something.
     if (!input.contextBestName) {
       throw new Error("Review verdict was missing the context-best card.");
+    }
+
+    // ...nor does the schema guarantee the name is a card that was on offer. A
+    // context-best from outside the pack is not a lesson, it is a hallucination
+    // the walkthrough would render as a real alternative -- so it is refused
+    // rather than shown, and deliberately not frozen: a verdict is cached on
+    // first success, and caching this one would make the invention permanent.
+    // Matched through canonicalName because models reach for typographic
+    // apostrophes and hyphens that the pack spells with ASCII.
+    const key = (name: string) => canonicalName(name).toLowerCase();
+    const offered = new Set(context.packNames.map(key));
+    if (!offered.has(key(input.contextBestName))) {
+      console.error(
+        `Review verdict named "${input.contextBestName}", which was not in the pack.`,
+      );
+      return null;
     }
     const result: ReviewVerdict = {
       contextBestName: input.contextBestName,
@@ -233,9 +271,25 @@ export const frame = action({
   handler: async (ctx, args): Promise<string | null> => {
     const userContent = await ctx.runQuery(internal.review.framePrompt, args);
     try {
-      return await text({ system: system(), userContent, maxTokens: 500 });
+      return await text({
+        system: system(),
+        userContent,
+        // 500 truncated the closing frame against claude-sonnet-5 while the
+        // opening frame fit in 320. Same story as the verdict above.
+        maxTokens: 900,
+        onUsage: (usage) =>
+          ctx.runMutation(internal.metrics.record, {
+            ...usage,
+            area: "frame",
+            sessionId: args.sessionId,
+            phase: args.phase,
+          }),
+      });
     } catch (e) {
-      if (e instanceof CoachUnavailableError) return null;
+      if (e instanceof CoachUnavailableError) {
+        console.error(`Draft frame (${args.phase}) unavailable: ${e.message}`);
+        return null;
+      }
       throw e;
     }
   },
