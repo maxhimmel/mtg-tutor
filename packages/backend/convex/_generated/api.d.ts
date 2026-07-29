@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as draft from "../draft.js";
 import type * as http from "../http.js";
+import type * as iobench from "../iobench.js";
 import type * as llm from "../llm.js";
 import type * as metrics from "../metrics.js";
 import type * as review from "../review.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   draft: typeof draft;
   http: typeof http;
+  iobench: typeof iobench;
   llm: typeof llm;
   metrics: typeof metrics;
   review: typeof review;

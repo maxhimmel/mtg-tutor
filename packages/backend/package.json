@@ -33,6 +33,7 @@
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
     "bench-llm": "node scripts/bench-llm.mjs",
+    "bench-io": "node scripts/bench-io.mjs",
     "bench-report": "node scripts/bench-report.mjs"
   },
   "dependencies": {
