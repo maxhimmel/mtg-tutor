@@ -64,9 +64,9 @@
     },
     "stats.overview": {
       "sampled": 1,
-      "meanBytesRead": 228406,
+      "meanBytesRead": 229343,
       "meanBytesWritten": 0,
-      "maxBytesRead": 228406,
+      "maxBytesRead": 229343,
       "callsPerDraft": null,
       "totalBytesPerDraft": null
     },
