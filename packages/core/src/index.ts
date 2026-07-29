@@ -8,6 +8,7 @@ export * from "./model/keywords.js";
 export * from "./model/mana.js";
 export * from "./model/typeLine.js";
 export * from "./model/setData.js";
+export * from "./model/hydrate.js";
 
 export * from "./data/sources.js";
 export * from "./data/mapping.js";

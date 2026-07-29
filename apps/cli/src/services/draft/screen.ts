@@ -1,6 +1,14 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { COACH, cardValue, explainPick, isDecisionPick } from "@mtg-tutor/core";
+import {
+  COACH,
+  cardValue,
+  explainPick,
+  hydrate,
+  hydrateScore,
+  isDecisionPick,
+  textIndex,
+} from "@mtg-tutor/core";
 import type { Card, PickScore } from "@mtg-tutor/core";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
@@ -23,13 +31,18 @@ export async function runDraft(
 
   let state = await convex.query(api.draft.state, { sessionId });
 
+  // The board carries only what the engine deals in; the rules text and art are
+  // read once here and joined below. Same split the web app works to, and the
+  // reason a pick no longer drags the whole set across the wire.
+  const text = textIndex(await convex.query(api.sets.cardText, { setCode, format }));
+
   while (!state.complete) {
-    const pack = [...state.pack].sort((a, b) => cardValue(b) - cardValue(a));
+    const pack = hydrate(state.pack, text).sort((a, b) => cardValue(b) - cardValue(a));
     const header =
       `Pack ${state.packNo} · Pick ${state.pickNo}` +
       `  (${pack.length} cards · pool ${state.pool.length})`;
 
-    const picked = await pickCard(pack as Card[], header);
+    const picked = await pickCard(pack, header);
     if (!picked) {
       p.cancel(`Draft abandoned. Resume it any time: mtg-tutor draft --resume ${sessionId}`);
       return;
@@ -43,7 +56,7 @@ export async function runDraft(
     await showPickFeedback(
       sessionId,
       result.pickIndex,
-      result.score as PickScore<Card>,
+      hydrateScore(result.score as PickScore, text),
       result.signal,
       pack.length,
     );

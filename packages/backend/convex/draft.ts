@@ -8,18 +8,23 @@ import {
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import { loadBoard, requireUserId, setDocFor } from "./sessions.js";
-import { type TextIndex, hydrate, hydrateCard, hydratePick, textIndex } from "./cardText.js";
+import { cardTextFor, hydrate, hydrateCard, hydratePick } from "./cardText.js";
 
-// The board as a person sees it, so the cards go out whole: the engine deals in
-// its own half of a card, and a tile with no art or type line on it is not a
-// board. See cardText.ts.
-const boardView = (engine: DraftEngine, text: TextIndex) => ({
+// The board in the engine's half of a card: names, colours, rarity and the
+// numbers a score is made of.
+//
+// The rules text and art are NOT put back on here, and that is the point. This
+// is the response a client gets 42 times a draft, and the text half of a set is
+// ~180KB that does not change between picks -- so the client reads it once for
+// the session and joins by name, rather than being sent it again on every pick.
+// See sets.cardText and the hydration in DraftBoard.
+const boardView = (engine: DraftEngine) => ({
   packNo: engine.packNo,
   pickNo: engine.pickNo,
   complete: engine.isComplete(),
   totalPicks: engine.totalPicks(),
-  pack: engine.isComplete() ? [] : hydrate(engine.currentPack, text),
-  pool: hydrate(engine.humanPool, text),
+  pack: engine.isComplete() ? [] : engine.currentPack,
+  pool: engine.humanPool,
 });
 
 export const start = mutation({
@@ -58,7 +63,7 @@ export const start = mutation({
 export const state = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
     return {
       sessionId: session._id,
       setCode: session.setCode,
@@ -69,7 +74,7 @@ export const state = query({
       format: session.format,
       status: session.status,
       summary: session.summary,
-      ...boardView(engine, textIndex(cardsDoc.cards)),
+      ...boardView(engine),
     };
   },
 });
@@ -77,7 +82,7 @@ export const state = query({
 export const pick = mutation({
   args: { sessionId: v.id("draftSessions"), cardName: v.string() },
   handler: async (ctx, args) => {
-    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine } = await loadBoard(ctx, args.sessionId);
 
     if (engine.isComplete()) {
       throw new Error("This draft is already finished.");
@@ -104,12 +109,11 @@ export const pick = mutation({
         : {}),
     });
 
-    const text = textIndex(cardsDoc.cards);
     return {
-      score: hydratePick(record, text).score,
+      score: record.score,
       signal: record.signal,
       pickIndex: session.pickedNames.length,
-      ...boardView(engine, text),
+      ...boardView(engine),
     };
   },
 });
@@ -118,8 +122,15 @@ export const pick = mutation({
 export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
-    const text = textIndex(cardsDoc.cards);
+    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    // Once per finished draft, for the pool the deck is built from and the few
+    // cards the mistakes name -- not the whole set.
+    const text = await cardTextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      engine.history.flatMap((h) => [h.picked.name, h.score.best.name]),
+    );
 
     const mistakes = engine.history
       .filter(
@@ -155,7 +166,7 @@ export const results = query({
 export const coachContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine } = await loadBoard(ctx, args.sessionId);
 
     const record = engine.history[args.pickIndex];
     if (!record) {
@@ -164,12 +175,22 @@ export const coachContext = internalQuery({
       );
     }
 
-    // The pool as it stood just after this pick, not the final pool.
+    // The pool as it stood just after this pick, not the final pool. It goes in
+    // as names grouped by colour, so it needs no rules text.
     const poolAtPick = engine.humanPool.slice(0, args.pickIndex + 1);
-    const text = textIndex(cardsDoc.cards);
+
+    // Only the pack. This is the read the coach makes on every decision pick,
+    // and it is the whole reason card text is a row per card: fourteen rows is
+    // ~8KB against the ~180KB the set's text weighs.
+    const text = await cardTextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      record.pack.map((c) => c.name),
+    );
 
     return {
-      userContent: buildPickContext(hydratePick(record, text), hydrate(poolAtPick, text)),
+      userContent: buildPickContext(hydratePick(record, text), poolAtPick),
       setCode: session.setCode,
       packNo: record.packNo,
       pickNo: record.pickNo,

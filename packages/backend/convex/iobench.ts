@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Card, PickScore } from "@mtg-tutor/core";
+import type { EngineCard, PickScore } from "@mtg-tutor/core";
 import { type MutationCtx, type QueryCtx, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { reviewVerdict } from "./validators.js";
@@ -54,15 +54,15 @@ export const stateCost = query({
 // and TypeScript answers that by widening the whole `api` object to `any`,
 // which surfaces as a pile of implicit-any errors in unrelated modules.
 interface PickOutcome {
-  score: PickScore<Card>;
+  score: PickScore;
   signal?: string;
   pickIndex: number;
   packNo: number;
   pickNo: number;
   complete: boolean;
   totalPicks: number;
-  pack: Card[];
-  pool: Card[];
+  pack: EngineCard[];
+  pool: EngineCard[];
 }
 
 // Returns the board alongside the cost: the harness has to know what the next

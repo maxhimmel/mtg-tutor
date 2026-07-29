@@ -1,6 +1,8 @@
 import { ConvexError } from "convex/values";
 import type { Card, CardText, EngineCard, RecordedPick } from "@mtg-tutor/core";
 import { normalizeName } from "@mtg-tutor/core";
+import type { StoredCard, StoredCardText, StoredEngineCard } from "./validators.js";
+import type { QueryCtx } from "./_generated/server.js";
 
 // Putting the rules text back on cards the engine dealt.
 //
@@ -15,6 +17,90 @@ import { normalizeName } from "@mtg-tutor/core";
 // each other over a `//`.
 
 export type TextIndex = Map<string, CardText>;
+
+/**
+ * The rules text for a set, keyed by normalized name.
+ *
+ * Pass the names you actually need. The coach describes five cards -- the one
+ * taken and the four best it passed -- and reading five rows costs ~3.5KB where
+ * reading the set costs ~180KB. Omitting `names` reads the whole set, which is
+ * what a review walkthrough or a client warming its card index wants; it is a
+ * deliberate whole-set read, not a default that crept in.
+ *
+ * Bounded by the set's card count either way, so `.collect()` here cannot grow
+ * without a set growing.
+ */
+export async function cardTextFor(
+  ctx: QueryCtx,
+  code: string,
+  format: string,
+  names?: readonly string[],
+): Promise<TextIndex> {
+  if (names) {
+    const keys = [...new Set(names.map(normalizeName))];
+    const rows = await Promise.all(
+      keys.map((key) =>
+        ctx.db
+          .query("setCardText")
+          .withIndex("by_code_format_and_key", (q) =>
+            q.eq("code", code).eq("format", format).eq("key", key),
+          )
+          .unique(),
+      ),
+    );
+    return new Map(rows.filter((r) => r !== null).map((r) => [r.key, r.text]));
+  }
+
+  const rows = await ctx.db
+    .query("setCardText")
+    .withIndex("by_code_format_and_key", (q) => q.eq("code", code).eq("format", format))
+    .collect();
+  return new Map(rows.map((r) => [r.key, r.text]));
+}
+
+// Convex stores an explicitly-undefined field rather than treating it as
+// absent, and an optional field is meant to be absent.
+function defined<T extends object>(o: T): T {
+  return Object.fromEntries(Object.entries(o).filter(([, val]) => val !== undefined)) as T;
+}
+
+// Where a whole card comes apart. Both halves are spelled out field by field
+// rather than by spreading and deleting, because a card gains fields over time
+// and this is the one place that has to decide which side a new one belongs on.
+export function engineHalf(c: StoredCard): StoredEngineCard {
+  return defined({
+    name: c.name,
+    rarity: c.rarity,
+    colors: c.colors,
+    slot: c.slot,
+    packRate: c.packRate,
+    gihWinRate: c.gihWinRate,
+    gihGames: c.gihGames,
+    alsa: c.alsa,
+    rarityBaseline: c.rarityBaseline,
+  });
+}
+
+export function textHalf(c: StoredCard): StoredCardText {
+  return defined({
+    name: c.name,
+    colorIdentity: c.colorIdentity,
+    manaCost: c.manaCost,
+    cmc: c.cmc,
+    typeLine: c.typeLine,
+    oracleText: c.oracleText,
+    power: c.power,
+    toughness: c.toughness,
+    loyalty: c.loyalty,
+    imageUrl: c.imageUrl,
+    collectorNumber: c.collectorNumber,
+    setCode: c.setCode,
+    avgPick: c.avgPick,
+    winRate: c.winRate,
+    iwd: c.iwd,
+    maindeckRate: c.maindeckRate,
+  });
+}
 
 export function textIndex(cards: readonly CardText[]): TextIndex {
   return new Map(cards.map((c) => [normalizeName(c.name), c]));

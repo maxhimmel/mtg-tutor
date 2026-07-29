@@ -12,7 +12,7 @@ import { z } from "zod";
 import { action, internalQuery, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
-import { hydrate, hydrateCard, hydratePick, textIndex } from "./cardText.js";
+import { cardTextFor, hydrate, hydrateCard } from "./cardText.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -54,7 +54,10 @@ export const load = query({
       .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", args.sessionId))
       .collect();
     const byIndex = new Map(verdicts.map((v) => [v.pickIndex, v.verdict]));
-    const text = textIndex(cardsDoc.cards);
+    // The walkthrough re-renders every pack of the draft, which between them
+    // hold most of the set -- so this is the one read that genuinely wants all
+    // of it, and it happens once when the review opens.
+    const text = await cardTextFor(ctx, session.setCode, session.format);
 
     return {
       id: session._id,
@@ -150,14 +153,21 @@ const VERDICT_SCHEMA = z.object({
 export const verdictContext = internalQuery({
   args: { sessionId: v.id("draftSessions"), pickIndex: v.number() },
   handler: async (ctx, args) => {
-    const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine } = await loadBoard(ctx, args.sessionId);
     const record = engine.history[args.pickIndex];
     if (!record) {
       throw new Error(
         `Session has ${engine.history.length} picks; no pick at index ${args.pickIndex}.`,
       );
     }
-    const text = textIndex(cardsDoc.cards);
+    // The pack, and nothing else: the pool before the pick goes into the prompt
+    // as names grouped by colour.
+    const text = await cardTextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      record.pack.map((c) => c.name),
+    );
 
     const existing = await ctx.db
       .query("reviewVerdicts")
@@ -185,7 +195,7 @@ export const verdictContext = internalQuery({
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
-        hydrate(engine.humanPool.slice(0, args.pickIndex), text),
+        engine.humanPool.slice(0, args.pickIndex),
       ),
     };
   },
@@ -273,11 +283,9 @@ export const framePrompt = internalQuery({
   handler: async (ctx, args) => {
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
     const winRates = new Map(cardsDoc.colorPairWinRates.map((r) => [r.pair, r.winRate]));
-    return buildDraftFrame(
-      args.phase,
-      hydrate(engine.humanPool, textIndex(cardsDoc.cards)),
-      winRates,
-    );
+    // No card text read at all: a frame lists the pool as names grouped by
+    // colour and ranks the set's archetypes, and neither needs rules text.
+    return buildDraftFrame(args.phase, engine.humanPool, winRates);
   },
 });
 

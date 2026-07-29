@@ -1,5 +1,5 @@
 import { v, type Infer } from "convex/values";
-import type { Card } from "@mtg-tutor/core";
+import type { Card, CardText, EngineCard } from "@mtg-tutor/core";
 
 // Literal unions rather than bare strings, so what comes back out of the
 // database is already typed as core's Rarity/ColorCode and needs no cast.
@@ -20,10 +20,43 @@ export const colorCode = v.union(
   v.literal("G"),
 );
 
-export const card = v.object({
+export const packSlot = v.union(
+  v.literal("common"),
+  v.literal("uncommon"),
+  v.literal("rare"),
+  v.literal("mythic"),
+  v.literal("bonus"),
+  v.literal("land"),
+);
+
+// The half of a card the draft engine reads: dealing a pack, running the bots,
+// scoring a pick. Convex charges for the whole document a function retrieved
+// rather than the fields it used, and a replay reads every card in the set on
+// every pick -- so what is NOT in here is the point. See core's EngineCard.
+export const engineCard = v.object({
   name: v.string(),
   rarity,
   colors: v.array(colorCode),
+  // Which pool the card is dealt from, decided at ingest instead of re-derived
+  // from the type line on every replay -- the last thing that kept `typeLine`
+  // and `setCode` on this side of a card. Optional for rows written before it
+  // existed, which a re-ingest fills in.
+  slot: v.optional(packSlot),
+  packRate: v.optional(v.number()),
+  gihWinRate: v.optional(v.number()),
+  gihGames: v.optional(v.number()),
+  // Here rather than with the other 17Lands numbers because cardValue nudges an
+  // unrated card by it, so scoring cannot be done without it.
+  alsa: v.optional(v.number()),
+  rarityBaseline: v.optional(v.number()),
+});
+
+// The half a person reads, and the half a prompt writes. One row per card in
+// `setCardText`, not an array on the pool document, because its readers want
+// SUBSETS: buildPickContext describes the picked card and the four best it
+// passed, so the coach needs five of these and not four hundred.
+export const cardText = v.object({
+  name: v.string(),
   colorIdentity: v.array(colorCode),
   manaCost: v.string(),
   cmc: v.number(),
@@ -34,9 +67,7 @@ export const card = v.object({
   loyalty: v.optional(v.string()),
   imageUrl: v.optional(v.string()),
   collectorNumber: v.string(),
-  gihWinRate: v.optional(v.number()),
-  gihGames: v.optional(v.number()),
-  alsa: v.optional(v.number()),
+  setCode: v.optional(v.string()),
   avgPick: v.optional(v.number()),
   winRate: v.optional(v.number()),
   // Denormalised from setStats by `ingest`, for the same reason rarityBaseline is:
@@ -44,12 +75,33 @@ export const card = v.object({
   // make the GIH WR beside them readable. ~13KB per set. See Card.iwd.
   iwd: v.optional(v.number()),
   maindeckRate: v.optional(v.number()),
-  setCode: v.optional(v.string()),
-  rarityBaseline: v.optional(v.number()),
-  packRate: v.optional(v.number()),
+});
+
+// A whole card, which is what `ingest` builds from Scryfall and hands to
+// `store`. Storage is where the two halves part company, so this is an argument
+// shape and never a stored one.
+export const card = v.object({ ...engineCard.fields, ...cardText.fields });
+
+// Transitional: validates a whole card AND the engine's half of one, so a pool
+// document can be rewritten in place while some rows are split and some are
+// not. Only the six fields a CardText requires need relaxing; the rest were
+// optional already.
+//
+// Deleted when migrations:splitStoredCards has run everywhere and setCards.cards
+// narrows to v.array(engineCard).
+export const migratingCard = v.object({
+  ...card.fields,
+  colorIdentity: v.optional(v.array(colorCode)),
+  manaCost: v.optional(v.string()),
+  cmc: v.optional(v.number()),
+  typeLine: v.optional(v.string()),
+  oracleText: v.optional(v.string()),
+  collectorNumber: v.optional(v.string()),
 });
 
 export type StoredCard = Infer<typeof card>;
+export type StoredEngineCard = Infer<typeof engineCard>;
+export type StoredCardText = Infer<typeof cardText>;
 
 // Observed booster shapes for a set. Optional throughout: a set we have no
 // draft data for keeps the fixed PACK constants.
@@ -101,6 +153,10 @@ export const packCard = v.object({
 // stops type-checking rather than failing at runtime on a replayed draft.
 type AssertAssignable<A extends B, B> = [A, B];
 export type _CardShapeMatchesCore = AssertAssignable<StoredCard, Card>;
+// Each half on its own too, so a field drifting to the wrong side of the split
+// stops type-checking here rather than at whichever reader first misses it.
+export type _EngineShapeMatchesCore = AssertAssignable<StoredEngineCard, EngineCard>;
+export type _TextShapeMatchesCore = AssertAssignable<StoredCardText, CardText>;
 
 // Per-card statistics derived from the 17Lands public datasets by
 // scripts/build-set-stats.mjs. Every rate carries its own sample size, because

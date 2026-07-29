@@ -28,7 +28,7 @@ import { gunzipSync } from "node:zlib";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ConvexHttpClient } from "convex/browser";
-import { buildSetData, makePack, mulberry32, packSizeFor, withPackSlots } from "@mtg-tutor/core";
+import { buildSetData, makePack, mulberry32, packSizeFor } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -193,12 +193,9 @@ if (packCards.length) {
     : ok(`all ${packCards.length} declared pack cards are in the pool`);
 }
 
-const set = buildSetData(
-  doc.code,
-  withPackSlots(doc.code, doc.cards),
-  new Map(),
-  doc.packComposition,
-);
+// The cards already carry their pack slot -- ingest decides it once, rather
+// than it being re-derived from the type line on every replay.
+const set = buildSetData(doc.code, doc.cards, new Map(), doc.packComposition);
 const poolSizes = Object.fromEntries(
   Object.entries(set.pools).map(([k, v]) => [k, v.length]),
 );
