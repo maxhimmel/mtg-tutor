@@ -62,10 +62,16 @@ const base = existsSync(baseFile) ? JSON.parse(readFileSync(baseFile, "utf8")) :
 // 2.3 to 2.1 fails nothing -- the gate allows a 15% drop -- but it is not an
 // improvement either, and a report that called it one would sell every cut as a
 // win. Not-failing is "held"; only a move in the good direction is "improved".
+// `scope` is which areas the metric is computed from, and it is load-bearing for
+// --area runs. Citations and principle ids are counted across coach AND verdict
+// answers, so a verdict-only run scores lower on all three blended metrics for no
+// reason but the flag. Rendering that as "regressed" would blame the prompt for
+// the flag, so those chips report "not measured" instead.
 const METRICS = [
   {
     key: "offTopicCardNames",
     label: "off-topic card names",
+    scope: ["coach", "verdict"],
     fmt: (n) => String(n),
     worse: (b, a) => a > b,
     better: (b, a) => a < b,
@@ -73,6 +79,7 @@ const METRICS = [
   {
     key: "inventedCitationRate",
     label: "invented citation rate",
+    scope: ["coach", "verdict"],
     fmt: (n) => `${(n * 100).toFixed(1)}%`,
     worse: (b, a) => a > b + 0.02,
     better: (b, a) => a < b,
@@ -80,6 +87,7 @@ const METRICS = [
   {
     key: "citationDensity",
     label: "citations per answer",
+    scope: ["coach"],
     fmt: (n) => n.toFixed(2),
     worse: (b, a) => a < b * 0.85,
     better: (b, a) => a > b,
@@ -87,6 +95,7 @@ const METRICS = [
   {
     key: "distinctPrinciples",
     label: "distinct principles used",
+    scope: ["coach", "verdict"],
     fmt: (n) => String(n),
     worse: (b, a) => a < b * 0.85,
     better: (b, a) => a > b,
@@ -94,6 +103,7 @@ const METRICS = [
   {
     key: "divergenceRate",
     label: "context-best divergence",
+    scope: ["verdict"],
     fmt: (n) => `${(n * 100).toFixed(1)}%`,
     // Both directions are degradation -- toward 1 the coach is echoing the data
     // verdict it was handed, toward 0 it is guessing -- so there is no move that
@@ -104,6 +114,7 @@ const METRICS = [
   {
     key: "unansweredVerdicts",
     label: "unanswered verdicts",
+    scope: ["verdict"],
     fmt: (n) => String(n),
     worse: (b, a) => a > b,
     better: (b, a) => a < b,
@@ -111,6 +122,7 @@ const METRICS = [
   {
     key: "emptyAnswers",
     label: "empty answers",
+    scope: ["coach"],
     fmt: (n) => String(n),
     // An invariant, not a comparison: non-zero fails whatever the baseline said.
     worse: (_b, a) => a > 0,
@@ -119,13 +131,19 @@ const METRICS = [
   {
     key: "emptyFrames",
     label: "empty frames",
+    scope: ["frame"],
     fmt: (n) => String(n),
     worse: (_b, a) => a > 0,
     better: (b, a) => a < b,
   },
 ];
 
-const truncatedTotal = (r) => Object.values(r.areas).reduce((n, a) => n + a.truncated, 0);
+const ALL_AREAS = ["coach", "verdict", "frame"];
+// Transcripts written before --area existed described a full run.
+const runAreas = run.areasRun ?? ALL_AREAS;
+const baseAreas = base?.areasRun ?? ALL_AREAS;
+const measured = base ? runAreas.filter((a) => baseAreas.includes(a)) : runAreas;
+const covers = (scope) => scope.every((a) => measured.includes(a));
 
 const sumArea = (r, field) => Object.values(r.areas).reduce((n, a) => n + a[field], 0);
 
@@ -225,16 +243,24 @@ function deltaBar(label, after, before) {
     </div>`;
 }
 
+const unmeasured = (m) => `<div class="chip skipped">
+      <span class="chip-label">${esc(m.label)}</span>
+      <span class="chip-val muted">needs ${esc(m.scope.join(" + "))}</span>
+      <span class="chip-tag">not measured</span>
+    </div>`;
+
 function metricChips() {
   if (!base) {
-    return METRICS.map(
-      (m) =>
-        `<div class="chip"><span class="chip-label">${esc(m.label)}</span><span class="chip-val">${esc(
-          m.fmt(run.accuracy[m.key]),
-        )}</span></div>`,
+    return METRICS.map((m) =>
+      covers(m.scope)
+        ? `<div class="chip"><span class="chip-label">${esc(m.label)}</span><span class="chip-val">${esc(
+            m.fmt(run.accuracy[m.key]),
+          )}</span></div>`
+        : unmeasured(m),
     ).join("");
   }
   const rows = METRICS.map((m) => {
+    if (!covers(m.scope)) return unmeasured(m);
     const b = base.accuracy[m.key];
     const a = run.accuracy[m.key];
     const st = status(m, b, a);
@@ -244,8 +270,11 @@ function metricChips() {
       <span class="chip-tag">${st}</span>
     </div>`;
   });
-  const bt = truncatedTotal(base);
-  const at = truncatedTotal(run);
+  // Summed over the areas both runs covered, not over each file's whole map, so
+  // a partial run is never charged with truncations it never went looking for.
+  const truncIn = (r) => measured.reduce((n, k) => n + (r.areas[k]?.truncated ?? 0), 0);
+  const bt = truncIn(base);
+  const at = truncIn(run);
   const st = at > bt ? "regressed" : at < bt ? "improved" : "held";
   rows.push(`<div class="chip ${st}">
       <span class="chip-label">truncated answers</span>
@@ -396,6 +425,8 @@ const html = `<!doctype html>
   .chip.held { border-left-color:var(--ghost); } .chip.held .chip-tag { color:var(--muted); }
   .chip.improved { border-left-color:var(--good); } .chip.improved .chip-tag { color:var(--good); }
   .chip.regressed { border-left-color:var(--bad); } .chip.regressed .chip-tag { color:var(--bad); }
+  .chip.skipped { border-left-color:transparent; border-style:dashed; opacity:.65; }
+  .chip.skipped .chip-tag { color:var(--muted); }
 
   table.areas { width:100%; border-collapse:collapse; font-size:.85rem; }
   .areas th { text-align:right; color:var(--muted); font-weight:500; padding:.4rem .6rem;
@@ -432,6 +463,10 @@ const html = `<!doctype html>
   base
     ? "candidate vs baseline &middot; picks ordered by how much the answer changed"
     : "single run &middot; no baseline transcript yet &middot; picks ordered by output cost"
+}${
+  runAreas.length < ALL_AREAS.length
+    ? ` &middot; <span class="warn">partial: ${esc(runAreas.join(", "))} only</span>`
+    : ""
 }${run.callErrors ? ` &middot; <span class="warn">${run.callErrors} call errors</span>` : ""}</p>
 
 <h2>Tokens</h2>

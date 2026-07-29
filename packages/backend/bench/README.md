@@ -40,11 +40,20 @@ pnpm bench-report --open          # renders the result, free and instant
    One change per run. Two changes and the comparison cannot tell you which one
    did what.
 
-4. **Measure it.**
+4. **Measure it — just the area you changed.**
 
    ```bash
-   pnpm bench-llm && pnpm bench-report --open
+   pnpm bench-llm --area verdict && pnpm bench-report --open
    ```
+
+   A full run is ~355k tokens. Tuning the verdict prompt does not need thirty
+   coach calls, and paying for them means a daily allowance buys fewer
+   iterations of the thing you are actually changing. `--area` takes any of
+   `coach`, `verdict`, `frame`, comma-separated; the default is all three.
+
+   Unlike `--limit`, a partial run **is** a valid measurement — of the areas it
+   covers. It writes a transcript, it compares against the baseline, and it
+   fails on a regression.
 
    The report answers three questions in order:
 
@@ -60,7 +69,38 @@ pnpm bench-report --open          # renders the result, free and instant
    moves the numbers and the reference prose forward together. Reverting costs
    nothing but the run.
 
+   A partial run **cannot** become a baseline, and the script refuses. Merging a
+   verdict-only run into an existing baseline would leave its blended accuracy
+   metrics describing a mixture of two runs against two different prompts — a
+   number with no meaning that every later comparison would trust. Iterate with
+   `--area`, then re-baseline with one full run.
+
 6. **Repeat from 3.**
+
+## What a partial run does not tell you
+
+Several accuracy metrics are computed across more than one area — citations and
+principle ids are counted over coach **and** verdict answers. So a verdict-only
+run collects fewer of them for no reason but the flag, and comparing that against
+a full baseline would report a regression the prompt did not cause.
+
+Rather than compare them anyway, both tools skip those checks and say so:
+`not compared: distinct principles used (needs coach + verdict)` on the console,
+and a dashed `not measured` chip in the report.
+
+| Metric | Needs |
+|---|---|
+| citations per answer, empty answers | `coach` |
+| context-best divergence, unanswered verdicts | `verdict` |
+| empty frames | `frame` |
+| off-topic card names, invented citation rate, distinct principles used | `coach` + `verdict` |
+| truncated answers | any area the run and the baseline share |
+
+The practical consequence: **`--area` is for iterating, a full run is for
+deciding.** A verdict-only run can tell you the verdict prompt got cheaper
+without breaking divergence or truncation. It cannot tell you whether the corpus
+is still being reached for across the system, because that is a coach + verdict
+question.
 
 ## What "held" means
 
@@ -142,6 +182,7 @@ npx convex env get LLM_PROVIDER      # openai-compatible | anthropic
 | `--set fdn` | which set to draft (default `fdn`) |
 | `--format TradDraft` | must match how the set was ingested |
 | `--seed 42` | pins the deal, so two runs send byte-identical prompts |
+| `--area verdict` | which prompts to spend on: `coach`, `verdict`, `frame`, comma-separated. Default all three. A valid measurement of what it covers — see above. |
 | `--limit N` | coach and review only the first N picks. **Not a valid benchmark** — writes no artifacts and compares nothing. For proving the harness runs. |
 | `--update-baseline` | accept this run as the new reference |
 | `--open` | *(bench-report)* open the page when it is written |

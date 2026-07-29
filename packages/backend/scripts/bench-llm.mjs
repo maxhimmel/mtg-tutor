@@ -1,6 +1,7 @@
 // What one draft costs in tokens, and whether the advice survived the saving.
 //
 //   pnpm --filter @mtg-tutor/backend bench-llm [--set fdn] [--seed 42]
+//                                              [--area coach,verdict,frame]
 //                                              [--limit N] [--update-baseline]
 //
 // Drives a real draft through the real endpoints -- the same /coach stream a
@@ -68,6 +69,23 @@ const seed = Number(flag("seed", 42));
 // the report says so.
 const limit = Number(flag("limit", Infinity));
 const minPackCards = Number(flag("min-pack-cards", COACH.minPackCards));
+
+// Which prompts to spend on. Unlike --limit, a partial run IS a valid
+// measurement -- of the areas it covers. Tuning the verdict prompt does not need
+// thirty coach calls, and paying for them means a daily token allowance buys
+// fewer iterations of the thing actually being changed.
+const ALL_AREAS = ["coach", "verdict", "frame"];
+const areasRun = flag("area", ALL_AREAS.join(","))
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const unknownArea = areasRun.find((a) => !ALL_AREAS.includes(a));
+if (unknownArea) {
+  throw new Error(`Unknown --area "${unknownArea}". Choose from: ${ALL_AREAS.join(", ")}.`);
+}
+if (areasRun.length === 0) throw new Error("--area needs at least one of: " + ALL_AREAS.join(", "));
+const partial = areasRun.length < ALL_AREAS.length;
+const willRun = (area) => areasRun.includes(area);
 
 const url = process.env.CONVEX_URL;
 const site = process.env.CONVEX_SITE_URL;
@@ -170,38 +188,47 @@ const attempt = async (label, fn) => {
   }
 };
 
+if (partial) console.log(`--area ${areasRun.join(",")}: measuring those areas only`);
+
 // Coaching is requested pick by pick, exactly as a player's board does it.
 const coached = [];
-for (const pick of picks.slice(0, limit)) {
-  if (!isDecisionPick(pick.cardsInPack, minPackCards)) continue;
-  await freshToken();
-  const text = await attempt(`coach p${pick.pickIndex}`, () => coach(pick.pickIndex));
-  if (text) coached.push({ ...pick, text });
+if (willRun("coach")) {
+  for (const pick of picks.slice(0, limit)) {
+    if (!isDecisionPick(pick.cardsInPack, minPackCards)) continue;
+    await freshToken();
+    const text = await attempt(`coach p${pick.pickIndex}`, () => coach(pick.pickIndex));
+    if (text) coached.push({ ...pick, text });
+  }
+  console.log(`coached ${coached.length} picks`);
 }
-console.log(`coached ${coached.length} picks`);
 
 // Decision picks only, which is what the walkthrough and the CLI's breakdown
 // ask for: there is nothing to review about a pick that had one card in it.
 const verdicts = [];
-for (const pick of picks.slice(0, limit)) {
-  if (!isDecisionPick(pick.cardsInPack, minPackCards)) continue;
-  await freshToken();
-  const verdict = await attempt(`verdict p${pick.pickIndex}`, () =>
-    client.action(api.review.verdict, { sessionId, pickIndex: pick.pickIndex }),
-  );
-  verdicts.push({ ...pick, verdict: verdict ?? null });
+if (willRun("verdict")) {
+  for (const pick of picks.slice(0, limit)) {
+    if (!isDecisionPick(pick.cardsInPack, minPackCards)) continue;
+    await freshToken();
+    const verdict = await attempt(`verdict p${pick.pickIndex}`, () =>
+      client.action(api.review.verdict, { sessionId, pickIndex: pick.pickIndex }),
+    );
+    verdicts.push({ ...pick, verdict: verdict ?? null });
+  }
+  console.log(`reviewed ${verdicts.length} picks`);
 }
-console.log(`reviewed ${verdicts.length} picks`);
 
 const frames = [];
-for (const phase of ["open", "close"]) {
-  await freshToken();
-  const text = await attempt(`frame ${phase}`, () =>
-    client.action(api.review.frame, { sessionId, phase }),
-  );
-  frames.push({ phase, text: text ?? null });
+if (willRun("frame")) {
+  for (const phase of ["open", "close"]) {
+    await freshToken();
+    const text = await attempt(`frame ${phase}`, () =>
+      client.action(api.review.frame, { sessionId, phase }),
+    );
+    frames.push({ phase, text: text ?? null });
+  }
+  console.log(`framed ${frames.length} phases`);
 }
-console.log(`framed ${frames.length} phases\n`);
+console.log("");
 
 // ------------------------------------------------------------------- the tokens
 
@@ -380,6 +407,11 @@ const record = {
   provider,
   model,
   minPackCards,
+  // What this run is entitled to say anything about. Read back on comparison:
+  // several accuracy metrics are computed across more than one area, and
+  // comparing those against a baseline that covered different ground reports
+  // drift that is an artifact of the flag rather than of the prompt.
+  areasRun,
   areas: byArea,
   accuracy,
 };
@@ -445,6 +477,19 @@ writeFileSync(runFile, `${JSON.stringify(transcript, null, 2)}\n`);
 console.log(`\nwrote run ${runFile.pathname.split("/").pop()}`);
 
 if (has("update-baseline")) {
+  // A baseline has to describe one coherent run. Merging a coach-only run into
+  // an existing file would leave its blended accuracy metrics -- invented
+  // citation rate, distinct principles, off-topic names -- describing a mixture
+  // of two runs against two different prompts, which is a number with no
+  // meaning that every later comparison would trust.
+  if (partial) {
+    console.log(
+      `\n--area ${areasRun.join(",")} cannot become a baseline: a partial run measures ` +
+        "part of the system, and a baseline has to describe all of it. Iterate with " +
+        "--area, then re-baseline with a full run.",
+    );
+    process.exit(0);
+  }
   writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`);
   // The reference prose, versioned beside the reference numbers. Without this
   // twin, accepting a saving would move the numbers forward and leave the next
@@ -463,6 +508,39 @@ if (!existsSync(file)) {
 const base = JSON.parse(readFileSync(file, "utf8"));
 const failures = [];
 const notes = [];
+// Baselines written before --area existed described a full run.
+const baseAreas = base.areasRun ?? ALL_AREAS;
+const skipped = [];
+
+// Which areas an accuracy metric is computed from. The blended three are the
+// reason this table exists: citations and principle ids are counted across coach
+// AND verdict answers, so a coach-only run scores lower on all of them for no
+// reason but the flag. Comparing those against a full baseline would report a
+// regression that the prompt did not cause -- and reporting a phantom regression
+// once is enough to stop the gate being trusted.
+const SCOPE = {
+  "truncated answers": ALL_AREAS,
+  "unanswered verdicts": ["verdict"],
+  "divergence rate": ["verdict"],
+  "citation density": ["coach"],
+  "off-topic card names": ["coach", "verdict"],
+  "invented citation rate": ["coach", "verdict"],
+  "distinct principles used": ["coach", "verdict"],
+};
+
+const comparedAreas = areasRun.filter((a) => baseAreas.includes(a));
+/** Runs the check only if both this run and the baseline covered every area it reads. */
+const scoped = (label, check) => {
+  if (comparedAreas.length === 0) {
+    skipped.push(`${label} (this run and the baseline share no areas)`);
+    return;
+  }
+  // Truncation is summed over whatever the two runs have in common, so any
+  // overlap makes it comparable. Everything else needs its specific areas.
+  const needs = label === "truncated answers" ? comparedAreas : SCOPE[label];
+  if (needs.every((a) => comparedAreas.includes(a))) return check();
+  skipped.push(`${label} (needs ${SCOPE[label].join(" + ")})`);
+};
 
 // Deterministic, so any drift is real and worth the exact comparison. A band
 // here would only hide the thing this exists to catch.
@@ -513,59 +591,77 @@ invariant("empty frames", accuracy.emptyFrames);
 // six, which is a known defect with a fix that belongs in the prompt, not in a
 // bigger ceiling. An invariant nothing can satisfy makes every run red, and a
 // permanently red gate stops being read. This still catches it getting worse.
-regression(
-  "truncated answers",
-  Object.values(base.areas).reduce((n, a) => n + a.truncated, 0),
-  truncated,
-  truncated > Object.values(base.areas).reduce((n, a) => n + a.truncated, 0),
+// Summed over the areas BOTH runs covered, rather than over each file's whole
+// areas map. A verdict-only run against a full baseline would otherwise be
+// charged with the coach and frame truncations it never went looking for.
+scoped("truncated answers", () => {
+  const baseTruncated = comparedAreas.reduce((n, k) => n + (base.areas[k]?.truncated ?? 0), 0);
+  const ranTruncated = comparedAreas.reduce((n, k) => n + (byArea[k]?.truncated ?? 0), 0);
+  regression("truncated answers", baseTruncated, ranTruncated, ranTruncated > baseTruncated);
+});
+scoped("unanswered verdicts", () =>
+  regression(
+    "unanswered verdicts",
+    base.accuracy.unansweredVerdicts,
+    accuracy.unansweredVerdicts,
+    accuracy.unansweredVerdicts > base.accuracy.unansweredVerdicts,
+  ),
 );
-regression(
-  "unanswered verdicts",
-  base.accuracy.unansweredVerdicts,
-  accuracy.unansweredVerdicts,
-  accuracy.unansweredVerdicts > base.accuracy.unansweredVerdicts,
+scoped("off-topic card names", () =>
+  regression(
+    "off-topic card names",
+    base.accuracy.offTopicCardNames,
+    accuracy.offTopicCardNames,
+    accuracy.offTopicCardNames > base.accuracy.offTopicCardNames,
+  ),
 );
-regression(
-  "off-topic card names",
-  base.accuracy.offTopicCardNames,
-  accuracy.offTopicCardNames,
-  accuracy.offTopicCardNames > base.accuracy.offTopicCardNames,
+scoped("invented citation rate", () =>
+  regression(
+    "invented citation rate",
+    pct(base.accuracy.inventedCitationRate),
+    pct(accuracy.inventedCitationRate),
+    accuracy.inventedCitationRate > base.accuracy.inventedCitationRate + 0.02,
+  ),
 );
-regression(
-  "invented citation rate",
-  pct(base.accuracy.inventedCitationRate),
-  pct(accuracy.inventedCitationRate),
-  accuracy.inventedCitationRate > base.accuracy.inventedCitationRate + 0.02,
-);
-regression(
-  "citation density",
-  base.accuracy.citationDensity.toFixed(2),
-  accuracy.citationDensity.toFixed(2),
-  accuracy.citationDensity < base.accuracy.citationDensity * 0.85,
+scoped("citation density", () =>
+  regression(
+    "citation density",
+    base.accuracy.citationDensity.toFixed(2),
+    accuracy.citationDensity.toFixed(2),
+    accuracy.citationDensity < base.accuracy.citationDensity * 0.85,
+  ),
 );
 // The guard against condensing the corpus rather than cutting it. Keeping every
 // id while stripping the depth behind it leaves density flat -- the coach still
 // cites -- but narrows what it can find to say, and that shows up here.
-regression(
-  "distinct principles used",
-  base.accuracy.distinctPrinciples,
-  accuracy.distinctPrinciples,
-  accuracy.distinctPrinciples < base.accuracy.distinctPrinciples * 0.85,
+scoped("distinct principles used", () =>
+  regression(
+    "distinct principles used",
+    base.accuracy.distinctPrinciples,
+    accuracy.distinctPrinciples,
+    accuracy.distinctPrinciples < base.accuracy.distinctPrinciples * 0.85,
+  ),
 );
 // Both directions are degradation: toward 1 the coach stopped reasoning about
 // the pool and is echoing the data verdict it was handed, toward 0 it is
 // guessing. Neither shows up as a token regression.
-regression(
-  "divergence rate",
-  pct(base.accuracy.divergenceRate),
-  pct(accuracy.divergenceRate),
-  Math.abs(accuracy.divergenceRate - base.accuracy.divergenceRate) > 0.15,
+scoped("divergence rate", () =>
+  regression(
+    "divergence rate",
+    pct(base.accuracy.divergenceRate),
+    pct(accuracy.divergenceRate),
+    Math.abs(accuracy.divergenceRate - base.accuracy.divergenceRate) > 0.15,
+  ),
 );
 
 console.log("");
 for (const note of notes) console.log(`note: ${note}`);
+// Said out loud rather than left to inference. A partial run that printed only
+// "matches baseline" would read as a clean bill of health for the whole system
+// when most of it was never asked.
+for (const s of skipped) console.log(`not compared: ${s}`);
 if (failures.length === 0) {
-  console.log("matches baseline.");
+  console.log(partial ? `matches baseline for ${areasRun.join(", ")}.` : "matches baseline.");
   process.exit(0);
 }
 for (const f of failures) console.log(`REGRESSION ${f}`);
