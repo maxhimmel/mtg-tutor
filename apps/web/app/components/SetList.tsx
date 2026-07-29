@@ -126,7 +126,7 @@ export function SetList({
                 </th>
               );
             })}
-            <th scope="col">
+            <th scope="col" className="w-0">
               <span className="sr-only">Start a draft</span>
             </th>
           </tr>
@@ -140,15 +140,38 @@ export function SetList({
             return (
               <tr
                 key={`${set.code}-${set.format}`}
-                className="transition-colors hover:bg-base-300/40"
+                className={`group relative transition-colors has-[button:focus-visible]:outline-2 has-[button:focus-visible]:-outline-offset-2 has-[button:focus-visible]:outline-primary ${
+                  starting === null ? "hover:bg-base-300/40" : ""
+                } ${isStarting ? "bg-base-300/40" : ""}`}
               >
                 <th scope="row" className="font-normal">
                   <span className="flex items-center gap-3">
-                    <SetIcon uri={set.iconUri} className="size-6 text-base-content/50" />
+                    <SetIcon
+                      uri={set.iconUri}
+                      className={`size-6 transition-colors ${
+                        isStarting ? "text-primary" : "text-base-content/50"
+                      } ${
+                        starting === null ? "group-hover:text-primary" : ""
+                      }`}
+                    />
                     <span className="flex flex-col">
-                      <span className="font-display font-semibold leading-tight">
+                      {/* The row is the button: a real <button> keeps the
+                          keyboard and screen-reader path intact, and its
+                          stretched ::after is what makes the whole row the hit
+                          target. */}
+                      <button
+                        type="button"
+                        onClick={() => onStart(set.code, set.format)}
+                        disabled={starting !== null}
+                        aria-label={`Draft ${name}`}
+                        className={`text-left font-display font-semibold leading-tight transition-colors after:absolute after:inset-0 after:content-[''] focus-visible:outline-none ${
+                          starting === null
+                            ? "cursor-pointer group-hover:text-primary"
+                            : "cursor-not-allowed after:cursor-default"
+                        }`}
+                      >
                         {name}
-                      </span>
+                      </button>
                       <span className="eyebrow">
                         {set.code.toUpperCase()} · {set.format}
                       </span>
@@ -175,23 +198,41 @@ export function SetList({
                   {set.ratedCardCount}
                 </td>
 
-                <td className="text-right">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-primary"
-                    onClick={() => onStart(set.code, set.format)}
-                    disabled={starting !== null}
-                    aria-label={`Draft ${name}`}
-                  >
-                    {isStarting ? (
-                      <>
-                        <span className="loading loading-spinner loading-xs" />
-                        Opening…
-                      </>
-                    ) : (
-                      "Draft"
-                    )}
-                  </button>
+                {/* Not a second control. At rest the row only carries a
+                    dog-eared corner -- the crease a page keeps when someone
+                    has been turning it -- and the fold peels further open,
+                    with the word it stands for, once the row is live. */}
+                <td className="relative whitespace-nowrap pr-7 text-right">
+                  {isStarting ? (
+                    <span className="inline-flex items-center gap-2 text-xs text-primary">
+                      <span className="loading loading-spinner loading-xs" />
+                      Opening…
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={`text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary opacity-0 transition-opacity ${
+                        starting === null
+                          ? "group-hover:opacity-100 group-has-[button:focus-visible]:opacity-100"
+                          : ""
+                      }`}
+                    >
+                      Draft
+                    </span>
+                  )}
+
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute bottom-0 right-0 transition-all duration-200 before:absolute before:inset-0 before:bg-base-200 before:[clip-path:polygon(100%_0,100%_100%,0_100%)] after:absolute after:inset-0 after:transition-colors after:[clip-path:polygon(0_0,100%_0,0_100%)] ${
+                      isStarting
+                        ? "size-5 after:bg-primary"
+                        : `size-3 after:bg-base-content/15 ${
+                            starting === null
+                              ? "group-hover:size-5 group-hover:after:bg-primary group-has-[button:focus-visible]:size-5 group-has-[button:focus-visible]:after:bg-primary"
+                              : ""
+                          }`
+                    }`}
+                  />
                 </td>
               </tr>
             );
