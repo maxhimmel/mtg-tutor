@@ -1,0 +1,158 @@
+# Benchmark: what a draft costs, and whether the advice survived the saving
+
+Reducing AI token usage is easy. Reducing it without quietly making the coaching
+worse is the hard part, and it is the only reason this directory exists.
+
+Two commands:
+
+```bash
+pnpm bench-llm                    # drives a real draft, ~92 model calls, ~10 min
+pnpm bench-report --open          # renders the result, free and instant
+```
+
+## The procedure
+
+1. **Establish the reference.**
+
+   ```bash
+   pnpm bench-llm --update-baseline
+   ```
+
+   Prompts unchanged. This writes both the numbers and the prose that produced
+   them. Do this once per provider — a baseline is never comparable across
+   providers.
+
+2. **Read it.**
+
+   ```bash
+   pnpm bench-report --open
+   ```
+
+   Single-run mode, ordered by output cost. This is where a line like "verdict
+   output is 25.4k of the run's 30.8k tokens" stops being a statistic and
+   becomes thirty pieces of prose you can see the verbosity in.
+
+3. **Cut one thing.** Verdict first — it is the largest output line in the
+   budget, and `VERDICT_SCHEMA`'s field descriptions in `convex/review.ts` are
+   the only instruction the model gets about length. Coach input surface is the
+   next target, then frames.
+
+   One change per run. Two changes and the comparison cannot tell you which one
+   did what.
+
+4. **Measure it.**
+
+   ```bash
+   pnpm bench-llm && pnpm bench-report --open
+   ```
+
+   The report answers three questions in order:
+
+   - **Did it get cheaper?** The bars at the top, candidate against baseline.
+   - **Did it stay correct?** The metric chips — each one marked `held`,
+     `improved` or `regressed` using the same thresholds `bench-llm` fails on,
+     so the page can never disagree with the gate.
+   - **Did it stay good?** The per-pick prose, ordered by how much each answer
+     changed. A cut usually moves five picks and leaves twenty-five alone; those
+     five are at the top.
+
+5. **Accept or revert.** Accepting is `pnpm bench-llm --update-baseline`, which
+   moves the numbers and the reference prose forward together. Reverting costs
+   nothing but the run.
+
+6. **Repeat from 3.**
+
+## What "held" means
+
+`held` means the benchmark would not have failed it — not that nothing moved.
+Citation density falling from 2.30 to 2.10 is inside the gate's 15% tolerance,
+so it reads `held` with both numbers shown. Only a move in the good direction
+reads `improved`. This distinction is deliberate: without it every cut would
+report itself as a win.
+
+`regressed` on any chip means `pnpm bench-llm` exits non-zero.
+
+## Why quality is measured at all
+
+The mechanical metrics catch the failures a token cut actually causes:
+
+| Metric | Catches |
+|---|---|
+| invented citation rate | the model citing principle ids that do not exist |
+| citations per answer | the coach dropping the corpus and freelancing |
+| distinct principles used | the corpus being *condensed* rather than cut — every id kept, the depth behind them stripped, so the coach still cites but can only find a handful of things to say |
+| context-best divergence | drift in either direction: toward 1 the coach is echoing the data verdict it was handed, toward 0 it is guessing |
+| truncated answers | the JSON cut mid-object, or prose cut mid-sentence |
+| unanswered verdicts | the model naming a card outside the pack, or returning nothing usable |
+
+None of them answer "is this advice good". That is the read you do yourself in
+step 4, which is why the report exists rather than a pass/fail number.
+
+## The files
+
+| File | Written by | Committed |
+|---|---|---|
+| `baseline.<set>.<format>.<seed>.<provider>.json` | `--update-baseline` | yes — the gate |
+| `run.<...>.baseline.json` | `--update-baseline` | yes — the reference prose |
+| `run.<...>.json` | every full run | yes — see below |
+| `report.<...>.html` | `bench-report` | no — derived, rebuilt for free |
+
+Transcripts are committed because they cannot be reproduced. The seed pins the
+deal and the prompts byte-for-byte, but not the model's generation: re-running
+costs a full run's tokens and comes back with different prose. The runs most
+worth keeping are the ones whose cut was **rejected** — they never become a
+baseline, so without a commit there is no record of what the cut did to the
+coaching or why it was backed out.
+
+A run overwrites the previous file of the same name. Commit between runs, or the
+second one takes the first with it.
+
+The prose transcript exists because `llmUsage` stores token counts and nothing
+else. The answers live in the harness's memory during a run and are gone when
+the process exits, so anything not written to `run.*.json` can never be compared
+against later.
+
+## Provider caveats
+
+Baselines are **per provider and never comparable across them**. A run records
+the provider it used and the filename carries it.
+
+- **Anthropic** reports the cache split, so its numbers can price a saving in
+  money.
+- **Anything openai-compatible** — Groq, Ollama, vLLM, OpenRouter — records
+  itself as `local`, because that is the name the provider seam registers. Its
+  baseline is valid for output length, call frequency and accuracy, and says
+  nothing about what a saving is worth. Groq sends no cache signal at all; the
+  report shows the input surface but the split is meaningless.
+
+  Because they all record as `local`, a Groq baseline and an Ollama baseline
+  would collide under one filename. Only keep one openai-compatible baseline at
+  a time, or rename by hand.
+
+Switch providers on the deployment, not in the script:
+
+```bash
+npx convex env get LLM_PROVIDER      # openai-compatible | anthropic
+```
+
+## Flags
+
+| Flag | Effect |
+|---|---|
+| `--set fdn` | which set to draft (default `fdn`) |
+| `--format TradDraft` | must match how the set was ingested |
+| `--seed 42` | pins the deal, so two runs send byte-identical prompts |
+| `--limit N` | coach and review only the first N picks. **Not a valid benchmark** — writes no artifacts and compares nothing. For proving the harness runs. |
+| `--update-baseline` | accept this run as the new reference |
+| `--open` | *(bench-report)* open the page when it is written |
+| `--vs <file>` | *(bench-report)* compare against a specific transcript |
+
+## Prerequisites
+
+- `pnpm login` — the harness drives the same authenticated endpoints a browser
+  does, and cannot talk to them anonymously.
+- The set must be ingested for the format being drafted. A run that names the
+  wrong format reads identically to a missing set, so the error lists what is
+  actually available.
+- `pnpm build` if `packages/core` changed — scripts read `dist`, not `src`, so a
+  green vitest run does not mean the harness sees your change.
