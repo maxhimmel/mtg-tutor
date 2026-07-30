@@ -84,7 +84,7 @@ export function CardTile({
       type="button"
       // select-none so the double-click shortcut does not also highlight the
       // name on the tiles that have no art to cover it.
-      className={`hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""}`}
+      className={`card-focus hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""}`}
       onClick={() => {
         hidePreview();
         onPick(card);

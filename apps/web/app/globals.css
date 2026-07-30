@@ -140,6 +140,23 @@
   }
 }
 
+/* A card tile's focus ring. The browser's default is a blue rectangle from
+   another design system entirely, and it turns up on a card you clicked with a
+   mouse the moment you touch any key -- which is when the focus-visible
+   heuristic decides you are navigating by keyboard. It cannot just be removed,
+   because then a keyboard has no way to say where it is, so it is drawn in the
+   page's own parchment instead: clearly not the gold, which means the card you
+   are on and the card you are holding never look like the same thing. */
+@utility card-focus {
+  border-radius: var(--radius-box);
+  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-base-content) 75%, transparent);
+    outline-offset: 3px;
+  }
+}
+
 /* Every surface that floats above the page -- card previews, the keyword panel,
    the user menu -- so they read as one family and always have an edge. The
    border is tinted with base-content rather than using base-300, which is
