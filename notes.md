@@ -72,30 +72,43 @@
        at flush [as flush] (ai/src/generate-text/stream-text.ts:1388:27)
    ```
 
-   Nothing is broken for the player: `onError` in `llm.ts` catches the stream
-   failure, the interrupted-coaching message is appended to the body, and both
-   clients fall back to the deterministic explanation. The problem is that this
-   is precisely the condition `unavailable()` was written to stop shouting
-   about — "a daily token cap on the dev provider" is the example in its own
-   comment — and it is shouting again through a different door.
+   **The player-facing half is fixed (2026-07-30); the log line is not, and
+   probably cannot be from our side.**
 
-   **Confirmed pre-existing, not caused by the usage instrumentation.** Verified
-   2026-07-28 by stripping the `Promise.allSettled` usage read out of `stream()`
-   entirely and re-running: the uncaught error still appeared. It comes from
-   `streamText`'s internal flush rejecting a promise the pump never consumes.
-   (The _separate_ `Promise.all` bug that instrumentation did introduce — the
-   second rejection going unconsumed — is fixed.)
+   What it was doing to the player, which the earlier note had wrong: Convex
+   kills the whole request on an unhandled rejection and *discards the response
+   body with it*. The 200 status had already been committed, so `/coach` came
+   back 200-with-nothing — `!res.ok` never tripped and both clients rendered a
+   blank panel instead of falling back. Fixed by treating an empty 200 as the
+   coach being unavailable, in `DraftBoard.tsx` and `apps/cli/.../coach.ts`.
+   Covered by tests in `packages/backend/test/llm.test.ts` and
+   `apps/cli/src/core/tutor/coach.test.ts`, which use a stub provider and spend
+   no tokens.
 
-   The likely fix is to consume the result promises the pump currently ignores,
-   the same way `totalUsage` and `finishReason` are now consumed via
-   `allSettled` — probably `result.text` or `result.finalStep`, whichever the
-   SDK rejects on this path. Worth confirming which one rather than defensively
-   awaiting all of them. Easy to reproduce: exhaust the Groq daily cap, or point
-   `LLM_BASE_URL` at something that refuses.
+   Ruled out, so nobody re-litigates it: consuming the promises the pump ignores
+   does **not** help. Tried `.catch()` on all 21 public result promises, then on
+   the 5 private `DelayedPromise` slots, then patching `DelayedPromise.reject`
+   to defuse every rejection unconditionally — the uncaught error survived all
+   three. It is not reachable from the result object, and `try`/`catch` cannot
+   reach it either: nothing in our stack ever awaits it, and by the time it
+   fires the handler has already returned its `Response`. Not fixed in ai 7.0.42
+   either. Convex offers no hook — `addEventListener("unhandledrejection")`
+   registers but never fires, and there is no `process.on`.
 
-6. When rendering the card placard for cards that have a sub-card we should render the placard's mana cost with a "//" divider.
+   The one thing that would work is `generateText` instead of `streamText`,
+   which rejects into our own `await` where `unavailable()` already catches it —
+   that is why `text()` and `object()` never log this. **Rejected:** it costs
+   token-by-token streaming, and making the player wait for a whole answer is a
+   worse trade than a cosmetic log line.
 
-7. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
+   Easy to reproduce: point `LLM_MODEL` at a model that does not exist, which
+   fails instantly and spends nothing.
+
+6. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
+
+7. I want animations when loading packs. Start each animation with the first card in the pack.
+   - Intro: cards slide in from the right side of the screen with a slight delay before the next card slides in.
+   - Outro: after a card is picked, cards slide to the left until off-screen.
 
 # Ideas:
 
