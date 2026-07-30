@@ -47,10 +47,15 @@ export function CardTile({
   disabled,
   showStats,
   label,
+  selected,
 }: {
   card: Card;
   onPick: (card: Card) => void;
   disabled?: boolean;
+  // Drawn half-pulled from the row, the way you hold a card you are thinking
+  // about before you take it. What a click then means is the caller's business:
+  // the tile only reports that it was clicked.
+  selected?: boolean;
   // Overrides the guiderails setting when given. The review quiz passes false:
   // the hover panel leads with the card's win rate, which is the answer to the
   // question the quiz is asking.
@@ -70,7 +75,7 @@ export function CardTile({
   return (
     <button
       type="button"
-      className="hover-3d group w-full cursor-pointer bg-transparent p-0 perspective-midrange disabled:cursor-not-allowed disabled:opacity-50"
+      className={`hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""}`}
       onClick={() => {
         hidePreview();
         onPick(card);
@@ -82,7 +87,7 @@ export function CardTile({
       {/* First child is the face that tilts; hover-3d clips it and applies the
           shine. `relative` is that shine's positioning context -- the effect's
           ::before is absolute -- not leftover from the win-rate badge. */}
-      <CardFace card={card} className="group-hover:border-primary" />
+      <CardFace card={card} className={selected ? "border-primary" : "group-hover:border-primary"} />
 
       {TILT_ZONES.map((i) => (
         <span key={i} aria-hidden className="block" />

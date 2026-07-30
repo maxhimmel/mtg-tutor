@@ -92,6 +92,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // because for as long as it is leaving, two packs exist: this one and the one
   // arriving behind it.
   const [outgoing, setOutgoing] = useState<{ cards: Card[]; picked: string } | null>(null);
+  // The card pulled out of the row and not yet taken. By name, because that is
+  // what identifies a card everywhere else on the board.
+  const [selected, setSelected] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -237,10 +240,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [last, text],
   );
 
+  const selectedCard = useMemo(
+    () => pack.find((card) => card.name === selected),
+    [pack, selected],
+  );
+
   const boardCards = useMemo(
     () => [...pack, ...pool, ...(lastView?.pack ?? [])],
     [pack, pool, lastView],
   );
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
 
   // Held back until every card in it can be drawn. A pack is dealt all at once,
   // so the alternative is watching it assemble itself frame by frame.
@@ -264,9 +281,21 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // half-arrived citation rather than flashing "[EVA" into the prose.
   const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
 
+  // Clicking a card no longer spends the pick: it pulls the card out of the row
+  // and the pick is confirmed separately, because taking the wrong card by a
+  // stray click is unrecoverable -- the draft moves on. Clicking the card you
+  // already pulled confirms it, which makes a double-click the whole gesture in
+  // one go for anyone who does not want the second step.
+  function onTileClick(card: Card) {
+    if (picking) return;
+    if (selected === card.name) void onPick(card);
+    else setSelected(card.name);
+  }
+
   async function onPick(card: Card) {
     if (picking || !text) return;
     setPicking(true);
+    setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
     const packBefore = state?.pack ?? [];
 
@@ -344,48 +373,83 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         <Results sessionId={id} />
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          {outgoing ? (
-            <div key="outgoing" className={PACK_GRID} aria-hidden>
-              {outgoing.cards.map((card, i) => {
-                const kept = card.name === outgoing.picked;
-                return (
+          <div>
+            {outgoing ? (
+              <div key="outgoing" className={PACK_GRID} aria-hidden>
+                {outgoing.cards.map((card, i) => {
+                  const kept = card.name === outgoing.picked;
+                  return (
+                    <div
+                      key={card.name}
+                      className={`flex ${kept ? "motion-safe:animate-keep" : "motion-safe:animate-pass"}`}
+                      // The card you took holds its place for as long as the rest
+                      // of the pack takes to go, so it is the last thing on screen.
+                      style={
+                        kept
+                          ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
+                          : { animationDelay: `${i * PASS_STAGGER}ms` }
+                      }
+                    >
+                      <CardFace card={card} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : packReady ? (
+              <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
+                {pack.map((card, i) => (
                   <div
                     key={card.name}
-                    className={`flex ${kept ? "motion-safe:animate-keep" : "motion-safe:animate-pass"}`}
-                    // The card you took holds its place for as long as the rest
-                    // of the pack takes to go, so it is the last thing on screen.
-                    style={
-                      kept
-                        ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
-                        : { animationDelay: `${i * PASS_STAGGER}ms` }
-                    }
+                    className="relative flex motion-safe:animate-deal"
+                    style={{ animationDelay: `${i * DEAL_STAGGER}ms` }}
                   >
-                    <CardFace card={card} />
+                    <CardTile
+                      card={card}
+                      onPick={onTileClick}
+                      disabled={picking}
+                      selected={selected === card.name}
+                      label={selected === card.name ? `Confirm ${card.name}` : `Select ${card.name}`}
+                    />
+                    {/* Sits in the gap the card leaves as it lifts, so the label
+                        is revealed by the pull rather than pasted over the art. */}
+                    {selected === card.name && (
+                      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
+                        <span className="badge badge-primary badge-sm">Selected</span>
+                      </span>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          ) : packReady ? (
-            <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
-              {pack.map((card, i) => (
-                <div
-                  key={card.name}
-                  className="flex motion-safe:animate-deal"
-                  style={{ animationDelay: `${i * DEAL_STAGGER}ms` }}
-                >
-                  <CardTile card={card} onPick={onPick} disabled={picking} />
+                ))}
+              </div>
+            ) : (
+              // The pack's own shape is the loading state: the right number of
+              // cards at the right size, so nothing moves when the art lands.
+              <div className={PACK_GRID}>
+                {pack.map((card) => (
+                  <span key={card.name} className="skeleton card-aspect block w-full rounded-xl" />
+                ))}
+              </div>
+            )}
+
+            {selectedCard && (
+              <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
+                <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
+                  <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={picking}
+                    onClick={() => void onPick(selectedCard)}
+                  >
+                    Confirm pick
+                  </button>
+                  <span className="hidden text-xs text-base-content/50 sm:inline">
+                    Double-click a card to skip this step · <kbd className="kbd kbd-xs">esc</kbd> to
+                    clear
+                  </span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            // The pack's own shape is the loading state: the right number of
-            // cards at the right size, so nothing moves when the art lands.
-            <div className={PACK_GRID}>
-              {pack.map((card) => (
-                <span key={card.name} className="skeleton card-aspect block w-full rounded-xl" />
-              ))}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
           <aside className="flex flex-col gap-4">
             <Panel title="Last pick" bodyClassName="gap-3">
