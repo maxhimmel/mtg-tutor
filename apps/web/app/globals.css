@@ -150,6 +150,44 @@
   }
 }
 
+/* Waiting for a pack's art, drawn as the set's own symbol rather than as a row
+   of grey rectangles. It is huge, cropped by the edge of the drafting area, and
+   held at a few percent of the text colour so it sits in the page rather than on
+   it -- and a gold sheen crosses it, which is the only thing that says the board
+   is working. The cards then arrive on top of it, out of the dark.
+
+   Rides on SetIcon, which already masks a coloured block with the set's SVG, so
+   the sheen is a background layer inside that mask: the light travels across the
+   symbol's own shape rather than across a box containing it. */
+@keyframes glyph-sheen {
+  from {
+    background-position: -60% 0;
+  }
+  to {
+    background-position: 160% 0;
+  }
+}
+
+@utility pack-glyph {
+  background-image: linear-gradient(
+    105deg,
+    transparent 42%,
+    color-mix(in oklab, var(--color-primary) 55%, transparent) 50%,
+    transparent 58%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  /* Linear and quick: a pack usually loads inside a second, and an eased sweep
+     spends that second barely moving at the start of its travel. */
+  animation: glyph-sheen 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-glyph {
+    animation: none;
+  }
+}
+
 /* A card tile's focus ring. The browser's default is a blue rectangle from
    another design system entirely, and it turns up on a card you clicked with a
    mouse the moment you touch any key -- which is when the focus-visible

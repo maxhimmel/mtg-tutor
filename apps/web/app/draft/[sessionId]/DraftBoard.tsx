@@ -433,12 +433,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 ))}
               </div>
             ) : (
-              // The pack's own shape is the loading state: the right number of
-              // cards at the right size, so nothing moves when the art lands.
-              <div className={PACK_GRID}>
-                {pack.map((card) => (
-                  <span key={card.name} className="skeleton card-aspect block w-full rounded-xl" />
-                ))}
+              // Waiting for the pack's art. The slots hold the pack's own shape
+              // -- the right number of cards at the right size, so nothing moves
+              // when the art lands -- and the set's symbol fills the drafting
+              // area behind them, cropped by its edge, with a sheen crossing it.
+              // The cards then arrive on top of it, out of the dark.
+              <div className="relative isolate overflow-hidden rounded-box">
+                <SetIcon
+                  uri={state.setIcon}
+                  className="pack-glyph pointer-events-none absolute -top-[10%] -right-[14%] -z-10 h-[120%] w-[70%] text-base-content/[0.07]"
+                />
+                <div className={PACK_GRID}>
+                  {pack.map((card) => (
+                    <span
+                      key={card.name}
+                      className="card-aspect block w-full rounded-xl bg-base-200/50"
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
