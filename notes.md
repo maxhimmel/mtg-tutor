@@ -65,13 +65,24 @@
 
 5. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
-6. Here's some text from the coach after I made a pick:
+6. **A card the coach names in shorthand goes unlinked** — it wrote "the
+   6-mana Zealot" for "Kulrath Zealot", and `CardText` styles only names it can
+   match exactly, so the one card the sentence was arguing for rendered as plain
+   text while the card it was arguing against was hoverable.
 
-```Flamekin Gildweaver is a solid mid‑range creature but its IWD (+2.8) and curve (4 mana) are weaker than the 6‑mana Zealot’s higher IWD (+5.5) and stronger board presence as a bomb‑type threat. Since you already have two reds and are still early enough to pivot, taking the higher‑impact Zealot would improve your deck’s power and consistency.
+   **The cheap half is done (2026-07-30):** both system prompts now ask for full
+   names (`NAME_RULE`, `core/tutor/prompt.ts`) — a rule against a corpus we pay
+   for on every call either way. **Whether it is enough is not yet known**; the
+   check is to draft and read the answers, not to reason about it.
 
-```
-
-- That's no good! The problem is that the "Zealot" it's referring to isn't highlighted. The creatures fullname is actually "Kulrath Zealot".
+   If it isn't, the other half is teaching `cardNamePattern` to accept partial
+   names, and `cardNames.ts` is where the risk is written down: matching is
+   longest-first precisely so "Skystinger Drake" is never matched as
+   "Skystinger". A last-word fallback undoes that guarantee — one word can
+   belong to several cards in a set, and the matcher cannot tell which was
+   meant. It would have to be restricted to words that are unambiguous across
+   the cards on the board, which is a real matcher change rather than a
+   fallback.
 
 # Ideas:
 

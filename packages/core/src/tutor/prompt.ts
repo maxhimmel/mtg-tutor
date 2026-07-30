@@ -15,6 +15,18 @@ function principlesBlock(doc: PrinciplesDoc): string {
     .join("\n\n");
 }
 
+// Card names in an answer are linked back to the board by exact match
+// (`cardNamePattern`), so a name the model shortens is prose the player cannot
+// hover — and it is the card the sentence is about that goes unlinked. Asking
+// for the full name is cheaper and safer than teaching the matcher to accept
+// partial ones: a single word can belong to several cards in a set, and the
+// matcher has no way to tell which one was meant.
+const NAME_RULE = [
+  '- Write every card name out in full, exactly as printed — "Kulrath Zealot", never',
+  '  "the Zealot". Names are matched against the cards in play to make them hoverable,',
+  "  and a shortened one is left as plain text.",
+];
+
 // Builds the grounding system prompt from the principles corpus. Pure string
 // work — no SDK dependency — so any transport (CLI now, web later) can reuse it.
 export function buildSystemPrompt(doc: PrinciplesDoc): string {
@@ -26,6 +38,7 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "",
     "Rules:",
     "- Keep it to 1-3 sentences. No preamble, no restating the situation.",
+    ...NAME_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
     "  Only cite ids that appear in the list below; never invent one. Put a citation",
     "  at the end of the sentence it supports, never mid-clause as part of the",
@@ -62,6 +75,7 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "",
     "Rules:",
     "- Be concrete and specific; no filler or restating the situation back.",
+    ...NAME_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
     "  Only cite ids that appear in the list below; never invent one. Put a citation",
     "  at the end of the sentence it supports, never mid-clause as part of the",
