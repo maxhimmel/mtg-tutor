@@ -63,51 +63,9 @@
    session successfully. A re-crawl from unchanged artifacts is safe; it was the
    `packRate` rebuild that broke EOE, not re-ingestion as such.
 
-5. **A failed coach stream logs an uncaught `AI_NoOutputGeneratedError`.** When
-   `/coach` calls the model and nothing comes back — a rate limit is the easy way
-   to see it — the deployment logs:
+5. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
-   ```
-   [CONVEX H(POST /coach)] [ERROR] Uncaught AI_NoOutputGeneratedError:
-     No output generated. Check the stream for errors.
-       at flush [as flush] (ai/src/generate-text/stream-text.ts:1388:27)
-   ```
-
-   **The player-facing half is fixed (2026-07-30); the log line is not, and
-   probably cannot be from our side.**
-
-   What it was doing to the player, which the earlier note had wrong: Convex
-   kills the whole request on an unhandled rejection and _discards the response
-   body with it_. The 200 status had already been committed, so `/coach` came
-   back 200-with-nothing — `!res.ok` never tripped and both clients rendered a
-   blank panel instead of falling back. Fixed by treating an empty 200 as the
-   coach being unavailable, in `DraftBoard.tsx` and `apps/cli/.../coach.ts`.
-   Covered by tests in `packages/backend/test/llm.test.ts` and
-   `apps/cli/src/core/tutor/coach.test.ts`, which use a stub provider and spend
-   no tokens.
-
-   Ruled out, so nobody re-litigates it: consuming the promises the pump ignores
-   does **not** help. Tried `.catch()` on all 21 public result promises, then on
-   the 5 private `DelayedPromise` slots, then patching `DelayedPromise.reject`
-   to defuse every rejection unconditionally — the uncaught error survived all
-   three. It is not reachable from the result object, and `try`/`catch` cannot
-   reach it either: nothing in our stack ever awaits it, and by the time it
-   fires the handler has already returned its `Response`. Not fixed in ai 7.0.42
-   either. Convex offers no hook — `addEventListener("unhandledrejection")`
-   registers but never fires, and there is no `process.on`.
-
-   The one thing that would work is `generateText` instead of `streamText`,
-   which rejects into our own `await` where `unavailable()` already catches it —
-   that is why `text()` and `object()` never log this. **Rejected:** it costs
-   token-by-token streaming, and making the player wait for a whole answer is a
-   worse trade than a cosmetic log line.
-
-   Easy to reproduce: point `LLM_MODEL` at a model that does not exist, which
-   fails instantly and spends nothing.
-
-6. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
-
-7. Here's some text from the coach after I made a pick:
+6. Here's some text from the coach after I made a pick:
 
 ```Flamekin Gildweaver is a solid mid‑range creature but its IWD (+2.8) and curve (4 mana) are weaker than the 6‑mana Zealot’s higher IWD (+5.5) and stronger board presence as a bomb‑type threat. Since you already have two reds and are still early enough to pivot, taking the higher‑impact Zealot would improve your deck’s power and consistency.
 
@@ -167,25 +125,25 @@ empty rather than renumbering everything under it. 4, 5 and 10 shipped on
    get a hint/make a suggestion/pick for them? (Guiderails is the always-on
    version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
 
-6. **Show the field, not just the win rate.** The draft dataset is every human
+4. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
    only "this card has the higher win rate". A pick-order distribution is a
    better teacher than a scalar, and it is the same new draft-data pass that
    roadmap #3 (`human-bots`) needs — the bots consume it, the player sees it.
 
-7. **Sealed mode.** Six packs, no passing, build the 40. `makePack` and
+5. **Sealed mode.** Six packs, no passing, build the 40. `makePack` and
    `suggestDeck` already exist, so this is mostly a new screen — and it is a
    different skill (pool evaluation and deck construction rather than pick
    order).
    - Not too interested in this format. Low priority.
 
-8. **A deck-building step.** Today `suggestDeck` just shows you the answer on
+6. **A deck-building step.** Today `suggestDeck` just shows you the answer on
    the results screen. Building the 40 is half of Limited and the app currently
    does it for you; making the player build it and then diffing against the
    suggestion (and against real winning curves, roadmap #2) is a whole second
    practice surface on top of data we already have.
 
-9. **Re-serve your own misses.** `stats.overview` already computes
+7. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
 
@@ -396,3 +354,16 @@ The architecture, the data pipeline and the deploy story are all documented in
 7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.
+8. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
+   cosmetic and stays.** Convex kills the request on an unhandled rejection and
+   discards the response body with it, so a no-output stream returned
+   200-with-nothing and both clients rendered a blank panel. Fixed 2026-07-30 by
+   treating an empty 200 as the coach being unavailable (`DraftBoard.tsx`,
+   `apps/cli/.../coach.ts`; stub-provider tests, no tokens spent). The log line
+   itself is not reachable from our side: `.catch()` on all 21 public result
+   promises, on the 5 private `DelayedPromise` slots, and patching
+   `DelayedPromise.reject` outright all failed to defuse it, nothing in our stack
+   ever awaits it, and Convex fires no `unhandledrejection`. Still present in ai
+   7.0.42. Only `generateText` would fix it — **rejected**, token-by-token
+   streaming is worth more than a clean log. Reproduce by pointing `LLM_MODEL` at
+   a model that does not exist.

@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import { type Card, keywordsOf } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
 import { useHeldKey } from "../lib/useHeldKey";
@@ -127,6 +128,12 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     setHover(null);
     setPos(null);
   }, []);
+
+  // Clicking a nav link while hovering a card leaves the preview stranded: the
+  // element under the cursor unmounts with the page it was on, so onMouseLeave
+  // never fires and the image hangs over the route you just navigated to.
+  const pathname = usePathname();
+  useEffect(hide, [pathname, hide]);
 
   // Position after render so the box size is known and clamping is accurate.
   // useEffect (not layout) keeps this off the server render; the box stays at
