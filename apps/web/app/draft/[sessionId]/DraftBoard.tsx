@@ -415,10 +415,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       label={`Select ${card.name}`}
                     />
                     {/* Sits in the gap the card leaves as it lifts, so the label
-                        is revealed by the pull rather than pasted over the art. */}
+                        is revealed by the pull rather than pasted over the art,
+                        and its top edge meets the card's ring -- same material,
+                        same turn, so the light reads as one thing. */}
                     {selected === card.name && (
-                      <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-                        <span className="badge badge-primary badge-sm">Selected</span>
+                      <span className="pointer-events-none absolute inset-x-0 -bottom-2 flex justify-center">
+                        <span className="badge-lit px-2.5 py-0.5 text-[0.6875rem] font-semibold tracking-[0.14em] uppercase">
+                          Selected
+                        </span>
                       </span>
                     )}
                   </div>

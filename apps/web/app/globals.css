@@ -96,23 +96,46 @@
   }
 }
 
+/* The light itself, so the ring and the label that names the selection are cut
+   from one material rather than two things that happen to be gold. Both turn on
+   the same 6s clock and both start when the selection does, so they stay in
+   phase for as long as it lasts. */
+:root {
+  --lit-stops:
+    var(--color-primary), var(--color-warning) 20%,
+    color-mix(in oklab, var(--color-primary) 40%, var(--color-base-100)) 50%,
+    var(--color-warning) 80%, var(--color-primary);
+}
+
 @utility card-lit {
   border: 2px solid transparent;
-  background-image: conic-gradient(
-    from var(--ring-angle),
-    var(--color-primary),
-    var(--color-warning) 20%,
-    color-mix(in oklab, var(--color-primary) 40%, var(--color-base-100)) 50%,
-    var(--color-warning) 80%,
-    var(--color-primary)
-  );
+  background-image: conic-gradient(from var(--ring-angle), var(--lit-stops));
   background-origin: border-box;
   box-shadow: 0 0 1.75rem -0.35rem color-mix(in oklab, var(--color-primary) 65%, transparent);
   animation: ring-turn 6s linear infinite;
 }
 
+/* The same ring, closed into a pill: two background layers, the gradient on the
+   border box and the page colour on the padding box, which is what leaves the
+   border showing through as light. Filling the pill instead would have needed a
+   text colour that works over both the bright and the dim end of the sweep, and
+   there isn't one -- so the label is drawn in the gold rather than on it. */
+@utility badge-lit {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-image:
+    linear-gradient(var(--color-base-100), var(--color-base-100)),
+    conic-gradient(from var(--ring-angle), var(--lit-stops));
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
+  color: var(--color-primary);
+  box-shadow: 0 0 1rem -0.25rem color-mix(in oklab, var(--color-primary) 60%, transparent);
+  animation: ring-turn 6s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .card-lit {
+  .card-lit,
+  .badge-lit {
     animation: none;
   }
 }
