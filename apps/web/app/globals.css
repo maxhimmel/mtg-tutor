@@ -64,6 +64,15 @@
   aspect-ratio: 488 / 680;
 }
 
+/* A pack crosses a full viewport width arriving and another leaving, and a
+   transform still counts toward scrollable overflow -- so the half of the draft
+   that travels rightward would hang a horizontal scrollbar off the page for the
+   length of every animation. `clip` rather than `hidden`: hidden would make the
+   root a scroll container, which breaks the confirm bar's sticky. */
+html {
+  overflow-x: clip;
+}
+
 /* daisyUI's hover-3d is transform-driven and ships no reduced-motion guard of
    its own, so the tilt is opted out of here. */
 @media (prefers-reduced-motion: reduce) {
@@ -245,19 +254,23 @@
   inherits: true;
 }
 
+/* Arriving and leaving are one journey, not two effects: the pack travels past
+   you in a single direction and your pick is the pause in the middle of it. So
+   this is pack-pass run backwards -- the same distance, the same tilt held
+   through the move, and an easing curve that is the mirror of the other's
+   (a leaving card accelerates away; an arriving one decelerates into place).
+   No fade at either end, because a pack does not fade, it travels. */
 @keyframes pack-deal {
   from {
-    opacity: 0;
-    transform: translateX(calc(var(--pass-dir) * 2.5rem)) rotate(calc(var(--pass-dir) * 1.5deg));
+    transform: translateX(calc(var(--pass-dir) * 110vw)) rotate(calc(var(--pass-dir) * -2deg));
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
 
 @utility animate-deal {
-  animation: pack-deal 340ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  animation: pack-deal 300ms cubic-bezier(0.1, 0.6, 0.5, 1) both;
 }
 
 /* No `from`: the card leaves from wherever it is sitting, and `both` holds it
