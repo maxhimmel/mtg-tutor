@@ -262,6 +262,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // Held back until every card in it can be drawn. A pack is dealt all at once,
   // so the alternative is watching it assemble itself frame by frame.
   const [packReady, setPackReady] = useState(false);
+  // Where the set symbol's sheen is: idle before it has been shown, sweeping
+  // while the light is still crossing it, done once it has landed.
+  const [glyphPhase, setGlyphPhase] = useState<"idle" | "sweeping" | "done">("idle");
   const packImages = useMemo(
     () => pack.flatMap((card) => (card.imageUrl ? [webpImage(card.imageUrl)] : [])),
     [pack],
@@ -269,6 +272,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     let cancelled = false;
     setPackReady(false);
+    setGlyphPhase("idle");
     void preloadImages(packImages).then(() => {
       if (!cancelled) setPackReady(true);
     });
@@ -276,6 +280,18 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       cancelled = true;
     };
   }, [packImages]);
+
+  // A sheen cut off halfway across the set's symbol looks like a bug, not like
+  // waiting, so once the symbol is on screen it stays until the light has
+  // crossed it. It costs nothing on a fast pack: the symbol only appears at all
+  // if the images outlast the outgoing pack, and a pack that loads inside that
+  // window skips this entirely.
+  const glyphVisible = !outgoing && (!packReady || glyphPhase === "sweeping");
+  useEffect(() => {
+    // Nothing to finish when the animation is off, and waiting for an iteration
+    // that will never fire would strand the board on its loading state.
+    if (glyphVisible && glyphPhase === "idle") setGlyphPhase(motionOK() ? "sweeping" : "done");
+  }, [glyphVisible, glyphPhase]);
 
   // Recomputed on every streamed chunk, which is why splitCitations tolerates a
   // half-arrived citation rather than flashing "[EVA" into the prose.
@@ -395,7 +411,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                   );
                 })}
               </div>
-            ) : packReady ? (
+            ) : !glyphVisible ? (
               <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
                 {pack.map((card, i) => (
                   <div
@@ -442,6 +458,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 <SetIcon
                   uri={state.setIcon}
                   className="pack-glyph pointer-events-none absolute -top-[10%] -right-[14%] -z-10 h-[120%] w-[70%] text-base-content/[0.07]"
+                  // The light has crossed the symbol; if the pack is loaded the
+                  // cards can come in now, and if it is not this simply runs
+                  // again rather than cutting the next pass short.
+                  onAnimationIteration={() => {
+                    if (packReady) setGlyphPhase("done");
+                  }}
                 />
                 <div className={PACK_GRID}>
                   {pack.map((card) => (
