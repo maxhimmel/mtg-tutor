@@ -74,6 +74,137 @@
   }
 }
 
+/* The card you are holding, lit. A 1px edge is invisible in a grid of fifteen
+   bright card faces, so a selection gets a real ring and a halo behind it --
+   the card held up to the light, which is also what the lift is doing.
+
+   The ring turns because a moving light is what says "this is live" without
+   adding a second colour to the page. It stays inside the theme's gold, primary
+   through warning and back, and never goes transparent: a ring with holes in it
+   reads as a broken border rather than as light. Registering --ring-angle is
+   what makes it animatable; where @property is unsupported the ring is simply
+   still, which is a fine second-best. */
+@property --ring-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ring-turn {
+  to {
+    --ring-angle: 360deg;
+  }
+}
+
+/* The light itself, so the ring and the label that names the selection are cut
+   from one material rather than two things that happen to be gold. Both turn on
+   the same 6s clock and both start when the selection does, so they stay in
+   phase for as long as it lasts. */
+:root {
+  --lit-stops:
+    var(--color-primary), var(--color-warning) 20%,
+    color-mix(in oklab, var(--color-primary) 40%, var(--color-base-100)) 50%,
+    var(--color-warning) 80%, var(--color-primary);
+}
+
+@utility card-lit {
+  border: 2px solid transparent;
+  background-image: conic-gradient(from var(--ring-angle), var(--lit-stops));
+  background-origin: border-box;
+  box-shadow: 0 0 1.75rem -0.35rem color-mix(in oklab, var(--color-primary) 65%, transparent);
+  animation: ring-turn 6s linear infinite;
+}
+
+/* hover-3d scales the face 5% on hover, which moves the card's bottom edge --
+   and the badge sits on that edge, so pointing at a selected card slid the two
+   apart. A card already pulled out of the row does not need to jump again when
+   you point at it; holding it still is what lets the badge sit exactly on the
+   edge in every state. The tilt is untouched, and unselected cards still scale.
+   Unlayered on purpose: that is what beats daisyUI's own hover rule. */
+.hover-3d:hover > .card-lit {
+  scale: 1;
+}
+
+/* The same ring, closed into a pill: two background layers, the gradient on the
+   border box and the page colour on the padding box, which is what leaves the
+   border showing through as light. Filling the pill instead would have needed a
+   text colour that works over both the bright and the dim end of the sweep, and
+   there isn't one -- so the label is drawn in the gold rather than on it. */
+@utility badge-lit {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-image:
+    linear-gradient(var(--color-base-100), var(--color-base-100)),
+    conic-gradient(from var(--ring-angle), var(--lit-stops));
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
+  color: var(--color-primary);
+  box-shadow: 0 0 1rem -0.25rem color-mix(in oklab, var(--color-primary) 60%, transparent);
+  animation: ring-turn 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-lit,
+  .badge-lit {
+    animation: none;
+  }
+}
+
+/* Waiting for a pack's art, drawn as the set's own symbol rather than as a row
+   of grey rectangles. It is huge, cropped by the edge of the drafting area, and
+   held at a few percent of the text colour so it sits in the page rather than on
+   it -- and a gold sheen crosses it, which is the only thing that says the board
+   is working. The cards then arrive on top of it, out of the dark.
+
+   Rides on SetIcon, which already masks a coloured block with the set's SVG, so
+   the sheen is a background layer inside that mask: the light travels across the
+   symbol's own shape rather than across a box containing it. */
+@keyframes glyph-sheen {
+  from {
+    background-position: -60% 0;
+  }
+  to {
+    background-position: 160% 0;
+  }
+}
+
+@utility pack-glyph {
+  background-image: linear-gradient(
+    105deg,
+    transparent 42%,
+    color-mix(in oklab, var(--color-primary) 55%, transparent) 50%,
+    transparent 58%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  /* Linear and quick: a pack usually loads inside a second, and an eased sweep
+     spends that second barely moving at the start of its travel. */
+  animation: glyph-sheen 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pack-glyph {
+    animation: none;
+  }
+}
+
+/* A card tile's focus ring. The browser's default is a blue rectangle from
+   another design system entirely, and it turns up on a card you clicked with a
+   mouse the moment you touch any key -- which is when the focus-visible
+   heuristic decides you are navigating by keyboard. It cannot just be removed,
+   because then a keyboard has no way to say where it is, so it is drawn in the
+   page's own parchment instead: clearly not the gold, which means the card you
+   are on and the card you are holding never look like the same thing. */
+@utility card-focus {
+  border-radius: var(--radius-box);
+  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--color-base-content) 75%, transparent);
+    outline-offset: 3px;
+  }
+}
+
 /* Every surface that floats above the page -- card previews, the keyword panel,
    the user menu -- so they read as one family and always have an edge. The
    border is tinted with base-content rather than using base-300, which is
@@ -88,10 +219,69 @@
   @apply text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-base-content/60;
 }
 
-/* Animation is rationed to moments worth marking, of which there are two: a
-   graded pick landing, and the win-rate gap opening in the glossary's opening
-   figure -- which is that page's whole argument. Both go through motion-safe:,
-   so a reduced-motion reader gets the result with no movement at all. */
+/* Animation is rationed to moments worth marking, of which there are three: a
+   pack changing hands, a graded pick landing, and the win-rate gap opening in
+   the glossary's opening figure -- which is that page's whole argument. All go
+   through motion-safe:, so a reduced-motion reader gets the result with no
+   movement at all. */
+/* A booster draft moves in one direction: the pack in front of you came from
+   the player on your right and goes to the player on your left. So the board
+   moves the way the table does -- cards deal in from the right, one after the
+   next, and the pack sweeps off to the left when you pass it on.
+
+   The card you took does not go with it. It lifts out of the row and stays,
+   which is the one asymmetry in the moment and the reason the pick has its own
+   keyframe rather than an exception inside the sweep.
+
+   Delays are set inline by DraftBoard, because how long a pack takes to arrive
+   or leave depends on how many cards are still in it -- and packs thin out as
+   the draft goes on, which is exactly how a real one feels. */
+@keyframes pack-deal {
+  from {
+    opacity: 0;
+    transform: translateX(2.5rem) rotate(1.5deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-deal {
+  animation: pack-deal 340ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* No `from`: the card leaves from wherever it is sitting, and `both` holds it
+   there through its delay. -110vw clears the viewport from any column. */
+@keyframes pack-pass {
+  to {
+    transform: translateX(-110vw) rotate(-2deg);
+  }
+}
+
+@utility animate-pass {
+  animation: pack-pass 300ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+@keyframes pack-keep {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  45% {
+    opacity: 1;
+    transform: translateY(-0.9rem);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.9rem) scale(0.97);
+  }
+}
+
+@utility animate-keep {
+  animation: pack-keep 300ms ease-out both;
+}
+
 @keyframes verdict-in {
   from {
     opacity: 0;

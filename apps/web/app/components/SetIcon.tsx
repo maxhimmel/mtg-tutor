@@ -9,10 +9,16 @@ export function SetIcon({
   uri,
   name,
   className = "size-5",
+  onAnimationIteration,
 }: {
   uri?: string;
   name?: string;
   className?: string;
+  // For a caller that animates the icon and needs to know when a pass of that
+  // animation has finished -- the draft board holds its loading state until the
+  // sheen has crossed the symbol once. The browser's own event rather than a
+  // matching timer, so there is no duration written down in two places.
+  onAnimationIteration?: () => void;
 }) {
   if (!uri) return null;
 
@@ -22,6 +28,7 @@ export function SetIcon({
       aria-label={name ? `${name} set icon` : undefined}
       aria-hidden={name ? undefined : true}
       className={`inline-block shrink-0 bg-current ${className}`}
+      onAnimationIteration={onAnimationIteration}
       style={{
         maskImage: `url("${uri}")`,
         WebkitMaskImage: `url("${uri}")`,

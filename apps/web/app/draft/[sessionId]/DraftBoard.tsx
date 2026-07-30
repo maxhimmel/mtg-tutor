@@ -20,7 +20,7 @@ import {
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
 import { CardText } from "../../components/CardText";
-import { CardTile } from "../../components/CardTile";
+import { CardFace, CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
 import { PicksColumn } from "../../components/PicksColumn";
 import { PrincipleBadges } from "../../components/PrincipleBadge";
@@ -29,9 +29,28 @@ import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSettings } from "../../lib/useSettings";
 import { convexSiteUrl } from "../../lib/convexSite";
+import { webpImage } from "../../lib/cardImage";
+import { preloadImages } from "../../lib/preloadImages";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
+
+// The pack grid, shared by the pack, the pack being passed on, and the
+// placeholder that stands in between them, so a pack arriving or leaving cannot
+// shift the layout it moves through.
+const PACK_GRID = "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5";
+
+// How the pack changes hands. The durations mirror animate-deal/animate-pass in
+// globals.css; the gap between cards lives here because the board is what knows
+// how many are left in the pack, and the sequence is only as long as the pack.
+const DEAL_STAGGER = 28;
+const PASS_STAGGER = 24;
+const PASS_MS = 300;
+const passDuration = (cards: number) => PASS_MS + PASS_STAGGER * Math.max(0, cards - 1);
+
+const motionOK = () =>
+  typeof window === "undefined" ||
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
@@ -69,6 +88,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
   const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
+  // The pack on its way to the next drafter. Held separately from the board
+  // because for as long as it is leaving, two packs exist: this one and the one
+  // arriving behind it.
+  const [outgoing, setOutgoing] = useState<{ cards: Card[]; picked: string } | null>(null);
+  // The card pulled out of the row and not yet taken. By name, because that is
+  // what identifies a card everywhere else on the board.
+  const [selected, setSelected] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -214,20 +240,90 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [last, text],
   );
 
+  const selectedCard = useMemo(
+    () => pack.find((card) => card.name === selected),
+    [pack, selected],
+  );
+
   const boardCards = useMemo(
     () => [...pack, ...pool, ...(lastView?.pack ?? [])],
     [pack, pool, lastView],
   );
 
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
+  // Held back until every card in it can be drawn. A pack is dealt all at once,
+  // so the alternative is watching it assemble itself frame by frame.
+  const [packReady, setPackReady] = useState(false);
+  // Where the set symbol's sheen is: idle before it has been shown, sweeping
+  // while the light is still crossing it, done once it has landed.
+  const [glyphPhase, setGlyphPhase] = useState<"idle" | "sweeping" | "done">("idle");
+  const packImages = useMemo(
+    () => pack.flatMap((card) => (card.imageUrl ? [webpImage(card.imageUrl)] : [])),
+    [pack],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    setPackReady(false);
+    setGlyphPhase("idle");
+    void preloadImages(packImages).then(() => {
+      if (!cancelled) setPackReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [packImages]);
+
+  // The symbol is always on the board, so the light crossing it is free to
+  // finish after the cards have arrived rather than holding them back: the sheen
+  // runs while the pack loads and then plays out its last pass. Nothing is ever
+  // cut off mid-symbol, and nothing waits for it either.
+  const sheening = !packReady || glyphPhase === "sweeping";
+  useEffect(() => {
+    // Reduced motion has no pass to play out, and waiting on an iteration that
+    // will never fire would leave the sheen class on for the rest of the draft.
+    if (!packReady && glyphPhase === "idle") setGlyphPhase(motionOK() ? "sweeping" : "done");
+  }, [packReady, glyphPhase]);
+
   // Recomputed on every streamed chunk, which is why splitCitations tolerates a
   // half-arrived citation rather than flashing "[EVA" into the prose.
   const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
 
+  // A click never spends the pick: it pulls the card out of the row, and the
+  // pick is confirmed separately, because taking the wrong card by a stray click
+  // is unrecoverable -- the draft moves on. Clicking the card you already pulled
+  // therefore does nothing, on purpose: a click, a pause and another click is
+  // someone rereading the card, not someone deciding. The shortcut for deciding
+  // fast is a real double-click, which is a gesture rather than a repetition.
+  function onTileClick(card: Card) {
+    if (picking) return;
+    setSelected(card.name);
+  }
+
   async function onPick(card: Card) {
     if (picking || !text) return;
     setPicking(true);
+    setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
     const packBefore = state?.pack ?? [];
+
+    // The pack you just picked from, held on screen so it can be passed on
+    // rather than swapped out. It leaves on its own clock -- waiting for the
+    // server first would make the wait feel like the animation.
+    const passing = pack;
+    setOutgoing({ cards: passing, picked: card.name });
+    const sweep = window.setTimeout(
+      () => setOutgoing(null),
+      motionOK() ? passDuration(passing.length) : 0,
+    );
+
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
       const score = result.score as PickScore;
@@ -248,6 +344,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
     } catch (e) {
+      // Nothing was passed after all, so put the pack back rather than let it
+      // finish leaving.
+      window.clearTimeout(sweep);
+      setOutgoing(null);
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setPicking(false);
@@ -287,14 +387,142 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       {state.complete ? (
         <Results sessionId={id} />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5">
-            {pack.map((card) => (
-              <CardTile key={card.name} card={card} onPick={onPick} disabled={picking} />
-            ))}
+        <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          {/* The set's mark, stamped on the board the way it is stamped on every
+              card in the pack: oversized and sitting behind the pack rather than
+              beside it. Quiet enough at 5% to be chrome, until the sheen crosses
+              it while a pack loads and it becomes the one thing saying the board
+              is working.
+
+              It is placed against the window rather than against the board, so
+              it holds one position for the whole draft instead of moving with a
+              pack that is emptying. Centred on the cards: half the window, less
+              half of what the side panel and its gap take (384px), which is
+              where the middle of the pack column falls at any width the page is
+              capped and guttered to. Below lg the panel stacks under the pack
+              and the middle is simply the middle. */}
+          <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)]">
+              {/* Two and a half rows of cards tall, measured rather than
+                  guessed: the pack's own grid, dealt one item two and a half
+                  cards tall (488x680 is a card, so 488x1700 is two and a half of
+                  them) at the width the pack column has -- the page's 1500px cap
+                  and gutters, less the side panel and the gap beside it. So the
+                  mark is sized in cards at any viewport width, and stays that way
+                  if the grid's columns ever change. */}
+              <div className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)]`}>
+                <span style={{ aspectRatio: "488 / 1700" }} />
+              </div>
+
+              <SetIcon
+                uri={state.setIcon}
+                className={`absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
+                // One pass of the light has landed. If the pack is here the sheen
+                // stops; if it is not, this simply runs again rather than starting
+                // a pass it cannot finish.
+                onAnimationIteration={() => {
+                  if (packReady) setGlyphPhase("done");
+                }}
+              />
+            </div>
           </div>
 
-          <aside className="flex flex-col gap-4">
+          <div>
+            {outgoing ? (
+              <div key="outgoing" className={PACK_GRID} aria-hidden>
+                {outgoing.cards.map((card, i) => {
+                  const kept = card.name === outgoing.picked;
+                  return (
+                    <div
+                      key={card.name}
+                      className={`flex ${kept ? "motion-safe:animate-keep" : "motion-safe:animate-pass"}`}
+                      // The card you took holds its place for as long as the rest
+                      // of the pack takes to go, so it is the last thing on screen.
+                      style={
+                        kept
+                          ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
+                          : { animationDelay: `${i * PASS_STAGGER}ms` }
+                      }
+                    >
+                      <CardFace card={card} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : packReady ? (
+              <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
+                {pack.map((card, i) => (
+                  <div
+                    key={card.name}
+                    className="relative flex motion-safe:animate-deal"
+                    style={{ animationDelay: `${i * DEAL_STAGGER}ms` }}
+                  >
+                    <CardTile
+                      card={card}
+                      onPick={onTileClick}
+                      onQuickPick={onPick}
+                      disabled={picking}
+                      selected={selected === card.name}
+                      // What one click does, which is the same whether or not
+                      // the card is already selected. Being selected is state,
+                      // and aria-pressed is what carries it.
+                      label={`Select ${card.name}`}
+                    />
+                    {/* Sits in the gap the card leaves as it lifts, so the label
+                        is revealed by the pull rather than pasted over the art,
+                        and its top edge meets the card's ring -- same material,
+                        same turn, so the light reads as one thing. */}
+                    {selected === card.name && (
+                      // bottom-3 is the lift (-translate-y-3), which puts this
+                      // box's bottom edge on the card's; translate-y-1/2 then
+                      // drops it by half its own height, centring the badge on
+                      // that edge whatever size the card is drawn at.
+                      <span className="pointer-events-none absolute inset-x-0 bottom-3 flex translate-y-1/2 justify-center">
+                        <span className="badge-lit px-2.5 py-0.5 text-[0.6875rem] font-semibold tracking-[0.14em] uppercase">
+                          Selected
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Waiting for the pack's art. Nothing is drawn in the cards' place
+              // -- the set symbol behind the board is what says the board is
+              // working. These hold the pack's shape and nothing else, so the
+              // cards land where the page already had room for them.
+              <div className={PACK_GRID}>
+                {pack.map((card) => (
+                  <span key={card.name} className="card-aspect block w-full" />
+                ))}
+              </div>
+            )}
+
+            {selectedCard && (
+              <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
+                <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
+                  <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={picking}
+                    onClick={() => void onPick(selectedCard)}
+                  >
+                    Confirm pick
+                  </button>
+                  <span className="hidden text-xs text-base-content/50 sm:inline">
+                    Double-click a card to skip this step · <kbd className="kbd kbd-xs">esc</kbd> to
+                    clear
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* The right-hand wall for card previews: the coach is talking here,
+              and a card image landing on top of it covers the thing you are
+              drafting by. */}
+          <aside data-preview-edge className="flex flex-col gap-4">
             <Panel title="Last pick" bodyClassName="gap-3">
               {lastView ? (
                 <>

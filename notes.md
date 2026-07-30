@@ -5,6 +5,7 @@
 - "Adventure" sub-card/split-card type (see: "Picklock Prankster")
 - Bargain
 - Storm
+- Backup
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -76,8 +77,8 @@
    probably cannot be from our side.**
 
    What it was doing to the player, which the earlier note had wrong: Convex
-   kills the whole request on an unhandled rejection and *discards the response
-   body with it*. The 200 status had already been committed, so `/coach` came
+   kills the whole request on an unhandled rejection and _discards the response
+   body with it_. The 200 status had already been committed, so `/coach` came
    back 200-with-nothing — `!res.ok` never tripped and both clients rendered a
    blank panel instead of falling back. Fixed by treating an empty 200 as the
    coach being unavailable, in `DraftBoard.tsx` and `apps/cli/.../coach.ts`.
@@ -106,11 +107,20 @@
 
 6. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
-7. I want animations when loading packs. Start each animation with the first card in the pack.
-   - Intro: cards slide in from the right side of the screen with a slight delay before the next card slides in.
-   - Outro: after a card is picked, cards slide to the left until off-screen.
+7. Here's some text from the coach after I made a pick:
+
+```Flamekin Gildweaver is a solid mid‑range creature but its IWD (+2.8) and curve (4 mana) are weaker than the 6‑mana Zealot’s higher IWD (+5.5) and stronger board presence as a bomb‑type threat. Since you already have two reds and are still early enough to pivot, taking the higher‑impact Zealot would improve your deck’s power and consistency.
+
+```
+
+- That's no good! The problem is that the "Zealot" it's referring to isn't highlighted. The creatures fullname is actually "Kulrath Zealot".
 
 # Ideas:
+
+Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
+below cite these by number, so a shipped idea is deleted and its number left
+empty rather than renumbering everything under it. 4, 5 and 10 shipped on
+2026-07-30 — what survives of them is in "Decisions worth not re-litigating".
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -156,13 +166,6 @@
 3. What about a button on the side panel or something for the user to click to
    get a hint/make a suggestion/pick for them? (Guiderails is the always-on
    version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
-
-4. Clicking on a draft pick shouldn't immediately be the user's pick. It should select/highlight the card with a little badge indicated w/some wording. And then have a "confirm pick" button anchored somewhere. Double-clicking should behave as the current system works and not require the confirm button.
-
-5. Pre-load all the images in the current pack before we display that page.
-   Remove the image popping in as it dynamically loads. I'd rather have a
-   loading page/spinner/state than the faster image lazy loading.
-   (`CardTile.tsx` currently uses a plain `<img loading="lazy">`.)
 
 6. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
@@ -393,3 +396,19 @@ The architecture, the data pipeline and the deploy story are all documented in
 7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.
+8. **The draft board's pack sequence** (shipped 2026-07-30, Ideas 4, 5 and 10).
+   Four parts of it look arbitrary and are not:
+   - **A click selects; only a real `dblclick` takes the card.** Not "clicked
+     twice" — a click, a pause and another click is someone rereading a card
+     with the cursor where they left it, and a pick is unrecoverable. The
+     shortcut is the platform's own event on purpose; there is no timer
+     reconstructing it, and reintroducing one would resurrect the bug.
+   - **`CardTile` is `loading="eager"` only because `lib/preloadImages` decodes
+     the whole pack first.** Reverting either half alone brings back cards
+     fading up out of empty frames one at a time.
+   - **Cards deal in from the right and the pack passes out to the left**
+     because that is the direction a real pod passes packs. It is the format's
+     geometry, not a transition; do not mirror it.
+   - **The outgoing pack leaves on its own timer rather than awaiting the
+     mutation**, so the animation covers the round trip instead of following it.
+     Awaiting it would add the server's latency to the animation's.
