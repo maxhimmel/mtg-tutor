@@ -1,5 +1,10 @@
 # Issues:
 
+0. We gotta figure out how to handle rendering certain types of cards that are 2-in-one. (This relates to the "Adventure" issue below.)
+   - It'd be nice to have a helpful tool-tip (like the Haste, Trample, etc) for Adventures and Omens and sub-cards of that variety.
+   - It'd also be awesome to have double-sided cards have an additional enlarged popup on hover showing the backside.
+   - I don't know if there are other card types/varieties that fit this shape but let's be thorough.
+
 1. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
 
 - "Adventure" sub-card/split-card type (see: "Picklock Prankster")
@@ -65,24 +70,8 @@
 
 5. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
-6. **A card the coach names in shorthand goes unlinked** — it wrote "the
-   6-mana Zealot" for "Kulrath Zealot", and `CardText` styles only names it can
-   match exactly, so the one card the sentence was arguing for rendered as plain
-   text while the card it was arguing against was hoverable.
-
-   **The cheap half is done (2026-07-30):** both system prompts now ask for full
-   names (`NAME_RULE`, `core/tutor/prompt.ts`) — a rule against a corpus we pay
-   for on every call either way. **Whether it is enough is not yet known**; the
-   check is to draft and read the answers, not to reason about it.
-
-   If it isn't, the other half is teaching `cardNamePattern` to accept partial
-   names, and `cardNames.ts` is where the risk is written down: matching is
-   longest-first precisely so "Skystinger Drake" is never matched as
-   "Skystinger". A last-word fallback undoes that guarantee — one word can
-   belong to several cards in a set, and the matcher cannot tell which was
-   meant. It would have to be restricted to words that are unambiguous across
-   the cards on the board, which is a real matcher change rather than a
-   fallback.
+6. We should create a favicon/logo for the app!
+   - Minimalist + cute + easy to see at a glance.
 
 # Ideas:
 
@@ -157,6 +146,12 @@ empty rather than renumbering everything under it. 4, 5 and 10 shipped on
 7. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
+
+8. Let's constrain who can actually use our deployed app. This isn't ready for public exposure yet. I don't want randoms online wasting my AI tokens. I wanna only allow certain friends to use the app. Maybe it'd be cool to allow people to attempt to sign-up, but instead notify me for their approval?
+   - Secondarily, is there an easy way for me to invite people to use the app?! Could I send them a link rather than need to ask for their email or something?
+
+9. I'd like to limit the usage per user.
+   - I'm the admin/developer so I should be exempt. In fact, maybe I should be able to manage roles or something that dictate usage limits. For instance a tester friend could have unlimited? But normal friends in the "beta release" (or w/e we're supposed to call this workflow) should be limited to 3 drafts and reviews a day or something.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
