@@ -389,18 +389,20 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       ) : (
         <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           {/* The set's mark, stamped on the board the way it is stamped on every
-              card in the pack: oversized, bled off the left edge and clipped by
-              it, the same move the picker's plates make. Quiet enough at 5% to
-              be chrome, until the sheen crosses it while a pack loads and it
-              becomes the one thing saying the board is working.
+              card in the pack: oversized and sitting behind the pack rather than
+              beside it. Quiet enough at 5% to be chrome, until the sheen crosses
+              it while a pack loads and it becomes the one thing saying the board
+              is working.
 
-              It is placed against the screen rather than against the board, so
-              the edge that cuts it off is the edge of the window and not a
-              column boundary sitting in the middle of the page -- and so it
-              holds its place for the whole draft instead of moving with a pack
-              that is emptying. */}
+              It is placed against the window rather than against the board, so
+              it holds one position for the whole draft instead of moving with a
+              pack that is emptying. Centred on the cards: half the window, less
+              half of what the side panel and its gap take (384px), which is
+              where the middle of the pack column falls at any width the page is
+              capped and guttered to. Below lg the panel stacks under the pack
+              and the middle is simply the middle. */}
           <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-            <div className="absolute top-1/2 -left-24 -translate-y-1/2">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)]">
               {/* Two and a half rows of cards tall, measured rather than
                   guessed: the pack's own grid, dealt one item two and a half
                   cards tall (488x680 is a card, so 488x1700 is two and a half of
@@ -414,7 +416,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
               <SetIcon
                 uri={state.setIcon}
-                className={`absolute top-0 left-0 aspect-square h-full text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
+                className={`absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
                 // One pass of the light has landed. If the pack is here the sheen
                 // stops; if it is not, this simply runs again rather than starting
                 // a pass it cannot finish.
