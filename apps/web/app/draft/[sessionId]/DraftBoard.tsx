@@ -40,13 +40,14 @@ const PRINCIPLES = loadPrinciples();
 // shift the layout it moves through.
 const PACK_GRID = "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5";
 
-// How the pack changes hands. The durations mirror animate-deal/animate-pass in
-// globals.css; the gap between cards lives here because the board is what knows
-// how many are left in the pack, and the sequence is only as long as the pack.
-const DEAL_STAGGER = 28;
-const PASS_STAGGER = 24;
-const PASS_MS = 300;
-const passDuration = (cards: number) => PASS_MS + PASS_STAGGER * Math.max(0, cards - 1);
+// How the pack changes hands. One set of numbers for both halves, because
+// arriving and leaving are the same motion: the duration mirrors
+// animate-deal/animate-pass in globals.css, and the gap between cards lives here
+// because the board is what knows how many are left in the pack -- the sequence
+// is only ever as long as the pack.
+const PACK_STAGGER = 24;
+const PACK_MS = 300;
+const passDuration = (cards: number) => PACK_MS + PACK_STAGGER * Math.max(0, cards - 1);
 
 // Which way this pack is travelling. A draft reverses direction every pack --
 // 1 left, 2 right, 3 left -- so in packs 1 and 3 the pack in front of you came
@@ -459,7 +460,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       style={
                         kept
                           ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
-                          : { animationDelay: `${i * PASS_STAGGER}ms` }
+                          : { animationDelay: `${i * PACK_STAGGER}ms` }
                       }
                     >
                       <CardFace card={card} />
@@ -477,7 +478,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                   <div
                     key={card.name}
                     className="relative flex motion-safe:animate-deal"
-                    style={{ animationDelay: `${i * DEAL_STAGGER}ms` }}
+                    style={{ animationDelay: `${i * PACK_STAGGER}ms` }}
                   >
                     <CardTile
                       card={card}
