@@ -497,7 +497,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             )}
           </div>
 
-          <aside className="flex flex-col gap-4">
+          {/* The right-hand wall for card previews: the coach is talking here,
+              and a card image landing on top of it covers the thing you are
+              drafting by. */}
+          <aside data-preview-edge className="flex flex-col gap-4">
             <Panel title="Last pick" bodyClassName="gap-3">
               {lastView ? (
                 <>

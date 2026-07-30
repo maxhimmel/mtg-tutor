@@ -67,14 +67,26 @@ interface Placement {
   panelLeft: number | null;
 }
 
+// The preview's right-hand wall. Usually the viewport, but a page can nominate
+// something else as its edge -- the draft board's side panel is where the coach
+// is talking, and a card image landing on top of it is the preview covering the
+// thing you are drafting by. Only honoured when that element genuinely sits to
+// the right of the card, so a layout that stacks it below (narrow viewports)
+// falls back to the viewport rather than clamping the preview to nothing.
+function rightEdge(anchor: DOMRect): number {
+  const marked = document.querySelector("[data-preview-edge]");
+  const box = marked?.getBoundingClientRect();
+  return box && box.left > anchor.right ? box.left : window.innerWidth;
+}
+
 function place(anchor: DOMRect, wantsPanel: boolean): Placement {
-  const vw = window.innerWidth;
+  const right = rightEdge(anchor);
   const vh = window.innerHeight;
 
   // Prefer the right of the anchor; flip left when it would overflow.
   let left = anchor.right + GAP;
-  if (left + PREVIEW_W > vw - GAP) left = anchor.left - GAP - PREVIEW_W;
-  left = Math.max(GAP, Math.min(left, vw - GAP - PREVIEW_W));
+  if (left + PREVIEW_W > right - GAP) left = anchor.left - GAP - PREVIEW_W;
+  left = Math.max(GAP, Math.min(left, right - GAP - PREVIEW_W));
 
   // Vertically center on the anchor, clamped to the viewport.
   let top = anchor.top + anchor.height / 2 - PREVIEW_H / 2;
@@ -86,7 +98,7 @@ function place(anchor: DOMRect, wantsPanel: boolean): Placement {
   if (wantsPanel) {
     const beyond = left + PREVIEW_W + GAP;
     const before = left - GAP - PANEL_W;
-    if (beyond + PANEL_W <= vw - GAP) panelLeft = beyond;
+    if (beyond + PANEL_W <= right - GAP) panelLeft = beyond;
     else if (before >= GAP) panelLeft = before;
   }
 
