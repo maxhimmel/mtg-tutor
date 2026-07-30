@@ -117,6 +117,11 @@
 
 # Ideas:
 
+Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
+below cite these by number, so a shipped idea is deleted and its number left
+empty rather than renumbering everything under it. 4, 5 and 10 shipped on
+2026-07-30 — what survives of them is in "Decisions worth not re-litigating".
+
 1. A quiz on what archetype a mono-colored card belongs to.
 
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
@@ -162,37 +167,6 @@
    get a hint/make a suggestion/pick for them? (Guiderails is the always-on
    version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
 
-4. **Done (2026-07-30).** Clicking a card in the pack pulls it half out of the
-   row, lights it (`card-lit` — a turning gold ring and a halo, because a 1px
-   border is invisible against fifteen bright card faces), badges it "Selected"
-   in the gap the lift leaves, and names it in a sticky bar with the confirm
-   button. Escape clears.
-
-   **A click only ever selects, no matter how many times it happens.** The
-   shortcut is the platform's own `dblclick`, not "clicked twice" — a
-   double-click is one gesture, while a click, a pause and another click is
-   someone rereading the card with their cursor still on it, and only the first
-   should spend a pick. Corrected the same day after the first cut conflated
-   them.
-
-   The review quiz's tiles deliberately did **not** get any of this: a guess is
-   reversible and a pick is not.
-
-5. **Done (2026-07-30).** `lib/preloadImages.ts` decodes every card in the pack
-   before the pack is rendered (`decode()`, not `onload` — a loaded image still
-   costs a decode on first paint, which was the flash). Bounded at 4s so a dead
-   CDN cannot trap the board. `CardTile` is now `loading="eager"`, which is only
-   correct because of the gate.
-
-   What stands in is the **set's own symbol** at the scale of the drafting area,
-   cropped by its right edge at 7% of the text colour, with a gold sheen
-   crossing it (`pack-glyph`) — riding on `SetIcon`'s existing mask, so the light
-   travels across the symbol's shape rather than a box around it. Behind it the
-   pack's slots still hold their exact places at the card aspect ratio, so
-   nothing shifts when the art lands and the cards arrive out of the dark. Was a
-   row of daisyUI skeletons first: correct about layout, silent about where you
-   were.
-
 6. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
    only "this card has the higher win rate". A pick-order distribution is a
@@ -214,19 +188,6 @@
 9. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
-
-10. **Done (2026-07-30).** Cards deal in from the right on a 28ms stagger from
-    the first card, and the pack sweeps off to the left when you pick — which is
-    the direction a real pod passes packs, and is why the motion is right-to-left
-    rather than either way round. The card you took does not go with it: it lifts
-    out of the row and is the last thing on screen (`pack-keep` in
-    `globals.css`).
-
-    Two things worth keeping: the outgoing pack leaves on its own timer rather
-    than waiting for the mutation, so the animation **covers** the round trip
-    instead of following it; and the sequence is only as long as the pack, so it
-    shortens on its own as packs thin out. Reduced motion skips the animation
-    _and_ the wait.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -435,3 +396,19 @@ The architecture, the data pipeline and the deploy story are all documented in
 7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.
+8. **The draft board's pack sequence** (shipped 2026-07-30, Ideas 4, 5 and 10).
+   Four parts of it look arbitrary and are not:
+   - **A click selects; only a real `dblclick` takes the card.** Not "clicked
+     twice" — a click, a pause and another click is someone rereading a card
+     with the cursor where they left it, and a pick is unrecoverable. The
+     shortcut is the platform's own event on purpose; there is no timer
+     reconstructing it, and reintroducing one would resurrect the bug.
+   - **`CardTile` is `loading="eager"` only because `lib/preloadImages` decodes
+     the whole pack first.** Reverting either half alone brings back cards
+     fading up out of empty frames one at a time.
+   - **Cards deal in from the right and the pack passes out to the left**
+     because that is the direction a real pod passes packs. It is the format's
+     geometry, not a transition; do not mirror it.
+   - **The outgoing pack leaves on its own timer rather than awaiting the
+     mutation**, so the animation covers the round trip instead of following it.
+     Awaiting it would add the server's latency to the animation's.
