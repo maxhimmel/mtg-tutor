@@ -76,8 +76,8 @@
    probably cannot be from our side.**
 
    What it was doing to the player, which the earlier note had wrong: Convex
-   kills the whole request on an unhandled rejection and *discards the response
-   body with it*. The 200 status had already been committed, so `/coach` came
+   kills the whole request on an unhandled rejection and _discards the response
+   body with it_. The 200 status had already been committed, so `/coach` came
    back 200-with-nothing — `!res.ok` never tripped and both clients rendered a
    blank panel instead of falling back. Fixed by treating an empty 200 as the
    coach being unavailable, in `DraftBoard.tsx` and `apps/cli/.../coach.ts`.
@@ -105,10 +105,6 @@
    fails instantly and spends nothing.
 
 6. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
-
-7. I want animations when loading packs. Start each animation with the first card in the pack.
-   - Intro: cards slide in from the right side of the screen with a slight delay before the next card slides in.
-   - Outro: after a card is picked, cards slide to the left until off-screen.
 
 # Ideas:
 
@@ -157,12 +153,20 @@
    get a hint/make a suggestion/pick for them? (Guiderails is the always-on
    version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
 
-4. Clicking on a draft pick shouldn't immediately be the user's pick. It should select/highlight the card with a little badge indicated w/some wording. And then have a "confirm pick" button anchored somewhere. Double-clicking should behave as the current system works and not require the confirm button.
+4. **Done (2026-07-30).** Clicking a card in the pack pulls it half out of the
+   row, badges it "Selected" in the gap the lift leaves, and names it in a
+   sticky bar with the confirm button. Clicking the pulled card again confirms
+   it, so a double-click is still the whole gesture in one motion — which is why
+   there is no `onDoubleClick` handler anywhere. Escape clears. The review
+   quiz's tiles deliberately did **not** get this: a guess is reversible and a
+   pick is not.
 
-5. Pre-load all the images in the current pack before we display that page.
-   Remove the image popping in as it dynamically loads. I'd rather have a
-   loading page/spinner/state than the faster image lazy loading.
-   (`CardTile.tsx` currently uses a plain `<img loading="lazy">`.)
+5. **Done (2026-07-30).** `lib/preloadImages.ts` decodes every card in the pack
+   before the pack is rendered (`decode()`, not `onload` — a loaded image still
+   costs a decode on first paint, which was the flash). Bounded at 4s so a dead
+   CDN cannot trap the board. What stands in is the pack's own shape at the card
+   aspect ratio, not a spinner, so nothing shifts when the art lands. `CardTile`
+   is now `loading="eager"`, which is only correct because of the gate.
 
 6. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
@@ -185,6 +189,19 @@
 9. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
+
+10. **Done (2026-07-30).** Cards deal in from the right on a 28ms stagger from
+    the first card, and the pack sweeps off to the left when you pick — which is
+    the direction a real pod passes packs, and is why the motion is right-to-left
+    rather than either way round. The card you took does not go with it: it lifts
+    out of the row and is the last thing on screen (`pack-keep` in
+    `globals.css`).
+
+    Two things worth keeping: the outgoing pack leaves on its own timer rather
+    than waiting for the mutation, so the animation **covers** the round trip
+    instead of following it; and the sequence is only as long as the pack, so it
+    shortens on its own as packs thin out. Reduced motion skips the animation
+    _and_ the wait.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
