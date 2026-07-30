@@ -154,12 +154,20 @@
    version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
 
 4. **Done (2026-07-30).** Clicking a card in the pack pulls it half out of the
-   row, badges it "Selected" in the gap the lift leaves, and names it in a
-   sticky bar with the confirm button. Clicking the pulled card again confirms
-   it, so a double-click is still the whole gesture in one motion — which is why
-   there is no `onDoubleClick` handler anywhere. Escape clears. The review
-   quiz's tiles deliberately did **not** get this: a guess is reversible and a
-   pick is not.
+   row, lights it (`card-lit` — a turning gold ring and a halo, because a 1px
+   border is invisible against fifteen bright card faces), badges it "Selected"
+   in the gap the lift leaves, and names it in a sticky bar with the confirm
+   button. Escape clears.
+
+   **A click only ever selects, no matter how many times it happens.** The
+   shortcut is the platform's own `dblclick`, not "clicked twice" — a
+   double-click is one gesture, while a click, a pause and another click is
+   someone rereading the card with their cursor still on it, and only the first
+   should spend a pick. Corrected the same day after the first cut conflated
+   them.
+
+   The review quiz's tiles deliberately did **not** get any of this: a guess is
+   reversible and a pick is not.
 
 5. **Done (2026-07-30).** `lib/preloadImages.ts` decodes every card in the pack
    before the pack is rendered (`decode()`, not `onload` — a loaded image still
