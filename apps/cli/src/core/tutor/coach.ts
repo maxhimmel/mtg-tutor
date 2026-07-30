@@ -28,15 +28,28 @@ export async function* streamCoach(
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
+  let said = 0;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      yield decoder.decode(value, { stream: true });
+      const text = decoder.decode(value, { stream: true });
+      said += text.length;
+      yield text;
     }
     const tail = decoder.decode();
-    if (tail) yield tail;
+    if (tail) {
+      said += tail.length;
+      yield tail;
+    }
   } finally {
     reader.releaseLock();
   }
+
+  // A 200 that says nothing is still a coach that did not answer, and it is the
+  // shape a model call that produced no output actually takes: the status went
+  // out long before the call failed, so there is no error code left to send. The
+  // status checks above cannot catch it, and without this the player just gets a
+  // blank where the advice should be.
+  if (said === 0) throw new CoachUnavailable("coach returned an empty answer");
 }
