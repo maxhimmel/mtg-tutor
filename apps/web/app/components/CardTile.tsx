@@ -10,6 +10,37 @@ import { useCardHover, useHidePreview } from "./CardPreview";
 // component's DOM contract, not spacing.
 const TILT_ZONES = [0, 1, 2, 3, 4, 5, 6, 7];
 
+// What a card looks like, with nothing you can do to it. Separate from the tile
+// because the pack being passed on is a picture of a pack, not a set of controls
+// -- rendering it as buttons would put fifteen tab stops on cards that are on
+// their way off the screen.
+export function CardFace({ card, className }: { card: Card; className?: string }) {
+  return (
+    <span
+      className={`card-aspect relative block w-full overflow-hidden rounded-xl border border-transparent ${className ?? ""}`}
+    >
+      {card.imageUrl ? (
+        // Plain <img>: Scryfall already serves an appropriately sized image,
+        // so next/image's optimizer would add cost without benefit. Eager
+        // because the surfaces that show tiles show a whole pack at once and
+        // wait for it (lib/preloadImages) -- deferring anything here would only
+        // reintroduce the pop-in that preloading removes.
+        <img
+          src={webpImage(card.imageUrl)}
+          alt={card.name}
+          loading="eager"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="flex h-full w-full flex-col justify-between border border-base-300 bg-base-200 p-3 text-left">
+          <span className="text-sm font-semibold">{card.name}</span>
+          <span className="text-xs text-base-content/60">{card.typeLine}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function CardTile({
   card,
   onPick,
@@ -51,21 +82,7 @@ export function CardTile({
       {/* First child is the face that tilts; hover-3d clips it and applies the
           shine. `relative` is that shine's positioning context -- the effect's
           ::before is absolute -- not leftover from the win-rate badge. */}
-      <span className="card-aspect relative block w-full rounded-xl border border-transparent group-hover:border-primary">
-        {card.imageUrl ? (
-          // Plain <img>: Scryfall already serves an appropriately sized image,
-          // so next/image's optimizer would add cost without benefit. Eager
-          // because the surfaces that show tiles show a whole pack at once and
-          // wait for it (lib/preloadImages) -- deferring anything here would only
-          // reintroduce the pop-in that preloading removes.
-          <img src={webpImage(card.imageUrl)} alt={card.name} loading="eager" className="h-full w-full object-cover" />
-        ) : (
-          <span className="flex h-full w-full flex-col justify-between border border-base-300 bg-base-200 p-3 text-left">
-            <span className="text-sm font-semibold">{card.name}</span>
-            <span className="text-xs text-base-content/60">{card.typeLine}</span>
-          </span>
-        )}
-      </span>
+      <CardFace card={card} className="group-hover:border-primary" />
 
       {TILT_ZONES.map((i) => (
         <span key={i} aria-hidden className="block" />

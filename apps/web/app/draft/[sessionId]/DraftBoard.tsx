@@ -20,7 +20,7 @@ import {
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
 import { CardText } from "../../components/CardText";
-import { CardTile } from "../../components/CardTile";
+import { CardFace, CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
 import { PicksColumn } from "../../components/PicksColumn";
 import { PrincipleBadges } from "../../components/PrincipleBadge";
@@ -35,9 +35,22 @@ import { preloadImages } from "../../lib/preloadImages";
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
 
-// The pack grid, shared by the pack and the placeholder that stands in for it,
-// so a pack arriving cannot shift the layout it arrives into.
+// The pack grid, shared by the pack, the pack being passed on, and the
+// placeholder that stands in between them, so a pack arriving or leaving cannot
+// shift the layout it moves through.
 const PACK_GRID = "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5";
+
+// How the pack changes hands. The durations mirror animate-deal/animate-pass in
+// globals.css; the gap between cards lives here because the board is what knows
+// how many are left in the pack, and the sequence is only as long as the pack.
+const DEAL_STAGGER = 28;
+const PASS_STAGGER = 24;
+const PASS_MS = 300;
+const passDuration = (cards: number) => PASS_MS + PASS_STAGGER * Math.max(0, cards - 1);
+
+const motionOK = () =>
+  typeof window === "undefined" ||
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
@@ -75,6 +88,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
   const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
+  // The pack on its way to the next drafter. Held separately from the board
+  // because for as long as it is leaving, two packs exist: this one and the one
+  // arriving behind it.
+  const [outgoing, setOutgoing] = useState<{ cards: Card[]; picked: string } | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -252,6 +269,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     setPicking(true);
     // Read before the mutation returns: `result` already holds the next pack.
     const packBefore = state?.pack ?? [];
+
+    // The pack you just picked from, held on screen so it can be passed on
+    // rather than swapped out. It leaves on its own clock -- waiting for the
+    // server first would make the wait feel like the animation.
+    const passing = pack;
+    setOutgoing({ cards: passing, picked: card.name });
+    const sweep = window.setTimeout(
+      () => setOutgoing(null),
+      motionOK() ? passDuration(passing.length) : 0,
+    );
+
     try {
       const result = await pickCard({ sessionId: id, cardName: card.name });
       const score = result.score as PickScore;
@@ -272,6 +300,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
     } catch (e) {
+      // Nothing was passed after all, so put the pack back rather than let it
+      // finish leaving.
+      window.clearTimeout(sweep);
+      setOutgoing(null);
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setPicking(false);
@@ -312,17 +344,48 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         <Results sessionId={id} />
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className={PACK_GRID}>
-            {packReady
-              ? pack.map((card) => (
-                  <CardTile key={card.name} card={card} onPick={onPick} disabled={picking} />
-                ))
-              : // The pack's own shape is the loading state: the right number of
-                // cards at the right size, so nothing moves when the art lands.
-                pack.map((card) => (
-                  <span key={card.name} className="skeleton card-aspect block w-full rounded-xl" />
-                ))}
-          </div>
+          {outgoing ? (
+            <div key="outgoing" className={PACK_GRID} aria-hidden>
+              {outgoing.cards.map((card, i) => {
+                const kept = card.name === outgoing.picked;
+                return (
+                  <div
+                    key={card.name}
+                    className={`flex ${kept ? "motion-safe:animate-keep" : "motion-safe:animate-pass"}`}
+                    // The card you took holds its place for as long as the rest
+                    // of the pack takes to go, so it is the last thing on screen.
+                    style={
+                      kept
+                        ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
+                        : { animationDelay: `${i * PASS_STAGGER}ms` }
+                    }
+                  >
+                    <CardFace card={card} />
+                  </div>
+                );
+              })}
+            </div>
+          ) : packReady ? (
+            <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
+              {pack.map((card, i) => (
+                <div
+                  key={card.name}
+                  className="flex motion-safe:animate-deal"
+                  style={{ animationDelay: `${i * DEAL_STAGGER}ms` }}
+                >
+                  <CardTile card={card} onPick={onPick} disabled={picking} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            // The pack's own shape is the loading state: the right number of
+            // cards at the right size, so nothing moves when the art lands.
+            <div className={PACK_GRID}>
+              {pack.map((card) => (
+                <span key={card.name} className="skeleton card-aspect block w-full rounded-xl" />
+              ))}
+            </div>
+          )}
 
           <aside className="flex flex-col gap-4">
             <Panel title="Last pick" bodyClassName="gap-3">
