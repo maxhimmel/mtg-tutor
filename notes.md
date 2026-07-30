@@ -120,7 +120,7 @@
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
 below cite these by number, so a shipped idea is deleted and its number left
 empty rather than renumbering everything under it. 4, 5 and 10 shipped on
-2026-07-30 — what survives of them is in "Decisions worth not re-litigating".
+2026-07-30.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -396,19 +396,3 @@ The architecture, the data pipeline and the deploy story are all documented in
 7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.
-8. **The draft board's pack sequence** (shipped 2026-07-30, Ideas 4, 5 and 10).
-   Four parts of it look arbitrary and are not:
-   - **A click selects; only a real `dblclick` takes the card.** Not "clicked
-     twice" — a click, a pause and another click is someone rereading a card
-     with the cursor where they left it, and a pick is unrecoverable. The
-     shortcut is the platform's own event on purpose; there is no timer
-     reconstructing it, and reintroducing one would resurrect the bug.
-   - **`CardTile` is `loading="eager"` only because `lib/preloadImages` decodes
-     the whole pack first.** Reverting either half alone brings back cards
-     fading up out of empty frames one at a time.
-   - **Cards deal in from the right and the pack passes out to the left**
-     because that is the direction a real pod passes packs. It is the format's
-     geometry, not a transition; do not mirror it.
-   - **The outgoing pack leaves on its own timer rather than awaiting the
-     mutation**, so the animation covers the round trip instead of following it.
-     Awaiting it would add the server's latency to the animation's.
