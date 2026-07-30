@@ -259,12 +259,26 @@ html {
    this is pack-pass run backwards -- the same distance, the same tilt held
    through the move, and an easing curve that is the mirror of the other's
    (a leaving card accelerates away; an arriving one decelerates into place).
-   No fade at either end, because a pack does not fade, it travels. */
+
+   The opacity stops are mirrored too (8/30 here against 92/70 there), and they
+   are there to keep the edge of the window out of it: a card is already gone
+   before it reaches the edge and does not appear until it is past it, so what
+   you never see is a card being cut in half by the screen. They are placed
+   against each curve rather than spaced evenly -- both are steep at the far end
+   of the travel, which is exactly where the card is off screen. */
 @keyframes pack-deal {
   from {
+    opacity: 0;
     transform: translateX(calc(var(--pass-dir) * 110vw)) rotate(calc(var(--pass-dir) * -2deg));
   }
+  8% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
   to {
+    opacity: 1;
     transform: none;
   }
 }
@@ -273,10 +287,18 @@ html {
   animation: pack-deal 300ms cubic-bezier(0.1, 0.6, 0.5, 1) both;
 }
 
-/* No `from`: the card leaves from wherever it is sitting, and `both` holds it
-   there through its delay. 110vw clears the viewport from any column. */
+/* No `from` for the transform: the card leaves from wherever it is sitting, and
+   `both` holds it there through its delay. 110vw clears the viewport from any
+   column. The opacity stops are pack-deal's, reflected. */
 @keyframes pack-pass {
+  70% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 0;
+  }
   to {
+    opacity: 0;
     transform: translateX(calc(var(--pass-dir) * -110vw)) rotate(calc(var(--pass-dir) * -2deg));
   }
 }
