@@ -394,35 +394,35 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               be chrome, until the sheen crosses it while a pack loads and it
               becomes the one thing saying the board is working.
 
-              It hangs from the top rather than sitting on the bottom, so it
-              stays put as a pack empties instead of riding up with the last row.
-              The clip is its own absolutely positioned box: overflow-hidden on
-              the board itself would make the board a scroll container and strand
-              the confirm bar, which is sticky. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 -z-10 flex flex-col overflow-hidden"
-          >
-            {/* Two and a half rows of cards, measured by dealing the pack's own
-                grid an item two and a half cards tall (488x680 is the card, so
-                488x1700 is two and a half of them) at the pack column's width --
-                384px being the side panel and the gap beside it. The mark then
-                starts below the rows a full pack fills, at any viewport width,
-                without anyone writing a pixel height down. */}
-            <div className={`${PACK_GRID} invisible mb-7 w-full shrink-0 lg:w-[calc(100%-384px)]`}>
-              <span style={{ aspectRatio: "488 / 1700" }} />
-            </div>
+              It is placed against the screen rather than against the board, so
+              the edge that cuts it off is the edge of the window and not a
+              column boundary sitting in the middle of the page -- and so it
+              holds its place for the whole draft instead of moving with a pack
+              that is emptying. */}
+          <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+            <div className="absolute top-1/2 -left-24 -translate-y-1/2">
+              {/* Two and a half rows of cards tall, measured rather than
+                  guessed: the pack's own grid, dealt one item two and a half
+                  cards tall (488x680 is a card, so 488x1700 is two and a half of
+                  them) at the width the pack column has -- the page's 1500px cap
+                  and gutters, less the side panel and the gap beside it. So the
+                  mark is sized in cards at any viewport width, and stays that way
+                  if the grid's columns ever change. */}
+              <div className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)]`}>
+                <span style={{ aspectRatio: "488 / 1700" }} />
+              </div>
 
-            <SetIcon
-              uri={state.setIcon}
-              className={`-ml-24 size-[clamp(18rem,34vw,32rem)] shrink-0 text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
-              // One pass of the light has landed. If the pack is here the sheen
-              // stops; if it is not, this simply runs again rather than starting
-              // a pass it cannot finish.
-              onAnimationIteration={() => {
-                if (packReady) setGlyphPhase("done");
-              }}
-            />
+              <SetIcon
+                uri={state.setIcon}
+                className={`absolute top-0 left-0 aspect-square h-full text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
+                // One pass of the light has landed. If the pack is here the sheen
+                // stops; if it is not, this simply runs again rather than starting
+                // a pass it cannot finish.
+                onAnimationIteration={() => {
+                  if (packReady) setGlyphPhase("done");
+                }}
+              />
+            </div>
           </div>
 
           <div>
