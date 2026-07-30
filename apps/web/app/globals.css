@@ -74,6 +74,49 @@
   }
 }
 
+/* The card you are holding, lit. A 1px edge is invisible in a grid of fifteen
+   bright card faces, so a selection gets a real ring and a halo behind it --
+   the card held up to the light, which is also what the lift is doing.
+
+   The ring turns because a moving light is what says "this is live" without
+   adding a second colour to the page. It stays inside the theme's gold, primary
+   through warning and back, and never goes transparent: a ring with holes in it
+   reads as a broken border rather than as light. Registering --ring-angle is
+   what makes it animatable; where @property is unsupported the ring is simply
+   still, which is a fine second-best. */
+@property --ring-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ring-turn {
+  to {
+    --ring-angle: 360deg;
+  }
+}
+
+@utility card-lit {
+  border: 2px solid transparent;
+  background-image: conic-gradient(
+    from var(--ring-angle),
+    var(--color-primary),
+    var(--color-warning) 20%,
+    color-mix(in oklab, var(--color-primary) 40%, var(--color-base-100)) 50%,
+    var(--color-warning) 80%,
+    var(--color-primary)
+  );
+  background-origin: border-box;
+  box-shadow: 0 0 1.75rem -0.35rem color-mix(in oklab, var(--color-primary) 65%, transparent);
+  animation: ring-turn 6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-lit {
+    animation: none;
+  }
+}
+
 /* Every surface that floats above the page -- card previews, the keyword panel,
    the user menu -- so they read as one family and always have an edge. The
    border is tinted with base-content rather than using base-300, which is

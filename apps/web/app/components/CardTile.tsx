@@ -16,9 +16,10 @@ const TILT_ZONES = [0, 1, 2, 3, 4, 5, 6, 7];
 // their way off the screen.
 export function CardFace({ card, className }: { card: Card; className?: string }) {
   return (
-    <span
-      className={`card-aspect relative block w-full overflow-hidden rounded-xl border border-transparent ${className ?? ""}`}
-    >
+    // The edge treatment is the caller's, not part of a card face: a selected
+    // card's ring sets its own border-width, and a base `border-transparent`
+    // here would be one more rule for it to have to beat.
+    <span className={`card-aspect relative block w-full overflow-hidden rounded-xl ${className ?? ""}`}>
       {card.imageUrl ? (
         // Plain <img>: Scryfall already serves an appropriately sized image,
         // so next/image's optimizer would add cost without benefit. Eager
@@ -87,7 +88,10 @@ export function CardTile({
       {/* First child is the face that tilts; hover-3d clips it and applies the
           shine. `relative` is that shine's positioning context -- the effect's
           ::before is absolute -- not leftover from the win-rate badge. */}
-      <CardFace card={card} className={selected ? "border-primary" : "group-hover:border-primary"} />
+      <CardFace
+        card={card}
+        className={selected ? "card-lit" : "border border-transparent group-hover:border-primary"}
+      />
 
       {TILT_ZONES.map((i) => (
         <span key={i} aria-hidden className="block" />
