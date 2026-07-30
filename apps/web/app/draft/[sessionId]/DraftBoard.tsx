@@ -281,15 +281,15 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // half-arrived citation rather than flashing "[EVA" into the prose.
   const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
 
-  // Clicking a card no longer spends the pick: it pulls the card out of the row
-  // and the pick is confirmed separately, because taking the wrong card by a
-  // stray click is unrecoverable -- the draft moves on. Clicking the card you
-  // already pulled confirms it, which makes a double-click the whole gesture in
-  // one go for anyone who does not want the second step.
+  // A click never spends the pick: it pulls the card out of the row, and the
+  // pick is confirmed separately, because taking the wrong card by a stray click
+  // is unrecoverable -- the draft moves on. Clicking the card you already pulled
+  // therefore does nothing, on purpose: a click, a pause and another click is
+  // someone rereading the card, not someone deciding. The shortcut for deciding
+  // fast is a real double-click, which is a gesture rather than a repetition.
   function onTileClick(card: Card) {
     if (picking) return;
-    if (selected === card.name) void onPick(card);
-    else setSelected(card.name);
+    setSelected(card.name);
   }
 
   async function onPick(card: Card) {
@@ -406,9 +406,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     <CardTile
                       card={card}
                       onPick={onTileClick}
+                      onQuickPick={onPick}
                       disabled={picking}
                       selected={selected === card.name}
-                      label={selected === card.name ? `Confirm ${card.name}` : `Select ${card.name}`}
+                      // What one click does, which is the same whether or not
+                      // the card is already selected. Being selected is state,
+                      // and aria-pressed is what carries it.
+                      label={`Select ${card.name}`}
                     />
                     {/* Sits in the gap the card leaves as it lifts, so the label
                         is revealed by the pull rather than pasted over the art. */}

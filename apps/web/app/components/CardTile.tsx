@@ -45,6 +45,7 @@ export function CardFace({ card, className }: { card: Card; className?: string }
 export function CardTile({
   card,
   onPick,
+  onQuickPick,
   disabled,
   showStats,
   label,
@@ -52,6 +53,11 @@ export function CardTile({
 }: {
   card: Card;
   onPick: (card: Card) => void;
+  // A double-click, as the platform defines one -- two clicks inside the
+  // system's own threshold. Deliberately not "the tile was clicked twice": a
+  // click, a pause, and another click is someone changing their mind, and it
+  // must not spend the pick.
+  onQuickPick?: (card: Card) => void;
   disabled?: boolean;
   // Drawn half-pulled from the row, the way you hold a card you are thinking
   // about before you take it. What a click then means is the caller's business:
@@ -76,13 +82,20 @@ export function CardTile({
   return (
     <button
       type="button"
-      className={`hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""}`}
+      // select-none so the double-click shortcut does not also highlight the
+      // name on the tiles that have no art to cover it.
+      className={`hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""}`}
       onClick={() => {
         hidePreview();
         onPick(card);
       }}
+      // Fires after the two clicks that make it up, so whatever those did
+      // already happened -- which is why a caller can leave selection to
+      // onPick and treat this purely as the shortcut.
+      onDoubleClick={onQuickPick && (() => onQuickPick(card))}
       disabled={disabled}
       aria-label={label ?? `Pick ${card.name}`}
+      aria-pressed={selected}
       {...hover}
     >
       {/* First child is the face that tilts; hover-3d clips it and applies the
