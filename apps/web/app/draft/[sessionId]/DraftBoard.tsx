@@ -419,7 +419,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         and its top edge meets the card's ring -- same material,
                         same turn, so the light reads as one thing. */}
                     {selected === card.name && (
-                      <span className="pointer-events-none absolute inset-x-0 -bottom-2 flex justify-center">
+                      // bottom-3 is the lift (-translate-y-3), which puts this
+                      // box's bottom edge on the card's; translate-y-1/2 then
+                      // drops it by half its own height, centring the badge on
+                      // that edge whatever size the card is drawn at.
+                      <span className="pointer-events-none absolute inset-x-0 bottom-3 flex translate-y-1/2 justify-center">
                         <span className="badge-lit px-2.5 py-0.5 text-[0.6875rem] font-semibold tracking-[0.14em] uppercase">
                           Selected
                         </span>

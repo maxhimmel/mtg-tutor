@@ -115,6 +115,16 @@
   animation: ring-turn 6s linear infinite;
 }
 
+/* hover-3d scales the face 5% on hover, which moves the card's bottom edge --
+   and the badge sits on that edge, so pointing at a selected card slid the two
+   apart. A card already pulled out of the row does not need to jump again when
+   you point at it; holding it still is what lets the badge sit exactly on the
+   edge in every state. The tilt is untouched, and unselected cards still scale.
+   Unlayered on purpose: that is what beats daisyUI's own hover rule. */
+.hover-3d:hover > .card-lit {
+  scale: 1;
+}
+
 /* The same ring, closed into a pill: two background layers, the gradient on the
    border box and the page colour on the padding box, which is what leaves the
    border showing through as light. Filling the pill instead would have needed a
