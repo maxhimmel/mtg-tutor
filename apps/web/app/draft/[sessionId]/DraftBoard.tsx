@@ -281,17 +281,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     };
   }, [packImages]);
 
-  // A sheen cut off halfway across the set's symbol looks like a bug, not like
-  // waiting, so once the symbol is on screen it stays until the light has
-  // crossed it. It costs nothing on a fast pack: the symbol only appears at all
-  // if the images outlast the outgoing pack, and a pack that loads inside that
-  // window skips this entirely.
-  const glyphVisible = !outgoing && (!packReady || glyphPhase === "sweeping");
+  // The symbol is always on the board, so the light crossing it is free to
+  // finish after the cards have arrived rather than holding them back: the sheen
+  // runs while the pack loads and then plays out its last pass. Nothing is ever
+  // cut off mid-symbol, and nothing waits for it either.
+  const sheening = !packReady || glyphPhase === "sweeping";
   useEffect(() => {
-    // Nothing to finish when the animation is off, and waiting for an iteration
-    // that will never fire would strand the board on its loading state.
-    if (glyphVisible && glyphPhase === "idle") setGlyphPhase(motionOK() ? "sweeping" : "done");
-  }, [glyphVisible, glyphPhase]);
+    // Reduced motion has no pass to play out, and waiting on an iteration that
+    // will never fire would leave the sheen class on for the rest of the draft.
+    if (!packReady && glyphPhase === "idle") setGlyphPhase(motionOK() ? "sweeping" : "done");
+  }, [packReady, glyphPhase]);
 
   // Recomputed on every streamed chunk, which is why splitCitations tolerates a
   // half-arrived citation rather than flashing "[EVA" into the prose.
@@ -388,7 +387,31 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       {state.complete ? (
         <Results sessionId={id} />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          {/* The set's mark, stamped on the board the way it is stamped on every
+              card in the pack: oversized, bled off the bottom corner and clipped
+              by it, the same move the picker's plates make. It sits under the
+              side panel rather than beside it, so the panel takes a bite out of
+              it -- and it is quiet enough at 5% to be chrome, until the sheen
+              crosses it while a pack loads and it becomes the one thing saying
+              the board is working.
+
+              The clip is its own absolutely positioned box: overflow-hidden on
+              the board itself would make the board a scroll container and strand
+              the confirm bar, which is sticky. */}
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+            <SetIcon
+              uri={state.setIcon}
+              className={`absolute -right-16 -bottom-24 size-[clamp(20rem,42vw,40rem)] text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
+              // One pass of the light has landed. If the pack is here the sheen
+              // stops; if it is not, this simply runs again rather than starting
+              // a pass it cannot finish.
+              onAnimationIteration={() => {
+                if (packReady) setGlyphPhase("done");
+              }}
+            />
+          </div>
+
           <div>
             {outgoing ? (
               <div key="outgoing" className={PACK_GRID} aria-hidden>
@@ -411,7 +434,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                   );
                 })}
               </div>
-            ) : !glyphVisible ? (
+            ) : packReady ? (
               <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
                 {pack.map((card, i) => (
                   <div
@@ -449,30 +472,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 ))}
               </div>
             ) : (
-              // Waiting for the pack's art. The slots hold the pack's own shape
-              // -- the right number of cards at the right size, so nothing moves
-              // when the art lands -- and the set's symbol fills the drafting
-              // area behind them, cropped by its edge, with a sheen crossing it.
-              // The cards then arrive on top of it, out of the dark.
-              <div className="relative isolate overflow-hidden rounded-box">
-                <SetIcon
-                  uri={state.setIcon}
-                  className="pack-glyph pointer-events-none absolute -top-[10%] -right-[14%] -z-10 h-[120%] w-[70%] text-base-content/[0.07]"
-                  // The light has crossed the symbol; if the pack is loaded the
-                  // cards can come in now, and if it is not this simply runs
-                  // again rather than cutting the next pass short.
-                  onAnimationIteration={() => {
-                    if (packReady) setGlyphPhase("done");
-                  }}
-                />
-                <div className={PACK_GRID}>
-                  {pack.map((card) => (
-                    <span
-                      key={card.name}
-                      className="card-aspect block w-full rounded-xl bg-base-200/50"
-                    />
-                  ))}
-                </div>
+              // Waiting for the pack's art. Nothing is drawn in the cards' place
+              // -- the set symbol behind the board is what says the board is
+              // working. These hold the pack's shape and nothing else, so the
+              // cards land where the page already had room for them.
+              <div className={PACK_GRID}>
+                {pack.map((card) => (
+                  <span key={card.name} className="card-aspect block w-full" />
+                ))}
               </div>
             )}
 
