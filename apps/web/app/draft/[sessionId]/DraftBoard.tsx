@@ -180,6 +180,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           prose += decoder.decode(value, { stream: true });
           setCoach(prose);
         }
+
+        // A 200 that says nothing is still a coach that did not answer, and it
+        // is the shape a model call that produced no output actually takes: the
+        // status went out long before the call failed, so there is no error code
+        // left for the checks above to catch. Without this the panel just sits
+        // blank for the rest of the pick.
+        if (!prose.trim()) fallback();
       } catch {
         fallback();
       }
