@@ -389,20 +389,33 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       ) : (
         <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           {/* The set's mark, stamped on the board the way it is stamped on every
-              card in the pack: oversized, bled off the bottom corner and clipped
-              by it, the same move the picker's plates make. It sits under the
-              side panel rather than beside it, so the panel takes a bite out of
-              it -- and it is quiet enough at 5% to be chrome, until the sheen
-              crosses it while a pack loads and it becomes the one thing saying
-              the board is working.
+              card in the pack: oversized, bled off the left edge and clipped by
+              it, the same move the picker's plates make. Quiet enough at 5% to
+              be chrome, until the sheen crosses it while a pack loads and it
+              becomes the one thing saying the board is working.
 
+              It hangs from the top rather than sitting on the bottom, so it
+              stays put as a pack empties instead of riding up with the last row.
               The clip is its own absolutely positioned box: overflow-hidden on
               the board itself would make the board a scroll container and strand
               the confirm bar, which is sticky. */}
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 -z-10 flex flex-col overflow-hidden"
+          >
+            {/* Two and a half rows of cards, measured by dealing the pack's own
+                grid an item two and a half cards tall (488x680 is the card, so
+                488x1700 is two and a half of them) at the pack column's width --
+                384px being the side panel and the gap beside it. The mark then
+                starts below the rows a full pack fills, at any viewport width,
+                without anyone writing a pixel height down. */}
+            <div className={`${PACK_GRID} invisible mb-7 w-full shrink-0 lg:w-[calc(100%-384px)]`}>
+              <span style={{ aspectRatio: "488 / 1700" }} />
+            </div>
+
             <SetIcon
               uri={state.setIcon}
-              className={`absolute -right-16 -bottom-24 size-[clamp(20rem,42vw,40rem)] text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
+              className={`-ml-24 size-[clamp(18rem,34vw,32rem)] shrink-0 text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
               // One pass of the light has landed. If the pack is here the sheen
               // stops; if it is not, this simply runs again rather than starting
               // a pass it cannot finish.
