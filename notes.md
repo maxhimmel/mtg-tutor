@@ -358,8 +358,10 @@ The architecture, the data pipeline and the deploy story are all documented in
    cosmetic and stays.** Convex kills the request on an unhandled rejection and
    discards the response body with it, so a no-output stream returned
    200-with-nothing and both clients rendered a blank panel. Fixed 2026-07-30 by
-   treating an empty 200 as the coach being unavailable (`DraftBoard.tsx`,
-   `apps/cli/.../coach.ts`; stub-provider tests, no tokens spent). The log line
+   treating an empty 200 as the coach being unavailable, in each client's own
+   `coach.ts` (`apps/web/app/lib`, `apps/cli/src/core/tutor`) — the seam exists
+   in the web client so this decision is testable there too, and both tests stub
+   the response and spend nothing. The log line
    itself is not reachable from our side: `.catch()` on all 21 public result
    promises, on the 5 private `DelayedPromise` slots, and patching
    `DelayedPromise.reject` outright all failed to defuse it, nothing in our stack

@@ -28,6 +28,7 @@ import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSettings } from "../../lib/useSettings";
+import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
 import { webpImage } from "../../lib/cardImage";
 import { preloadImages } from "../../lib/preloadImages";
@@ -184,50 +185,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       if (!SITE) return fallback();
 
       try {
-        // /coach spends the deployment's Anthropic key, so it rejects anonymous
-        // callers. This is a plain fetch rather than a Convex call, so the token
-        // the ConvexReactClient already holds has to be attached by hand.
+        // The token the ConvexReactClient already holds has to be attached by
+        // hand, because /coach is an HTTP action rather than a Convex call.
         const token = await getAccessToken();
+        const request = { site: SITE, token, sessionId, pickIndex, minPackCards };
 
-        const res = await fetch(`${SITE}/coach`, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ sessionId, pickIndex, minPackCards }),
-        });
-
-        // 204 is the server agreeing this pick was forced -- it can disagree
-        // with us, since it owns the clamp and we do not.
-        if (res.status === 204) return skip();
-
-        // 401 unauthenticated, 503 when no API key is configured; fall back to
-        // the deterministic explanation rather than leaving the panel empty.
-        if (!res.ok || !res.body) return fallback();
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
         let prose = "";
-
-        for (;;) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (run !== streamRun.current) {
-            await reader.cancel();
-            return;
-          }
-          prose += decoder.decode(value, { stream: true });
+        for await (const chunk of streamCoachFrom(request)) {
+          // A newer pick is already streaming; leaving the loop cancels this one.
+          if (run !== streamRun.current) return;
+          prose += chunk;
           setCoach(prose);
         }
-
-        // A 200 that says nothing is still a coach that did not answer, and it
-        // is the shape a model call that produced no output actually takes: the
-        // status went out long before the call failed, so there is no error code
-        // left for the checks above to catch. Without this the panel just sits
-        // blank for the rest of the pick.
-        if (!prose.trim()) fallback();
-      } catch {
+      } catch (e) {
+        // The server can disagree with us about whether this pick was forced,
+        // since it owns the clamp and we do not. Everything else -- no key, a
+        // lapsed token, an answer that never came -- falls back to the
+        // deterministic explanation rather than leaving the panel empty.
+        if (e instanceof CoachDeclined) return skip();
         fallback();
       }
     },
