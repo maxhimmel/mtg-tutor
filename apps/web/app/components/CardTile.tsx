@@ -54,8 +54,11 @@ export function CardTile({
       <span className="card-aspect relative block w-full rounded-xl border border-transparent group-hover:border-primary">
         {card.imageUrl ? (
           // Plain <img>: Scryfall already serves an appropriately sized image,
-          // so next/image's optimizer would add cost without benefit.
-          <img src={webpImage(card.imageUrl)} alt={card.name} loading="lazy" className="h-full w-full object-cover" />
+          // so next/image's optimizer would add cost without benefit. Eager
+          // because the surfaces that show tiles show a whole pack at once and
+          // wait for it (lib/preloadImages) -- deferring anything here would only
+          // reintroduce the pop-in that preloading removes.
+          <img src={webpImage(card.imageUrl)} alt={card.name} loading="eager" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full w-full flex-col justify-between border border-base-300 bg-base-200 p-3 text-left">
             <span className="text-sm font-semibold">{card.name}</span>

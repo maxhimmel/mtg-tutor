@@ -29,9 +29,15 @@ import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSettings } from "../../lib/useSettings";
 import { convexSiteUrl } from "../../lib/convexSite";
+import { webpImage } from "../../lib/cardImage";
+import { preloadImages } from "../../lib/preloadImages";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
+
+// The pack grid, shared by the pack and the placeholder that stands in for it,
+// so a pack arriving cannot shift the layout it arrives into.
+const PACK_GRID = "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5";
 
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
@@ -219,6 +225,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [pack, pool, lastView],
   );
 
+  // Held back until every card in it can be drawn. A pack is dealt all at once,
+  // so the alternative is watching it assemble itself frame by frame.
+  const [packReady, setPackReady] = useState(false);
+  const packImages = useMemo(
+    () => pack.flatMap((card) => (card.imageUrl ? [webpImage(card.imageUrl)] : [])),
+    [pack],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    setPackReady(false);
+    void preloadImages(packImages).then(() => {
+      if (!cancelled) setPackReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [packImages]);
+
   // Recomputed on every streamed chunk, which is why splitCitations tolerates a
   // half-arrived citation rather than flashing "[EVA" into the prose.
   const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
@@ -288,10 +312,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         <Results sessionId={id} />
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5">
-            {pack.map((card) => (
-              <CardTile key={card.name} card={card} onPick={onPick} disabled={picking} />
-            ))}
+          <div className={PACK_GRID}>
+            {packReady
+              ? pack.map((card) => (
+                  <CardTile key={card.name} card={card} onPick={onPick} disabled={picking} />
+                ))
+              : // The pack's own shape is the loading state: the right number of
+                // cards at the right size, so nothing moves when the art lands.
+                pack.map((card) => (
+                  <span key={card.name} className="skeleton card-aspect block w-full rounded-xl" />
+                ))}
           </div>
 
           <aside className="flex flex-col gap-4">
