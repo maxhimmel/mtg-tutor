@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConvex, useConvexAuth, useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
@@ -48,6 +48,13 @@ const PASS_STAGGER = 24;
 const PASS_MS = 300;
 const passDuration = (cards: number) => PASS_MS + PASS_STAGGER * Math.max(0, cards - 1);
 
+// Which way this pack is travelling. A draft reverses direction every pack --
+// 1 left, 2 right, 3 left -- so in packs 1 and 3 the pack in front of you came
+// from your right and goes to your left, and in pack 2 it is the other way
+// round. 1 runs the animation right-to-left; -1 mirrors it. The engine owns the
+// rule (core/draft/engine.ts `rotate`); this only has to agree with it.
+const passDirection = (packNo: number) => (packNo % 2 === 1 ? 1 : -1);
+
 const motionOK = () =>
   typeof window === "undefined" ||
   !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -91,7 +98,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // The pack on its way to the next drafter. Held separately from the board
   // because for as long as it is leaving, two packs exist: this one and the one
   // arriving behind it.
-  const [outgoing, setOutgoing] = useState<{ cards: Card[]; picked: string } | null>(null);
+  // packNo travels with it: by the time this pack is leaving, the board may
+  // already be on the next one, and pack 2 leaves the other way round.
+  const [outgoing, setOutgoing] = useState<{
+    cards: Card[];
+    picked: string;
+    packNo: number;
+  } | null>(null);
   // The card pulled out of the row and not yet taken. By name, because that is
   // what identifies a card everywhere else on the board.
   const [selected, setSelected] = useState<string | null>(null);
@@ -318,7 +331,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // rather than swapped out. It leaves on its own clock -- waiting for the
     // server first would make the wait feel like the animation.
     const passing = pack;
-    setOutgoing({ cards: passing, picked: card.name });
+    setOutgoing({ cards: passing, picked: card.name, packNo: state?.packNo ?? 1 });
     const sweep = window.setTimeout(
       () => setOutgoing(null),
       motionOK() ? passDuration(passing.length) : 0,
@@ -429,7 +442,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
           <div>
             {outgoing ? (
-              <div key="outgoing" className={PACK_GRID} aria-hidden>
+              <div
+                key="outgoing"
+                className={PACK_GRID}
+                aria-hidden
+                style={{ "--pass-dir": passDirection(outgoing.packNo) } as CSSProperties}
+              >
                 {outgoing.cards.map((card, i) => {
                   const kept = card.name === outgoing.picked;
                   return (
@@ -450,7 +468,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 })}
               </div>
             ) : packReady ? (
-              <div key={`pack-${state.packNo}-${state.pickNo}`} className={PACK_GRID}>
+              <div
+                key={`pack-${state.packNo}-${state.pickNo}`}
+                className={PACK_GRID}
+                style={{ "--pass-dir": passDirection(state.packNo) } as CSSProperties}
+              >
                 {pack.map((card, i) => (
                   <div
                     key={card.name}

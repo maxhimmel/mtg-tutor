@@ -224,22 +224,31 @@
    the glossary's opening figure -- which is that page's whole argument. All go
    through motion-safe:, so a reduced-motion reader gets the result with no
    movement at all. */
-/* A booster draft moves in one direction: the pack in front of you came from
-   the player on your right and goes to the player on your left. So the board
-   moves the way the table does -- cards deal in from the right, one after the
-   next, and the pack sweeps off to the left when you pass it on.
+/* A booster draft passes packs one way around the table, and it reverses each
+   pack: 1 left, 2 right, 3 left (engine.ts rotate). So the board moves the way
+   the table does. In packs 1 and 3 the pack in front of you came from the player
+   on your right and goes to the one on your left -- cards deal in from the
+   right, one after the next, and sweep off to the left when you pass it on. In
+   pack 2 the whole sequence runs the other way, which is what --pass-dir flips.
 
    The card you took does not go with it. It lifts out of the row and stays,
    which is the one asymmetry in the moment and the reason the pick has its own
-   keyframe rather than an exception inside the sweep.
+   keyframe rather than an exception inside the sweep -- and the reason that one
+   is direction-blind.
 
    Delays are set inline by DraftBoard, because how long a pack takes to arrive
    or leave depends on how many cards are still in it -- and packs thin out as
    the draft goes on, which is exactly how a real one feels. */
+@property --pass-dir {
+  syntax: "<number>";
+  initial-value: 1;
+  inherits: true;
+}
+
 @keyframes pack-deal {
   from {
     opacity: 0;
-    transform: translateX(2.5rem) rotate(1.5deg);
+    transform: translateX(calc(var(--pass-dir) * 2.5rem)) rotate(calc(var(--pass-dir) * 1.5deg));
   }
   to {
     opacity: 1;
@@ -252,10 +261,10 @@
 }
 
 /* No `from`: the card leaves from wherever it is sitting, and `both` holds it
-   there through its delay. -110vw clears the viewport from any column. */
+   there through its delay. 110vw clears the viewport from any column. */
 @keyframes pack-pass {
   to {
-    transform: translateX(-110vw) rotate(-2deg);
+    transform: translateX(calc(var(--pass-dir) * -110vw)) rotate(calc(var(--pass-dir) * -2deg));
   }
 }
 
