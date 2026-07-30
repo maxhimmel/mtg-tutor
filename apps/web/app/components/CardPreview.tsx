@@ -169,8 +169,21 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
               }}
             >
               {/* Data first: it is what the player is hovering to check. The
-                  keyword reminders are reference material and can scroll away. */}
-              {stats && <CardStats card={hover.card} expanded={explain} />}
+                  keyword reminders are reference material and can scroll away.
+
+                  The shift hint belongs to the stat rows and sits with them --
+                  it is what those abbreviations expand to, and below the keyword
+                  reminders it read as an offer to explain those instead. */}
+              {stats && (
+                <div className="flex flex-col gap-1.5">
+                  <CardStats card={hover.card} expanded={explain} />
+                  {!explain && (
+                    <p className="text-[11px] text-base-content/45">
+                      Hold <kbd className="kbd kbd-xs">shift</kbd> for what these mean
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Explaining costs about the height the keywords occupy, and the
                   panel cannot be scrolled (pointer-events:none). Someone holding
@@ -191,11 +204,6 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                 </ul>
               )}
 
-              {stats && !explain && (
-                <p className="text-[11px] text-base-content/45">
-                  Hold <kbd className="kbd kbd-xs">shift</kbd> for what these mean
-                </p>
-              )}
             </div>
           )}
         </>
