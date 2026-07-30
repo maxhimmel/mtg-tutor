@@ -106,6 +106,14 @@
 
 6. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
+7. Here's some text from the coach after I made a pick:
+
+```Flamekin Gildweaver is a solid mid‑range creature but its IWD (+2.8) and curve (4 mana) are weaker than the 6‑mana Zealot’s higher IWD (+5.5) and stronger board presence as a bomb‑type threat. Since you already have two reds and are still early enough to pivot, taking the higher‑impact Zealot would improve your deck’s power and consistency.
+
+```
+
+- That's no good! The problem is that the "Zealot" it's referring to isn't highlighted. The creatures fullname is actually "Kulrath Zealot".
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
@@ -172,9 +180,17 @@
 5. **Done (2026-07-30).** `lib/preloadImages.ts` decodes every card in the pack
    before the pack is rendered (`decode()`, not `onload` — a loaded image still
    costs a decode on first paint, which was the flash). Bounded at 4s so a dead
-   CDN cannot trap the board. What stands in is the pack's own shape at the card
-   aspect ratio, not a spinner, so nothing shifts when the art lands. `CardTile`
-   is now `loading="eager"`, which is only correct because of the gate.
+   CDN cannot trap the board. `CardTile` is now `loading="eager"`, which is only
+   correct because of the gate.
+
+   What stands in is the **set's own symbol** at the scale of the drafting area,
+   cropped by its right edge at 7% of the text colour, with a gold sheen
+   crossing it (`pack-glyph`) — riding on `SetIcon`'s existing mask, so the light
+   travels across the symbol's shape rather than a box around it. Behind it the
+   pack's slots still hold their exact places at the card aspect ratio, so
+   nothing shifts when the art lands and the cards arrive out of the dark. Was a
+   row of daisyUI skeletons first: correct about layout, silent about where you
+   were.
 
 6. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
