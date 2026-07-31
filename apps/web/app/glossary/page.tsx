@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { CARD_STAT_GLOSSARY, SCORING_GLOSSARY, type GlossaryEntry } from "@mtg-tutor/core";
 import { PageShell } from "../components/PageShell";
-import { Dumbbell } from "./Dumbbell";
+import { GradeRuler } from "./figures/GradeRuler";
+import { MaindeckGrid } from "./figures/MaindeckGrid";
+import { PickStrip } from "./figures/PickStrip";
+import { WinRateAxis } from "./figures/WinRateAxis";
 
 export const metadata: Metadata = {
   title: "Glossary — mtg-tutor",
@@ -47,6 +51,20 @@ const SECTIONS: { id: string; question: string; note?: string; ids: string[] }[]
     ids: SCORING_GLOSSARY.map((e) => e.id),
   },
 ];
+
+// Each question that has a figure gets it above its definitions, because the
+// figure is the answer and the entries are the reference you come back for. The
+// opening figure is not in here: it sits above every section, since the argument
+// it makes -- that the headline number is never enough -- is the page's, not one
+// section's.
+//
+// Keyed by section id rather than listed alongside the ids, so a section without
+// a figure needs no placeholder and adding one later touches nothing else.
+const FIGURES: Record<string, ReactNode> = {
+  "how-much-trust": <MaindeckGrid />,
+  when: <PickStrip />,
+  grading: <GradeRuler />,
+};
 
 const ALL = [...CARD_STAT_GLOSSARY, ...SCORING_GLOSSARY];
 const byId = new Map(ALL.map((e) => [e.id, e]));
@@ -122,7 +140,7 @@ export default function GlossaryPage() {
         </div>
 
         <div className="mt-8">
-          <Dumbbell />
+          <WinRateAxis />
         </div>
 
         <div className="mt-12 gap-12 xl:flex xl:items-start">
@@ -162,7 +180,9 @@ export default function GlossaryPage() {
                   </p>
                 )}
 
-                <div className="mt-6 flex flex-col gap-6">
+                {FIGURES[section.id] && <div className="mt-6">{FIGURES[section.id]}</div>}
+
+                <div className="mt-8 flex flex-col gap-6">
                   {section.ids.map((id) => {
                     const entry = byId.get(id);
                     return entry ? <Entry key={id} entry={entry} /> : null;
