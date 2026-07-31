@@ -23,6 +23,7 @@
     "deploy": "convex deploy",
     "env:pull": "convex env list > .env.convex && echo 'wrote .env.convex (gitignored)'",
     "env:push": "convex env set --force --from-file .env.convex",
+    "llm": "node scripts/llm-provider.mjs",
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
