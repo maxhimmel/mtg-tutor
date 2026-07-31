@@ -23,7 +23,17 @@ function summarizePool(pool: readonly PoolCard[]): string {
 // Writes cards into a prompt, so it wants them whole: describeCard names the
 // mana value and type line, and statLine reads the numbers that sit beside a
 // win rate. Hydrated from the text table before it gets here.
-export function buildPickContext(rec: RecordedPick<Card>, poolBefore: readonly PoolCard[]): string {
+//
+// `poolBefore` is what the player is building; `benched` is what they drafted
+// and then set aside. Splitting them is the whole point of a sideboard taken
+// during a draft: a speculative red rare the player has since given up on
+// should stop counting as a red commitment, and should stop being the thing the
+// next pick is judged against.
+export function buildPickContext(
+  rec: RecordedPick<Card>,
+  poolBefore: readonly PoolCard[],
+  benched: readonly PoolCard[] = [],
+): string {
   const { picked, score, pack } = rec;
   // The pool the player is looking at includes what they just took; the
   // commitments they were judged against do not. Both come from `poolBefore` so
@@ -44,11 +54,18 @@ export function buildPickContext(rec: RecordedPick<Card>, poolBefore: readonly P
 
   return [
     situationLine(rec.packNo, rec.pickNo, pack.length),
-    commitmentLine(poolBefore, score.onColor),
+    commitmentLine(poolBefore, picked),
     "",
     `Your pool so far (${pool.length} cards):`,
     summarizePool(pool),
     "",
+    // Only when there is one. An empty sideboard is the normal case and a line
+    // saying so would be a rule the model has to hold for nothing.
+    benched.length > 0
+      ? `Sideboard (${benched.length} cards) — drafted, then set aside. The player is NOT ` +
+        `building with these, so do not count them toward their colors or their curve:\n` +
+        `${summarizePool(benched)}\n`
+      : null,
     `You picked: ${describeCard(picked)}`,
     `  ${statLine(picked)}`,
     "",

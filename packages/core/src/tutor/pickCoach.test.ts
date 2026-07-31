@@ -84,4 +84,29 @@ describe("buildPickContext", () => {
   it("gives the passed cards their stats, not just a win rate", () => {
     expect(ctx).toContain("ALSA 6.0");
   });
+
+  it("says nothing about a sideboard when nothing has been benched", () => {
+    expect(ctx).not.toContain("Sideboard");
+  });
+
+  describe("with cards benched", () => {
+    // Two blue cards in the pool, both set aside: the pool is committed to blue
+    // only if you count cards the player has already given up on.
+    const benched = [card("Storm Fox", { colors: ["U"] }), card("Tide Herald", { colors: ["U"] })];
+    const withBench = buildPickContext(rec, [], benched);
+
+    it("lists what was set aside, and says it is not being built with", () => {
+      expect(withBench).toContain("Sideboard (2 cards)");
+      expect(withBench).toContain("Storm Fox");
+      expect(withBench).toContain("NOT");
+    });
+
+    it("leaves the benched cards out of the committed colors", () => {
+      expect(withBench).toContain("Committed colors: none yet");
+    });
+
+    it("leaves them out of the pool it counts, so the two lists cannot double-count", () => {
+      expect(withBench).toContain("Your pool so far (1 cards)");
+    });
+  });
 });

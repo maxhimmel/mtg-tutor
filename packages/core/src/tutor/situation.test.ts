@@ -24,22 +24,38 @@ describe("situationLine", () => {
 describe("commitmentLine", () => {
   const pool = (...colors: string[][]): PoolCard[] =>
     colors.map((c, i) => ({ name: `Card ${i}`, colors: c as PoolCard["colors"] }));
+  const [red] = pool(["R"]);
+  const [blue] = pool(["U"]);
+  const [rock] = pool([]);
 
   it("says the pool is open when no color has two cards", () => {
-    expect(commitmentLine(pool(["U"], ["R"]), true)).toContain("none yet");
+    expect(commitmentLine(pool(["U"], ["R"]), red)).toContain("none yet");
   });
 
   it("names the committed colors in WUBRG order", () => {
-    expect(commitmentLine(pool(["U"], ["W"], ["U"], ["W"]), true)).toContain(
+    expect(commitmentLine(pool(["U"], ["W"], ["U"], ["W"]), blue)).toContain(
       "Committed colors: White/Blue",
     );
   });
 
   it("reports whether the pick respected those colors", () => {
-    expect(commitmentLine(pool(["R"], ["R"]), true)).toContain("This pick is on that color.");
-    expect(commitmentLine(pool(["R"], ["R"]), false)).toContain("This pick is OFF that color.");
-    expect(commitmentLine(pool(["R"], ["R"], ["W"], ["W"]), false)).toContain(
+    expect(commitmentLine(pool(["R"], ["R"]), red)).toContain("This pick is on that color.");
+    expect(commitmentLine(pool(["R"], ["R"]), blue)).toContain("This pick is OFF that color.");
+    expect(commitmentLine(pool(["R"], ["R"], ["W"], ["W"]), blue)).toContain(
       "This pick is OFF those colors.",
     );
+  });
+
+  it("counts a colorless pick as on-color, whatever the pool is in", () => {
+    expect(commitmentLine(pool(["R"], ["R"]), rock)).toContain("This pick is on that color.");
+  });
+
+  // The reason this is derived here rather than passed in: benching the red
+  // cards must take red off the commitments AND stop calling a blue pick
+  // on-color, and a stored onColor from the whole pool says the opposite.
+  it("judges the pick against the pool it renders, not the one it was scored against", () => {
+    const benchedRed = pool(["U"], ["U"]);
+    expect(commitmentLine(benchedRed, red)).toContain("Committed colors: Blue");
+    expect(commitmentLine(benchedRed, red)).toContain("This pick is OFF that color.");
   });
 });

@@ -40,7 +40,7 @@ function listPack(pick: StoredPick): string {
 export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCard[]): string {
   return [
     situationLine(pick.packNo, pick.pickNo, pick.pack.length),
-    commitmentLine(poolBefore, pick.onColor),
+    commitmentLine(poolBefore, pick.picked),
     "",
     `Pool before this pick (${poolBefore.length} cards):`,
     summarizePool(poolBefore),

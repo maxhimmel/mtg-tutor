@@ -1,6 +1,6 @@
 import type { PoolCard } from "../model/card.js";
 import { PACK } from "../config.js";
-import { committedColors } from "../scoring/score.js";
+import { committedColors, isOnColor } from "../scoring/score.js";
 import { colorNames } from "./cardLine.js";
 
 // Where a pick sits in the draft, and what the pool is committed to by then.
@@ -23,11 +23,16 @@ export function situationLine(packNo: number, pickNo: number, cardsInPack: numbe
   );
 }
 
-// `pool` must be the pool as it stood BEFORE the pick, because `onColor` was
-// judged against exactly that -- rendering the two from different moments is how
-// a prompt ends up calling a pick off-color and then listing the color it made.
-export function commitmentLine(pool: readonly PoolCard[], onColor: boolean): string {
+// `pool` must be the pool as it stood BEFORE the pick -- rendering the two from
+// different moments is how a prompt ends up calling a pick off-color and then
+// listing the color it made.
+//
+// On/off color is derived here rather than taken from the stored score, because
+// the pool this renders is not always the pool the score was computed against:
+// benching a card removes it from the commitments without rewriting history.
+export function commitmentLine(pool: readonly PoolCard[], picked: PoolCard): string {
   const committed = committedColors(pool);
+  const onColor = isOnColor(committed, picked.colors);
   if (committed.size === 0) {
     return "Committed colors: none yet (no color has 2+ cards) — the pool is still open.";
   }

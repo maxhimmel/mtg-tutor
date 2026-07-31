@@ -41,6 +41,17 @@ export function committedColors(pool: readonly PoolCard[]): Set<ColorCode> {
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
 }
 
+// Whether a card belongs to what the pool is building. Before any commitment
+// nothing can be off-color -- early picks are expendable and staying open is
+// correct -- and a colorless card fits whatever the pool becomes.
+//
+// Shared rather than inlined because the prompt says this out loud ("this pick
+// is OFF those colors") next to the colors it computed, and the two saying
+// different things is the bug that sentence is most able to hide.
+export function isOnColor(committed: ReadonlySet<ColorCode>, colors: readonly ColorCode[]): boolean {
+  return committed.size === 0 || colors.length === 0 || colors.some((c) => committed.has(c));
+}
+
 // A pick worth thinking about: the pack still has enough cards that the choice
 // is real (late forced picks of 2-3 cards teach nothing). Takes a count rather
 // than the pack, because the coach gate runs server-side where only the size
@@ -69,13 +80,7 @@ export function scorePick<C extends EngineCard>(pack: C[], picked: C, pool: C[])
   const rankInPack = ranked.findIndex((c) => c.name === picked.name) + 1;
 
   const committed = committedColors(pool);
-  // You can't be "off-color" before committing to any colors — early picks are
-  // expendable and staying open is correct. Fixes the bogus P1P1 "off your
-  // colors" warning; partial credit below stays gated on committed.
-  const onColor =
-    committed.size === 0 ||
-    picked.colors.length === 0 ||
-    picked.colors.some((c) => committed.has(c));
+  const onColor = isOnColor(committed, picked.colors);
 
   let score: number;
   if (picked.name === best.name) {

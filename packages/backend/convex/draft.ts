@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   type DraftEngine,
   buildPickContext,
@@ -76,8 +76,43 @@ export const state = query({
       format: session.format,
       status: session.status,
       summary: session.summary,
+      sideboard: session.sideboard ?? [],
       ...boardView(engine),
     };
+  },
+});
+
+// Set a pick aside, or take it back. Positions in the pool, not names -- see the
+// field's note in schema.ts.
+//
+// Idempotent in both directions rather than a toggle: the client already knows
+// which state it is asking for, and a toggle would flip twice on a double-click
+// and land back where it started.
+export const bench = mutation({
+  args: {
+    sessionId: v.id("draftSessions"),
+    pickIndex: v.number(),
+    benched: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const session = await ownedSession(ctx, args.sessionId);
+
+    if (!Number.isInteger(args.pickIndex) || args.pickIndex < 0) {
+      throw new ConvexError(`${args.pickIndex} is not a pick.`);
+    }
+    if (args.pickIndex >= session.pickedNames.length) {
+      throw new ConvexError(
+        `This draft has ${session.pickedNames.length} picks; there is nothing at ${args.pickIndex}.`,
+      );
+    }
+
+    const current = new Set(session.sideboard ?? []);
+    if (args.benched) current.add(args.pickIndex);
+    else current.delete(args.pickIndex);
+
+    const sideboard = [...current].sort((a, b) => a - b);
+    await ctx.db.patch(args.sessionId, { sideboard });
+    return sideboard;
   },
 });
 
@@ -196,10 +231,20 @@ export const coachContext = internalQuery({
     );
     const record = toRecordedPick(row, text);
 
+    // The sideboard as it stands NOW, applied to the pool as it stood then. That
+    // is deliberate: what the player has since decided they are not playing is
+    // the current answer to "what are you building", and it is the only thing
+    // here that is allowed to change after a pick was made. Positions past this
+    // pick are cards it had not yet seen, and `poolBefore` simply has no entry
+    // for them.
+    const benched = new Set(session.sideboard ?? []);
+    const maindeck = row.poolBefore.filter((_, i) => !benched.has(i));
+    const sideboard = row.poolBefore.filter((_, i) => benched.has(i));
+
     return {
       // The pool as it stood BEFORE this pick: the prompt shows it with the pick
       // added back, and judges the pick's colors against it without.
-      userContent: buildPickContext(record, row.poolBefore),
+      userContent: buildPickContext(record, maindeck, sideboard),
       setCode: session.setCode,
       packNo: row.packNo,
       pickNo: row.pickNo,
