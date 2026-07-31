@@ -78,7 +78,8 @@
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
 below cite these by number, so a shipped idea is deleted and its number left
 empty rather than renumbering everything under it. 4, 5 and 10 shipped on
-2026-07-30.
+2026-07-30; the sideboard and mana-curve ideas that took 10 and 11 after that
+shipped on 2026-07-31.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
