@@ -77,6 +77,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const convex = useConvex();
   const { isAuthenticated } = useConvexAuth();
   const pickCard = useMutation(api.draft.pick);
+  const benchCard = useMutation(api.draft.bench);
   const { getAccessToken } = useAccessToken();
 
   // Loaded once, then advanced from what `pick` returns, rather than held open
@@ -343,6 +344,25 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     }
   }
 
+  // Moved locally first and reconciled with what the server returns, because
+  // this board holds its own state rather than subscribing: waiting for the
+  // round trip would leave a card sitting in a list it has been dragged out of.
+  async function onBench(pickIndex: number, benched: boolean) {
+    const before = state?.sideboard ?? [];
+    const after = benched
+      ? [...before, pickIndex].sort((a, b) => a - b)
+      : before.filter((i) => i !== pickIndex);
+    setState((prev) => prev && { ...prev, sideboard: after });
+
+    try {
+      const stored = await benchCard({ sessionId: id, pickIndex, benched });
+      setState((prev) => prev && { ...prev, sideboard: stored });
+    } catch (e) {
+      setState((prev) => prev && { ...prev, sideboard: before });
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   if (loadError) {
     return <PageNotice tone="error">{loadError}</PageNotice>;
   }
@@ -562,7 +582,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               )}
             </Panel>
 
-            <PicksColumn pool={pool} />
+            <PicksColumn
+              pool={pool}
+              sideboard={state.sideboard}
+              onBench={(pickIndex, benched) => void onBench(pickIndex, benched)}
+            />
           </aside>
         </div>
       )}
