@@ -180,6 +180,18 @@ export default defineSchema({
     seed: v.number(),
     pickedNames: v.array(v.string()),
     status: v.union(v.literal("active"), v.literal("complete")),
+    // Which picks the player has set aside, as positions in `pickedNames`.
+    //
+    // Positions rather than names, because drafting two copies of a card is
+    // normal and benching one of them must not bench both. The same position
+    // indexes a stored pick's `poolBefore`, which is the pool in pick order --
+    // so the coach can split one pick's pool into maindeck and sideboard
+    // without reading anything else.
+    //
+    // Nothing else derives from this: the pool, the score and the suggested
+    // deck are all unchanged by it. It is the player's intent, and the only
+    // thing that reads intent is the coach.
+    sideboard: v.optional(v.array(v.number())),
     createdAt: v.string(),
     completedAt: v.optional(v.string()),
     // Denormalized on completion so the stats screen doesn't replay every draft.
