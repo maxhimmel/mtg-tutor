@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CARD_STAT_GLOSSARY, SCORING_GLOSSARY, type GlossaryEntry } from "@mtg-tutor/core";
 import { PageShell } from "../components/PageShell";
-import { Dumbbell } from "./Dumbbell";
+import { WinRateAxis } from "./figures/WinRateAxis";
 
 export const metadata: Metadata = {
   title: "Glossary — mtg-tutor",
@@ -122,7 +122,7 @@ export default function GlossaryPage() {
         </div>
 
         <div className="mt-8">
-          <Dumbbell />
+          <WinRateAxis />
         </div>
 
         <div className="mt-12 gap-12 xl:flex xl:items-start">
