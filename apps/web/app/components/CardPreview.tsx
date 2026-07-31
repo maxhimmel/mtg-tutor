@@ -149,7 +149,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
         <>
           <div
             ref={boxRef}
-            className="popup-surface pointer-events-none fixed z-50 overflow-hidden p-1 transition-opacity"
+            className="popup-surface pointer-events-none fixed z-50 overflow-hidden transition-opacity"
             style={{
               left: pos?.left ?? -9999,
               top: pos?.top ?? -9999,
@@ -157,10 +157,18 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
               opacity: pos ? 1 : 0,
             }}
           >
+            {/* Flush to the border, and the two rules that keep it there.
+                Scryfall's art is full-bleed with square corners, so any inset
+                shows as a band of base-200 -- and the surface's own padding used
+                to leave one that widened at the corners, where the card's clip
+                and the border's curve pull apart. The surface clips to its own
+                radius instead. `block` because an inline image sits on a text
+                baseline, which put a few more pixels of that band under the
+                bottom edge only. */}
             <img
               src={webpImage(hover.card.imageUrl)}
               alt={hover.card.name}
-              className="w-full rounded-lg"
+              className="block w-full"
               draggable={false}
             />
           </div>
