@@ -4,6 +4,7 @@ import Link from "next/link";
 import { CARD_STAT_GLOSSARY, SCORING_GLOSSARY, type GlossaryEntry } from "@mtg-tutor/core";
 import { PageShell } from "../components/PageShell";
 import { MaindeckGrid } from "./figures/MaindeckGrid";
+import { PickStrip } from "./figures/PickStrip";
 import { WinRateAxis } from "./figures/WinRateAxis";
 
 export const metadata: Metadata = {
@@ -60,6 +61,7 @@ const SECTIONS: { id: string; question: string; note?: string; ids: string[] }[]
 // a figure needs no placeholder and adding one later touches nothing else.
 const FIGURES: Record<string, ReactNode> = {
   "how-much-trust": <MaindeckGrid />,
+  when: <PickStrip />,
 };
 
 const ALL = [...CARD_STAT_GLOSSARY, ...SCORING_GLOSSARY];
