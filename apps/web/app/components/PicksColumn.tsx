@@ -4,6 +4,7 @@ import { type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { ringFor } from "../lib/cardFrame";
 import { COLOR_NAMES } from "../lib/format";
 import { CardPlacardList } from "./CardPlacard";
+import { ManaCurve } from "./ManaCurve";
 import { Panel } from "./Panel";
 
 // Enough to see what the deck is becoming without turning the panel into a
@@ -50,6 +51,10 @@ export function PicksColumn({ pool }: { pool: Card[] }) {
         </div>
       }
     >
+      {/* Above the counts, because it answers a question they cannot: the tally
+          says what the pool is made of, the curve says when it can play it. */}
+      <ManaCurve cards={pool} />
+
       {types.length > 0 && (
         <div className="flex flex-col gap-1.5 border-b border-base-300 pb-2.5">
           <div className="flex flex-wrap gap-1">
