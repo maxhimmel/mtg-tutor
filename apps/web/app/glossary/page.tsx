@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CARD_STAT_GLOSSARY, SCORING_GLOSSARY, type GlossaryEntry } from "@mtg-tutor/core";
 import { PageShell } from "../components/PageShell";
+import { GradeRuler } from "./figures/GradeRuler";
 import { MaindeckGrid } from "./figures/MaindeckGrid";
 import { PickStrip } from "./figures/PickStrip";
 import { WinRateAxis } from "./figures/WinRateAxis";
@@ -62,6 +63,7 @@ const SECTIONS: { id: string; question: string; note?: string; ids: string[] }[]
 const FIGURES: Record<string, ReactNode> = {
   "how-much-trust": <MaindeckGrid />,
   when: <PickStrip />,
+  grading: <GradeRuler />,
 };
 
 const ALL = [...CARD_STAT_GLOSSARY, ...SCORING_GLOSSARY];

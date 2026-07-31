@@ -341,9 +341,11 @@ html {
   animation: verdict-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
-/* The glossary's dumbbell connector, drawn left to right from the "without it"
-   end -- so the gap is something the reader watches open rather than arrives at.
-   Paired with animate-verdict on the far dot, which lands as the line reaches it. */
+/* The connector in the glossary's opening figure, drawn left to right from the
+   "without it" end -- so the gap is something the reader watches open rather
+   than arrives at. Paired with animate-verdict on the far dot, which lands as
+   the line reaches it. The page's other three figures are deliberately still:
+   only the one carrying the argument moves. */
 @keyframes gap-draw {
   from {
     transform: scaleX(0);
