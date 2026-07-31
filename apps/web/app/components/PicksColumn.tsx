@@ -153,11 +153,18 @@ export function PicksColumn({
           {picks.length === 0 ? "Nothing drafted yet." : "Every pick is in the sideboard."}
         </p>
       ) : (
-        <CardPlacardList
-          cards={deck}
-          trailing={trailingFor(maindeck, false)}
-          className="max-h-[45vh] overflow-y-auto pr-1"
-        />
+        // Labelled like the sideboard below it, because since benching shipped
+        // the panel's title counts both and neither number could be read off the
+        // other. The title is what you have drafted; this is what you are
+        // playing, which is the one the tallies above already describe.
+        <div className="flex flex-col gap-1.5">
+          <div className="eyebrow text-base-content/50">Maindeck ({maindeck.length})</div>
+          <CardPlacardList
+            cards={deck}
+            trailing={trailingFor(maindeck, false)}
+            className="max-h-[45vh] overflow-y-auto pr-1"
+          />
+        </div>
       )}
 
       {bench.length > 0 && (
