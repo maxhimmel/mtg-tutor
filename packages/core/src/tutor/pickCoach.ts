@@ -48,10 +48,33 @@ export function buildPickContext(
     .map((c) => `  - ${describeCard(c)}\n    ${statLine(c)}`)
     .join("\n");
 
-  const verdict = score.isBest
-    ? `${score.score}/100 (${score.grade}) — you took the statistically best card.`
-    : `${score.score}/100 (${score.grade}), rank ${score.rankInPack} of ${pack.length}. ` +
-      `Best by the numbers: ${score.rawBest.name} (GIH WR ${pct(score.rawBest.gihWinRate)}).`;
+  // Both answers, always, because the gap between them is the lesson. Naming
+  // the raw best even when the player took it is what lets the coach say "the
+  // strongest card here was also the right one" rather than leaving the model
+  // to guess whether they diverged.
+  const divergence =
+    score.contextBest.name === score.rawBest.name
+      ? `The strongest card in the pack was also the best one for this deck: ${score.rawBest.name}.`
+      : `Strongest card in the pack: ${score.rawBest.name} ` +
+        `(GIH WR ${pct(score.rawBest.gihWinRate)}). Best for THIS deck: ${score.contextBest.name}.`;
+
+  const verdict = [
+    score.isBest
+      ? `${score.score}/100 (${score.grade}) — you took the best card for this deck.`
+      : `${score.score}/100 (${score.grade}), rank ${score.rankInPack} of ${pack.length} on raw power.`,
+    divergence,
+    // Only the reasons that moved this pick, so the model is not handed a
+    // column of zeroes to read meaning into.
+    score.terms.length > 0
+      ? `Why ${picked.name} is worth what it is here: ` +
+        score.terms
+          .map((t) => `${t.label} ${t.delta >= 0 ? "+" : ""}${(t.delta * 100).toFixed(1)}pp`)
+          .join(", ") +
+        "."
+      : null,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
 
   return [
     situationLine(rec.packNo, rec.pickNo, pack.length),

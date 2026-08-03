@@ -37,6 +37,7 @@ describe("buildPickContext", () => {
     rawBestValue: 0.62,
     contextBest: best,
     contextBestValue: 0.62,
+    terms: [],
     isBest: false,
     onColor: true,
     rankInPack: 2,
@@ -135,5 +136,55 @@ describe("buildPickContext", () => {
     it("says nothing when no color was left behind", () => {
       expect(ctx).not.toContain("Pivot:");
     });
+  });
+});
+
+describe("buildPickContext showing the verdict's working", () => {
+  const picked = card("Lightning Strike", { colors: ["R"], gihWinRate: 0.58 });
+  const other = card("Big Bomb", { colors: ["R"], gihWinRate: 0.62 });
+  const base = (over: Partial<PickScore<Card>>): RecordedPick<Card> => ({
+    packNo: 2,
+    pickNo: 5,
+    pack: [picked, other],
+    picked,
+    score: {
+      score: 84,
+      grade: "B+",
+      picked,
+      pickedValue: 0.58,
+      rawBest: other,
+      rawBestValue: 0.62,
+      contextBest: picked,
+      contextBestValue: 0.6,
+      terms: [],
+      isBest: true,
+      onColor: true,
+      rankInPack: 2,
+      ...over,
+    },
+  });
+
+  it("names both answers when they differ, so the gap can be taught", () => {
+    const out = buildPickContext(base({}), []);
+    expect(out).toContain("Strongest card in the pack: Big Bomb");
+    expect(out).toContain("Best for THIS deck: Lightning Strike");
+  });
+
+  it("says so plainly when they agree, rather than leaving it to be inferred", () => {
+    const out = buildPickContext(base({ contextBest: other, rawBest: other }), []);
+    expect(out).toContain("also the best one for this deck: Big Bomb");
+  });
+
+  it("lists the reasons the pick was worth what it was", () => {
+    const out = buildPickContext(
+      base({ terms: [{ label: "archetype", delta: 0.023 }, { label: "splash", delta: -0.008 }] }),
+      [],
+    );
+    expect(out).toContain("archetype +2.3pp");
+    expect(out).toContain("splash -0.8pp");
+  });
+
+  it("says nothing about reasons when none moved the pick", () => {
+    expect(buildPickContext(base({}), [])).not.toContain("is worth what it is here");
   });
 });

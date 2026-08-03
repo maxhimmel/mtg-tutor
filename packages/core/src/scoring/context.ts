@@ -67,7 +67,17 @@ function winRateAtWidth(archetypes: readonly ColorWinRate[], width: number): num
  */
 export function splashCost(archetypes: readonly ColorWinRate[], width: number): number {
   if (width <= 2) return 0;
-  return Math.max(0, winRateAtWidth(archetypes, 2) - winRateAtWidth(archetypes, width));
+  // Monotone in width, and it has to be enforced rather than assumed. A width
+  // nobody played falls back to the format's own rate, which is HIGHER than a
+  // measured wider archetype -- so a five-colour deck nobody drafted would come
+  // out cheaper than the four-colour one that was, and the marginal step into
+  // it would read as a discount. Found in a stored pick paying +1.5pp to add a
+  // colour.
+  let worst = 0;
+  for (let w = 3; w <= width; w++) {
+    worst = Math.max(worst, winRateAtWidth(archetypes, 2) - winRateAtWidth(archetypes, w));
+  }
+  return Math.max(0, worst);
 }
 
 /**
@@ -206,8 +216,12 @@ export function contextValue(card: EngineCard, ctx: ScoringContext): ContextValu
   // What this card would make the deck, if taken.
   const widened = new Set(ctx.colors);
   for (const c of card.colors) widened.add(c);
-  const splash =
-    splashCost(ctx.archetypes, widened.size) - splashCost(ctx.archetypes, ctx.colors.size);
+  // Floored: widening the deck is never a saving, whatever the archetype table
+  // happens to say about a width few people drafted.
+  const splash = Math.max(
+    0,
+    splashCost(ctx.archetypes, widened.size) - splashCost(ctx.archetypes, ctx.colors.size),
+  );
 
   const terms: ValueTerm[] = [
     { label: "archetype", delta: ctx.commitment * archDelta(ctx, card, context) },

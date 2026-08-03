@@ -244,6 +244,10 @@ export const storedPickScore = v.object({
   rawBestValue: v.number(),
   contextBestName: v.string(),
   contextBestValue: v.number(),
+  // Why the picked card was worth what it was, in win-rate points. Stored
+  // rather than recomputed, because the coach reads this row instead of
+  // replaying and the reasons are part of what the pick actually saw.
+  terms: v.optional(v.array(v.object({ label: v.string(), delta: v.number() }))),
   isBest: v.boolean(),
   onColor: v.boolean(),
   rankInPack: v.number(),

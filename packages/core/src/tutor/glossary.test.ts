@@ -61,7 +61,11 @@ describe("STAT_LEGEND", () => {
   it("keeps the instructions the model needs and the corpus has no place for", () => {
     expect(STAT_LEGEND).toContain("Do not recite them back");
     expect(STAT_LEGEND).toContain("riding its deck");
-    expect(STAT_LEGEND).toContain("the verdict cannot see it");
+    // The verdict reads the pool now, so the old line saying it could not is
+    // gone. What replaces it still has to name the limit that remains.
+    expect(STAT_LEGEND).toContain("RAW BEST");
+    expect(STAT_LEGEND).toContain("CONTEXT BEST");
+    expect(STAT_LEGEND).toContain("NOT in the verdict");
   });
 
   it("wraps to a readable width", () => {

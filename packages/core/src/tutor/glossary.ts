@@ -98,13 +98,14 @@ export const SCORING_GLOSSARY: GlossaryEntry[] = [
     id: "score",
     label: "Score",
     name: "Pick score, 0-100",
-    short: "How close your pick came to the highest-rated card in the pack.",
+    short: "How close your pick came to the best card for the deck you are building.",
     detail: [
-      "Taking the top-rated card scores 100. Otherwise the score falls with the win-rate gap between your pick and that card — a gap of about two percentage points costs roughly fifteen points.",
-      "Once you have committed to colors, a pick that stays in them earns a few points back, so a disciplined on-color pick is not punished as hard as an off-color one of the same raw power.",
+      "Taking that card scores 100. Otherwise the score falls with the win-rate gap between your pick and it — a gap of about two percentage points costs roughly fifteen points.",
+      "The card it compares you against is not always the strongest one in the pack. Once you have committed to colors, a card that would drag you into a third is charged what a third color actually costs in this set, and a card that suits your archetype is credited what the archetype's own data says it is worth.",
+      "Early on there is no such thing: with nothing committed, the comparison is raw power alone, so a first-pick score never implies you should be in any particular color.",
     ],
     caveat:
-      "It measures agreement with the data's top card, not whether the pick was right for your deck. See raw-power best.",
+      "It measures the pick, not the plan. A high score means you took the best card available for the deck you were in, which is a different question from whether that deck was the one to be in.",
   },
   {
     id: "grade",

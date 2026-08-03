@@ -1,7 +1,7 @@
 import type { Card, ColorCode, EngineCard, PoolCard } from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
-import { type ScoringContext, contextValue } from "./context.js";
+import { type ScoringContext, type ValueTerm, contextValue } from "./context.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -29,6 +29,11 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   // from -- the engine replaying a draft, and every test that does not care.
   contextBest: C;
   contextBestValue: number;
+
+  // Why the picked card was worth what it was, in win-rate points, largest
+  // first. Empty when no context was supplied, or when nothing moved it. A
+  // grade you cannot interrogate is worse than a simple one.
+  terms: ValueTerm[];
 
   isBest: boolean; // took the card the grade was measured against
   onColor: boolean;
@@ -110,13 +115,17 @@ export function scorePick<C extends EngineCard>(
   let contextBest = rawBest;
   let contextBestValue = rawBestValue;
   let pickedInContext = pickedValue;
+  let terms: ValueTerm[] = [];
   if (ctx) {
     let bestSoFar = -Infinity;
     for (const card of pack) {
-      const v = contextValue(card, ctx).value;
-      if (card.name === picked.name) pickedInContext = v;
-      if (v > bestSoFar) {
-        bestSoFar = v;
+      const scored = contextValue(card, ctx);
+      if (card.name === picked.name) {
+        pickedInContext = scored.value;
+        terms = scored.terms;
+      }
+      if (scored.value > bestSoFar) {
+        bestSoFar = scored.value;
         contextBest = card;
       }
     }
@@ -157,6 +166,7 @@ export function scorePick<C extends EngineCard>(
     rawBestValue,
     contextBest,
     contextBestValue,
+    terms,
     // Tracks whatever the grade was measured against, so a 100/100 pick can
     // never come back marked as a miss.
     isBest: picked.name === target.name,

@@ -227,3 +227,27 @@ describe("contextValue", () => {
     expect(out.terms.reduce((a, t) => a + t.delta, 0)).toBeCloseTo(out.value - out.base, 10);
   });
 });
+
+describe("splashCost is monotone in width", () => {
+  // fdn's shape: nothing at four colours, so the width falls back to the
+  // format's own rate -- which is higher than the measured three-colour rate.
+  const gappy: ColorWinRate[] = [
+    { colors: "WU", n: 20000, wr: 0.6 },
+    { colors: "WUB", n: 5000, wr: 0.53 },
+  ];
+
+  it("never makes a wider deck cheaper than a narrower one", () => {
+    for (let w = 3; w <= 5; w++) {
+      expect(splashCost(gappy, w)).toBeGreaterThanOrEqual(splashCost(gappy, w - 1));
+    }
+  });
+
+  // The bug this is for: a stored pick was credited +1.5pp for adding a colour,
+  // because the unmeasured width fell back to a rate above the measured one.
+  it("never pays a card for widening the deck", () => {
+    const ctx = ctxOf({ colors: new Set<ColorCode>(["W", "U", "B"]), archetypes: gappy });
+    const fourth = card("Fourth Colour", ["R"], 0.6);
+    const splash = contextValue(fourth, ctx).terms.find((t) => t.label === "splash");
+    expect(splash?.delta ?? 0).toBeLessThanOrEqual(0);
+  });
+});
