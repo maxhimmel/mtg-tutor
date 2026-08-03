@@ -3,6 +3,7 @@ import {
   type Card,
   type ScryfallCard,
   type SeventeenLandsCard,
+  computeCardValue,
   isBasicLand,
   mergeCards,
   normalizeName,
@@ -432,13 +433,17 @@ export const ingest = action({
       const rarityBaseline = baselines.get(c.rarity);
       const packRate = rates.get(normalizeName(c.name));
       const { iwd, maindeckRate } = readability.get(normalizeName(c.name)) ?? {};
-      return {
+      const rated = {
         ...c,
         ...(rarityBaseline != null ? { rarityBaseline } : {}),
         ...(packRate != null ? { packRate } : {}),
         ...(iwd != null ? { iwd } : {}),
         ...(maindeckRate != null ? { maindeckRate } : {}),
       };
+      // After the baseline is on, never before: computing it against the raw
+      // card would bake in RARITY_BASELINE's fixed guess for every unrated card
+      // and quietly undo what observedRarityBaselines just measured.
+      return { ...rated, value: computeCardValue(rated) };
     });
 
     // Two-colour archetype win rates, for describing guilds in the review.

@@ -67,6 +67,25 @@ describe("the deal is stable across a corpus of seeds", () => {
     });
   }
 
+  // The invariant behind precomputing `cardValue` at ingest. Bots pick by it, so
+  // if the stored answer differs from the formula by a float the seed deals
+  // different packs and every draft in that set stops replaying. Asserted on the
+  // mixed set because that is the one whose cards span all four branches.
+  it("deals identically whether value is stored or computed on read", () => {
+    const computed = fakeMixedSet();
+    const stored: SetData = {
+      ...computed,
+      cards: computed.cards.map((c) => ({ ...c, value: cardValue(c) })),
+      pools: Object.fromEntries(
+        Object.entries(computed.pools).map(([slot, cards]) => [
+          slot,
+          cards.map((c) => ({ ...c, value: cardValue(c) })),
+        ]),
+      ) as SetData["pools"],
+    };
+    expect(dealHash(stored, SEEDS)).toBe(dealHash(computed, SEEDS));
+  });
+
   it("deals the same set the same way twice", () => {
     expect(dealHash(fakeSet(), 20)).toBe(dealHash(fakeSet(), 20));
   });

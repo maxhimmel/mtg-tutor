@@ -49,6 +49,10 @@ export const engineCard = v.object({
   // unrated card by it, so scoring cannot be done without it.
   alsa: v.optional(v.number()),
   rarityBaseline: v.optional(v.number()),
+  // Resolved at ingest -- see EngineCard.value. Optional only until every set
+  // has been re-ingested; the change that shrinks this validator makes it
+  // required, and the push is what proves no pool still lacks it.
+  value: v.optional(v.number()),
 });
 
 // The half a person reads, and the half a prompt writes. One row per card in

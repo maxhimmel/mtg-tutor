@@ -51,7 +51,22 @@ export function observedRarityBaselines(cards: readonly EngineCard[]): Map<Rarit
 // the baseline onto the format's scale (see EngineCard.rarityBaseline), not by
 // shifting the win rates -- so a gap between two cards stays in real win-rate
 // points and SCORING.winRateGapK keeps its meaning.
+// Ingest resolves this once and stores it (see EngineCard.value); everything
+// else reads it.
+//
+// Falling back to the formula is transitional, not a permanent second path: it
+// is what lets a set ingested before the field existed keep scoring identically
+// until it is re-ingested. It stops being reachable in the same change that
+// takes gihWinRate, gihGames, rarityBaseline, alsa and rarity off EngineCard --
+// after that there is nothing left on the card to compute from, and `value`
+// becomes required rather than optional.
 export function cardValue(card: EngineCard): number {
+  return card.value ?? computeCardValue(card);
+}
+
+// The formula itself. Ingest is the only caller that needs it directly -- every
+// other reader wants `cardValue`, which prefers the stored answer.
+export function computeCardValue(card: EngineCard): number {
   const games = card.gihGames ?? 0;
   if (card.gihWinRate != null && games >= SCORING.minSampleForWinRate) {
     return card.gihWinRate;

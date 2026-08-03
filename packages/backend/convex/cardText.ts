@@ -78,6 +78,7 @@ export function engineHalf(c: StoredCard): StoredEngineCard {
     gihGames: c.gihGames,
     alsa: c.alsa,
     rarityBaseline: c.rarityBaseline,
+    value: c.value,
   });
 }
 

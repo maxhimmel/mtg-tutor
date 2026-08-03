@@ -59,6 +59,17 @@ export interface EngineCard {
   //
   // On this half of the card because cardValue nudges an unrated card by it.
   alsa?: number;
+
+  // What `cardValue` resolves to, settled once at ingest instead of recomputed
+  // on every read. Its inputs -- gihWinRate, gihGames, rarityBaseline, alsa,
+  // rarity -- do not change between ingests, so recomputing them 42 times a
+  // draft was only ever paying to carry them on the hot path.
+  //
+  // Absent for sets ingested before this, which fall back to computing it and
+  // deal identically. Bots pick by this number, so a set where it disagrees with
+  // the formula deals differently and strands its drafts: the two must stay
+  // exactly equal, which `corpus.test.ts` asserts.
+  value?: number;
 }
 
 /**
