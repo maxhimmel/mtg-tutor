@@ -161,7 +161,16 @@ export const pick = mutation({
         ? {
             status: "complete" as const,
             completedAt: new Date().toISOString(),
-            summary: summarizeDraft(engine.history, engine.humanPool),
+            // Maindeck, so the stored pair names the deck rather than the pile,
+            // and agrees with what `results` computes live.
+            summary: summarizeDraft(
+              engine.history,
+              splitPool(
+                engine.humanPool,
+                normalizeBench(session.sideboard ?? []),
+                session.pickedNames.length,
+              ).maindeck,
+            ),
           }
         : {}),
     });
@@ -203,11 +212,22 @@ export const results = query({
       .sort((a, b) => b.cost - a.cost)
       .slice(0, args.mistakeLimit ?? 5);
 
+    // Building the 40 out of cards the player has said they are not playing is
+    // the app overruling them with its own suggestion. `colorPair` reads the
+    // maindeck for the same reason: it should name the deck, not the pile.
+    const { maindeck, sideboard } = splitPool(
+      engine.humanPool,
+      normalizeBench(session.sideboard ?? []),
+      session.pickedNames.length,
+    );
+
     return {
-      summary: summarizeDraft(engine.history, engine.humanPool),
+      summary: summarizeDraft(engine.history, maindeck),
       // The deck builder reads type lines and colour identity to tell a land
       // from a spell and a splash from a lane, so it wants whole cards.
-      deck: suggestDeck(hydrate(engine.humanPool, text)),
+      deck: suggestDeck(hydrate(maindeck, text)),
+      // So the screen can show what was set aside rather than silently drop it.
+      sideboard: hydrate(sideboard, text),
       mistakes,
       status: session.status,
       // Without 17Lands data every card scores off its rarity baseline, so a
