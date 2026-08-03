@@ -2,10 +2,10 @@
 // the CLI and the web app will. Mirrors apps/cli's headless smoke test: always
 // take the highest-value card, so every pick should score 100.
 //
-//   pnpm --filter @mtg-tutor/backend smoke-draft [setCode]
+//   pnpm --filter @mtg-tutor/backend smoke-draft [setCode] [format]
 
 import { ConvexHttpClient } from "convex/browser";
-import { cardValue } from "@mtg-tutor/core";
+import { PACK, cardValue } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { accessToken } from "./lib/auth.mjs";
 
@@ -14,24 +14,45 @@ process.loadEnvFile(new URL("../.env.local", import.meta.url));
 const url = process.env.CONVEX_URL;
 if (!url) throw new Error("CONVEX_URL missing -- run `pnpm exec convex dev --once` first.");
 
-const setCode = process.argv[2] ?? "fdn";
+const setCode = (process.argv[2] ?? "fdn").toLowerCase();
+const requestedFormat = process.argv[3];
 const client = new ConvexHttpClient(url);
 client.setAuth(await accessToken());
 
-const stored = await client.query(api.sets.get, { setCode });
-if (!stored) {
+// Every query below keys on (code, format), and the format is the set's, not a
+// default this script may pick: `sets.get` and `draft.start` both fall back to
+// PremierDraft, so a TradDraft set read without one comes back empty and reports
+// itself as never ingested. Ask `list` -- the cheap table -- what is really here.
+const ingested = (await client.query(api.sets.list, {})).filter((s) => s.code === setCode);
+if (ingested.length === 0) {
   throw new Error(`Set "${setCode}" is not ingested. Run: convex run sets:ingest '{"setCode":"${setCode}"}'`);
 }
-console.log(`set ${setCode}: ${stored.cards.length} cards, ${stored.ratedCardCount} with 17Lands data`);
+const formats = ingested.map((s) => s.format);
+if (requestedFormat && !formats.includes(requestedFormat)) {
+  throw new Error(`Set "${setCode}" is ingested as ${formats.join(", ")}, not ${requestedFormat}.`);
+}
+// A set can be ingested under several formats, and picking one silently would
+// smoke-test whichever happened to sort first.
+if (!requestedFormat && formats.length > 1) {
+  throw new Error(`Set "${setCode}" is ingested as ${formats.join(" and ")} -- name one.`);
+}
+const format = requestedFormat ?? formats[0];
 
-const sessionId = await client.mutation(api.draft.start, { setCode });
+const stored = await client.query(api.sets.get, { setCode, format });
+console.log(`set ${setCode}/${format}: ${stored.cards.length} cards, ${stored.ratedCardCount} with 17Lands data`);
+
+// Counted here rather than over the packs dealt below, because art is not on the
+// half the engine deals: imageUrl lives on setCardText, and a pack carries
+// EngineCards. `get` hydrates both halves, so this is the read that can see it.
+const withArt = stored.cards.filter((c) => c.imageUrl).length;
+
+const sessionId = await client.mutation(api.draft.start, { setCode, format });
 console.log(`session ${sessionId}`);
 
 let state = await client.query(api.draft.state, { sessionId });
 const openingPack = state.pack.length;
 let scoreTotal = 0;
 let picks = 0;
-const withArt = new Set();
 
 const started = Date.now();
 while (!state.complete) {
@@ -40,7 +61,6 @@ while (!state.complete) {
 
   scoreTotal += result.score.score;
   picks++;
-  for (const c of state.pack) if (c.imageUrl) withArt.add(c.name);
 
   state = { complete: result.complete, pack: result.pack, pool: result.pool };
 }
@@ -49,10 +69,13 @@ const elapsed = Date.now() - started;
 const results = await client.query(api.draft.results, { sessionId });
 
 console.log(`\nopening pack: ${openingPack} cards`);
-console.log(`picks: ${picks} (expected ${45})`);
+// Derived, not fixed at 45: that is the fallback 15-card pack, and a set with an
+// observed packComposition deals its real shape -- 14 cards and 42 picks for a
+// modern Play Booster. The pack we were dealt is the honest multiplicand.
+console.log(`picks: ${picks} (expected ${PACK.packsPerDraft * openingPack})`);
 console.log(`pool size: ${state.pool.length}`);
 console.log(`avg score taking the best each time: ${(scoreTotal / picks).toFixed(1)} (expect ~100)`);
-console.log(`distinct cards seen carrying art: ${withArt.size}`);
+console.log(`cards carrying art: ${withArt}/${stored.cards.length}`);
 console.log(`summary: ${JSON.stringify(results.summary)}`);
 const { spells, nonbasicLands, basicLands } = results.deck;
 console.log(`suggested deck: ${results.deck.colors.join("") || "splashy"}, ${spells.length} spells + ${nonbasicLands.length} drafted lands + ${basicLands} basics = ${spells.length + nonbasicLands.length + basicLands}`);
