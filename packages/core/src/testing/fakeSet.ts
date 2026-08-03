@@ -87,3 +87,44 @@ export function fakePlayBoosterSet(composition?: PackComposition): SetData {
     },
   );
 }
+
+// A set whose cards do NOT all sit on the same branch of `cardValue`.
+//
+// `fakeSet` and `fakePlayBoosterSet` give every card `gihGames: 5000` and
+// `alsa: 8`, so every lookup takes the trusted-win-rate branch and returns raw
+// GIH. That leaves the rarity baseline, the thin-sample blend and the ALSA nudge
+// unexercised -- which is the wrong half to leave uncovered, because those are
+// the paths a freshly released set runs on, and a change that moves them strands
+// exactly the drafts nobody has replayed yet.
+//
+// Roughly FDN's shape: ~73% of cards rated, the rest unrated or thin.
+export function fakeMixedSet(): SetData {
+  const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
+  const cards: Card[] = [];
+
+  // Spread across the pivot (8) in both directions so the nudge is signed, and
+  // past the clamp at both ends so saturation is covered too.
+  const alsaFor = (i: number) => 1 + ((i * 3) % 14);
+
+  const add = (name: string, rarity: Rarity, i: number, count: number) => {
+    const kind = i % 10;
+    const over: Partial<Card> =
+      kind < 7
+        ? { gihGames: 5000, alsa: alsaFor(i) }
+        : kind < 9
+          ? // Thin sample: below minSampleForWinRate, so the blend runs.
+            { gihGames: 40, alsa: alsaFor(i) }
+          : // Never rated: baseline + nudge only.
+            { gihWinRate: undefined, gihGames: 0, alsa: alsaFor(i) };
+    // Half carry a measured baseline, half fall through to the constant.
+    if (i % 2 === 0) over.rarityBaseline = 0.6 + (i % 5) * 0.004;
+    cards.push(mkCard(name, rarity, [colors[i % 5]], 0.48 + (i % count) * 0.004, over));
+  };
+
+  for (let i = 0; i < 60; i++) add(`C${i}`, "common", i, 10);
+  for (let i = 0; i < 30; i++) add(`U${i}`, "uncommon", i, 8);
+  for (let i = 0; i < 20; i++) add(`R${i}`, "rare", i, 6);
+  for (let i = 0; i < 10; i++) add(`M${i}`, "mythic", i, 4);
+
+  return buildSetData("mix", withPackSlots("mix", cards));
+}

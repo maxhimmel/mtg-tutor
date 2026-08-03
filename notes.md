@@ -11,6 +11,7 @@
 - Bargain
 - Storm
 - Backup
+- Discover
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
