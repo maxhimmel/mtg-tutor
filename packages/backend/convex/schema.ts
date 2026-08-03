@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   benchEntry,
+  cardContext,
   cardStats,
   cardText,
   colorCode,
@@ -102,6 +103,20 @@ export default defineSchema({
     format: v.string(),
     key: v.string(),
     text: cardText,
+  }).index("by_code_format_and_key", ["code", "format", "key"]),
+
+  // What scoring reads to judge a card against the deck being built. A third
+  // table for the same reason setCardText is a second one: choosing the
+  // context-best card in a pack needs this for the ~14 cards in that pack, never
+  // for the set, so it must not ride the pool document.
+  //
+  // Keyed and shaped exactly like setCardText, including nesting the payload
+  // under one field so spreading a row cannot put `_id` and `key` on a card.
+  setCardContext: defineTable({
+    code: v.string(),
+    format: v.string(),
+    key: v.string(),
+    context: cardContext,
   }).index("by_code_format_and_key", ["code", "format", "key"]),
 
   // Our own draft statistics, derived from the 17Lands public datasets rather

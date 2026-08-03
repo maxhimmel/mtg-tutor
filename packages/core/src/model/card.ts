@@ -113,6 +113,34 @@ export interface CardText {
   maindeckRate?: number;
 }
 
+/**
+ * What scoring reads to judge a card against the deck being built, rather than
+ * on its own.
+ *
+ * A third table, and for the same reason `setCardText` is a second one: its
+ * readers want SUBSETS. Choosing the context-best card in a pack needs this for
+ * the ~14 cards in that pack, never for the set -- so it cannot ride the pool
+ * document, which is read whole on every pick and which two commits just spent
+ * some effort shrinking.
+ *
+ * `iwd` and `maindeckRate` are duplicated from CardText on purpose. Scoring
+ * needs them, the text row is not otherwise on the pick path, and two numbers a
+ * card is cheaper than a second read of a different table.
+ */
+export interface CardContext {
+  // This card's win rate inside each archetype, keyed by the deck's real
+  // colours -- "WU", and also "WUB". Absent for a card no archetype had enough
+  // games of; present for 82-97% of rated cards, median 93%.
+  archWr?: Record<string, number>;
+  // Opening-hand win rate minus drawn-later win rate: whether a card wants the
+  // game short or long. Measured at corr 0.022 with GIH WR across all 17 sets,
+  // which is what makes it worth storing -- it is a second axis, not a
+  // restatement of the first.
+  speed?: number;
+  iwd?: number;
+  maindeckRate?: number;
+}
+
 /** A whole card: what the engine reads, plus what a person reads. */
 export type Card = EngineCard & CardText;
 

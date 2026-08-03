@@ -21,7 +21,14 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { card, cardStats, colorWinRate, packCard, packComposition } from "./validators.js";
+import {
+  card,
+  cardContext,
+  cardStats,
+  colorWinRate,
+  packCard,
+  packComposition,
+} from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
 // return type would be inferred from a type that depends on itself. Declaring
@@ -74,7 +81,7 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // the rules text, art and reading statistics out to setCardText, and
 // "5-value-precomputed" settled cardValue at ingest and sent the four statistics
 // it was computed from after them, and "6-rarity-off-pool" sent the fifth.
-const POOL_REVISION = "7-all-color-counts";
+const POOL_REVISION = "8-card-context";
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -463,6 +470,35 @@ export const ingest = action({
       (p) => !pooled.has(normalizeName(p.name)),
     ).length;
 
+    // The context rows. Built here rather than in `store` because this is where
+    // the stats artifact is already open, and written as a whole row per card so
+    // scoring reads a pack's worth and not a set's.
+    const archByCard = new Map<string, Record<string, number>>();
+    for (const a of stats.archetypes ?? []) {
+      const key = normalizeName(a.name);
+      const seen = archByCard.get(key) ?? {};
+      seen[a.colors] = a.wr;
+      archByCard.set(key, seen);
+    }
+
+    const contexts = stats.cards.map((c) => {
+      const key = normalizeName(c.name);
+      const archWr = archByCard.get(key);
+      // Both halves have to have cleared the sample floor for the difference
+      // between them to mean anything; the artifact writes undefined otherwise.
+      const speed =
+        c.ohWr != null && c.gdWr != null ? Math.round((c.ohWr - c.gdWr) * 1e4) / 1e4 : undefined;
+      return {
+        key,
+        context: {
+          ...(archWr && Object.keys(archWr).length > 0 ? { archWr } : {}),
+          ...(speed != null ? { speed } : {}),
+          ...(c.iwd != null ? { iwd: c.iwd } : {}),
+          ...(c.maindeckRate != null ? { maindeckRate: c.maindeckRate } : {}),
+        },
+      };
+    });
+
     const stored = await ctx.runMutation(internal.sets.store, {
       code: setCode,
       name: scryfall.meta.name,
@@ -471,6 +507,7 @@ export const ingest = action({
       format,
       cards,
       colorWinRates,
+      contexts,
       packComposition: stats.packComposition,
       sourceHash: poolFingerprint,
       metaRevision: META_REVISION,
@@ -561,6 +598,7 @@ export const store = internalMutation({
     format: v.string(),
     cards: v.array(card),
     colorWinRates: v.array(colorWinRate),
+    contexts: v.array(v.object({ key: v.string(), context: cardContext })),
     packComposition: v.optional(packComposition),
     sourceHash: v.optional(v.string()),
     metaRevision: v.optional(v.string()),
@@ -655,6 +693,27 @@ export const store = internalMutation({
         format: args.format,
         key: normalizeName(c.name),
         text: textHalf(c),
+      });
+    }
+
+    // Same wholesale replace as the text rows above, and for the same reason.
+    // Only cards the stats artifact actually had context for get a row, so a
+    // reader must treat a missing one as "no context", not as an error -- which
+    // is the honest state for a card no archetype had enough games of.
+    const staleContext = await ctx.db
+      .query("setCardContext")
+      .withIndex("by_code_format_and_key", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .collect();
+    for (const row of staleContext) await ctx.db.delete(row._id);
+
+    for (const { key, context } of args.contexts) {
+      await ctx.db.insert("setCardContext", {
+        code: args.code,
+        format: args.format,
+        key,
+        context,
       });
     }
 

@@ -127,6 +127,21 @@ export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;
 export type StoredCardText = Infer<typeof cardText>;
 
+// What scoring reads to judge a card in context. One row per card in
+// `setCardContext` -- see core's CardContext for why this is a third table and
+// not more fields on the pool.
+//
+// Synergy is deliberately absent. It belongs here by rights, but eight partner
+// names a card measured at 201KB of read per draft against 41KB for the
+// archetype splits -- two thirds of the cost for the weakest of the signals
+// (median lift 1.93pp against archetype fit's 4.2pp). Left for its own decision.
+export const cardContext = v.object({
+  archWr: v.optional(v.record(v.string(), v.number())),
+  speed: v.optional(v.number()),
+  iwd: v.optional(v.number()),
+  maindeckRate: v.optional(v.number()),
+});
+
 // One archetype's own win rate, no card dimension. Same shape setStats stores,
 // so ingest copies it across rather than reshaping it.
 export const colorWinRate = v.object({
