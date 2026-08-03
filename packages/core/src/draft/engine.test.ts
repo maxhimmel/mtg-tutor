@@ -18,7 +18,7 @@ describe("makePack", () => {
     const set = fakeSet();
     for (let s = 0; s < 50; s++) {
       const pack = makePack(set, rng(s));
-      const bombs = pack.filter((c) => c.rarity === "rare" || c.rarity === "mythic");
+      const bombs = pack.filter((c) => c.slot === "rare" || c.slot === "mythic");
       expect(bombs.length).toBe(PACK.rareOrMythic);
     }
   });

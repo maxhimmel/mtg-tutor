@@ -18,7 +18,7 @@ export function mkCard(
   colors: ColorCode[],
   gih: number,
   overrides: Partial<Card> = {},
-): Card {
+): IngestCard & { value: number } {
   const base: IngestCard = {
     name,
     rarity,
@@ -42,7 +42,7 @@ export function mkCard(
 
 // A set with enough cards in every rarity pool to generate real packs.
 export function fakeSet(): SetData {
-  const cards: Card[] = [];
+  const cards: (IngestCard & { value: number })[] = [];
   const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
 
   for (let i = 0; i < 60; i++) {
@@ -69,7 +69,7 @@ export function fakeSet(): SetData {
 // and an observed composition. Mirrors what SOS ingestion produces.
 export function fakePlayBoosterSet(composition?: PackComposition): SetData {
   const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
-  const cards: Card[] = [];
+  const cards: (IngestCard & { value: number })[] = [];
 
   for (let i = 0; i < 60; i++)
     cards.push(mkCard(`C${i}`, "common", [colors[i % 5]], 0.48, { setCode: "tst" }));
@@ -88,7 +88,7 @@ export function fakePlayBoosterSet(composition?: PackComposition): SetData {
   return buildSetData(
     "tst",
     withPackSlots("tst", cards),
-    new Map(),
+    [],
     composition ?? {
       size: 14,
       shapes: [
@@ -112,7 +112,7 @@ export function fakePlayBoosterSet(composition?: PackComposition): SetData {
 // Roughly FDN's shape: ~73% of cards rated, the rest unrated or thin.
 export function fakeMixedSet(): SetData {
   const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
-  const cards: Card[] = [];
+  const cards: (IngestCard & { value: number })[] = [];
 
   // Spread across the pivot (8) in both directions so the nudge is signed, and
   // past the clamp at both ends so saturation is covered too.

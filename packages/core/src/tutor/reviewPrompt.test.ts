@@ -7,6 +7,7 @@ function card(name: string, over: Partial<Card> = {}): Card {
   return {
     name,
     rarity: "common",
+    value: 0.55,
     colors: [],
     colorIdentity: [],
     manaCost: "",

@@ -16,11 +16,12 @@
     "dist"
   ],
   "scripts": {
-    "generate": "tsx scripts/generate-principles.ts",
     "build": "pnpm run generate && tsc",
+    "check:purity": "tsx scripts/check-purity.ts",
+    "generate": "tsx scripts/generate-principles.ts",
     "test": "pnpm run check:purity && vitest run",
     "test:watch": "vitest",
-    "check:purity": "tsx scripts/check-purity.ts"
+    "typecheck": "tsc --noEmit -p tsconfig.check.json"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",

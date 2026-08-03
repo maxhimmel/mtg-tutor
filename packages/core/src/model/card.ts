@@ -61,11 +61,13 @@ export interface EngineCard {
  */
 export interface CardText {
   name: string;
-  // Optional because it is an INGEST input rather than something the app reads:
-  // rarity decides a card's pack slot and its baseline value, both settled once
-  // at ingest, and nothing anywhere renders it. It is kept on this half so the
-  // fact is not thrown away -- a rarity gem is an obvious thing to want -- but
-  // a row written before it moved here has none and nothing misses it.
+  // On this half because the readers left are the ones that PRINT it -- the CLI
+  // tags every card in a pack with C/U/R/M. What it is not is an engine field:
+  // it decides a card's pack slot and its baseline value, both settled once at
+  // ingest, and dealing reads `slot` rather than this.
+  //
+  // Optional because a row written before it moved here has none; `rarityTag`
+  // renders "?" for that, as it already did for any unrecognised rarity.
   rarity?: Rarity;
   colorIdentity: ColorCode[];
   manaCost: string;

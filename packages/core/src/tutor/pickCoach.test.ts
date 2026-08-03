@@ -8,6 +8,7 @@ function card(name: string, over: Partial<Card> = {}): Card {
   return {
     name,
     rarity: "common",
+    value: 0.55,
     colors: [],
     colorIdentity: [],
     manaCost: "",
@@ -27,7 +28,7 @@ describe("buildPickContext", () => {
   const best = card("Big Bomb", { colors: ["R"], gihWinRate: 0.62 });
   const poolMate = card("Storm Fox", { colors: ["U"] });
 
-  const score: PickScore = {
+  const score: PickScore<Card> = {
     score: 72,
     grade: "B",
     picked,
@@ -39,7 +40,7 @@ describe("buildPickContext", () => {
     rankInPack: 2,
   };
 
-  const rec: RecordedPick = {
+  const rec: RecordedPick<Card> = {
     packNo: 1,
     pickNo: 3,
     pack: [picked, best],

@@ -1,0 +1,11 @@
+// Typechecking sees everything; the build does not.
+//
+// tsconfig.json excludes tests and fixtures because they must not land in dist.
+// That also hid them from `tsc`, and a change to a shared type could leave a
+// real error in a fixture that every test still passed -- which happened.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

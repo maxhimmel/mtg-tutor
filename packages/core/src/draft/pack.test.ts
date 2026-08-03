@@ -18,15 +18,16 @@ describe("makePack with observed composition", () => {
   it("puts a bonus-sheet card in every pack", () => {
     const rng = mulberry32(11);
     for (let i = 0; i < 200; i++) {
-      const bonus = makePack(set, rng).filter((c) => c.setCode === "bns");
+      const bonus = makePack(set, rng).filter((c) => c.slot === "bonus");
       expect(bonus.length).toBeGreaterThanOrEqual(1);
     }
   });
 
   it("never leaks bonus-sheet cards into ordinary rarity slots", () => {
-    // The bonus cards here are uncommons, so a naive rarity pool would mix them
-    // into the uncommon slot and inflate how often they appear.
-    expect(set.pools.uncommon.every((c) => c.setCode === "tst")).toBe(true);
+    // The bonus cards here are printed at uncommon, so a partition by rarity
+    // would mix them into the uncommon slot and inflate how often they appear.
+    const uncommon = new Set(set.pools.uncommon.map((c) => c.name));
+    expect(set.pools.bonus.some((c) => uncommon.has(c.name))).toBe(false);
     expect(set.pools.bonus).toHaveLength(25);
   });
 
@@ -35,7 +36,7 @@ describe("makePack with observed composition", () => {
     let withLand = 0;
     const runs = 2000;
     for (let i = 0; i < runs; i++) {
-      if (makePack(set, rng).some(isBasicLand)) withLand++;
+      if (makePack(set, rng).some((c) => c.slot === "land")) withLand++;
     }
     // Shapes above carry a land in 40% of packs.
     expect(withLand / runs).toBeGreaterThan(0.33);
@@ -64,7 +65,7 @@ describe("weighted slots", () => {
     const set = fakePlayBoosterSet();
     const heavy = new Set(["B0", "B1", "B2", "B3", "B4"]);
     for (const c of set.cards) {
-      if (c.setCode === "bns") c.packRate = heavy.has(c.name) ? 0.1 : 0.01;
+      if (c.slot === "bonus") c.packRate = heavy.has(c.name) ? 0.1 : 0.01;
       else c.packRate = 0.05;
     }
     return set;
@@ -75,7 +76,7 @@ describe("weighted slots", () => {
     const hits = new Map<string, number>();
     for (let i = 0; i < runs; i++) {
       for (const c of makePack(set, rng)) {
-        if (c.setCode === "bns") hits.set(c.name, (hits.get(c.name) ?? 0) + 1);
+        if (c.slot === "bonus") hits.set(c.name, (hits.get(c.name) ?? 0) + 1);
       }
     }
     return hits;
@@ -141,7 +142,7 @@ describe("weighted slots", () => {
     for (let i = 0; i < 2000; i++) {
       const pack = makePack(set, rng);
       expect(pack).toHaveLength(14);
-      for (const c of pack) if (c.setCode === "bns") hits.add(c.name);
+      for (const c of pack) if (c.slot === "bonus") hits.add(c.name);
     }
     expect(hits.size).toBe(25);
   });

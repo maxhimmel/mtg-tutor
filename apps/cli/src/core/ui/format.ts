@@ -16,14 +16,17 @@ export function colorSwatch(colors: string[]): string {
   return colors.map((c) => (COLOR_FN[c] ?? ((s: string) => s))("●")).join("");
 }
 
-export function rarityTag(rarity: string): string {
+// Takes an optional rarity because that is what a card carries: it lives on the
+// text half and a row written before it moved there has none. Renders "?" then,
+// which is what it already did for any rarity outside the four below.
+export function rarityTag(rarity?: string): string {
   const map: Record<string, string> = {
     common: pc.gray("C"),
     uncommon: pc.cyan("U"),
     rare: pc.yellow("R"),
     mythic: pc.red("M"),
   };
-  return map[rarity] ?? pc.gray(rarity[0]?.toUpperCase() ?? "?");
+  return map[rarity ?? ""] ?? pc.gray(rarity?.[0]?.toUpperCase() ?? "?");
 }
 
 export function gradeColor(grade: string): string {

@@ -10,6 +10,7 @@ function card(over: Partial<Card> = {}): Card {
   return {
     name: "Test Bear",
     rarity: "common",
+    value: 0.55,
     colors: ["G"],
     colorIdentity: ["G"],
     manaCost: "{1}{G}",

@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
-import type { Card, UnvaluedCard } from "../model/card.js";
+import type { Card, IngestCard } from "../model/card.js";
 import { scorePick, gradeFor, committedColors, isDecisionPick, isCorrectGuess } from "./score.js";
 import { computeCardValue } from "./value.js";
 
 // Settles `value` the way ingest does, so a fixture reads the number its stats
 // imply rather than one written by hand beside them.
-function card(name: string, over: Partial<Card> = {}): Card {
-  const base: UnvaluedCard = {
+// Returns a card that definitely knows its rarity, so it can be handed to
+// computeCardValue -- the same distinction IngestCard draws for the pipeline.
+function card(name: string, over: Partial<Card> = {}): IngestCard & { value: number } {
+  const base: IngestCard = {
     name,
     rarity: "common",
     colors: [],
