@@ -95,6 +95,10 @@
 6. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
 
+7. I just picked a creature, there was probably like 6 other cards to choose from. The scorer told me the best pick was actually a mountain. Ridiculous for numerous reasons.
+   - A. The mountain isn't even in my color.
+   - B. Any other spell has more value than a basic land.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
