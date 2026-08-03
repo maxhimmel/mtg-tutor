@@ -1,6 +1,6 @@
 "use client";
 
-import { type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
+import { type Bench, type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { ringFor } from "../lib/cardFrame";
 import { COLOR_NAMES } from "../lib/format";
 import { CardPlacardList } from "./CardPlacard";
@@ -65,11 +65,12 @@ export function PicksColumn({
 }: {
   pool: Card[];
   // Positions in `pool`, which is the pool in pick order — see the field's note
-  // in the backend schema.
-  sideboard: number[];
+  // in the backend schema. The panel only asks whether a card is set aside, not
+  // when, so it reads `pos` and ignores the clock.
+  sideboard: Bench[];
   onBench: (pickIndex: number, benched: boolean) => void;
 }) {
-  const benched = new Set(sideboard);
+  const benched = new Set(sideboard.map((b) => b.pos));
   const picks = pool.map((card, pickIndex) => ({ card, pickIndex }));
 
   // Ascending mana value, name as the tie-break. Copied before sorting -- the

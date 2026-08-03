@@ -349,9 +349,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // round trip would leave a card sitting in a list it has been dragged out of.
   async function onBench(pickIndex: number, benched: boolean) {
     const before = state?.sideboard ?? [];
+    const without = before.filter((b) => b.pos !== pickIndex);
+    // Benching now, so the clock is the picks made so far. The server keeps an
+    // existing entry's `atPick` on a repeat call and this reconciles to it.
     const after = benched
-      ? [...before, pickIndex].sort((a, b) => a - b)
-      : before.filter((i) => i !== pickIndex);
+      ? [...without, { pos: pickIndex, atPick: state?.pool.length ?? pickIndex }].sort(
+          (a, b) => a.pos - b.pos,
+        )
+      : without;
     setState((prev) => prev && { ...prev, sideboard: after });
 
     try {

@@ -3,6 +3,8 @@ import {
   type DraftEngine,
   buildPickContext,
   newSeed,
+  normalizeBench,
+  splitPool,
   suggestDeck,
   summarizeDraft,
 } from "@mtg-tutor/core";
@@ -76,7 +78,7 @@ export const state = query({
       format: session.format,
       status: session.status,
       summary: session.summary,
-      sideboard: session.sideboard ?? [],
+      sideboard: normalizeBench(session.sideboard ?? []),
       ...boardView(engine),
     };
   },
@@ -106,11 +108,21 @@ export const bench = mutation({
       );
     }
 
-    const current = new Set(session.sideboard ?? []);
-    if (args.benched) current.add(args.pickIndex);
-    else current.delete(args.pickIndex);
+    const current = normalizeBench(session.sideboard ?? []);
+    const already = current.find((b) => b.pos === args.pickIndex);
 
-    const sideboard = [...current].sort((a, b) => a - b);
+    // Re-benching something already benched keeps its original clock. The
+    // mutation is idempotent, so a repeated call must not walk `atPick` forward
+    // and quietly turn a pick-5 decision into a pick-30 one.
+    if (args.benched && already) return current;
+
+    const without = current.filter((b) => b.pos !== args.pickIndex);
+    const sideboard = args.benched
+      ? [...without, { pos: args.pickIndex, atPick: session.pickedNames.length }].sort(
+          (a, b) => a.pos - b.pos,
+        )
+      : without;
+
     await ctx.db.patch(args.sessionId, { sideboard });
     return sideboard;
   },
@@ -231,15 +243,15 @@ export const coachContext = internalQuery({
     );
     const record = toRecordedPick(row, text);
 
-    // The sideboard as it stands NOW, applied to the pool as it stood then. That
-    // is deliberate: what the player has since decided they are not playing is
-    // the current answer to "what are you building", and it is the only thing
-    // here that is allowed to change after a pick was made. Positions past this
-    // pick are cards it had not yet seen, and `poolBefore` simply has no entry
-    // for them.
-    const benched = new Set(session.sideboard ?? []);
-    const maindeck = row.poolBefore.filter((_, i) => !benched.has(i));
-    const sideboard = row.poolBefore.filter((_, i) => benched.has(i));
+    // The sideboard as it stood at THIS pick, not as it stands now. Deciding at
+    // pick 40 that something is unplayable says nothing about the deck being
+    // built at pick 5, so a later bench must not rewrite an earlier pick's
+    // context -- and a card set aside as it was picked must never count.
+    const { maindeck, sideboard } = splitPool(
+      row.poolBefore,
+      normalizeBench(session.sideboard ?? []),
+      args.pickIndex,
+    );
 
     return {
       // The pool as it stood BEFORE this pick: the prompt shows it with the pick

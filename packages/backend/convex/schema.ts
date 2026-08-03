@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  benchEntry,
   cardStats,
   cardText,
   colorCode,
@@ -180,7 +181,7 @@ export default defineSchema({
     seed: v.number(),
     pickedNames: v.array(v.string()),
     status: v.union(v.literal("active"), v.literal("complete")),
-    // Which picks the player has set aside, as positions in `pickedNames`.
+    // Which picks the player has set aside, and when they decided it.
     //
     // Positions rather than names, because drafting two copies of a card is
     // normal and benching one of them must not bench both. The same position
@@ -188,10 +189,15 @@ export default defineSchema({
     // so the coach can split one pick's pool into maindeck and sideboard
     // without reading anything else.
     //
-    // Nothing else derives from this: the pool, the score and the suggested
-    // deck are all unchanged by it. It is the player's intent, and the only
-    // thing that reads intent is the coach.
-    sideboard: v.optional(v.array(v.number())),
+    // `atPick` is what keeps an earlier pick's context from being rewritten by a
+    // later decision: cutting a card at pick 40 is not evidence about the deck
+    // being built at pick 5. `atPick === pos` means it was set aside as it was
+    // picked, which is the strongest statement the player can make about it.
+    //
+    // The bare-number arm is the pre-clock shape, kept only until the backfill
+    // has run on both deployments; `normalizeBench` reads either. Every reader
+    // goes through it -- see model/bench.ts in core.
+    sideboard: v.optional(v.union(v.array(v.number()), v.array(benchEntry))),
     createdAt: v.string(),
     completedAt: v.optional(v.string()),
     // Denormalized on completion so the stats screen doesn't replay every draft.

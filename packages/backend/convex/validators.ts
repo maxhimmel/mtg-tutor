@@ -181,6 +181,13 @@ export const storedPickScore = v.object({
   rankInPack: v.number(),
 });
 
+// One set-aside pick: where it sits in the pool, and when the player decided.
+// See the `sideboard` note in schema.ts and `Bench` in core.
+export const benchEntry = v.object({
+  pos: v.number(),
+  atPick: v.number(),
+});
+
 export const draftSummary = v.object({
   overallScore: v.number(),
   accuracy: v.number(),
