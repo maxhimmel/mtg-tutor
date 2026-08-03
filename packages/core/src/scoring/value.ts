@@ -91,3 +91,50 @@ export function computeCardValue(card: ValueInputs): number {
 export function clamp(x: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, x));
 }
+
+// A fingerprint of what `computeCardValue` DOES, not of the source that does it.
+//
+// `EngineCard.value` is settled at ingest and read from the card ever after, so
+// a change to the formula does not reach a stored pool until that pool is
+// ingested again. Nothing would notice: scoring would quietly keep returning
+// the old numbers, correctly and consistently, until someone thought to re-run
+// the pipeline.
+//
+// Note it fingerprints (formula x inputs), not the formula alone: editing the
+// list below invalidates every pool too, for values that did not change. That
+// is the safe direction to be wrong in, and the list should rarely move.
+//
+// So the formula's own behaviour feeds the revision that gates re-ingestion
+// (POOL_REVISION in convex/sets.ts). Change the formula and every set's
+// sourceHash changes with it, which makes the next `pnpm ingest-sets` rebuild
+// them -- rather than leaving a step to remember.
+//
+// Inputs are fixed and chosen to touch every branch: a trusted win rate, a thin
+// sample, an unrated card, a measured baseline, and ALSA.
+//
+// The ALSA values matter more than they look. The nudge is
+// clamp((8 - alsa) / 100, -0.02, 0.02), so 8 is its zero and anything outside
+// (6, 10) is clamped flat -- an input set made only of those is blind to the
+// divisor entirely, which a first draft of this list was. 7 and 9 sit inside the
+// clamp on either side, and are what make the nudge observable.
+const FINGERPRINT_INPUTS: ValueInputs[] = [
+  { rarity: "common", gihWinRate: 0.55, gihGames: 5000, alsa: 8 },
+  { rarity: "rare", gihWinRate: 0.62, gihGames: 5000, alsa: 1 },
+  { rarity: "mythic", gihWinRate: 0.58, gihGames: 40, alsa: 9 },
+  { rarity: "uncommon", gihGames: 0, alsa: 7 },
+  { rarity: "common", gihGames: 0, alsa: 9, rarityBaseline: 0.6123 },
+  { rarity: "special", gihWinRate: 0.5, gihGames: 199, alsa: 7, rarityBaseline: 0.61 },
+  { rarity: "uncommon", gihGames: 0, alsa: 14 },
+  { rarity: "bonus", gihGames: 0 },
+];
+
+export const VALUE_FINGERPRINT = ((): string => {
+  let h = 0x811c9dc5;
+  for (const input of FINGERPRINT_INPUTS) {
+    for (const ch of computeCardValue(input).toFixed(12)) {
+      h ^= ch.charCodeAt(0);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+  }
+  return h.toString(36);
+})();

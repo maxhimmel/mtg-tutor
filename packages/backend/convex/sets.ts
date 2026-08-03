@@ -4,6 +4,7 @@ import {
   type IngestCard,
   type ScryfallCard,
   type SeventeenLandsCard,
+  VALUE_FINGERPRINT,
   computeCardValue,
   isBasicLand,
   mergeCards,
@@ -81,7 +82,10 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // the rules text, art and reading statistics out to setCardText, and
 // "5-value-precomputed" settled cardValue at ingest and sent the four statistics
 // it was computed from after them, and "6-rarity-off-pool" sent the fifth.
-const POOL_REVISION = "8-card-context";
+// The tag names what changed; the fingerprint makes a change to how a card is
+// VALUED invalidate every pool without anyone remembering to say so. See
+// VALUE_FINGERPRINT.
+const POOL_REVISION = `8-card-context.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
