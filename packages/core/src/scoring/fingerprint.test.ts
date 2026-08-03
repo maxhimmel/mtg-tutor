@@ -32,13 +32,13 @@ describe("the value formula's fingerprint", () => {
         "the formula, SCORING.minSampleForWinRate, or RARITY_BASELINE.",
         "",
       ].join("\n"),
-    ).toBe("6te8y2");
+    ).toBe("hj8qhs");
   });
 
   // Guards the guard: a fingerprint that cannot notice a change is worse than
   // none, because it reads as coverage.
   it("is sensitive to each branch it claims to cover", () => {
-    const base = { rarity: "common" } as const;
+    const base = { rarity: "common", typeLine: "Creature" } as const;
     const distinct = new Set(
       [
         computeCardValue({ ...base, gihWinRate: 0.55, gihGames: 5000, alsa: 8 }),
@@ -51,5 +51,8 @@ describe("the value formula's fingerprint", () => {
     // Trusted, blend, baseline, ALSA nudge, measured baseline -- five inputs
     // that must not collapse onto one another.
     expect(distinct.size).toBe(5);
+
+    // And the rule that has nothing to do with any of them.
+    expect(computeCardValue({ ...base, typeLine: "Basic Land — Island" })).toBe(0);
   });
 });

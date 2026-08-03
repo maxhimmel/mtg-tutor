@@ -54,7 +54,11 @@ describe("the deal is stable across a corpus of seeds", () => {
   // which change did it and that stranding every existing draft is intended.
   const GOLDEN: [string, () => SetData, number][] = [
     ["a fixed-shape set", fakeSet, 954436148],
-    ["a Play Booster set", fakePlayBoosterSet, 3474325496],
+    // Moved deliberately when basic lands stopped being valued as the median
+    // rated common: bots no longer take them, so what wheels changed. Only this
+    // fixture has basics, and only this hash moved -- which is what says the
+    // change is confined to them.
+    ["a Play Booster set", fakePlayBoosterSet, 3984038120],
     // The one that matters most for a change to how value is stored: the other
     // two sit entirely on the trusted-win-rate branch, so neither would notice a
     // baseline, blend or ALSA regression.

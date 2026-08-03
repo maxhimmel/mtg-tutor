@@ -52,29 +52,17 @@ export const engineCard = v.object({
   value: v.number(),
 });
 
-// What a stored pick saw, which is NOT the same shape as a pool.
+// What a stored pick saw. Identical to `engineCard`, and that is worth saying
+// out loud rather than leaving as a coincidence.
 //
-// A pool document is read 42 times a draft and every byte is billed each time,
-// so it carries the minimum. A pick's pack is read a handful of rows at a time
-// by the coach, and is a permanent record that can never be rebuilt -- the set
-// it was dealt from may have been re-ingested since. So it keeps the statistics
-// as they stood when the pick was made, on purpose: hydration lets the engine
-// half win over the text half, which is what makes the coach describe the card
-// the player actually saw rather than the card it has since become.
-//
-// `value` is optional only until the backfill has run; see migrations.ts.
-export const packSnapshot = v.object({
-  name: v.string(),
-  colors: v.array(colorCode),
-  slot: v.optional(packSlot),
-  packRate: v.optional(v.number()),
-  value: v.optional(v.number()),
-  rarity: v.optional(rarity),
-  gihWinRate: v.optional(v.number()),
-  gihGames: v.optional(v.number()),
-  alsa: v.optional(v.number()),
-  rarityBaseline: v.optional(v.number()),
-});
+// This was briefly its own shape, so a pick could keep the statistics as they
+// stood when it was made -- hydration lets the engine half win over the text
+// half, so a stored pack would have described the card the player saw rather
+// than the card it has since become. That stopped being possible when those
+// statistics left EngineCard: `engineHalf` no longer writes them, so there is
+// nothing for a snapshot to preserve. The idea is recoverable if it is ever
+// wanted; it would mean writing more than the engine half here on purpose.
+export const packSnapshot = engineCard;
 
 // The half a person reads, and the half a prompt writes. One row per card in
 // `setCardText`, not an array on the pool document, because its readers want

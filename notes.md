@@ -95,9 +95,29 @@
 6. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
 
-7. I just picked a creature, there was probably like 6 other cards to choose from. The scorer told me the best pick was actually a mountain. Ridiculous for numerous reasons.
-   - A. The mountain isn't even in my color.
-   - B. Any other spell has more value than a basic land.
+7. ~~The scorer told me the best pick was actually a mountain.~~ **FIXED.**
+   Measured before the fix: a Plains in fdn was worth **0.5845**, which is the
+   measured median rated common, and it outranked **123 of the set's 270 rated
+   cards**.
+
+   `cardValue` read "no 17Lands data" as "unknown", and `observedRarityBaselines`
+   fills an unknown with the median rated card of its rarity. That is a sound
+   inference about an unrated SPELL and a wrong one about a basic land, which is
+   not unknown -- 17Lands reports nothing about it because there is nothing to
+   report.
+
+   Both halves of the complaint came from that. It beat real spells because it
+   was valued as an average one (B), and it could not be punished for being
+   off-colour because a basic has no colours, so it dodges the splash cost and
+   does not dilute commitment (A). Overvalued and unpunishable at once.
+
+   A basic is now worth 0, which is not a tuning knob: you are handed as many as
+   you want when you build, so taking one adds nothing you did not already have.
+   Non-basic lands are untouched and still real picks -- Deathcap Glade 0.622.
+
+   **It was also a bot bug.** Bots draft by `cardValue`, so they had been taking
+   basics over half the set, which distorts what wheels and therefore every
+   signal read off it.
 
 # Ideas:
 

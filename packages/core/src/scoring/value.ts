@@ -1,5 +1,6 @@
 import type { EngineCard, Rarity } from "../model/card.js";
 import { RARITY_BASELINE, SCORING } from "../config.js";
+import { isBasicLand } from "../model/card.js";
 
 // What ingest computes `EngineCard.value` with. Spelled out rather than picked
 // off Card, because no stored half carries all five: four are on the text half
@@ -7,6 +8,8 @@ import { RARITY_BASELINE, SCORING } from "../config.js";
 // can call the functions below.
 export interface ValueInputs {
   rarity: Rarity;
+  // Only so a basic land can be recognised. See computeCardValue.
+  typeLine: string;
   gihWinRate?: number;
   gihGames?: number;
   rarityBaseline?: number;
@@ -71,6 +74,17 @@ export function cardValue(card: EngineCard): number {
 }
 
 export function computeCardValue(card: ValueInputs): number {
+  // Before anything else, because a basic land is not an unrated card.
+  //
+  // The fallback below reads "no data" as "unknown" and fills it with the median
+  // rated card of that rarity, which is a sound inference about a SPELL nobody
+  // has data for. A basic is not unknown: 17Lands reports nothing about it
+  // because there is nothing to report. Left to the fallback it came out at
+  // 0.5845 in fdn -- the median rated common, outranking 123 of the set's 270
+  // rated cards -- so the scorer called a Mountain the best card in the pack,
+  // and the bots drafted them.
+  if (isBasicLand(card)) return SCORING.basicLandValue;
+
   const games = card.gihGames ?? 0;
   if (card.gihWinRate != null && games >= SCORING.minSampleForWinRate) {
     return card.gihWinRate;
@@ -118,14 +132,23 @@ export function clamp(x: number, lo: number, hi: number): number {
 // divisor entirely, which a first draft of this list was. 7 and 9 sit inside the
 // clamp on either side, and are what make the nudge observable.
 const FINGERPRINT_INPUTS: ValueInputs[] = [
-  { rarity: "common", gihWinRate: 0.55, gihGames: 5000, alsa: 8 },
-  { rarity: "rare", gihWinRate: 0.62, gihGames: 5000, alsa: 1 },
-  { rarity: "mythic", gihWinRate: 0.58, gihGames: 40, alsa: 9 },
-  { rarity: "uncommon", gihGames: 0, alsa: 7 },
-  { rarity: "common", gihGames: 0, alsa: 9, rarityBaseline: 0.6123 },
-  { rarity: "special", gihWinRate: 0.5, gihGames: 199, alsa: 7, rarityBaseline: 0.61 },
-  { rarity: "uncommon", gihGames: 0, alsa: 14 },
-  { rarity: "bonus", gihGames: 0 },
+  { rarity: "common", typeLine: "Creature", gihWinRate: 0.55, gihGames: 5000, alsa: 8 },
+  { rarity: "rare", typeLine: "Instant", gihWinRate: 0.62, gihGames: 5000, alsa: 1 },
+  { rarity: "mythic", typeLine: "Creature", gihWinRate: 0.58, gihGames: 40, alsa: 9 },
+  { rarity: "uncommon", typeLine: "Creature", gihGames: 0, alsa: 7 },
+  { rarity: "common", typeLine: "Creature", gihGames: 0, alsa: 9, rarityBaseline: 0.6123 },
+  {
+    rarity: "special",
+    typeLine: "Sorcery",
+    gihWinRate: 0.5,
+    gihGames: 199,
+    alsa: 7,
+    rarityBaseline: 0.61,
+  },
+  { rarity: "uncommon", typeLine: "Artifact", gihGames: 0, alsa: 14 },
+  { rarity: "bonus", typeLine: "Enchantment", gihGames: 0 },
+  // The basic-land rule, which is the whole reason typeLine is in this type.
+  { rarity: "common", typeLine: "Basic Land — Plains", gihGames: 0 },
 ];
 
 export const VALUE_FINGERPRINT = ((): string => {

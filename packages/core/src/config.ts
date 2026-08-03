@@ -37,6 +37,14 @@ export const SCORING = {
   minSampleForWinRate: 200,
   onColorPartialCredit: 8,
 
+  // What a basic land is worth as a pick: nothing.
+  //
+  // Not a tuning knob and not a guess. Every other card's value answers "how
+  // much better is a deck with this in it", and for a basic the answer is zero
+  // by construction -- you are handed as many as you want when you build, so
+  // taking one adds nothing you did not already have. It is the one card in a
+  // pack that is strictly never an improvement.
+  basicLandValue: 0,
   // Below this maindeck rate, a card's win rate was measured on the games
   // someone chose to play it rather than on every game it was taken for. A
   // judgement -- "taken and then left out more often than not" -- and the
