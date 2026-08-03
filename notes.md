@@ -17,6 +17,15 @@
    (`setStats.synergies` is computed and stored and read by nothing — it is the
    data that would fix this.)
 
+   **Still open, and now on purpose.** `setCardContext` was built to carry
+   exactly this and synergy was left out of it: eight partner names per card
+   measured at **201KB of read per draft**, against 41KB for the archetype
+   splits — two thirds of the table's cost for the weakest of the signals
+   (median lift 1.93pp against archetype fit's 4.2pp, p90 3.79 against 8.0).
+   Storing partners as pool indices rather than names would roughly halve it if
+   this is picked up. `pnpm backtest-scoring` is the harness, with the caveat
+   below about what it can and cannot judge.
+
 3. **"Best pick" is decided by data alone, and the interesting answer needs the
    model.** `scorePick` ranks a pack by `cardValue` and calls the top card the
    best — pure 17Lands win rate, blind to what is already in your pool. The
@@ -30,12 +39,11 @@
    silently drops every pick where you took the raw best and the coach would
    still have taken something else — exactly the divergence worth teaching.
 
-   What would fix it is a deterministic context-aware value: `cardValue` reading
-   the archetype splits and synergies we already own, so scoring knows your
-   colours. That is roadmap #1 (`archetype-aware-scoring`) — this is a second
-   reason to do it, and the place it would pay off beyond scoring. Until then
-   `isBest` is the honest proxy and the report is named for what it actually
-   shows.
+   **RESOLVED.** `contextValue` (`core/scoring/context.ts`) is that
+   deterministic context-aware value, `scorePick` returns both `rawBest` and
+   `contextBest`, and the grade follows the contextual one. `isBest` now means
+   "took the card the grade was measured against", so the missed-picks report
+   asks the real question instead of the proxy.
 
 4. **Re-ingesting a set strands every draft taken against the old data.** A
    session is `{seed, pickedNames}` replayed against whatever the set says
@@ -69,7 +77,20 @@
    session successfully. A re-crawl from unchanged artifacts is safe; it was the
    `packRate` rebuild that broke EOE, not re-ingestion as such.
 
-5. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
+5. ~~The scoring heuristic feels superficial.~~ **DONE.** The score reads the
+   deck now: archetype fit and what a third colour costs, both measured win
+   rates carried in their own units, plus a one-sided correction for cards whose
+   win rate was measured on the games someone chose to play them. Gated on
+   `commitment`, which is zero at P1P1 so nothing is implied before there is a
+   deck to imply it about.
+
+   Two signals are stored and deliberately NOT scored, each for a stated reason.
+   **Speed** (`ohWr - gdWr`) is genuinely orthogonal to win rate (corr 0.022),
+   but whether a proactive card is GOOD depends on how fast the format is and
+   nothing measures that — it needs the replay dataset (Ideas #2). **IWD** has a
+   sound measurement argument and no derivable weight; the first attempt took
+   0.37 from `1 - corr^2` and that reasoning is wrong, since how redundant a
+   signal is says nothing about how far it should move an answer.
 
 6. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
@@ -186,7 +207,18 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
 
 Ordered by value × readiness. Each is a candidate feature branch.
 
-1. **`archetype-aware-scoring`** — consume the archetype splits + synergies we
+1. ~~**`archetype-aware-scoring`**~~ — **DONE**, and not the way this entry
+   said. It recommended denormalising the archetype splits onto `setCards`,
+   priced at "+5-6% (~13KB/set)". That figure was measured against the OLD 240KB
+   document; against the 46KB one it was +28%, on the document read 42 times a
+   draft. The splits went to a third table (`setCardContext`) read a pack at a
+   time instead, and the pool went the other way entirely: 46.5KB → 24.7KB,
+   1.91MB → 1.01MB per draft, by moving everything `cardValue` needed off it and
+   storing the answer.
+
+   Superseded text follows.
+
+   **`archetype-aware-scoring`** — consume the archetype splits + synergies we
    now own (`setStats.archetypes` / `.synergies`, read by nothing in scoring
    yet) so `cardValue`/scoring rates a card by how good it is _in your colours_,
    and surface the metrics we compute but never show (trap warnings from
@@ -267,6 +299,27 @@ Ordered by value × readiness. Each is a candidate feature branch.
 Separate track: the **review features** in "Deferred" above (alternate draft
 lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated
 to the data work.
+
+# Measurement traps worth not falling into twice:
+
+1. **`trophyPickRate` cannot be fitted against.** It is the pick rate among 3-0
+   drafters and is the only decision-level ground truth we hold, which makes it
+   the obvious objective for a pick scorer — and it is nearly circular with
+   `maindeckRate`. Maindeck rate ALONE ranks trophy picks at rho 0.90, against
+   0.81 for the card value being improved. A weight search against it duly found
+   +0.12 held-out, which is not a better scorer but one that has learned to
+   predict one drafter behaviour from another. Use it as a CONSTRAINT — it
+   catches a wrong sign or a wrong shape, and did both — never as a target.
+2. **A fixture with no gaps hides a whole class of bug.** `splashCost` paid a
+   card 1.5pp to add a colour, because a width nobody drafted falls back to the
+   format's own rate, which is higher than a measured wider archetype. Every
+   test fixture had contiguous archetype widths; the real data had a hole. Found
+   by reading a stored pick.
+3. **A test that cannot fail reads as coverage.** Both the replay corpus and the
+   value fingerprint were written with input batteries that could not have
+   noticed the change they existed to catch — every ALSA value sat at the nudge's
+   pivot or past its clamp. Perturb the thing under test and watch the guard go
+   red before trusting it.
 
 # Deferred trade-offs (revisit when the premise changes):
 
