@@ -137,7 +137,8 @@ export function hydratePick(rec: RecordedPick, index: TextIndex): RecordedPick<C
     score: {
       ...rec.score,
       picked: hydrateCard(rec.score.picked, index),
-      best: hydrateCard(rec.score.best, index),
+      rawBest: hydrateCard(rec.score.rawBest, index),
+      contextBest: hydrateCard(rec.score.contextBest, index),
     },
   };
 }

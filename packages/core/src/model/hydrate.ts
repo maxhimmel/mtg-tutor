@@ -41,7 +41,8 @@ export function hydrateScore(score: PickScore, text: TextIndex): PickScore<Card>
   return {
     ...score,
     picked: hydrateCard(score.picked, text),
-    best: hydrateCard(score.best, text),
+    rawBest: hydrateCard(score.rawBest, text),
+    contextBest: hydrateCard(score.contextBest, text),
   };
 }
 

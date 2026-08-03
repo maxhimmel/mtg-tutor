@@ -1,6 +1,7 @@
 import type { Card, ColorCode, EngineCard, PoolCard } from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
+import { type ScoringContext, contextValue } from "./context.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -14,12 +15,24 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   score: number; // 0-100
   grade: string; // A+ .. F
   picked: C;
-  best: C;
   pickedValue: number;
-  bestValue: number;
-  isBest: boolean;
+
+  // The two answers to "what was the best card here", kept apart because the
+  // gap between them is the thing worth teaching. There is no field called
+  // `best`: a reader has to say which question it is asking.
+  //
+  // The data's top card, on raw power, blind to the pool.
+  rawBest: C;
+  rawBestValue: number;
+  // The card that best served THIS deck. Equal to rawBest when no scoring
+  // context was supplied, which is every caller that has no set to read one
+  // from -- the engine replaying a draft, and every test that does not care.
+  contextBest: C;
+  contextBestValue: number;
+
+  isBest: boolean; // took the data's top card
   onColor: boolean;
-  rankInPack: number; // 1 = best available
+  rankInPack: number; // 1 = best available, by raw power
 }
 
 export function gradeFor(score: number): string {
@@ -72,21 +85,52 @@ export function isCorrectGuess(
   return guessName === rawBestName || guessName === contextBestName;
 }
 
-export function scorePick<C extends EngineCard>(pack: C[], picked: C, pool: C[]): PickScore<C> {
+/**
+ * `ctx` is optional, and its absence is not a degraded mode -- it is what the
+ * engine has. Replaying a draft reads the pool document and nothing else, so
+ * there is no archetype table to hand over; the contextual answer then simply
+ * equals the raw one. Callers that CAN read a set's context pass it and get a
+ * second opinion.
+ *
+ * Not deal-affecting either way. Bots pick by `cardValue` directly, so nothing
+ * here decides what wheels, which is what lets this keep changing.
+ */
+export function scorePick<C extends EngineCard>(
+  pack: C[],
+  picked: C,
+  pool: C[],
+  ctx?: ScoringContext,
+): PickScore<C> {
   const ranked = [...pack].sort((a, b) => cardValue(b) - cardValue(a));
-  const best = ranked[0];
-  const bestValue = cardValue(best);
+  const rawBest = ranked[0];
+  const rawBestValue = cardValue(rawBest);
   const pickedValue = cardValue(picked);
   const rankInPack = ranked.findIndex((c) => c.name === picked.name) + 1;
+
+  let contextBest = rawBest;
+  let contextBestValue = rawBestValue;
+  if (ctx) {
+    let bestSoFar = -Infinity;
+    for (const card of pack) {
+      const v = contextValue(card, ctx).value;
+      if (v > bestSoFar) {
+        bestSoFar = v;
+        contextBest = card;
+      }
+    }
+    contextBestValue = bestSoFar;
+  }
 
   const committed = committedColors(pool);
   const onColor = isOnColor(committed, picked.colors);
 
+  // Still graded against raw power. Widening the shape and moving the grade are
+  // separate changes on purpose: this one must not alter a single score.
   let score: number;
-  if (picked.name === best.name) {
+  if (picked.name === rawBest.name) {
     score = 100;
   } else {
-    const gap = bestValue - pickedValue; // in win-rate points (0-1)
+    const gap = rawBestValue - pickedValue; // in win-rate points (0-1)
     score = 100 - gap * SCORING.winRateGapK;
     if (onColor && committed.size > 0) score += SCORING.onColorPartialCredit;
   }
@@ -96,10 +140,12 @@ export function scorePick<C extends EngineCard>(pack: C[], picked: C, pool: C[])
     score,
     grade: gradeFor(score),
     picked,
-    best,
     pickedValue,
-    bestValue,
-    isBest: picked.name === best.name,
+    rawBest,
+    rawBestValue,
+    contextBest,
+    contextBestValue,
+    isBest: picked.name === rawBest.name,
     onColor,
     rankInPack,
   };

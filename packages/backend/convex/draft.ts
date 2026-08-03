@@ -196,7 +196,7 @@ export const results = query({
       ctx,
       session.setCode,
       session.format,
-      engine.history.flatMap((h) => [h.picked.name, h.score.best.name]),
+      engine.history.flatMap((h) => [h.picked.name, h.score.rawBest.name]),
     );
 
     // The gap the score is actually made of, not a raw GIH delta. They used to
@@ -209,8 +209,8 @@ export const results = query({
         packNo: h.packNo,
         pickNo: h.pickNo,
         picked: hydrateCard(h.picked, text),
-        best: hydrateCard(h.score.best, text),
-        cost: h.score.bestValue - h.score.pickedValue,
+        best: hydrateCard(h.score.rawBest, text),
+        cost: h.score.rawBestValue - h.score.pickedValue,
       }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, args.mistakeLimit ?? 5);

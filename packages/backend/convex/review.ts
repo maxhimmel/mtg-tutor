@@ -84,7 +84,7 @@ export const load = query({
         // whole rather than as the engine's half of a card.
         pack: hydrate(h.pack, text),
         picked: hydrateCard(h.picked, text),
-        bestName: h.score.best.name,
+        bestName: h.score.rawBest.name,
         score: h.score.score,
         isBest: h.score.isBest,
         onColor: h.score.onColor,
@@ -209,7 +209,7 @@ export const verdictContext = internalQuery({
           // statistics beside its win rate.
           pack: record.pack,
           picked: record.picked,
-          bestName: record.score.best.name,
+          bestName: record.score.rawBest.name,
           score: record.score.score,
           isBest: record.score.isBest,
           onColor: record.score.onColor,

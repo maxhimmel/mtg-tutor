@@ -51,7 +51,7 @@ export function buildPickContext(
   const verdict = score.isBest
     ? `${score.score}/100 (${score.grade}) — you took the statistically best card.`
     : `${score.score}/100 (${score.grade}), rank ${score.rankInPack} of ${pack.length}. ` +
-      `Best by the numbers: ${score.best.name} (GIH WR ${pct(score.best.gihWinRate)}).`;
+      `Best by the numbers: ${score.rawBest.name} (GIH WR ${pct(score.rawBest.gihWinRate)}).`;
 
   return [
     situationLine(rec.packNo, rec.pickNo, pack.length),

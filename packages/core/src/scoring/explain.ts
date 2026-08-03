@@ -27,19 +27,20 @@ function wheelNote(alsa?: number): string {
 // hydrated score rather than the engine's.
 export function explainPick(ps: PickScore<Card>): string[] {
   const lines: string[] = [];
-  const { picked, best } = ps;
+  const { picked, rawBest } = ps;
 
   if (ps.isBest) {
     lines.push(`✅ Best available. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ${wheelNote(picked.alsa)}.`);
   } else {
-    const delta = (ps.bestValue - ps.pickedValue) * 100;
+    const delta = (ps.rawBestValue - ps.pickedValue) * 100;
     lines.push(
       `You took ${picked.name} (GIH WR ${pct(picked.gihWinRate)}); ` +
-        `the data favors ${best.name} (GIH WR ${pct(best.gihWinRate)}) — a ${delta.toFixed(1)}% win-rate gap.`,
+        `the data favors ${rawBest.name} (GIH WR ${pct(rawBest.gihWinRate)}) — a ${delta.toFixed(1)}% win-rate gap.`,
     );
-    const bestRole = detectRole(best);
-    if (bestRole === "removal") lines.push(`${best.name} is efficient removal — premium in most archetypes.`);
-    if (best.alsa != null) lines.push(`${best.name} ${wheelNote(best.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);
+    const bestRole = detectRole(rawBest);
+    if (bestRole === "removal") lines.push(`${rawBest.name} is efficient removal — premium in most archetypes.`);
+    if (rawBest.alsa != null)
+      lines.push(`${rawBest.name} ${wheelNote(rawBest.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);
   }
 
   if (!ps.onColor) {

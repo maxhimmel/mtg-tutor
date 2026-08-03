@@ -85,9 +85,9 @@ export const overview = query({
         if (!h.score.isBest) {
           mistakes.push({
             pickedName: h.picked.name,
-            bestName: h.score.best.name,
+            bestName: h.score.rawBest.name,
             pickedValue: h.score.pickedValue,
-            bestValue: h.score.bestValue,
+            bestValue: h.score.rawBestValue,
             score: h.score.score,
             packNo: h.packNo,
             pickNo: h.pickNo,
