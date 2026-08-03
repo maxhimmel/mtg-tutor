@@ -16,6 +16,10 @@ export const env = createEnv({
     // pointing it at production writes production data and spends the
     // production Anthropic key on every test run.
     CONVEX_URL: z.string().url(),
+    // Only needed when the HTTP-action origin cannot be derived from CONVEX_URL
+    // by swapping the host -- a local deployment serves them on a second port of
+    // the same loopback address, with no .convex.cloud to replace.
+    CONVEX_SITE_URL: z.string().url().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
