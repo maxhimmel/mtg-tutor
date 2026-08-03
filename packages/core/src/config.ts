@@ -36,6 +36,17 @@ export const SCORING = {
   // Below this many "games in hand", trust rarity/ALSA more than a noisy WR.
   minSampleForWinRate: 200,
   onColorPartialCredit: 8,
+
+  // How much of IWD is information a card's win rate does not already carry.
+  // Measured, not chosen: corr(gihWr, iwd) = 0.793 across all 17 sets, so
+  // r^2 = 0.63 of it is already inside the win rate and 0.37 is not.
+  iwdResidualShare: 0.37,
+  // Below this maindeck rate, a card's win rate was measured on the games
+  // someone chose to play it rather than on the games it was taken for. This
+  // one IS a judgement -- "taken and then left out more often than not" -- and
+  // the correction it drives is a shrinkage toward the format baseline rather
+  // than a penalty, so being wrong about it costs confidence, not points.
+  maindeckTrustFloor: 0.5,
 };
 
 // Rough baseline card value (0-1 scale, ~win-rate-like) when 17Lands data is

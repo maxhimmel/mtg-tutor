@@ -19,6 +19,7 @@ export * from "./model/bench.js";
 export * from "./scoring/score.js";
 export * from "./scoring/value.js";
 export * from "./scoring/explain.js";
+export * from "./scoring/context.js";
 
 export * from "./util/rng.js";
 
