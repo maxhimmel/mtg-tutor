@@ -50,17 +50,6 @@ export const engineCard = v.object({
   // validates every stored document: this deploying is the proof that no pool
   // anywhere is still missing one.
   value: v.number(),
-
-  // TRANSITIONAL. These moved to cardText and no engine reader touches them --
-  // the TS type dropped them, so the compiler already refuses. They stay here
-  // only until every pool has been re-ingested into the smaller shape, because
-  // a push validates existing documents and the stored pools still carry them.
-  // The commit that removes these lines is what proves none do.
-  rarity: v.optional(rarity),
-  gihWinRate: v.optional(v.number()),
-  gihGames: v.optional(v.number()),
-  alsa: v.optional(v.number()),
-  rarityBaseline: v.optional(v.number()),
 });
 
 // What a stored pick saw, which is NOT the same shape as a pool.
