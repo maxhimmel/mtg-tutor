@@ -2,7 +2,7 @@
 // the CLI and the web app will. Mirrors apps/cli's headless smoke test: always
 // take the highest-value card, so every pick should score 100.
 //
-//   pnpm --filter @mtg-tutor/backend smoke-draft [setCode]
+//   pnpm --filter @mtg-tutor/backend smoke-draft [setCode] [format]
 
 import { ConvexHttpClient } from "convex/browser";
 import { cardValue } from "@mtg-tutor/core";
@@ -14,17 +14,34 @@ process.loadEnvFile(new URL("../.env.local", import.meta.url));
 const url = process.env.CONVEX_URL;
 if (!url) throw new Error("CONVEX_URL missing -- run `pnpm exec convex dev --once` first.");
 
-const setCode = process.argv[2] ?? "fdn";
+const setCode = (process.argv[2] ?? "fdn").toLowerCase();
+const requestedFormat = process.argv[3];
 const client = new ConvexHttpClient(url);
 client.setAuth(await accessToken());
 
-const stored = await client.query(api.sets.get, { setCode });
-if (!stored) {
+// Every query below keys on (code, format), and the format is the set's, not a
+// default this script may pick: `sets.get` and `draft.start` both fall back to
+// PremierDraft, so a TradDraft set read without one comes back empty and reports
+// itself as never ingested. Ask `list` -- the cheap table -- what is really here.
+const ingested = (await client.query(api.sets.list, {})).filter((s) => s.code === setCode);
+if (ingested.length === 0) {
   throw new Error(`Set "${setCode}" is not ingested. Run: convex run sets:ingest '{"setCode":"${setCode}"}'`);
 }
-console.log(`set ${setCode}: ${stored.cards.length} cards, ${stored.ratedCardCount} with 17Lands data`);
+const formats = ingested.map((s) => s.format);
+if (requestedFormat && !formats.includes(requestedFormat)) {
+  throw new Error(`Set "${setCode}" is ingested as ${formats.join(", ")}, not ${requestedFormat}.`);
+}
+// A set can be ingested under several formats, and picking one silently would
+// smoke-test whichever happened to sort first.
+if (!requestedFormat && formats.length > 1) {
+  throw new Error(`Set "${setCode}" is ingested as ${formats.join(" and ")} -- name one.`);
+}
+const format = requestedFormat ?? formats[0];
 
-const sessionId = await client.mutation(api.draft.start, { setCode });
+const stored = await client.query(api.sets.get, { setCode, format });
+console.log(`set ${setCode}/${format}: ${stored.cards.length} cards, ${stored.ratedCardCount} with 17Lands data`);
+
+const sessionId = await client.mutation(api.draft.start, { setCode, format });
 console.log(`session ${sessionId}`);
 
 let state = await client.query(api.draft.state, { sessionId });
