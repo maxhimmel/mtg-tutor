@@ -5,6 +5,7 @@ import {
   cardStats,
   cardText,
   colorCode,
+  colorWinRate,
   draftSummary,
   engineCard,
   packSnapshot,
@@ -68,10 +69,12 @@ export default defineSchema({
     // existing document, so this deploying at all is proof that no pool anywhere
     // still carries the old shape.
     cards: v.array(engineCard),
-    // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
-    colorPairWinRates: v.array(
-      v.object({ pair: v.string(), winRate: v.number() }),
-    ),
+    // How each archetype in this format actually did, at every colour count --
+    // not filtered to pairs. Three colours is the majority archetype in ktk and
+    // snc, and the cost of a third colour is the gap between these rates rather
+    // than a constant, so scoring needs the whole table on the hot path. ~30
+    // rows, under a kilobyte, on a document that is now ~24.7KB.
+    colorWinRates: v.array(colorWinRate),
     // Copied from setStats by `ingest` -- the observed booster shapes, on the
     // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),

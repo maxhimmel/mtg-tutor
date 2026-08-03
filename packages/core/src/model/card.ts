@@ -156,6 +156,13 @@ export interface PackShape {
   weight: number;
 }
 
+// One archetype's own win rate, with no card dimension.
+export interface ColorWinRate {
+  colors: string;
+  n: number;
+  wr: number;
+}
+
 export interface PackComposition {
   size: number;
   shapes: PackShape[];
@@ -175,8 +182,13 @@ export interface SetData {
     bonus: EngineCard[];
     land: EngineCard[];
   };
-  // Archetype color-pair win rates from 17Lands color_ratings, keyed like "WU".
-  colorPairWinRates: Map<string, number>;
+  // How each archetype in this format actually did, keyed by the deck's real
+  // colours -- "WU", but also "WUB" and beyond. Not filtered to pairs: three
+  // colours is the majority archetype in ktk and snc, and the cost of a third
+  // colour is the difference between these rates rather than a constant.
+  //
+  // `n` is carried because aggregating by colour count has to weight by it.
+  colorWinRates: ColorWinRate[];
   // Observed booster shapes. Absent for sets we have no draft data for; pack
   // generation then falls back to the PACK constants.
   packComposition?: PackComposition;

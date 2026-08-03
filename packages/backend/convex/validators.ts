@@ -127,6 +127,14 @@ export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;
 export type StoredCardText = Infer<typeof cardText>;
 
+// One archetype's own win rate, no card dimension. Same shape setStats stores,
+// so ingest copies it across rather than reshaping it.
+export const colorWinRate = v.object({
+  colors: v.string(),
+  n: v.number(),
+  wr: v.number(),
+});
+
 // Observed booster shapes for a set. Optional throughout: a set we have no
 // draft data for keeps the fixed PACK constants.
 export const packComposition = v.object({

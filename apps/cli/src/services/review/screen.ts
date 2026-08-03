@@ -21,7 +21,6 @@ interface ReviewOpts {
 export async function runReview(
   convex: ConvexHttpClient,
   draft: StoredDraft,
-  colorPairWinRates: Map<string, number>,
   opts: ReviewOpts,
 ) {
   p.intro(pc.bgCyan(pc.black(` Review: ${draft.setCode.toUpperCase()} — ${draft.createdAt.slice(0, 10)} `)));

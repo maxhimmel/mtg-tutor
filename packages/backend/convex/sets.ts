@@ -21,7 +21,7 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { card, cardStats, packCard, packComposition } from "./validators.js";
+import { card, cardStats, colorWinRate, packCard, packComposition } from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
 // return type would be inferred from a type that depends on itself. Declaring
@@ -74,7 +74,7 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // the rules text, art and reading statistics out to setCardText, and
 // "5-value-precomputed" settled cardValue at ingest and sent the four statistics
 // it was computed from after them, and "6-rarity-off-pool" sent the fifth.
-const POOL_REVISION = "6-rarity-off-pool";
+const POOL_REVISION = "7-all-color-counts";
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -449,10 +449,14 @@ export const ingest = action({
       return { ...rated, value: computeCardValue(rated) };
     });
 
-    // Two-colour archetype win rates, for describing guilds in the review.
-    const pairs = (stats.colorWinRates ?? [])
-      .filter((c) => /^[WUBRG]{2}$/.test(c.colors))
-      .map((c) => ({ pair: c.colors, winRate: c.wr }));
+    // Every archetype the format actually produced, at every colour count. The
+    // two-colour filter that used to be here threw away the majority archetype
+    // of ktk and snc, and with it the only measure of what a third colour costs
+    // -- which is the difference between these rates and varies by set from
+    // -0.3pp (snc) to -4.3pp (fdn).
+    const colorWinRates = (stats.colorWinRates ?? []).filter((c) =>
+      /^[WUBRG]+$/.test(c.colors),
+    );
 
     const pooled = new Set(cards.map((c) => normalizeName(c.name)));
     const missingPackCards = packCards.filter(
@@ -466,7 +470,7 @@ export const ingest = action({
       releasedAt: scryfall.meta.released_at,
       format,
       cards,
-      colorPairWinRates: pairs,
+      colorWinRates,
       packComposition: stats.packComposition,
       sourceHash: poolFingerprint,
       metaRevision: META_REVISION,
@@ -556,7 +560,7 @@ export const store = internalMutation({
     releasedAt: v.optional(v.string()),
     format: v.string(),
     cards: v.array(card),
-    colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
+    colorWinRates: v.array(colorWinRate),
     packComposition: v.optional(packComposition),
     sourceHash: v.optional(v.string()),
     metaRevision: v.optional(v.string()),
@@ -621,7 +625,7 @@ export const store = internalMutation({
       // still accepted a whole card: every ingest undid the split for that set
       // and nothing failed. The strict validator is what makes it impossible.
       cards: slotted.map(engineHalf),
-      colorPairWinRates: args.colorPairWinRates,
+      colorWinRates: args.colorWinRates,
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
       packComposition: args.packComposition ?? existingCards?.packComposition,
@@ -825,7 +829,7 @@ export const get = query({
     return {
       ...setDoc,
       cards: cardsDoc ? hydrate(cardsDoc.cards, text) : [],
-      colorPairWinRates: cardsDoc?.colorPairWinRates ?? [],
+      colorWinRates: cardsDoc?.colorWinRates ?? [],
       packComposition: cardsDoc?.packComposition,
     };
   },

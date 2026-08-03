@@ -1,5 +1,6 @@
 import {
   type Card,
+  type ColorWinRate,
   type EngineCard,
   type PackComposition,
   type PackSlot,
@@ -51,7 +52,7 @@ export function withPackSlots<T extends Card>(code: string, cards: T[]): T[] {
 export function buildSetData(
   code: string,
   cards: EngineCard[],
-  colorPairWinRates: Map<string, number> = new Map(),
+  colorWinRates: ColorWinRate[] = [],
   packComposition?: PackComposition,
 ): SetData {
   const inSlot = (slot: PackSlot) => cards.filter((c) => c.slot === slot);
@@ -80,7 +81,7 @@ export function buildSetData(
     cards,
     byName: new Map(cards.map((c) => [normalizeName(c.name), c])),
     pools,
-    colorPairWinRates,
+    colorWinRates,
     packComposition,
   };
 }

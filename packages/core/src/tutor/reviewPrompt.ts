@@ -1,4 +1,4 @@
-import type { Card, PoolCard } from "../model/card.js";
+import type { Card, ColorWinRate, PoolCard } from "../model/card.js";
 import type { StoredPick } from "../model/review.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
 import { type Pivot, commitmentLine, pivotLines, situationLine } from "./situation.js";
@@ -77,16 +77,16 @@ export function buildReviewContext(
 }
 
 // Opening + closing archetype/signal frame for the whole draft. `pool` is the
-// final pool; colorPairWinRates is 17Lands archetype data keyed like "WU".
+// final pool; `colorWinRates` is how each archetype in the format actually did.
 export function buildDraftFrame(
   phase: "open" | "close",
   pool: readonly PoolCard[],
-  colorPairWinRates: Map<string, number>,
+  colorWinRates: readonly ColorWinRate[],
 ): string {
-  const archetypes = [...colorPairWinRates]
-    .sort((a, b) => b[1] - a[1])
+  const archetypes = [...colorWinRates]
+    .sort((a, b) => b.wr - a.wr)
     .slice(0, 6)
-    .map(([pair, wr]) => `  ${pair}: ${pct(wr)}`)
+    .map((c) => `  ${c.colors}: ${pct(c.wr)}`)
     .join("\n");
 
   const shared = [

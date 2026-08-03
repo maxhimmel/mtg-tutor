@@ -75,7 +75,7 @@ export const load = query({
       seed: String(session.seed),
       createdAt: session.createdAt,
       colorPair: session.summary?.colorPair ?? "",
-      colorPairWinRates: cardsDoc.colorPairWinRates,
+      colorWinRates: cardsDoc.colorWinRates,
       picks: engine.history.map((h, pickIndex) => ({
         pickIndex,
         packNo: h.packNo,
@@ -303,7 +303,7 @@ export const framePrompt = internalQuery({
   args: { sessionId: v.id("draftSessions"), phase: v.union(v.literal("open"), v.literal("close")) },
   handler: async (ctx, args) => {
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
-    const winRates = new Map(cardsDoc.colorPairWinRates.map((r) => [r.pair, r.winRate]));
+    const winRates = cardsDoc.colorWinRates;
     // No card text read at all: a frame lists the pool as names grouped by
     // colour and ranks the set's archetypes, and neither needs rules text.
     return buildDraftFrame(args.phase, engine.humanPool, winRates);
