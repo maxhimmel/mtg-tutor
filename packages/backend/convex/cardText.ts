@@ -154,8 +154,19 @@ export async function cardContextFor(
   ctx: QueryCtx,
   code: string,
   format: string,
-  names: readonly string[],
+  names?: readonly string[],
 ): Promise<Map<string, CardContext>> {
+  // Omitting `names` reads the set's, ~50KB. That is what a REPLAY needs --
+  // it rescores every pick of a draft and between them they hold most of the
+  // set -- and it is deliberate there, not a default that crept in. It must
+  // never be what a single pick does.
+  if (!names) {
+    const all = await ctx.db
+      .query("setCardContext")
+      .withIndex("by_code_format_and_key", (q) => q.eq("code", code).eq("format", format))
+      .collect();
+    return new Map(all.map((r) => [r.key, r.context]));
+  }
   const keys = [...new Set(names.map(normalizeName))];
   const rows = await Promise.all(
     keys.map((key) =>

@@ -238,6 +238,7 @@ export const storedPickScore = v.object({
   grade: v.string(),
   pickedName: v.string(),
   pickedValue: v.number(),
+  pickedContextValue: v.optional(v.number()),
   // Both answers to "what was the best card here". Names rather than cards,
   // because both are in the pack stored beside this.
   rawBestName: v.string(),

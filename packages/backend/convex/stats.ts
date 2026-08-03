@@ -1,14 +1,27 @@
 import { v } from "convex/values";
-import { replayDraft } from "@mtg-tutor/core";
-import type { SetData } from "@mtg-tutor/core";
+import {
+  commitment,
+  committedColors,
+  normalizeBench,
+  normalizeName,
+  replayDraft,
+  splitPool,
+} from "@mtg-tutor/core";
+import type { CardContext, DraftEngine, EngineCard, SetData } from "@mtg-tutor/core";
 import { query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
 import { ownSessions, setCardsFor, setDocFor } from "./sessions.js";
+import { cardContextFor } from "./cardText.js";
 import { toSetData } from "./setData.js";
 
 // Per-draft numbers come from the denormalized summary; the per-pick breakdowns
 // (score by pick number, biggest misses) come from replay, at ~0.16ms per
 // finished draft.
+//
+// The replay is handed the same scoring context the pick had. Without it a
+// replay grades on raw power, and the two halves of this screen would disagree:
+// the averages would come from one scorer and the totals beside them from
+// another, and "biggest mistakes" would list picks the app had graded 100.
 //
 // Deliberately still replay, even though draftPicks now holds every pick. This
 // reads a hundred sessions at once and caches one pool per (setCode, format),
@@ -28,16 +41,25 @@ export const overview = query({
     const truncated = sessions.length > limit;
     const window = truncated ? sessions.slice(0, limit) : sessions;
 
-    const setCache = new Map<string, SetData>();
-    const setDataFor = async (session: Doc<"draftSessions">): Promise<SetData | undefined> => {
+    // Cached per SET, not per session, which is what makes this affordable.
+    // A hundred-draft window spans a handful of sets, so the pool and its
+    // context are read a handful of times between them -- against the ~8MB
+    // reading every draft's stored picks would cost, since each of those rows
+    // carries the pack it saw.
+    const setCache = new Map<string, { set: SetData; context: Map<string, CardContext> }>();
+    const setDataFor = async (
+      session: Doc<"draftSessions">,
+    ): Promise<{ set: SetData; context: Map<string, CardContext> } | undefined> => {
       const key = `${session.setCode}::${session.format}`;
       const cached = setCache.get(key);
       if (cached) return cached;
       try {
         const setDoc = await setDocFor(ctx, session.setCode, session.format);
         const set = toSetData(await setCardsFor(ctx, setDoc));
-        setCache.set(key, set);
-        return set;
+        const context = await cardContextFor(ctx, session.setCode, session.format);
+        const entry = { set, context };
+        setCache.set(key, entry);
+        return entry;
       } catch {
         // The set was never ingested here, or has since been replaced. That
         // draft's per-pick detail is unavailable; its summary still counts.
@@ -60,12 +82,30 @@ export const overview = query({
 
     let replayed = 0;
     for (const session of window) {
-      const set = await setDataFor(session);
-      if (!set) continue;
+      const loaded = await setDataFor(session);
+      if (!loaded) continue;
+      const { set, context } = loaded;
+
+      // Scored exactly the way the pick itself was, or this reports grades the
+      // player never saw -- and would list picks as misses that the app graded
+      // 100. The sideboard is part of that: a pick was judged against the deck
+      // minus whatever had been set aside by then.
+      const bench = normalizeBench(session.sideboard ?? []);
+      const scoring = (engine: DraftEngine) => {
+        const made = engine.history.length;
+        const maindeck = splitPool(engine.humanPool, bench, made).maindeck;
+        const colors = committedColors(maindeck);
+        return {
+          colors,
+          commitment: commitment(maindeck, colors, made, engine.totalPicks()),
+          archetypes: set.colorWinRates,
+          contextFor: (c: EngineCard) => context.get(normalizeName(c.name)),
+        };
+      };
 
       let engine;
       try {
-        engine = replayDraft(set, session.seed, session.pickedNames);
+        engine = replayDraft(set, session.seed, session.pickedNames, scoring);
       } catch {
         // Set data changed under a stored draft; skip its detail, keep its summary.
         continue;
@@ -85,9 +125,12 @@ export const overview = query({
         if (!h.score.isBest) {
           mistakes.push({
             pickedName: h.picked.name,
-            bestName: h.score.rawBest.name,
-            pickedValue: h.score.pickedValue,
-            bestValue: h.score.rawBestValue,
+            // contextBest, not rawBest: the filter above is "did you take the
+            // card the grade was measured against", so naming the other answer
+            // produced rows reading "you took X, best was X".
+            bestName: h.score.contextBest.name,
+            pickedValue: h.score.pickedContextValue,
+            bestValue: h.score.contextBestValue,
             score: h.score.score,
             packNo: h.packNo,
             pickNo: h.pickNo,

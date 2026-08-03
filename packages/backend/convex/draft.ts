@@ -225,7 +225,7 @@ export const results = query({
       ctx,
       session.setCode,
       session.format,
-      engine.history.flatMap((h) => [h.picked.name, h.score.rawBest.name]),
+      engine.history.flatMap((h) => [h.picked.name, h.score.contextBest.name]),
     );
 
     // The gap the score is actually made of, not a raw GIH delta. They used to
@@ -238,8 +238,11 @@ export const results = query({
         packNo: h.packNo,
         pickNo: h.pickNo,
         picked: hydrateCard(h.picked, text),
-        best: hydrateCard(h.score.rawBest, text),
-        cost: h.score.rawBestValue - h.score.pickedValue,
+        // The card the grade was measured against. Naming the raw best here
+        // while filtering on the contextual one listed picks as missing a card
+        // they had actually taken.
+        best: hydrateCard(h.score.contextBest, text),
+        cost: h.score.contextBestValue - h.score.pickedContextValue,
       }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, args.mistakeLimit ?? 5);

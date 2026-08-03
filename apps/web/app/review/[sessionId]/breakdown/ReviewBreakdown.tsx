@@ -17,11 +17,11 @@ import { useVerdicts } from "../../useVerdicts";
 const decisionPick = (pick: ReviewPick) =>
   isDecisionPick(pick.pack.length, REVIEW.decisionPickMinCards);
 
-// "missed" is picks where you did not take the card the data rates highest.
-// That is a proxy, not the real question -- a pick can be the raw-power best
-// and still be the wrong card for your deck -- but the better answer is the
-// coach's context-best, which does not exist until a model call has been spent.
-// See notes.md, Issues #3.
+// "missed" is picks where you did not take the best card FOR YOUR DECK, which
+// is what the score is now measured against. It used to mean the card the data
+// rated highest, which was a proxy that quietly dropped every pick where you
+// took the raw best and the right card was something else -- exactly the
+// divergence worth teaching. The proxy is gone; this is the real question.
 type Scope = "missed" | "all";
 
 const SCOPES: { key: Scope; label: string }[] = [

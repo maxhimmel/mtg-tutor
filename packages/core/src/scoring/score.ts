@@ -16,6 +16,11 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   grade: string; // A+ .. F
   picked: C;
   pickedValue: number;
+  // What the picked card was worth once the deck was accounted for. Equal to
+  // `pickedValue` with no context. The gap that produced the score is
+  // `contextBestValue - pickedContextValue`, and quoting any other pair mixes
+  // two scales.
+  pickedContextValue: number;
 
   // The two answers to "what was the best card here", kept apart because the
   // gap between them is the thing worth teaching. There is no field called
@@ -162,6 +167,7 @@ export function scorePick<C extends EngineCard>(
     grade: gradeFor(score),
     picked,
     pickedValue,
+    pickedContextValue: pickedInContext,
     rawBest,
     rawBestValue,
     contextBest,
