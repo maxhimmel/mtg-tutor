@@ -1,7 +1,7 @@
-import type { Card, PoolCard } from "../model/card.js";
+import type { Card, ColorWinRate, PoolCard } from "../model/card.js";
 import type { StoredPick } from "../model/review.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
-import { commitmentLine, situationLine } from "./situation.js";
+import { type Pivot, commitmentLine, pivotLines, situationLine } from "./situation.js";
 
 // Pure string builders for the review feature (no SDK). Siblings to pickCoach.ts,
 // reusable by a future web frontend. Unlike live coaching, review asks for a
@@ -37,14 +37,29 @@ function listPack(pick: StoredPick): string {
 
 // Context for a single reviewed pick. The player's pool is what they had BEFORE
 // this pick, so "context-best" is judged against their commitments at the time.
-export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCard[]): string {
+//
+// `benched` is what they had set aside BY this pick, which is the same split the
+// live coach gets -- a review that counted cards the player had already given up
+// on would judge the pick against a deck they were not building.
+export function buildReviewContext(
+  pick: StoredPick,
+  poolBefore: readonly PoolCard[],
+  benched: readonly PoolCard[] = [],
+  pivots: readonly Pivot[] = [],
+): string {
   return [
     situationLine(pick.packNo, pick.pickNo, pick.pack.length),
     commitmentLine(poolBefore, pick.picked),
+    pivotLines(pivots),
     "",
     `Pool before this pick (${poolBefore.length} cards):`,
     summarizePool(poolBefore),
     "",
+    benched.length > 0
+      ? `Sideboard by this point (${benched.length} cards) — drafted, then set aside. The ` +
+        `player was NOT building with these, so do not count them toward their colors or ` +
+        `their curve:\n${summarizePool(benched)}\n`
+      : null,
     `They took: ${describeCard(pick.picked)}`,
     `  ${statLine(pick.picked)}`,
     "",
@@ -56,20 +71,22 @@ export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCa
     "Judge the CONTEXT-BEST pick — the card that best serves this player's deck given",
     "their pool and the signals, which may differ from the raw-power best. Then explain",
     "the divergence (or agreement) and coach the pick.",
-  ].join("\n");
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
 }
 
 // Opening + closing archetype/signal frame for the whole draft. `pool` is the
-// final pool; colorPairWinRates is 17Lands archetype data keyed like "WU".
+// final pool; `colorWinRates` is how each archetype in the format actually did.
 export function buildDraftFrame(
   phase: "open" | "close",
   pool: readonly PoolCard[],
-  colorPairWinRates: Map<string, number>,
+  colorWinRates: readonly ColorWinRate[],
 ): string {
-  const archetypes = [...colorPairWinRates]
-    .sort((a, b) => b[1] - a[1])
+  const archetypes = [...colorWinRates]
+    .sort((a, b) => b.wr - a.wr)
     .slice(0, 6)
-    .map(([pair, wr]) => `  ${pair}: ${pct(wr)}`)
+    .map((c) => `  ${c.colors}: ${pct(c.wr)}`)
     .join("\n");
 
   const shared = [

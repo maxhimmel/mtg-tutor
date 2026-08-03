@@ -1,5 +1,9 @@
 # Issues:
 
+Numbering is stable and therefore gappy, for the same reason the ideas below
+are: `corpus.test.ts` cites issue #4. A fixed issue is deleted and its number
+left empty rather than renumbering everything under it.
+
 0. We gotta figure out how to handle rendering certain types of cards that are 2-in-one. (This relates to the "Adventure" issue below.)
    - It'd be nice to have a helpful tool-tip (like the Haste, Trample, etc) for Adventures and Omens and sub-cards of that variety.
    - It'd also be awesome to have double-sided cards have an additional enlarged popup on hover showing the backside.
@@ -11,30 +15,20 @@
 - Bargain
 - Storm
 - Backup
+- Discover
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
    data that would fix this.)
 
-3. **"Best pick" is decided by data alone, and the interesting answer needs the
-   model.** `scorePick` ranks a pack by `cardValue` and calls the top card the
-   best — pure 17Lands win rate, blind to what is already in your pool. The
-   review then has a second, better idea of best: the **context-best**, the card
-   that serves _this_ deck, and the lesson the whole feature is built around is
-   the gap between the two.
-
-   The problem is that context-best only exists after a model call, so nothing
-   can filter, sort or flag picks by it up front. Concretely: the missed-picks
-   report has to filter on `isBest` (did you take the data's top card), which
-   silently drops every pick where you took the raw best and the coach would
-   still have taken something else — exactly the divergence worth teaching.
-
-   What would fix it is a deterministic context-aware value: `cardValue` reading
-   the archetype splits and synergies we already own, so scoring knows your
-   colours. That is roadmap #1 (`archetype-aware-scoring`) — this is a second
-   reason to do it, and the place it would pay off beyond scoring. Until then
-   `isBest` is the honest proxy and the report is named for what it actually
-   shows.
+   **Still open, and now on purpose.** `setCardContext` was built to carry
+   exactly this and synergy was left out of it: eight partner names per card
+   measured at **201KB of read per draft**, against 41KB for the archetype
+   splits — two thirds of the table's cost for the weakest of the signals
+   (median lift 1.93pp against archetype fit's 4.2pp, p90 3.79 against 8.0).
+   Storing partners as pool indices rather than names would roughly halve it if
+   this is picked up. `pnpm backtest-scoring` is the harness, with the caveat
+   below about what it can and cannot judge.
 
 4. **Re-ingesting a set strands every draft taken against the old data.** A
    session is `{seed, pickedNames}` replayed against whatever the set says
@@ -67,8 +61,6 @@
    both deployments and stranded **nothing** — the backfill replayed every prod
    session successfully. A re-crawl from unchanged artifacts is safe; it was the
    `packRate` rebuild that broke EOE, not re-ingestion as such.
-
-5. The scoring heuristic feels superficial. This was one of the first things vibe-coded on this app. We have so much data and stats now. There has gotta be more interesting ways to give a score that's more perceptive. We should look into what we have available to us and come up with some interesting, accurate, dynamic scoring heuristics - with pros/cons.
 
 6. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
@@ -185,48 +177,22 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
 
 Ordered by value × readiness. Each is a candidate feature branch.
 
-1. **`archetype-aware-scoring`** — consume the archetype splits + synergies we
-   now own (`setStats.archetypes` / `.synergies`, read by nothing in scoring
-   yet) so `cardValue`/scoring rates a card by how good it is _in your colours_,
-   and surface the metrics we compute but never show (trap warnings from
-   `maindeckRate`, synergy hints, archetype fit in explanations). Highest value;
-   data is validated and live. `cardValue` (`core/scoring/value.ts`) is the
-   single tuning point — and it takes a bare `Card`, so this is a signature
-   change that ripples to bots and the deck builder for free.
-
-   The one real obstacle: `archetypes` lives on `setStats`, which the draft hot
-   path deliberately never reads (a 270KB document kept off the per-pick path).
-   Either denormalize the splits onto the cards in `setCards` the way
-   `rarityBaseline` already is, or thread a set-level context through
-   `cardValue` — the former keeps every existing call site working.
-
-   **That question is now settled in favour of denormalizing.** 2026-07-28 put
-   `iwd` and `maindeckRate` on `setCards` the same way, measured at +5-6% on the
-   document (~13KB/set) and confirmed harmless to existing sessions — a re-ingest
-   left the replayed deal byte-identical, because the deal depends only on pool
-   membership, order and `packRate`. Archetype splits are a bigger payload than
-   two scalars per card (~119KB/set unpruned), so they need pruning to the set's
-   real archetypes before they go the same way, but the pattern and the cost
-   model are established. `sets.ts` `ingest` has the denormalise loop; add to it.
-
-   Note the display and prompt work is already done: `core/tutor/cardLine.ts`
-   renders a card's stat line for both prompt builders and the CLI, and
-   `web/app/components/CardStats.tsx` is the hover panel. Archetype fit is a new
-   row in each, not new plumbing.
-
-2. **`deck-builder`** — replace the `DECK` 23-spell/17-land convention with real
+1. **`deck-builder`** — replace the `DECK` 23-spell/17-land convention with real
    winning-deck land counts & curves from the data. `core/draft/deck.ts`; `DECK`
    in `core/config.ts` is the single tuning point. Small, self-contained.
-3. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
+2. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
    data (needs a new draft-data pass) instead of greedy `cardValue` + colour
    bias, so signals/wheeling feel like a real pod. `core/draft/bots.ts` is still
    `cardValue + colorBias + noise`. Same data pass as Ideas #6.
-4. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
+3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
+   Also what `contextValue`'s speed term is waiting on: the axis is stored and
+   unscored because whether a proactive card is GOOD depends on format speed,
+   which nothing measures yet.
    This is what would re-tighten the availability gate to require replay
    (`USED_KINDS` in `scripts/lib/datasets.mjs`).
 
-5. **Follow-ups to token metrics** (spec:
+4. **Follow-ups to token metrics** (spec:
    `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
    the first pass, each for its own reason:
    - **Static token assertions in vitest, no API calls.** Input tokens,
@@ -266,6 +232,27 @@ Ordered by value × readiness. Each is a candidate feature branch.
 Separate track: the **review features** in "Deferred" above (alternate draft
 lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated
 to the data work.
+
+# Measurement traps worth not falling into twice:
+
+1. **`trophyPickRate` cannot be fitted against.** It is the pick rate among 3-0
+   drafters and is the only decision-level ground truth we hold, which makes it
+   the obvious objective for a pick scorer — and it is nearly circular with
+   `maindeckRate`. Maindeck rate ALONE ranks trophy picks at rho 0.90, against
+   0.81 for the card value being improved. A weight search against it duly found
+   +0.12 held-out, which is not a better scorer but one that has learned to
+   predict one drafter behaviour from another. Use it as a CONSTRAINT — it
+   catches a wrong sign or a wrong shape, and did both — never as a target.
+2. **A fixture with no gaps hides a whole class of bug.** `splashCost` paid a
+   card 1.5pp to add a colour, because a width nobody drafted falls back to the
+   format's own rate, which is higher than a measured wider archetype. Every
+   test fixture had contiguous archetype widths; the real data had a hole. Found
+   by reading a stored pick.
+3. **A test that cannot fail reads as coverage.** Both the replay corpus and the
+   value fingerprint were written with input batteries that could not have
+   noticed the change they existed to catch — every ALSA value sat at the nudge's
+   pivot or past its clamp. Perturb the thing under test and watch the guard go
+   red before trusting it.
 
 # Deferred trade-offs (revisit when the premise changes):
 
@@ -363,6 +350,24 @@ The architecture, the data pipeline and the deploy story are all documented in
 7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.
+9. **What the score reads, and what it deliberately does not.** `cardValue` is
+   frozen: bots pick by it, so it decides the deal, and every context-dependent
+   judgement lives in `contextValue` instead where it can change without
+   stranding a draft. Three terms, none tuned — archetype fit and splash cost
+   are measured win rates carried in their own units, and the trust correction
+   is one-sided because self-selection flatters in one direction only.
+
+   **Speed and IWD are stored and not scored, each for a stated reason.** Speed
+   is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
+   fast the format is, which needs the replay dataset. IWD has a sound
+   measurement argument and no derivable weight — the first attempt took 0.37
+   from `1 - corr^2`, and how redundant a signal is says nothing about how far
+   it should move an answer. A term whose magnitude cannot be justified does not
+   belong in the score.
+
+   **A basic land is worth 0**, which is not a knob: you are handed as many as
+   you want when you build, so taking one adds nothing you did not already have.
+
 8. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
    cosmetic and stays.** Convex kills the request on an unhandled rejection and
    discards the response body with it, so a no-output stream returned

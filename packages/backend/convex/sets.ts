@@ -1,8 +1,11 @@
 import { v } from "convex/values";
 import {
   type Card,
+  type IngestCard,
   type ScryfallCard,
   type SeventeenLandsCard,
+  VALUE_FINGERPRINT,
+  computeCardValue,
   isBasicLand,
   mergeCards,
   normalizeName,
@@ -19,7 +22,14 @@ import {
 } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { card, cardStats, packCard, packComposition } from "./validators.js";
+import {
+  card,
+  cardContext,
+  cardStats,
+  colorWinRate,
+  packCard,
+  packComposition,
+} from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
 // return type would be inferred from a type that depends on itself. Declaring
@@ -68,9 +78,14 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // The values are opaque tags whose only job is to differ from their
 // predecessors. Bumping POOL_REVISION re-crawls every set, so it is only worth
 // it when the stored card shape actually changed -- "3-card-stats" added iwd and
-// maindeckRate to the card, and "4-card-split" put the pack slot on it and moved
-// the rules text, art and reading statistics out to setCardText.
-const POOL_REVISION = "4-card-split";
+// maindeckRate to the card, "4-card-split" put the pack slot on it and moved
+// the rules text, art and reading statistics out to setCardText, and
+// "5-value-precomputed" settled cardValue at ingest and sent the four statistics
+// it was computed from after them, and "6-rarity-off-pool" sent the fifth.
+// The tag names what changed; the fingerprint makes a change to how a card is
+// VALUED invalidate every pool without anyone remembering to say so. See
+// VALUE_FINGERPRINT.
+const POOL_REVISION = `8-card-context.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -258,15 +273,15 @@ async function fetchByPrinting(
 // never made a deck is missing from them -- MKM's `Possibility Storm` is exactly
 // that, and keying on ratings alone would fetch it and then drop it again.
 function pickDraftable(
-  cards: Card[],
+  cards: IngestCard[],
   ratings: SeventeenLandsCard[],
   packCards: { name: string }[] = [],
-): Card[] {
+): IngestCard[] {
   const manifest = new Set(
     [...ratings.map((r) => r.name), ...packCards.map((p) => p.name)].map(normalizeName),
   );
   const seen = new Set<string>();
-  const out: Card[] = [];
+  const out: IngestCard[] = [];
 
   for (const c of cards) {
     const key = normalizeName(c.name);
@@ -432,24 +447,61 @@ export const ingest = action({
       const rarityBaseline = baselines.get(c.rarity);
       const packRate = rates.get(normalizeName(c.name));
       const { iwd, maindeckRate } = readability.get(normalizeName(c.name)) ?? {};
-      return {
+      const rated = {
         ...c,
         ...(rarityBaseline != null ? { rarityBaseline } : {}),
         ...(packRate != null ? { packRate } : {}),
         ...(iwd != null ? { iwd } : {}),
         ...(maindeckRate != null ? { maindeckRate } : {}),
       };
+      // After the baseline is on, never before: computing it against the raw
+      // card would bake in RARITY_BASELINE's fixed guess for every unrated card
+      // and quietly undo what observedRarityBaselines just measured.
+      return { ...rated, value: computeCardValue(rated) };
     });
 
-    // Two-colour archetype win rates, for describing guilds in the review.
-    const pairs = (stats.colorWinRates ?? [])
-      .filter((c) => /^[WUBRG]{2}$/.test(c.colors))
-      .map((c) => ({ pair: c.colors, winRate: c.wr }));
+    // Every archetype the format actually produced, at every colour count. The
+    // two-colour filter that used to be here threw away the majority archetype
+    // of ktk and snc, and with it the only measure of what a third colour costs
+    // -- which is the difference between these rates and varies by set from
+    // -0.3pp (snc) to -4.3pp (fdn).
+    const colorWinRates = (stats.colorWinRates ?? []).filter((c) =>
+      /^[WUBRG]+$/.test(c.colors),
+    );
 
     const pooled = new Set(cards.map((c) => normalizeName(c.name)));
     const missingPackCards = packCards.filter(
       (p) => !pooled.has(normalizeName(p.name)),
     ).length;
+
+    // The context rows. Built here rather than in `store` because this is where
+    // the stats artifact is already open, and written as a whole row per card so
+    // scoring reads a pack's worth and not a set's.
+    const archByCard = new Map<string, Record<string, number>>();
+    for (const a of stats.archetypes ?? []) {
+      const key = normalizeName(a.name);
+      const seen = archByCard.get(key) ?? {};
+      seen[a.colors] = a.wr;
+      archByCard.set(key, seen);
+    }
+
+    const contexts = stats.cards.map((c) => {
+      const key = normalizeName(c.name);
+      const archWr = archByCard.get(key);
+      // Both halves have to have cleared the sample floor for the difference
+      // between them to mean anything; the artifact writes undefined otherwise.
+      const speed =
+        c.ohWr != null && c.gdWr != null ? Math.round((c.ohWr - c.gdWr) * 1e4) / 1e4 : undefined;
+      return {
+        key,
+        context: {
+          ...(archWr && Object.keys(archWr).length > 0 ? { archWr } : {}),
+          ...(speed != null ? { speed } : {}),
+          ...(c.iwd != null ? { iwd: c.iwd } : {}),
+          ...(c.maindeckRate != null ? { maindeckRate: c.maindeckRate } : {}),
+        },
+      };
+    });
 
     const stored = await ctx.runMutation(internal.sets.store, {
       code: setCode,
@@ -458,7 +510,8 @@ export const ingest = action({
       releasedAt: scryfall.meta.released_at,
       format,
       cards,
-      colorPairWinRates: pairs,
+      colorWinRates,
+      contexts,
       packComposition: stats.packComposition,
       sourceHash: poolFingerprint,
       metaRevision: META_REVISION,
@@ -548,7 +601,8 @@ export const store = internalMutation({
     releasedAt: v.optional(v.string()),
     format: v.string(),
     cards: v.array(card),
-    colorPairWinRates: v.array(v.object({ pair: v.string(), winRate: v.number() })),
+    colorWinRates: v.array(colorWinRate),
+    contexts: v.array(v.object({ key: v.string(), context: cardContext })),
     packComposition: v.optional(packComposition),
     sourceHash: v.optional(v.string()),
     metaRevision: v.optional(v.string()),
@@ -613,7 +667,7 @@ export const store = internalMutation({
       // still accepted a whole card: every ingest undid the split for that set
       // and nothing failed. The strict validator is what makes it impossible.
       cards: slotted.map(engineHalf),
-      colorPairWinRates: args.colorPairWinRates,
+      colorWinRates: args.colorWinRates,
       // Ingest passes this from setStats; fall back to any existing value so a
       // bare re-run can't drop the set back to 15-card packs.
       packComposition: args.packComposition ?? existingCards?.packComposition,
@@ -643,6 +697,27 @@ export const store = internalMutation({
         format: args.format,
         key: normalizeName(c.name),
         text: textHalf(c),
+      });
+    }
+
+    // Same wholesale replace as the text rows above, and for the same reason.
+    // Only cards the stats artifact actually had context for get a row, so a
+    // reader must treat a missing one as "no context", not as an error -- which
+    // is the honest state for a card no archetype had enough games of.
+    const staleContext = await ctx.db
+      .query("setCardContext")
+      .withIndex("by_code_format_and_key", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .collect();
+    for (const row of staleContext) await ctx.db.delete(row._id);
+
+    for (const { key, context } of args.contexts) {
+      await ctx.db.insert("setCardContext", {
+        code: args.code,
+        format: args.format,
+        key,
+        context,
       });
     }
 
@@ -817,7 +892,7 @@ export const get = query({
     return {
       ...setDoc,
       cards: cardsDoc ? hydrate(cardsDoc.cards, text) : [],
-      colorPairWinRates: cardsDoc?.colorPairWinRates ?? [],
+      colorWinRates: cardsDoc?.colorWinRates ?? [],
       packComposition: cardsDoc?.packComposition,
     };
   },

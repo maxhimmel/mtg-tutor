@@ -1,11 +1,15 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  benchEntry,
+  cardContext,
   cardStats,
   cardText,
   colorCode,
+  colorWinRate,
   draftSummary,
   engineCard,
+  packSnapshot,
   llmCall,
   packCard,
   packComposition,
@@ -66,10 +70,12 @@ export default defineSchema({
     // existing document, so this deploying at all is proof that no pool anywhere
     // still carries the old shape.
     cards: v.array(engineCard),
-    // Map<string, number> isn't a Convex value; stored as pairs and rebuilt.
-    colorPairWinRates: v.array(
-      v.object({ pair: v.string(), winRate: v.number() }),
-    ),
+    // How each archetype in this format actually did, at every colour count --
+    // not filtered to pairs. Three colours is the majority archetype in ktk and
+    // snc, and the cost of a third colour is the gap between these rates rather
+    // than a constant, so scoring needs the whole table on the hot path. ~30
+    // rows, under a kilobyte, on a document that is now ~24.7KB.
+    colorWinRates: v.array(colorWinRate),
     // Copied from setStats by `ingest` -- the observed booster shapes, on the
     // hot-path document so pack generation needs no second read.
     packComposition: v.optional(packComposition),
@@ -97,6 +103,20 @@ export default defineSchema({
     format: v.string(),
     key: v.string(),
     text: cardText,
+  }).index("by_code_format_and_key", ["code", "format", "key"]),
+
+  // What scoring reads to judge a card against the deck being built. A third
+  // table for the same reason setCardText is a second one: choosing the
+  // context-best card in a pack needs this for the ~14 cards in that pack, never
+  // for the set, so it must not ride the pool document.
+  //
+  // Keyed and shaped exactly like setCardText, including nesting the payload
+  // under one field so spreading a row cannot put `_id` and `key` on a card.
+  setCardContext: defineTable({
+    code: v.string(),
+    format: v.string(),
+    key: v.string(),
+    context: cardContext,
   }).index("by_code_format_and_key", ["code", "format", "key"]),
 
   // Our own draft statistics, derived from the 17Lands public datasets rather
@@ -180,7 +200,7 @@ export default defineSchema({
     seed: v.number(),
     pickedNames: v.array(v.string()),
     status: v.union(v.literal("active"), v.literal("complete")),
-    // Which picks the player has set aside, as positions in `pickedNames`.
+    // Which picks the player has set aside, and when they decided it.
     //
     // Positions rather than names, because drafting two copies of a card is
     // normal and benching one of them must not bench both. The same position
@@ -188,10 +208,15 @@ export default defineSchema({
     // so the coach can split one pick's pool into maindeck and sideboard
     // without reading anything else.
     //
-    // Nothing else derives from this: the pool, the score and the suggested
-    // deck are all unchanged by it. It is the player's intent, and the only
-    // thing that reads intent is the coach.
-    sideboard: v.optional(v.array(v.number())),
+    // `atPick` is what keeps an earlier pick's context from being rewritten by a
+    // later decision: cutting a card at pick 40 is not evidence about the deck
+    // being built at pick 5. `atPick === pos` means it was set aside as it was
+    // picked, which is the strongest statement the player can make about it.
+    //
+    // The bare-number arm is the pre-clock shape, kept only until the backfill
+    // has run on both deployments; `normalizeBench` reads either. Every reader
+    // goes through it -- see model/bench.ts in core.
+    sideboard: v.optional(v.union(v.array(v.number()), v.array(benchEntry))),
     createdAt: v.string(),
     completedAt: v.optional(v.string()),
     // Denormalized on completion so the stats screen doesn't replay every draft.
@@ -221,7 +246,7 @@ export default defineSchema({
     pickNo: v.number(),
     // The pack as it was offered, in the engine's half of a card. The rules text
     // is joined from setCardText when a prompt needs it.
-    pack: v.array(engineCard),
+    pack: v.array(packSnapshot),
     pickedName: v.string(),
     // The pool as it stood BEFORE this pick, as the prompts consume it: names
     // grouped by colour, and nothing else. ~30 bytes a card, which is what lets

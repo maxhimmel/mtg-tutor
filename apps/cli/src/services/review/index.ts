@@ -53,8 +53,5 @@ export async function run(argv: string[]): Promise<void> {
   }
   s.stop(`Rebuilt ${loaded.setCode.toUpperCase()} — ${loaded.picks.length} picks`);
 
-  // Archetype win rates ride along with the draft now; no second fetch.
-  const colorPairWinRates = new Map(loaded.colorPairWinRates.map((r) => [r.pair, r.winRate]));
-
-  await runReview(convex, loaded as unknown as StoredDraft, colorPairWinRates, { mode });
+  await runReview(convex, loaded as unknown as StoredDraft, { mode });
 }

@@ -74,11 +74,11 @@ export function GradeRuler() {
       }
       coda={
         <>
-          Two percentage points behind the best card in the pack is a B+. Packs routinely hold four
-          or five cards inside that range, which is why the top of the scale is crowded and why a B+
-          is a fine pick rather than a near miss. Staying in colors you have already committed to
-          adds eight points to your <Term id="score" /> — about one band — so the scale rewards
-          discipline as well as agreement.
+          Two percentage points behind the best card for your deck is a B+. Packs routinely hold
+          four or five cards inside that range, which is why the top of the scale is crowded and why
+          a B+ is a fine pick rather than a near miss. The card you are measured against is the one
+          that suited your deck, not always the strongest in the pack — so staying in your colors
+          is not rewarded with a bonus, it is simply what the comparison is made of.
         </>
       }
     >

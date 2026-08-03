@@ -1,5 +1,5 @@
 import { ConvexError } from "convex/values";
-import type { Card, CardText, EngineCard, RecordedPick } from "@mtg-tutor/core";
+import type { Card, CardContext, CardText, EngineCard, RecordedPick } from "@mtg-tutor/core";
 import { normalizeName } from "@mtg-tutor/core";
 import type { StoredCard, StoredCardText, StoredEngineCard } from "./validators.js";
 import type { QueryCtx } from "./_generated/server.js";
@@ -70,21 +70,22 @@ function defined<T extends object>(o: T): T {
 export function engineHalf(c: StoredCard): StoredEngineCard {
   return defined({
     name: c.name,
-    rarity: c.rarity,
     colors: c.colors,
     slot: c.slot,
     packRate: c.packRate,
-    gihWinRate: c.gihWinRate,
-    gihGames: c.gihGames,
-    alsa: c.alsa,
-    rarityBaseline: c.rarityBaseline,
+    value: c.value,
   });
 }
 
 export function textHalf(c: StoredCard): StoredCardText {
   return defined({
     name: c.name,
+    rarity: c.rarity,
     colorIdentity: c.colorIdentity,
+    gihWinRate: c.gihWinRate,
+    gihGames: c.gihGames,
+    alsa: c.alsa,
+    rarityBaseline: c.rarityBaseline,
     manaCost: c.manaCost,
     cmc: c.cmc,
     typeLine: c.typeLine,
@@ -136,7 +137,49 @@ export function hydratePick(rec: RecordedPick, index: TextIndex): RecordedPick<C
     score: {
       ...rec.score,
       picked: hydrateCard(rec.score.picked, index),
-      best: hydrateCard(rec.score.best, index),
+      rawBest: hydrateCard(rec.score.rawBest, index),
+      contextBest: hydrateCard(rec.score.contextBest, index),
     },
   };
+}
+
+/**
+ * The scoring context for a set's cards, by normalised name.
+ *
+ * Pass the names you need, and on the pick path that is the pack -- about
+ * fourteen rows, ~2KB. Reading the set's would be ~50KB on a document already
+ * read 42 times a draft, which is the cost the whole split exists to avoid.
+ */
+export async function cardContextFor(
+  ctx: QueryCtx,
+  code: string,
+  format: string,
+  names?: readonly string[],
+): Promise<Map<string, CardContext>> {
+  // Omitting `names` reads the set's, ~50KB. That is what a REPLAY needs --
+  // it rescores every pick of a draft and between them they hold most of the
+  // set -- and it is deliberate there, not a default that crept in. It must
+  // never be what a single pick does.
+  if (!names) {
+    const all = await ctx.db
+      .query("setCardContext")
+      .withIndex("by_code_format_and_key", (q) => q.eq("code", code).eq("format", format))
+      .collect();
+    return new Map(all.map((r) => [r.key, r.context]));
+  }
+  const keys = [...new Set(names.map(normalizeName))];
+  const rows = await Promise.all(
+    keys.map((key) =>
+      ctx.db
+        .query("setCardContext")
+        .withIndex("by_code_format_and_key", (q) =>
+          q.eq("code", code).eq("format", format).eq("key", key),
+        )
+        .unique(),
+    ),
+  );
+  // A card with no row is a card no archetype had enough games of. That is the
+  // honest state for ~10% of a set, not an error, and scoring reads it as "no
+  // context" rather than as zero.
+  return new Map(rows.filter((r) => r !== null).map((r) => [r.key, r.context]));
 }

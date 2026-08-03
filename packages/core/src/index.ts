@@ -14,10 +14,12 @@ export * from "./data/sources.js";
 export * from "./data/mapping.js";
 export * from "./model/pick.js";
 export * from "./model/review.js";
+export * from "./model/bench.js";
 
 export * from "./scoring/score.js";
 export * from "./scoring/value.js";
 export * from "./scoring/explain.js";
+export * from "./scoring/context.js";
 
 export * from "./util/rng.js";
 

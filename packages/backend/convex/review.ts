@@ -5,6 +5,9 @@ import {
   buildReviewSystemPrompt,
   canonicalName,
   loadPrinciples,
+  normalizeBench,
+  pivots,
+  splitPool,
   summarizeDraft,
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
@@ -14,7 +17,7 @@ import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
-import { storedPick, toRecordedPick } from "./draftPicks.js";
+import { storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -72,7 +75,7 @@ export const load = query({
       seed: String(session.seed),
       createdAt: session.createdAt,
       colorPair: session.summary?.colorPair ?? "",
-      colorPairWinRates: cardsDoc.colorPairWinRates,
+      colorWinRates: cardsDoc.colorWinRates,
       picks: engine.history.map((h, pickIndex) => ({
         pickIndex,
         packNo: h.packNo,
@@ -81,7 +84,7 @@ export const load = query({
         // whole rather than as the engine's half of a card.
         pack: hydrate(h.pack, text),
         picked: hydrateCard(h.picked, text),
-        bestName: h.score.best.name,
+        bestName: h.score.rawBest.name,
         score: h.score.score,
         isBest: h.score.isBest,
         onColor: h.score.onColor,
@@ -186,6 +189,12 @@ export const verdictContext = internalQuery({
       )
       .unique();
 
+    // The same split the live coach gets, at the same moment: what had been set
+    // aside BY this pick. Reviewing against the whole pool would judge the pick
+    // against a deck the player had already stopped building.
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck, sideboard } = splitPool(row.poolBefore, bench, args.pickIndex);
+
     return {
       cached: existing?.verdict,
       // The only cards a context-best may name. The prompt lists these, but
@@ -200,12 +209,14 @@ export const verdictContext = internalQuery({
           // statistics beside its win rate.
           pack: record.pack,
           picked: record.picked,
-          bestName: record.score.best.name,
+          bestName: record.score.rawBest.name,
           score: record.score.score,
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
-        row.poolBefore,
+        maindeck,
+        sideboard,
+        pivots(row.poolBefore, bench, args.pickIndex),
       ),
     };
   },
@@ -292,7 +303,7 @@ export const framePrompt = internalQuery({
   args: { sessionId: v.id("draftSessions"), phase: v.union(v.literal("open"), v.literal("close")) },
   handler: async (ctx, args) => {
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
-    const winRates = new Map(cardsDoc.colorPairWinRates.map((r) => [r.pair, r.winRate]));
+    const winRates = cardsDoc.colorWinRates;
     // No card text read at all: a frame lists the pool as names grouped by
     // colour and ranks the set's archetypes, and neither needs rules text.
     return buildDraftFrame(args.phase, engine.humanPool, winRates);
@@ -337,7 +348,7 @@ export const backfillSummary = mutation({
     const { session, engine } = await loadBoard(ctx, args.sessionId);
     if (session.summary) return session.summary;
 
-    const summary = summarizeDraft(engine.history, engine.humanPool);
+    const summary = summarizeDraft(await storedScores(ctx, args.sessionId), engine.humanPool);
     await ctx.db.patch(args.sessionId, { summary });
     return summary;
   },

@@ -31,9 +31,13 @@ export async function recordPick(
       score: rec.score.score,
       grade: rec.score.grade,
       pickedName: rec.score.picked.name,
-      bestName: rec.score.best.name,
+      rawBestName: rec.score.rawBest.name,
+      contextBestName: rec.score.contextBest.name,
       pickedValue: rec.score.pickedValue,
-      bestValue: rec.score.bestValue,
+      pickedContextValue: rec.score.pickedContextValue,
+      rawBestValue: rec.score.rawBestValue,
+      contextBestValue: rec.score.contextBestValue,
+      ...(rec.score.terms.length > 0 ? { terms: rec.score.terms } : {}),
       isBest: rec.score.isBest,
       onColor: rec.score.onColor,
       rankInPack: rec.score.rankInPack,
@@ -55,6 +59,25 @@ export async function storedPick(
     .unique();
 }
 
+/**
+ * Every score this session actually gave, in pick order.
+ *
+ * A replay cannot answer this. `draft.pick` scores against the pack's context
+ * rows, and a replay has none -- reading the set's on every pick is the cost the
+ * card split exists to avoid -- so a replayed history carries raw-power scores
+ * and the stored rows carry what the player was shown. The stored rows win.
+ */
+export async function storedScores(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+): Promise<Doc<"draftPicks">["score"][]> {
+  const rows = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", sessionId))
+    .collect();
+  return rows.sort((a, b) => a.pickIndex - b.pickIndex).map((r) => r.score);
+}
+
 function inPack(pack: EngineCard[], name: string): EngineCard {
   const card = pack.find((c) => c.name === name);
   if (!card) {
@@ -68,8 +91,9 @@ function inPack(pack: EngineCard[], name: string): EngineCard {
 
 /** The stored row as the engine would have handed it over, cards and all. */
 export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): RecordedPick<Card> {
-  const pack = hydrate(row.pack, text);
-  const picked = hydrateCard(inPack(row.pack, row.pickedName), text);
+  const stored = row.pack;
+  const pack = hydrate(stored, text);
+  const picked = hydrateCard(inPack(stored, row.pickedName), text);
 
   return {
     packNo: row.packNo,
@@ -79,10 +103,14 @@ export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): Recorde
     score: {
       score: row.score.score,
       grade: row.score.grade,
-      picked: hydrateCard(inPack(row.pack, row.score.pickedName), text),
-      best: hydrateCard(inPack(row.pack, row.score.bestName), text),
+      picked: hydrateCard(inPack(stored, row.score.pickedName), text),
+      rawBest: hydrateCard(inPack(stored, row.score.rawBestName), text),
+      contextBest: hydrateCard(inPack(stored, row.score.contextBestName), text),
       pickedValue: row.score.pickedValue,
-      bestValue: row.score.bestValue,
+      pickedContextValue: row.score.pickedContextValue ?? row.score.pickedValue,
+      rawBestValue: row.score.rawBestValue,
+      contextBestValue: row.score.contextBestValue,
+      terms: row.score.terms ?? [],
       isBest: row.score.isBest,
       onColor: row.score.onColor,
       rankInPack: row.score.rankInPack,

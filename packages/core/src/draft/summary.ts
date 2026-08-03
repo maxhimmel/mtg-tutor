@@ -1,5 +1,5 @@
 import type { EngineCard } from "../model/card.js";
-import type { RecordedPick } from "../model/pick.js";
+import type { PickScore } from "../scoring/score.js";
 
 export interface DraftSummary {
   overallScore: number; // mean pick score, 0-100
@@ -24,15 +24,25 @@ export function deckColorPair(pool: EngineCard[]): string {
     .join("");
 }
 
-export function summarizeDraft(history: RecordedPick[], pool: EngineCard[]): DraftSummary {
-  if (history.length === 0) {
+/**
+ * `scores` rather than the engine's history, because they can differ: a pick is
+ * scored against its pack's context when the caller could read one, and a
+ * replay never can. The scores the player was actually shown are the stored
+ * ones, so a summary built from a replay would report a draft that did not
+ * happen.
+ */
+export function summarizeDraft(
+  scores: readonly Pick<PickScore, "score" | "isBest">[],
+  pool: EngineCard[],
+): DraftSummary {
+  if (scores.length === 0) {
     return { overallScore: 0, accuracy: 0, colorPair: "", pickCount: 0 };
   }
 
   return {
-    overallScore: history.reduce((sum, h) => sum + h.score.score, 0) / history.length,
-    accuracy: history.filter((h) => h.score.isBest).length / history.length,
+    overallScore: scores.reduce((sum, s) => sum + s.score, 0) / scores.length,
+    accuracy: scores.filter((s) => s.isBest).length / scores.length,
     colorPair: deckColorPair(pool),
-    pickCount: history.length,
+    pickCount: scores.length,
   };
 }

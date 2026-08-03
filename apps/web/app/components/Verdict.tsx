@@ -10,7 +10,7 @@ import { CardPlacard } from "./CardPlacard";
 // placards the pool uses -- so a miss reads as two rows to compare rather than
 // a sentence to parse.
 export function Verdict({ score }: { score: PickScore<Card> }) {
-  const lost = pctPoints(score.best.gihWinRate, score.picked.gihWinRate);
+  const lost = pctPoints(score.rawBest.gihWinRate, score.picked.gihWinRate);
 
   return (
     <div className="flex items-start gap-4">
@@ -39,7 +39,7 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
               <span>Best was</span>
               {lost && <span className="tabular-nums normal-case tracking-normal">−{lost}</span>}
             </div>
-            <CardPlacard card={score.best} />
+            <CardPlacard card={score.rawBest} />
           </div>
         )}
       </div>

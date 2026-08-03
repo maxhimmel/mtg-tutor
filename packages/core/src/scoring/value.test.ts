@@ -1,18 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { cardValue, observedRarityBaselines } from "./value.js";
 import { overallWinRate } from "../data/mapping.js";
+import type { Rarity } from "../model/card.js";
 import { mkCard } from "../testing/fakeSet.js";
 import { RARITY_BASELINE, SCORING } from "../config.js";
 import type { Card } from "../model/card.js";
 import type { ColorRating } from "../data/sources.js";
 
 const N = SCORING.minSampleForWinRate;
-const rated = (rarity: Card["rarity"], gih: number) =>
+const rated = (rarity: Rarity, gih: number) =>
   mkCard(`${rarity}-${gih}`, rarity, ["U"], gih, { gihGames: N });
 
 describe("observedRarityBaselines", () => {
   // A set whose rated win rates sit near 0.60, far from the 0.51-0.57 constants.
-  const cards: Card[] = [
+  const cards = [
     ...Array.from({ length: 6 }, (_, i) => rated("common", 0.58 + i * 0.01)),
     ...Array.from({ length: 6 }, (_, i) => rated("rare", 0.61 + i * 0.01)),
   ];

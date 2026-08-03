@@ -1,5 +1,6 @@
 import {
   type Card,
+  type ColorWinRate,
   type EngineCard,
   type PackComposition,
   type PackSlot,
@@ -38,8 +39,10 @@ export function packSlotFor(card: Card, code: string): PackSlot | undefined {
   }
 }
 
-/** Stamps every card with the pool it is dealt from. */
-export function withPackSlots(code: string, cards: Card[]): Card[] {
+// Generic so a caller holding something more specific than a Card -- ingest
+// holds one that definitely knows its rarity -- does not lose that on the way
+// through, which is the difference between the split compiling and not.
+export function withPackSlots<T extends Card>(code: string, cards: T[]): T[] {
   return cards.map((c) => ({ ...c, slot: packSlotFor(c, code) }));
 }
 
@@ -49,7 +52,7 @@ export function withPackSlots(code: string, cards: Card[]): Card[] {
 export function buildSetData(
   code: string,
   cards: EngineCard[],
-  colorPairWinRates: Map<string, number> = new Map(),
+  colorWinRates: ColorWinRate[] = [],
   packComposition?: PackComposition,
 ): SetData {
   const inSlot = (slot: PackSlot) => cards.filter((c) => c.slot === slot);
@@ -78,13 +81,8 @@ export function buildSetData(
     cards,
     byName: new Map(cards.map((c) => [normalizeName(c.name), c])),
     pools,
-    colorPairWinRates,
+    colorWinRates,
     packComposition,
   };
 }
 
-// How many cards actually carry 17Lands data. Below a couple dozen, scoring is
-// leaning on rarity baselines and the caller should say so.
-export function ratedCardCount(set: SetData): number {
-  return set.cards.filter((c) => c.gihWinRate != null).length;
-}

@@ -3,14 +3,20 @@ import {
   type DraftEngine,
   buildPickContext,
   newSeed,
+  commitment,
+  committedColors,
+  normalizeBench,
+  normalizeName,
+  pivots,
+  splitPool,
   suggestDeck,
   summarizeDraft,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import { loadBoard, ownedSession, requireUserId, setDocFor } from "./sessions.js";
-import { cardTextFor } from "./cardText.js";
+import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
-import { recordPick, storedPick, toRecordedPick } from "./draftPicks.js";
+import { recordPick, storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
 
 // The board in the engine's half of a card: names, colours, rarity and the
 // numbers a score is made of.
@@ -76,7 +82,7 @@ export const state = query({
       format: session.format,
       status: session.status,
       summary: session.summary,
-      sideboard: session.sideboard ?? [],
+      sideboard: normalizeBench(session.sideboard ?? []),
       ...boardView(engine),
     };
   },
@@ -106,11 +112,21 @@ export const bench = mutation({
       );
     }
 
-    const current = new Set(session.sideboard ?? []);
-    if (args.benched) current.add(args.pickIndex);
-    else current.delete(args.pickIndex);
+    const current = normalizeBench(session.sideboard ?? []);
+    const already = current.find((b) => b.pos === args.pickIndex);
 
-    const sideboard = [...current].sort((a, b) => a - b);
+    // Re-benching something already benched keeps its original clock. The
+    // mutation is idempotent, so a repeated call must not walk `atPick` forward
+    // and quietly turn a pick-5 decision into a pick-30 one.
+    if (args.benched && already) return current;
+
+    const without = current.filter((b) => b.pos !== args.pickIndex);
+    const sideboard = args.benched
+      ? [...without, { pos: args.pickIndex, atPick: session.pickedNames.length }].sort(
+          (a, b) => a.pos - b.pos,
+        )
+      : without;
+
     await ctx.db.patch(args.sessionId, { sideboard });
     return sideboard;
   },
@@ -119,7 +135,7 @@ export const bench = mutation({
 export const pick = mutation({
   args: { sessionId: v.id("draftSessions"), cardName: v.string() },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
 
     if (engine.isComplete()) {
       throw new Error("This draft is already finished.");
@@ -135,7 +151,38 @@ export const pick = mutation({
     // Captured before the pick, because humanPick appends to the pool it is
     // about to be compared against.
     const poolBefore = engine.humanPool.map((c) => ({ name: c.name, colors: c.colors }));
-    const record = engine.humanPick(chosen);
+
+    // What the deck is, as the player has defined it: the pool minus whatever
+    // they have set aside. Scoring a pick against cards they have said they are
+    // not playing is what this whole line of work exists to stop.
+    const bench = normalizeBench(session.sideboard ?? []);
+    const maindeck = splitPool(
+      engine.humanPool,
+      bench,
+      session.pickedNames.length,
+    ).maindeck;
+    const colors = committedColors(maindeck);
+
+    // The pack's context rows and no more -- fourteen of them, against the ~50KB
+    // the set's would cost on a document already read once per pick.
+    const context = await cardContextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      engine.currentPack.map((c) => c.name),
+    );
+
+    const record = engine.humanPick(chosen, {
+      colors,
+      commitment: commitment(
+        maindeck,
+        colors,
+        session.pickedNames.length,
+        engine.totalPicks(),
+      ),
+      archetypes: cardsDoc.colorWinRates,
+      contextFor: (c) => context.get(normalizeName(c.name)),
+    });
     const complete = engine.isComplete();
 
     // What this pick saw, written as it happens. Nothing recomputes it: the
@@ -149,7 +196,11 @@ export const pick = mutation({
         ? {
             status: "complete" as const,
             completedAt: new Date().toISOString(),
-            summary: summarizeDraft(engine.history, engine.humanPool),
+            // From the stored scores, not the replayed history: this pick and
+            // every one before it was scored against its pack's context, and a
+            // replay has none. Maindeck for the colour pair, so it names the
+            // deck rather than the pile.
+            summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
           }
         : {}),
     });
@@ -174,28 +225,44 @@ export const results = query({
       ctx,
       session.setCode,
       session.format,
-      engine.history.flatMap((h) => [h.picked.name, h.score.best.name]),
+      engine.history.flatMap((h) => [h.picked.name, h.score.contextBest.name]),
     );
 
+    // The gap the score is actually made of, not a raw GIH delta. They used to
+    // disagree -- a pick could be ranked the worst mistake while scoring better
+    // than one ranked below it -- and the old guard silently dropped every
+    // mistake involving a card 17Lands had no data for.
     const mistakes = engine.history
-      .filter(
-        (h) => !h.score.isBest && h.picked.gihWinRate != null && h.score.best.gihWinRate != null,
-      )
+      .filter((h) => !h.score.isBest)
       .map((h) => ({
         packNo: h.packNo,
         pickNo: h.pickNo,
         picked: hydrateCard(h.picked, text),
-        best: hydrateCard(h.score.best, text),
-        cost: h.score.best.gihWinRate! - h.picked.gihWinRate!,
+        // The card the grade was measured against. Naming the raw best here
+        // while filtering on the contextual one listed picks as missing a card
+        // they had actually taken.
+        best: hydrateCard(h.score.contextBest, text),
+        cost: h.score.contextBestValue - h.score.pickedContextValue,
       }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, args.mistakeLimit ?? 5);
 
+    // Building the 40 out of cards the player has said they are not playing is
+    // the app overruling them with its own suggestion. `colorPair` reads the
+    // maindeck for the same reason: it should name the deck, not the pile.
+    const { maindeck, sideboard } = splitPool(
+      engine.humanPool,
+      normalizeBench(session.sideboard ?? []),
+      session.pickedNames.length,
+    );
+
     return {
-      summary: summarizeDraft(engine.history, engine.humanPool),
+      summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
       // The deck builder reads type lines and colour identity to tell a land
       // from a spell and a splash from a lane, so it wants whole cards.
-      deck: suggestDeck(hydrate(engine.humanPool, text)),
+      deck: suggestDeck(hydrate(maindeck, text)),
+      // So the screen can show what was set aside rather than silently drop it.
+      sideboard: hydrate(sideboard, text),
       mistakes,
       status: session.status,
       // Without 17Lands data every card scores off its rarity baseline, so a
@@ -231,20 +298,22 @@ export const coachContext = internalQuery({
     );
     const record = toRecordedPick(row, text);
 
-    // The sideboard as it stands NOW, applied to the pool as it stood then. That
-    // is deliberate: what the player has since decided they are not playing is
-    // the current answer to "what are you building", and it is the only thing
-    // here that is allowed to change after a pick was made. Positions past this
-    // pick are cards it had not yet seen, and `poolBefore` simply has no entry
-    // for them.
-    const benched = new Set(session.sideboard ?? []);
-    const maindeck = row.poolBefore.filter((_, i) => !benched.has(i));
-    const sideboard = row.poolBefore.filter((_, i) => benched.has(i));
+    // The sideboard as it stood at THIS pick, not as it stands now. Deciding at
+    // pick 40 that something is unplayable says nothing about the deck being
+    // built at pick 5, so a later bench must not rewrite an earlier pick's
+    // context -- and a card set aside as it was picked must never count.
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck, sideboard } = splitPool(row.poolBefore, bench, args.pickIndex);
 
     return {
       // The pool as it stood BEFORE this pick: the prompt shows it with the pick
       // added back, and judges the pick's colors against it without.
-      userContent: buildPickContext(record, maindeck, sideboard),
+      userContent: buildPickContext(
+        record,
+        maindeck,
+        sideboard,
+        pivots(row.poolBefore, bench, args.pickIndex),
+      ),
       setCode: session.setCode,
       packNo: row.packNo,
       pickNo: row.pickNo,

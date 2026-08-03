@@ -32,7 +32,7 @@ const snapshot = (engine: DraftEngine) =>
     score: h.score.score,
     grade: h.score.grade,
     isBest: h.score.isBest,
-    best: h.score.best.name,
+    rawBest: h.score.rawBest.name,
     signal: h.signal,
   }));
 

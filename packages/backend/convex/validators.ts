@@ -33,9 +33,11 @@ export const packSlot = v.union(
 // scoring a pick. Convex charges for the whole document a function retrieved
 // rather than the fields it used, and a replay reads every card in the set on
 // every pick -- so what is NOT in here is the point. See core's EngineCard.
+// Five fields per card, and every one of them is read by dealing a pack or
+// scoring a pick. This document is retrieved 42 times a draft and Convex bills
+// the whole of it, so anything a reader only wants to SHOW belongs in cardText.
 export const engineCard = v.object({
   name: v.string(),
-  rarity,
   colors: v.array(colorCode),
   // Which pool the card is dealt from, decided at ingest instead of re-derived
   // from the type line on every replay -- the last thing that kept `typeLine`
@@ -43,13 +45,24 @@ export const engineCard = v.object({
   // existed, which a re-ingest fills in.
   slot: v.optional(packSlot),
   packRate: v.optional(v.number()),
-  gihWinRate: v.optional(v.number()),
-  gihGames: v.optional(v.number()),
-  // Here rather than with the other 17Lands numbers because cardValue nudges an
-  // unrated card by it, so scoring cannot be done without it.
-  alsa: v.optional(v.number()),
-  rarityBaseline: v.optional(v.number()),
+  // Required, not optional -- see EngineCard.value. The formula's inputs are on
+  // cardText now, so a card without this cannot be scored at all, and a push
+  // validates every stored document: this deploying is the proof that no pool
+  // anywhere is still missing one.
+  value: v.number(),
 });
+
+// What a stored pick saw. Identical to `engineCard`, and that is worth saying
+// out loud rather than leaving as a coincidence.
+//
+// This was briefly its own shape, so a pick could keep the statistics as they
+// stood when it was made -- hydration lets the engine half win over the text
+// half, so a stored pack would have described the card the player saw rather
+// than the card it has since become. That stopped being possible when those
+// statistics left EngineCard: `engineHalf` no longer writes them, so there is
+// nothing for a snapshot to preserve. The idea is recoverable if it is ever
+// wanted; it would mean writing more than the engine half here on purpose.
+export const packSnapshot = engineCard;
 
 // The half a person reads, and the half a prompt writes. One row per card in
 // `setCardText`, not an array on the pool document, because its readers want
@@ -57,7 +70,19 @@ export const engineCard = v.object({
 // passed, so the coach needs five of these and not four hundred.
 export const cardText = v.object({
   name: v.string(),
+  // An ingest input rather than something the app reads: it decides a card's
+  // pack slot and baseline value, both settled once at ingest, and nothing
+  // renders it. Kept so the fact is not thrown away. Optional in core too, so
+  // no transitional dance -- a row written before it moved here simply has none.
+  rarity: v.optional(rarity),
   colorIdentity: v.array(colorCode),
+  // The numbers `value` is computed from at ingest. Once the answer is stored,
+  // these are only ever shown to a person or written into a prompt, and both
+  // read a handful of cards rather than the set.
+  gihWinRate: v.optional(v.number()),
+  gihGames: v.optional(v.number()),
+  alsa: v.optional(v.number()),
+  rarityBaseline: v.optional(v.number()),
   manaCost: v.string(),
   cmc: v.number(),
   typeLine: v.string(),
@@ -80,11 +105,38 @@ export const cardText = v.object({
 // A whole card, which is what `ingest` builds from Scryfall and hands to
 // `store`. Storage is where the two halves part company, so this is an argument
 // shape and never a stored one.
-export const card = v.object({ ...engineCard.fields, ...cardText.fields });
+// `rarity` is re-required here on purpose: this is what `ingest` hands `store`,
+// and Scryfall states a rarity on every printing. Neither stored half needs it,
+// but the three functions between the merge and the split all do -- see core's
+// IngestCard.
+export const card = v.object({ ...engineCard.fields, ...cardText.fields, rarity });
 
 export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;
 export type StoredCardText = Infer<typeof cardText>;
+
+// What scoring reads to judge a card in context. One row per card in
+// `setCardContext` -- see core's CardContext for why this is a third table and
+// not more fields on the pool.
+//
+// Synergy is deliberately absent. It belongs here by rights, but eight partner
+// names a card measured at 201KB of read per draft against 41KB for the
+// archetype splits -- two thirds of the cost for the weakest of the signals
+// (median lift 1.93pp against archetype fit's 4.2pp). Left for its own decision.
+export const cardContext = v.object({
+  archWr: v.optional(v.record(v.string(), v.number())),
+  speed: v.optional(v.number()),
+  iwd: v.optional(v.number()),
+  maindeckRate: v.optional(v.number()),
+});
+
+// One archetype's own win rate, no card dimension. Same shape setStats stores,
+// so ingest copies it across rather than reshaping it.
+export const colorWinRate = v.object({
+  colors: v.string(),
+  n: v.number(),
+  wr: v.number(),
+});
 
 // Observed booster shapes for a set. Optional throughout: a set we have no
 // draft data for keeps the fixed PACK constants.
@@ -173,12 +225,28 @@ export const storedPickScore = v.object({
   score: v.number(),
   grade: v.string(),
   pickedName: v.string(),
-  bestName: v.string(),
   pickedValue: v.number(),
-  bestValue: v.number(),
+  pickedContextValue: v.optional(v.number()),
+  // Both answers to "what was the best card here". Names rather than cards,
+  // because both are in the pack stored beside this.
+  rawBestName: v.string(),
+  rawBestValue: v.number(),
+  contextBestName: v.string(),
+  contextBestValue: v.number(),
+  // Why the picked card was worth what it was, in win-rate points. Stored
+  // rather than recomputed, because the coach reads this row instead of
+  // replaying and the reasons are part of what the pick actually saw.
+  terms: v.optional(v.array(v.object({ label: v.string(), delta: v.number() }))),
   isBest: v.boolean(),
   onColor: v.boolean(),
   rankInPack: v.number(),
+});
+
+// One set-aside pick: where it sits in the pool, and when the player decided.
+// See the `sideboard` note in schema.ts and `Bench` in core.
+export const benchEntry = v.object({
+  pos: v.number(),
+  atPick: v.number(),
 });
 
 export const draftSummary = v.object({

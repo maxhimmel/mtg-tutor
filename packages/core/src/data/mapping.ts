@@ -2,7 +2,7 @@
 // fetchers so the CLI and the server produce identical cards from identical
 // responses, regardless of how they got them.
 
-import type { Card, ColorCode, Rarity } from "../model/card.js";
+import type { Card, ColorCode, IngestCard, Rarity } from "../model/card.js";
 import { normalizeName } from "../model/card.js";
 import type { ColorRating, ScryfallCard, SeventeenLandsCard } from "./sources.js";
 
@@ -48,10 +48,14 @@ function combatOf(sc: ScryfallCard) {
   };
 }
 
+// Returns cards without a `value` -- it depends on the set's measured rarity
+// baselines, which need every card merged first, and ingest settles it right
+// after. `IngestCard` rather than `UnvaluedCard` because Scryfall states a
+// rarity on every printing, and the three functions that run next need one.
 export function mergeCards(
   scryfall: ScryfallCard[],
   ratings: SeventeenLandsCard[],
-): Card[] {
+): IngestCard[] {
   const ratingByName = new Map(ratings.map((r) => [normalizeName(r.name), r]));
 
   return scryfall.map((sc) => {
