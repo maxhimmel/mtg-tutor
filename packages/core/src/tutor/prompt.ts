@@ -52,6 +52,15 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "  colors — those picks are expendable and staying open is correct [SIG-01]. Once",
     "  committed colors are named, that latitude is gone.",
     "- If the data verdict and your read disagree, say so briefly and explain why.",
+    // Handed only a filtered pool, a model coaches whatever deck it is shown. The
+    // player asked for a coach, not an assistant, so the pivot has to arrive as
+    // something with an opinion attached rather than a fact to accommodate.
+    "- A Pivot line means the player left a color behind mid-draft. Judge THIS pick",
+    "  against the deck they are building now, not the one they left. The pivot itself",
+    "  is fair to question: say if it looks premature or expensive rather than only",
+    "  going along with it.",
+    "- Cards in the Sideboard are ones the player has said they will not play. Do not",
+    "  count them toward colors or curve, and do not coach them back into the deck.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
     "",
     STAT_LEGEND,
@@ -90,6 +99,14 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "  pool had committed to by then. Judge how early a pick was from those, not from the",
     "  pick number — pick 3 of pack 2 is a third of the way in, not an open start.",
     "- These principles are set-agnostic; combine them with your general card knowledge.",
+    // Review is the surface that can actually answer this, because it sees what
+    // kept coming after the player left.
+    "- A Pivot line means the player left a color behind mid-draft. Judge each pick",
+    "  against the deck they were building AT THAT POINT. With the whole draft in view",
+    "  you can also say whether the pivot was right — whether the color they left kept",
+    "  flowing, and what leaving cost them.",
+    "- Cards in the Sideboard are ones the player has said they will not play. Do not",
+    "  count them toward colors or curve.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
     "",
     STAT_LEGEND,

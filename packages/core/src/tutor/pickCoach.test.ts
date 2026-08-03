@@ -109,4 +109,28 @@ describe("buildPickContext", () => {
       expect(withBench).toContain("Your pool so far (1 cards)");
     });
   });
+
+  describe("with a pivot", () => {
+    // The case a filtered pool cannot express: the deck reads RW either way, but
+    // only the pivot line says blue was given up and when.
+    const ctxWithPivot = buildPickContext(rec, [], [], [
+      {
+        atPick: 19,
+        colors: ["U"],
+        cards: [
+          { name: "Storm Fox", colors: ["U"] },
+          { name: "Tide Herald", colors: ["U"] },
+        ],
+      },
+    ]);
+
+    it("puts the abandoned color and the moment into the prompt", () => {
+      expect(ctxWithPivot).toContain("at pick 20");
+      expect(ctxWithPivot).toContain("left Blue behind");
+    });
+
+    it("says nothing when no color was left behind", () => {
+      expect(ctx).not.toContain("Pivot:");
+    });
+  });
 });

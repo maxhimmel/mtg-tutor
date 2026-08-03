@@ -1,7 +1,7 @@
 import type { Card, PoolCard } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
-import { commitmentLine, situationLine } from "./situation.js";
+import { type Pivot, commitmentLine, pivotLines, situationLine } from "./situation.js";
 
 // Renders a single draft pick into a compact prompt for the coach. Pure string
 // work (no SDK), so a future web frontend can reuse it as-is.
@@ -33,6 +33,7 @@ export function buildPickContext(
   rec: RecordedPick<Card>,
   poolBefore: readonly PoolCard[],
   benched: readonly PoolCard[] = [],
+  pivots: readonly Pivot[] = [],
 ): string {
   const { picked, score, pack } = rec;
   // The pool the player is looking at includes what they just took; the
@@ -55,6 +56,7 @@ export function buildPickContext(
   return [
     situationLine(rec.packNo, rec.pickNo, pack.length),
     commitmentLine(poolBefore, picked),
+    pivotLines(pivots),
     "",
     `Your pool so far (${pool.length} cards):`,
     summarizePool(pool),

@@ -6,6 +6,7 @@ import {
   canonicalName,
   loadPrinciples,
   normalizeBench,
+  pivots,
   splitPool,
   summarizeDraft,
 } from "@mtg-tutor/core";
@@ -191,11 +192,8 @@ export const verdictContext = internalQuery({
     // The same split the live coach gets, at the same moment: what had been set
     // aside BY this pick. Reviewing against the whole pool would judge the pick
     // against a deck the player had already stopped building.
-    const { maindeck, sideboard } = splitPool(
-      row.poolBefore,
-      normalizeBench(session.sideboard ?? []),
-      args.pickIndex,
-    );
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck, sideboard } = splitPool(row.poolBefore, bench, args.pickIndex);
 
     return {
       cached: existing?.verdict,
@@ -218,6 +216,7 @@ export const verdictContext = internalQuery({
         },
         maindeck,
         sideboard,
+        pivots(row.poolBefore, bench, args.pickIndex),
       ),
     };
   },

@@ -4,6 +4,7 @@ import {
   buildPickContext,
   newSeed,
   normalizeBench,
+  pivots,
   splitPool,
   suggestDeck,
   summarizeDraft,
@@ -267,16 +268,18 @@ export const coachContext = internalQuery({
     // pick 40 that something is unplayable says nothing about the deck being
     // built at pick 5, so a later bench must not rewrite an earlier pick's
     // context -- and a card set aside as it was picked must never count.
-    const { maindeck, sideboard } = splitPool(
-      row.poolBefore,
-      normalizeBench(session.sideboard ?? []),
-      args.pickIndex,
-    );
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck, sideboard } = splitPool(row.poolBefore, bench, args.pickIndex);
 
     return {
       // The pool as it stood BEFORE this pick: the prompt shows it with the pick
       // added back, and judges the pick's colors against it without.
-      userContent: buildPickContext(record, maindeck, sideboard),
+      userContent: buildPickContext(
+        record,
+        maindeck,
+        sideboard,
+        pivots(row.poolBefore, bench, args.pickIndex),
+      ),
       setCode: session.setCode,
       packNo: row.packNo,
       pickNo: row.pickNo,

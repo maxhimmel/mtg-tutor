@@ -1,7 +1,7 @@
 import type { Card, PoolCard } from "../model/card.js";
 import type { StoredPick } from "../model/review.js";
 import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
-import { commitmentLine, situationLine } from "./situation.js";
+import { type Pivot, commitmentLine, pivotLines, situationLine } from "./situation.js";
 
 // Pure string builders for the review feature (no SDK). Siblings to pickCoach.ts,
 // reusable by a future web frontend. Unlike live coaching, review asks for a
@@ -45,10 +45,12 @@ export function buildReviewContext(
   pick: StoredPick,
   poolBefore: readonly PoolCard[],
   benched: readonly PoolCard[] = [],
+  pivots: readonly Pivot[] = [],
 ): string {
   return [
     situationLine(pick.packNo, pick.pickNo, pick.pack.length),
     commitmentLine(poolBefore, pick.picked),
+    pivotLines(pivots),
     "",
     `Pool before this pick (${poolBefore.length} cards):`,
     summarizePool(poolBefore),
