@@ -157,27 +157,33 @@ export function archDelta(
   return inArchetype - archetype - (overall - base);
 }
 
-/**
- * The correction IWD makes to a win rate that confounds the card with its deck.
- *
- * GIH WR says a card was in hand when games were won; IWD subtracts the win rate
- * of the same decks in the games they did NOT draw it, so deck quality cancels.
- * The two correlate at 0.793 across all 17 sets, which is exactly why this is
- * weighted rather than added whole: r^2 = 0.63 of IWD is already inside the win
- * rate, and only the remaining 0.37 is information `cardValue` does not have.
- */
-function iwdCorrection(context: CardContext | undefined): number {
-  return context?.iwd == null ? 0 : context.iwd * SCORING.iwdResidualShare;
-}
+// IWD is stored and deliberately not scored, for the same reason `speed` is not:
+// the data cannot say how much of it to count.
+//
+// The measurement argument is sound -- GIH WR confounds a card with the decks
+// that played it, and IWD subtracts the same decks' win rate in the games they
+// did not draw it, so deck quality cancels. What that does not give is a WEIGHT.
+// The first attempt derived one from corr(gihWr, iwd) = 0.793, reasoning that
+// r^2 = 0.63 is redundant so 0.37 is new. That is wrong: how redundant a signal
+// is says nothing about how much it should move an answer. At 0.37 it made the
+// scorer disagree with what 3-0 drafters took in 16 of 17 sets.
+//
+// It needs an objective that is about card quality rather than about what
+// drafters do -- see the circularity note in scripts/backtest-scoring.mjs.
 
 /**
  * How much of a card's win rate to believe.
  *
- * A card taken and then left out of the deck half the time has a win rate
- * measured only on the games someone chose to play it -- a self-selected sample
- * that flatters it. This shrinks such a card toward the format baseline in
- * proportion to how far below the floor it sits, which is the honest shape:
- * not "this card is worse" but "we know less about it than the number suggests".
+ * A card taken and then left out of the deck was played in the games someone
+ * judged it good for. Its win rate is measured on that sample, so it FLATTERS
+ * the card -- and only in that direction.
+ *
+ * One-sided for exactly that reason. Self-selection is a directional bias, not
+ * noise: shrinking symmetrically would also push a weak unplayed card UP toward
+ * the baseline, as though not being played were evidence it is better than it
+ * looks. The first version of this did, and the trophy-pick backtest found it.
+ * Sample noise is a different problem and `cardValue` already handles it with
+ * `gihGames`.
  */
 function trapCorrection(
   card: EngineCard,
@@ -186,8 +192,10 @@ function trapCorrection(
 ): number {
   const rate = context?.maindeckRate;
   if (rate == null || rate >= SCORING.maindeckTrustFloor) return 0;
+  const value = cardValue(card);
+  if (value <= baseline) return 0;
   const distrust = (SCORING.maindeckTrustFloor - rate) / SCORING.maindeckTrustFloor;
-  return (baseline - cardValue(card)) * distrust;
+  return (baseline - value) * distrust;
 }
 
 export function contextValue(card: EngineCard, ctx: ScoringContext): ContextValue {
@@ -205,7 +213,6 @@ export function contextValue(card: EngineCard, ctx: ScoringContext): ContextValu
     { label: "archetype", delta: ctx.commitment * archDelta(ctx, card, context) },
     { label: "splash", delta: -ctx.commitment * splash },
     { label: "trust", delta: trapCorrection(card, context, baseline) },
-    { label: "iwd", delta: iwdCorrection(context) },
   ].filter((t) => t.delta !== 0);
 
   terms.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));

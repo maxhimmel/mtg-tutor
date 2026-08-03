@@ -196,12 +196,14 @@ describe("contextValue", () => {
     expect(out.value).toBeGreaterThan(formatBaseline(ARCHETYPES));
   });
 
-  it("shrinks a distrusted card toward the baseline, never past it", () => {
+  // Self-selection flatters in one direction only. Promoting a weak card
+  // nobody plays would read "not being played is evidence it is better than it
+  // looks", which is backwards -- and the backtest caught exactly that.
+  it("never promotes a weak card just because nobody plays it", () => {
     const weak = card("Weak Trap", ["W"], 0.5);
     const out = contextValue(weak, ctxOf({ contextFor: () => ({ maindeckRate: 0.01 }) }));
-    // Its rate is BELOW the baseline, so distrust moves it up, not down.
-    expect(out.value).toBeGreaterThan(out.base);
-    expect(out.value).toBeLessThanOrEqual(formatBaseline(ARCHETYPES));
+    expect(out.value).toBe(out.base);
+    expect(out.terms).toEqual([]);
   });
 
   it("does not distrust a card people actually play", () => {
@@ -209,16 +211,16 @@ describe("contextValue", () => {
     expect(out.terms.find((t) => t.label === "trust")).toBeUndefined();
   });
 
-  it("counts only the share of IWD the win rate does not already carry", () => {
+  it("does not score IWD, which is stored but has no defensible weight", () => {
     const out = contextValue(wu, ctxOf({ contextFor: () => ({ iwd: 0.04 }) }));
-    expect(out.terms.find((t) => t.label === "iwd")?.delta).toBeCloseTo(0.04 * 0.37, 10);
+    expect(out.terms).toEqual([]);
   });
 
   it("reports its terms largest-first, and they sum to the difference", () => {
     const splashy = card("Off Colour", ["B"], 0.62);
     const out = contextValue(
       splashy,
-      ctxOf({ contextFor: () => ({ archWr: { WU: 0.68 }, iwd: 0.03, maindeckRate: 0.3 }) }),
+      ctxOf({ contextFor: () => ({ archWr: { WU: 0.68 }, maindeckRate: 0.3 }) }),
     );
     const sizes = out.terms.map((t) => Math.abs(t.delta));
     expect([...sizes].sort((a, b) => b - a)).toEqual(sizes);

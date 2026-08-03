@@ -37,15 +37,11 @@ export const SCORING = {
   minSampleForWinRate: 200,
   onColorPartialCredit: 8,
 
-  // How much of IWD is information a card's win rate does not already carry.
-  // Measured, not chosen: corr(gihWr, iwd) = 0.793 across all 17 sets, so
-  // r^2 = 0.63 of it is already inside the win rate and 0.37 is not.
-  iwdResidualShare: 0.37,
   // Below this maindeck rate, a card's win rate was measured on the games
-  // someone chose to play it rather than on the games it was taken for. This
-  // one IS a judgement -- "taken and then left out more often than not" -- and
-  // the correction it drives is a shrinkage toward the format baseline rather
-  // than a penalty, so being wrong about it costs confidence, not points.
+  // someone chose to play it rather than on every game it was taken for. A
+  // judgement -- "taken and then left out more often than not" -- and the
+  // correction it drives only ever moves a card DOWN toward the baseline,
+  // because self-selection flatters in one direction. See trapCorrection.
   maindeckTrustFloor: 0.5,
 };
 

@@ -9,6 +9,7 @@
     "node": ">=20.12"
   },
   "scripts": {
+    "backtest-scoring": "pnpm --filter @mtg-tutor/backend backtest-scoring",
     "bench-io": "pnpm --filter @mtg-tutor/backend bench-io",
     "bench-llm": "pnpm --filter @mtg-tutor/backend bench-llm",
     "bench-report": "pnpm --filter @mtg-tutor/backend bench-report",
