@@ -5,9 +5,9 @@ import type {
   Card,
   ColorCode,
   PackComposition,
+  IngestCard,
   Rarity,
   SetData,
-  UnvaluedCard,
 } from "../model/card.js";
 import { buildSetData, withPackSlots } from "../model/setData.js";
 import { computeCardValue } from "../scoring/value.js";
@@ -19,7 +19,7 @@ export function mkCard(
   gih: number,
   overrides: Partial<Card> = {},
 ): Card {
-  const base: UnvaluedCard = {
+  const base: IngestCard = {
     name,
     rarity,
     colors,

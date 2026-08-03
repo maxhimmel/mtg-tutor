@@ -22,11 +22,6 @@ export type PackSlot = "common" | "uncommon" | "rare" | "mythic" | "bonus" | "la
  */
 export interface EngineCard {
   name: string;
-  // Still here, unlike the four statistics that left with `value`. Moving it
-  // costs ~10% of this document and nothing reads it after ingest -- but it is
-  // also what `withPackSlots` and `computeCardValue` run on, so taking it off
-  // storage means giving ingest its own card type. Worth doing, separately.
-  rarity: Rarity;
   colors: ColorCode[];
   // Which pool this card is dealt from, decided at ingest rather than derived
   // from the type line on every replay. It is also the last thing that needed
@@ -66,6 +61,12 @@ export interface EngineCard {
  */
 export interface CardText {
   name: string;
+  // Optional because it is an INGEST input rather than something the app reads:
+  // rarity decides a card's pack slot and its baseline value, both settled once
+  // at ingest, and nothing anywhere renders it. It is kept on this half so the
+  // fact is not thrown away -- a rarity gem is an obvious thing to want -- but
+  // a row written before it moved here has none and nothing misses it.
+  rarity?: Rarity;
   colorIdentity: ColorCode[];
   manaCost: string;
   cmc: number;
@@ -125,6 +126,17 @@ export type Card = EngineCard & CardText;
  * downstream wonder whether a card might not have one.
  */
 export type UnvaluedCard = Omit<Card, "value">;
+
+/**
+ * What ingest works with: a card that definitely knows its rarity.
+ *
+ * Storage does not keep rarity on the hot half and does not require it on the
+ * other, but the pipeline that produces a card always has it -- Scryfall says so
+ * on every printing -- and `packSlotFor`, `computeCardValue` and
+ * `observedRarityBaselines` all need it. Naming that asymmetry is what lets
+ * `EngineCard` drop the field without those three losing their input.
+ */
+export type IngestCard = UnvaluedCard & { rarity: Rarity };
 
 /**
  * The least a pool needs to be worth summarising.

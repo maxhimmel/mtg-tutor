@@ -38,7 +38,6 @@ export const packSlot = v.union(
 // the whole of it, so anything a reader only wants to SHOW belongs in cardText.
 export const engineCard = v.object({
   name: v.string(),
-  rarity,
   colors: v.array(colorCode),
   // Which pool the card is dealt from, decided at ingest instead of re-derived
   // from the type line on every replay -- the last thing that kept `typeLine`
@@ -57,6 +56,7 @@ export const engineCard = v.object({
   // only until every pool has been re-ingested into the smaller shape, because
   // a push validates existing documents and the stored pools still carry them.
   // The commit that removes these lines is what proves none do.
+  rarity: v.optional(rarity),
   gihWinRate: v.optional(v.number()),
   gihGames: v.optional(v.number()),
   alsa: v.optional(v.number()),
@@ -80,7 +80,7 @@ export const packSnapshot = v.object({
   slot: v.optional(packSlot),
   packRate: v.optional(v.number()),
   value: v.optional(v.number()),
-  rarity,
+  rarity: v.optional(rarity),
   gihWinRate: v.optional(v.number()),
   gihGames: v.optional(v.number()),
   alsa: v.optional(v.number()),
@@ -93,6 +93,11 @@ export const packSnapshot = v.object({
 // passed, so the coach needs five of these and not four hundred.
 export const cardText = v.object({
   name: v.string(),
+  // An ingest input rather than something the app reads: it decides a card's
+  // pack slot and baseline value, both settled once at ingest, and nothing
+  // renders it. Kept so the fact is not thrown away. Optional in core too, so
+  // no transitional dance -- a row written before it moved here simply has none.
+  rarity: v.optional(rarity),
   colorIdentity: v.array(colorCode),
   // The numbers `value` is computed from at ingest. Once the answer is stored,
   // these are only ever shown to a person or written into a prompt, and both
@@ -123,7 +128,11 @@ export const cardText = v.object({
 // A whole card, which is what `ingest` builds from Scryfall and hands to
 // `store`. Storage is where the two halves part company, so this is an argument
 // shape and never a stored one.
-export const card = v.object({ ...engineCard.fields, ...cardText.fields });
+// `rarity` is re-required here on purpose: this is what `ingest` hands `store`,
+// and Scryfall states a rarity on every printing. Neither stored half needs it,
+// but the three functions between the merge and the split all do -- see core's
+// IngestCard.
+export const card = v.object({ ...engineCard.fields, ...cardText.fields, rarity });
 
 export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;

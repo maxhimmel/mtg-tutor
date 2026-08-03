@@ -1,14 +1,17 @@
-import type { Card, EngineCard, Rarity } from "../model/card.js";
+import type { EngineCard, Rarity } from "../model/card.js";
 import { RARITY_BASELINE, SCORING } from "../config.js";
 
-// What ingest computes `EngineCard.value` with. Named as the fields it reads
-// rather than a whole card, because after the engine/text split no single stored
-// half carries all five -- only ingest, holding a card before it comes apart,
+// What ingest computes `EngineCard.value` with. Spelled out rather than picked
+// off Card, because no stored half carries all five: four are on the text half
+// and rarity is on neither. Only ingest, holding a card before it comes apart,
 // can call the functions below.
-export type ValueInputs = Pick<
-  Card,
-  "rarity" | "gihWinRate" | "gihGames" | "rarityBaseline" | "alsa"
->;
+export interface ValueInputs {
+  rarity: Rarity;
+  gihWinRate?: number;
+  gihGames?: number;
+  rarityBaseline?: number;
+  alsa?: number;
+}
 
 // Enough rated cards of a rarity for its median to mean anything.
 const MIN_RATED_PER_RARITY = 5;

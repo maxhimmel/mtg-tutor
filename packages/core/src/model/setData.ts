@@ -38,8 +38,10 @@ export function packSlotFor(card: Card, code: string): PackSlot | undefined {
   }
 }
 
-/** Stamps every card with the pool it is dealt from. */
-export function withPackSlots(code: string, cards: Card[]): Card[] {
+// Generic so a caller holding something more specific than a Card -- ingest
+// holds one that definitely knows its rarity -- does not lose that on the way
+// through, which is the difference between the split compiling and not.
+export function withPackSlots<T extends Card>(code: string, cards: T[]): T[] {
   return cards.map((c) => ({ ...c, slot: packSlotFor(c, code) }));
 }
 

@@ -70,7 +70,6 @@ function defined<T extends object>(o: T): T {
 export function engineHalf(c: StoredCard): StoredEngineCard {
   return defined({
     name: c.name,
-    rarity: c.rarity,
     colors: c.colors,
     slot: c.slot,
     packRate: c.packRate,
@@ -81,6 +80,7 @@ export function engineHalf(c: StoredCard): StoredEngineCard {
 export function textHalf(c: StoredCard): StoredCardText {
   return defined({
     name: c.name,
+    rarity: c.rarity,
     colorIdentity: c.colorIdentity,
     gihWinRate: c.gihWinRate,
     gihGames: c.gihGames,
