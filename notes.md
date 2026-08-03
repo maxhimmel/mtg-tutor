@@ -154,6 +154,8 @@ shipped on 2026-07-31.
 9. I'd like to limit the usage per user.
    - I'm the admin/developer so I should be exempt. In fact, maybe I should be able to manage roles or something that dictate usage limits. For instance a tester friend could have unlimited? But normal friends in the "beta release" (or w/e we're supposed to call this workflow) should be limited to 3 drafts and reviews a day or something.
 
+10. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
