@@ -5,6 +5,8 @@ import {
   buildReviewSystemPrompt,
   canonicalName,
   loadPrinciples,
+  normalizeBench,
+  splitPool,
   summarizeDraft,
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
@@ -186,6 +188,15 @@ export const verdictContext = internalQuery({
       )
       .unique();
 
+    // The same split the live coach gets, at the same moment: what had been set
+    // aside BY this pick. Reviewing against the whole pool would judge the pick
+    // against a deck the player had already stopped building.
+    const { maindeck, sideboard } = splitPool(
+      row.poolBefore,
+      normalizeBench(session.sideboard ?? []),
+      args.pickIndex,
+    );
+
     return {
       cached: existing?.verdict,
       // The only cards a context-best may name. The prompt lists these, but
@@ -205,7 +216,8 @@ export const verdictContext = internalQuery({
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
-        row.poolBefore,
+        maindeck,
+        sideboard,
       ),
     };
   },

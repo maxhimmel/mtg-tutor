@@ -37,7 +37,15 @@ function listPack(pick: StoredPick): string {
 
 // Context for a single reviewed pick. The player's pool is what they had BEFORE
 // this pick, so "context-best" is judged against their commitments at the time.
-export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCard[]): string {
+//
+// `benched` is what they had set aside BY this pick, which is the same split the
+// live coach gets -- a review that counted cards the player had already given up
+// on would judge the pick against a deck they were not building.
+export function buildReviewContext(
+  pick: StoredPick,
+  poolBefore: readonly PoolCard[],
+  benched: readonly PoolCard[] = [],
+): string {
   return [
     situationLine(pick.packNo, pick.pickNo, pick.pack.length),
     commitmentLine(poolBefore, pick.picked),
@@ -45,6 +53,11 @@ export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCa
     `Pool before this pick (${poolBefore.length} cards):`,
     summarizePool(poolBefore),
     "",
+    benched.length > 0
+      ? `Sideboard by this point (${benched.length} cards) — drafted, then set aside. The ` +
+        `player was NOT building with these, so do not count them toward their colors or ` +
+        `their curve:\n${summarizePool(benched)}\n`
+      : null,
     `They took: ${describeCard(pick.picked)}`,
     `  ${statLine(pick.picked)}`,
     "",
@@ -56,7 +69,9 @@ export function buildReviewContext(pick: StoredPick, poolBefore: readonly PoolCa
     "Judge the CONTEXT-BEST pick — the card that best serves this player's deck given",
     "their pool and the signals, which may differ from the raw-power best. Then explain",
     "the divergence (or agreement) and coach the pick.",
-  ].join("\n");
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
 }
 
 // Opening + closing archetype/signal frame for the whole draft. `pool` is the
