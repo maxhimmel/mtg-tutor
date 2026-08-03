@@ -8,9 +8,18 @@ next-env.d.ts
 scratch/
 .omc/
 .turbo/
+# Every env file holds keys except the committed examples, so the rule is
+# suffix-blind: `.env.local.cloud-dev`, kept while switching between a cloud and
+# a local deployment, is exactly as secret as the `.env.local` it copies.
 .env
-.env.local
+.env.*
+!.env.example
+!.env.*.example
 *.tsbuildinfo
+
+# A local Convex deployment's SQLite database, written by `convex dev` when the
+# selected deployment is `local:`. Rebuildable from the seed pipeline.
+.convex/
 
 # Raw 17Lands datasets. Build inputs only -- ~1.2GB per set, streamed and
 # reduced to a ~270KB artifact under packages/backend/data, which IS committed.

@@ -9,7 +9,10 @@ import { env } from "./env.js";
 // HTTP actions (the coach stream) live on the .convex.site host; queries and
 // mutations on .convex.cloud. Same deployment, different origin -- derived so
 // there is no second variable to drift.
-export const CONVEX_SITE_URL = env.CONVEX_URL.replace(
-  /\.convex\.cloud(\/|$)/,
-  ".convex.site$1",
-);
+//
+// The override exists for deployments the swap cannot describe: a local backend
+// puts HTTP actions on a second port rather than a second host, so the pattern
+// finds nothing and CONVEX_URL would pass through as its own coach origin.
+export const CONVEX_SITE_URL =
+  env.CONVEX_SITE_URL ??
+  env.CONVEX_URL.replace(/\.convex\.cloud(\/|$)/, ".convex.site$1");

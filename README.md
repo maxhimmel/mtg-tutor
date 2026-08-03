@@ -81,6 +81,66 @@ deployment seeded once with `pnpm seed-set-stats && pnpm ingest-sets`.
 
 Never run `next build` while `next dev` is running — they share `apps/web/.next`, and the build overwrites the dev server's bundle with one compiled under different env. The symptom is a page stuck on "Loading sets" with no error anywhere. Use `pnpm --filter @mtg-tutor/web typecheck` instead.
 
+### The dev deployment runs on your machine
+
+Feature work targets a **local** Convex deployment: the same backend binary,
+running as a subprocess of `convex dev`, with its database in `.convex/`. Its
+function calls and database bandwidth do not count against the plan's quotas,
+which is the point — the storage shapes under *Architecture* below were forced by
+a bill hit mid-prototype, and iterating on a schema should not be metered.
+
+The backend lives only as long as `convex dev`, so `pnpm dev:web` starts it and
+Ctrl-C stops it. `npx convex dashboard` opens it; use Chrome or Firefox, since
+Safari and Brave block requests to localhost.
+
+Creating one, once:
+
+```bash
+cd packages/backend
+npx convex deployment create local   # downloads the backend, registers it in the project
+npx convex deployment select local
+pnpm env:push                        # a new deployment has no env vars at all
+npx convex dev --once                # push schema + functions
+```
+
+Then seed it — `pnpm seed-set-stats && pnpm ingest-sets`, the same commands as
+any other fresh deployment. That rebuilds the sets from the committed artifacts
+but not your own drafts, which only exist where they were played; to carry those
+across, `npx convex export --path snapshot.zip` against dev and
+`npx convex import snapshot.zip` against local, which preserves `_id` and
+`_creationTime` so the draft → picks → verdicts references survive.
+
+Four values then point the clients at it. `convex dev` writes `CONVEX_URL` and
+`CONVEX_SITE_URL` into `packages/backend/.env.local` but cannot reach into a
+sibling package's env file (see `notes.md`), so copy them by hand:
+
+| File | Variable | Value |
+|---|---|---|
+| `apps/web/.env.local` | `NEXT_PUBLIC_CONVEX_URL` | `http://127.0.0.1:3210` |
+| `apps/web/.env.local` | `NEXT_PUBLIC_CONVEX_SITE_URL` | `http://127.0.0.1:3211` |
+| `apps/cli/.env` | `CONVEX_URL` | `http://127.0.0.1:3210` |
+| `apps/cli/.env` | `CONVEX_SITE_URL` | `http://127.0.0.1:3211` |
+
+Both `*_SITE_URL` are **required** here, where against a cloud deployment they
+are optional. The clients find the HTTP actions host (the streaming coach) by
+swapping `.convex.cloud` for `.convex.site`, and a local deployment answers on a
+second *port*, not a second host — so the swap finds nothing, the query URL
+passes through as its own coach origin, and `/coach` 404s at the wrong port.
+
+Finally `pnpm login` again: the stored session records the deployment it was
+issued against, and `scripts/lib/auth.mjs` refuses a mismatch rather than send a
+cloud token to a local backend.
+
+To go back to the cloud dev deployment, reverse the two halves —
+`npx convex deployment select dev`, restore the four values above to their
+`combative-hamster-414` equivalents, and `pnpm login` once more.
+
+One CLI wrinkle worth knowing: `deployment select` announces that it saved
+`CONVEX_SITE_URL` but leaves the previous deployment's value in place. The next
+`convex dev` corrects it. Until then the file names one deployment's coach
+endpoint alongside another's query endpoint, which `pnpm bench-llm` would follow
+without complaint.
+
 ## Deployment
 
 Vercel hosts the web app; Convex hosts the backend. The Vercel build deploys
