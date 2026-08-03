@@ -12,6 +12,10 @@ scratch/
 .env.local
 *.tsbuildinfo
 
+# A local Convex deployment's SQLite database, written by `convex dev` when the
+# selected deployment is `local:`. Rebuildable from the seed pipeline.
+.convex/
+
 # Raw 17Lands datasets. Build inputs only -- ~1.2GB per set, streamed and
 # reduced to a ~270KB artifact under packages/backend/data, which IS committed.
 # Caching them here just saves re-downloading while tuning metric definitions.
