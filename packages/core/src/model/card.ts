@@ -131,8 +131,12 @@ export interface CardText {
  */
 export interface CardContext {
   // This card's win rate inside each archetype, keyed by the deck's real
-  // colours -- "WU", and also "WUB". Absent for a card no archetype had enough
-  // games of; present for 82-97% of rated cards, median 93%.
+  // colours -- "WU", and also "WUB".
+  //
+  // 82-97% of rated cards carry SOME archetype, median 93% -- but a lookup
+  // wants the one you are actually in, and that is thinner: about 43% of fdn's
+  // rated cards have a row for UB specifically. A card needs 200 games inside
+  // an archetype to appear in it at all. Absent means no signal, not zero.
   archWr?: Record<string, number>;
   // Opening-hand win rate minus drawn-later win rate: whether a card wants the
   // game short or long. Measured at corr 0.022 with GIH WR across all 17 sets,

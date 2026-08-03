@@ -3,7 +3,10 @@ import {
   type DraftEngine,
   buildPickContext,
   newSeed,
+  commitment,
+  committedColors,
   normalizeBench,
+  normalizeName,
   pivots,
   splitPool,
   suggestDeck,
@@ -11,9 +14,9 @@ import {
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import { loadBoard, ownedSession, requireUserId, setDocFor } from "./sessions.js";
-import { cardTextFor } from "./cardText.js";
+import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
-import { recordPick, storedPick, toRecordedPick } from "./draftPicks.js";
+import { recordPick, storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
 
 // The board in the engine's half of a card: names, colours, rarity and the
 // numbers a score is made of.
@@ -132,7 +135,7 @@ export const bench = mutation({
 export const pick = mutation({
   args: { sessionId: v.id("draftSessions"), cardName: v.string() },
   handler: async (ctx, args) => {
-    const { session, engine } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
 
     if (engine.isComplete()) {
       throw new Error("This draft is already finished.");
@@ -148,7 +151,38 @@ export const pick = mutation({
     // Captured before the pick, because humanPick appends to the pool it is
     // about to be compared against.
     const poolBefore = engine.humanPool.map((c) => ({ name: c.name, colors: c.colors }));
-    const record = engine.humanPick(chosen);
+
+    // What the deck is, as the player has defined it: the pool minus whatever
+    // they have set aside. Scoring a pick against cards they have said they are
+    // not playing is what this whole line of work exists to stop.
+    const bench = normalizeBench(session.sideboard ?? []);
+    const maindeck = splitPool(
+      engine.humanPool,
+      bench,
+      session.pickedNames.length,
+    ).maindeck;
+    const colors = committedColors(maindeck);
+
+    // The pack's context rows and no more -- fourteen of them, against the ~50KB
+    // the set's would cost on a document already read once per pick.
+    const context = await cardContextFor(
+      ctx,
+      session.setCode,
+      session.format,
+      engine.currentPack.map((c) => c.name),
+    );
+
+    const record = engine.humanPick(chosen, {
+      colors,
+      commitment: commitment(
+        maindeck,
+        colors,
+        session.pickedNames.length,
+        engine.totalPicks(),
+      ),
+      archetypes: cardsDoc.colorWinRates,
+      contextFor: (c) => context.get(normalizeName(c.name)),
+    });
     const complete = engine.isComplete();
 
     // What this pick saw, written as it happens. Nothing recomputes it: the
@@ -162,16 +196,11 @@ export const pick = mutation({
         ? {
             status: "complete" as const,
             completedAt: new Date().toISOString(),
-            // Maindeck, so the stored pair names the deck rather than the pile,
-            // and agrees with what `results` computes live.
-            summary: summarizeDraft(
-              engine.history,
-              splitPool(
-                engine.humanPool,
-                normalizeBench(session.sideboard ?? []),
-                session.pickedNames.length,
-              ).maindeck,
-            ),
+            // From the stored scores, not the replayed history: this pick and
+            // every one before it was scored against its pack's context, and a
+            // replay has none. Maindeck for the colour pair, so it names the
+            // deck rather than the pile.
+            summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
           }
         : {}),
     });
@@ -225,7 +254,7 @@ export const results = query({
     );
 
     return {
-      summary: summarizeDraft(engine.history, maindeck),
+      summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
       // The deck builder reads type lines and colour identity to tell a land
       // from a spell and a splash from a lane, so it wants whole cards.
       deck: suggestDeck(hydrate(maindeck, text)),

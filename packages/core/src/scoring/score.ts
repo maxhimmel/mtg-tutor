@@ -30,7 +30,7 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   contextBest: C;
   contextBestValue: number;
 
-  isBest: boolean; // took the data's top card
+  isBest: boolean; // took the card the grade was measured against
   onColor: boolean;
   rankInPack: number; // 1 = best available, by raw power
 }
@@ -109,10 +109,12 @@ export function scorePick<C extends EngineCard>(
 
   let contextBest = rawBest;
   let contextBestValue = rawBestValue;
+  let pickedInContext = pickedValue;
   if (ctx) {
     let bestSoFar = -Infinity;
     for (const card of pack) {
       const v = contextValue(card, ctx).value;
+      if (card.name === picked.name) pickedInContext = v;
       if (v > bestSoFar) {
         bestSoFar = v;
         contextBest = card;
@@ -124,15 +126,25 @@ export function scorePick<C extends EngineCard>(
   const committed = committedColors(pool);
   const onColor = isOnColor(committed, picked.colors);
 
-  // Still graded against raw power. Widening the shape and moving the grade are
-  // separate changes on purpose: this one must not alter a single score.
+  // Graded against whichever question could actually be answered. With a
+  // context that is the card that served this deck, and the gap is measured in
+  // the same contextual units on both sides -- comparing a contextual best
+  // against a raw picked value would charge the pick for the difference between
+  // two scales.
+  const target = ctx ? contextBest : rawBest;
+  const targetValue = ctx ? contextBestValue : rawBestValue;
+  const mine = ctx ? pickedInContext : pickedValue;
+
   let score: number;
-  if (picked.name === rawBest.name) {
+  if (picked.name === target.name) {
     score = 100;
   } else {
-    const gap = rawBestValue - pickedValue; // in win-rate points (0-1)
+    const gap = targetValue - mine; // in win-rate points (0-1)
     score = 100 - gap * SCORING.winRateGapK;
-    if (onColor && committed.size > 0) score += SCORING.onColorPartialCredit;
+    // Only without a context. `contextValue` already charges what leaving your
+    // colours costs, measured per set -- adding a flat bonus on top would pay
+    // twice for the same fact, and in a unit nobody derived.
+    if (!ctx && onColor && committed.size > 0) score += SCORING.onColorPartialCredit;
   }
   score = clamp(Math.round(score), 0, 100);
 
@@ -145,7 +157,9 @@ export function scorePick<C extends EngineCard>(
     rawBestValue,
     contextBest,
     contextBestValue,
-    isBest: picked.name === rawBest.name,
+    // Tracks whatever the grade was measured against, so a 100/100 pick can
+    // never come back marked as a miss.
+    isBest: picked.name === target.name,
     onColor,
     rankInPack,
   };

@@ -3,6 +3,7 @@ import { DRAFT, PACK } from "../config.js";
 import { makePacks, packSizeFor } from "./pack.js";
 import { Bot } from "./bots.js";
 import { scorePick } from "../scoring/score.js";
+import type { ScoringContext } from "../scoring/context.js";
 import { readSignals } from "../scoring/explain.js";
 import type { RecordedPick } from "../model/pick.js";
 
@@ -40,9 +41,12 @@ export class DraftEngine {
   }
 
   // Human picks a card; bots pick from their hands; packs rotate; state advances.
-  humanPick(card: EngineCard): RecordedPick {
+  // `ctx` is what the caller could read about this pack, and only a caller with
+  // a database can read it. A replay has no context and scores on raw power --
+  // which is why the stored pick, not a replay, is the truth about a score.
+  humanPick(card: EngineCard, ctx?: ScoringContext): RecordedPick {
     const pack = this.currentPack;
-    const score = scorePick(pack, card, this.humanPool);
+    const score = scorePick(pack, card, this.humanPool, ctx);
     const signal = readSignals(pack, this.pickNo);
 
     const rec: RecordedPick = {

@@ -57,6 +57,25 @@ export async function storedPick(
     .unique();
 }
 
+/**
+ * Every score this session actually gave, in pick order.
+ *
+ * A replay cannot answer this. `draft.pick` scores against the pack's context
+ * rows, and a replay has none -- reading the set's on every pick is the cost the
+ * card split exists to avoid -- so a replayed history carries raw-power scores
+ * and the stored rows carry what the player was shown. The stored rows win.
+ */
+export async function storedScores(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+): Promise<Doc<"draftPicks">["score"][]> {
+  const rows = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", sessionId))
+    .collect();
+  return rows.sort((a, b) => a.pickIndex - b.pickIndex).map((r) => r.score);
+}
+
 function inPack(pack: EngineCard[], name: string): EngineCard {
   const card = pack.find((c) => c.name === name);
   if (!card) {

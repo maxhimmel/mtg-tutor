@@ -74,7 +74,7 @@ console.log(`\nopening pack: ${openingPack} cards`);
 // modern Play Booster. The pack we were dealt is the honest multiplicand.
 console.log(`picks: ${picks} (expected ${PACK.packsPerDraft * openingPack})`);
 console.log(`pool size: ${state.pool.length}`);
-console.log(`avg score taking the best each time: ${(scoreTotal / picks).toFixed(1)} (expect ~100)`);
+console.log(`avg score taking the RAW best each time: ${(scoreTotal / picks).toFixed(1)} (<100 is correct: the grade follows the context best)`);
 console.log(`cards carrying art: ${withArt}/${stored.cards.length}`);
 console.log(`summary: ${JSON.stringify(results.summary)}`);
 const { spells, nonbasicLands, basicLands } = results.deck;

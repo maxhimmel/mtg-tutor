@@ -1,5 +1,5 @@
 import { ConvexError } from "convex/values";
-import type { Card, CardText, EngineCard, RecordedPick } from "@mtg-tutor/core";
+import type { Card, CardContext, CardText, EngineCard, RecordedPick } from "@mtg-tutor/core";
 import { normalizeName } from "@mtg-tutor/core";
 import type { StoredCard, StoredCardText, StoredEngineCard } from "./validators.js";
 import type { QueryCtx } from "./_generated/server.js";
@@ -141,4 +141,34 @@ export function hydratePick(rec: RecordedPick, index: TextIndex): RecordedPick<C
       contextBest: hydrateCard(rec.score.contextBest, index),
     },
   };
+}
+
+/**
+ * The scoring context for a set's cards, by normalised name.
+ *
+ * Pass the names you need, and on the pick path that is the pack -- about
+ * fourteen rows, ~2KB. Reading the set's would be ~50KB on a document already
+ * read 42 times a draft, which is the cost the whole split exists to avoid.
+ */
+export async function cardContextFor(
+  ctx: QueryCtx,
+  code: string,
+  format: string,
+  names: readonly string[],
+): Promise<Map<string, CardContext>> {
+  const keys = [...new Set(names.map(normalizeName))];
+  const rows = await Promise.all(
+    keys.map((key) =>
+      ctx.db
+        .query("setCardContext")
+        .withIndex("by_code_format_and_key", (q) =>
+          q.eq("code", code).eq("format", format).eq("key", key),
+        )
+        .unique(),
+    ),
+  );
+  // A card with no row is a card no archetype had enough games of. That is the
+  // honest state for ~10% of a set, not an error, and scoring reads it as "no
+  // context" rather than as zero.
+  return new Map(rows.filter((r) => r !== null).map((r) => [r.key, r.context]));
 }

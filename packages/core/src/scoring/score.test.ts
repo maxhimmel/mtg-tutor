@@ -151,14 +151,46 @@ describe("scorePick with a scoring context", () => {
     expect(out.contextBest.name).toBe("Weak");
   });
 
-  // The point of this step: the shape widened and not one score moved. The
-  // grade flip is its own change so it can be reverted on its own.
-  it("does not change the score, the grade or isBest", () => {
-    const without = scorePick(pack, weak, []);
-    const with_ = scorePick(pack, weak, [], ctx);
-    expect(with_.score).toBe(without.score);
-    expect(with_.grade).toBe(without.grade);
-    expect(with_.isBest).toBe(without.isBest);
-    expect(with_.rankInPack).toBe(without.rankInPack);
+  // The change the whole plan is for. Taking the card your deck wants, over a
+  // stronger card that would drag you into a third colour, used to cost you a
+  // grade; the pool affected the score only through a flat +8.
+  it("grades against the deck's answer, not the data's", () => {
+    const blind = scorePick(pack, weak, []);
+    const seeing = scorePick(pack, weak, [], ctx);
+    expect(blind.score).toBeLessThan(100);
+    expect(seeing.score).toBe(100);
+  });
+
+  it("marks that pick best, so a 100 can never come back as a miss", () => {
+    expect(scorePick(pack, weak, [], ctx).isBest).toBe(true);
+    expect(scorePick(pack, weak, []).isBest).toBe(false);
+  });
+
+  it("still penalises taking the card the deck does not want", () => {
+    const out = scorePick(pack, strong, [], ctx);
+    expect(out.isBest).toBe(false);
+    expect(out.score).toBeLessThan(100);
+  });
+
+  // The flat on-colour bonus was the old way of saying "your pool matters".
+  // contextValue charges what leaving your colours costs, measured per set, so
+  // keeping the bonus would pay twice for the same fact.
+  it("drops the flat on-colour credit once it can measure the real cost", () => {
+    // strong is R (0.60) and would widen the deck to a third colour, which this
+    // set charges 0.10 for; mid and dud are both on-colour W.
+    const mid = card("Mid", { gihWinRate: 0.58, gihGames: 5000, colors: ["W"] });
+    const dud = card("Dud", { gihWinRate: 0.5, gihGames: 5000, colors: ["W"] });
+    const three = [strong, mid, dud];
+    const pool = [mid, dud]; // two W cards, so W is committed
+
+    // Raw: graded against strong, and handed 8 points back for being on-colour.
+    const blind = scorePick(three, dud, pool);
+    expect(blind.score).toBe(Math.round(100 - (0.6 - 0.5) * 750) + 8);
+
+    // Contextual: graded against mid, and the colour question is already priced
+    // into what strong is worth here. Exactly the formula, with nothing added.
+    const seeing = scorePick(three, dud, pool, ctx);
+    expect(seeing.contextBest.name).toBe("Mid");
+    expect(seeing.score).toBe(Math.round(100 - (0.58 - 0.5) * 750));
   });
 });

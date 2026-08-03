@@ -17,7 +17,7 @@ import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
-import { storedPick, toRecordedPick } from "./draftPicks.js";
+import { storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -348,7 +348,7 @@ export const backfillSummary = mutation({
     const { session, engine } = await loadBoard(ctx, args.sessionId);
     if (session.summary) return session.summary;
 
-    const summary = summarizeDraft(engine.history, engine.humanPool);
+    const summary = summarizeDraft(await storedScores(ctx, args.sessionId), engine.humanPool);
     await ctx.db.patch(args.sessionId, { summary });
     return summary;
   },
