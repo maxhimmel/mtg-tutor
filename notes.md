@@ -30,7 +30,7 @@ left empty rather than renumbering everything under it.
    this is picked up. `pnpm backtest-scoring` is the harness, with the caveat
    below about what it can and cannot judge.
 
-4. **Re-ingesting a set strands every draft taken against the old data.** A
+3. **Re-ingesting a set strands every draft taken against the old data.** A
    session is `{seed, pickedNames}` replayed against whatever the set says
    today, so when a set's card pool or pack model changes the seed deals
    different packs and `replayDraft` throws
@@ -62,8 +62,42 @@ left empty rather than renumbering everything under it.
    session successfully. A re-crawl from unchanged artifacts is safe; it was the
    `packRate` rebuild that broke EOE, not re-ingestion as such.
 
-6. We should create a favicon/logo for the app!
+4. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
+
+5. Terrible coaching/scoring going on:
+
+```
+Last pick
+A+
+98/100
+You took
+Dragonstorm Globe
+Best was
+−0.0%
+Dragonstorm Globe
+Coach
+Take Kin-Tree Nurturer instead — it’s a solid three‑drop creature that actually fits your Black‑Green curve and provides board presence, while Dragonstorm Globe is a generic mid‑range artifact that doesn’t improve your deck’s synergy.
+```
+
+That doesn't seem like it's working correctly. Also, I have like 7 dragons in my deck at this point and a lot of different colors. Dragonstorm Globe creates mana in any color and buffs dragons. The coach is inaccurate and the last pick is redundant.
+
+6. This just claimed that "Stormplain Detainment" wasn't removal:
+
+```
+Last pick
+A
+91/100
+You took
+Stormplain Detainment
+Best was
+−1.0%
+Sultai Monument
+Coach
+Stormplain Detainment is a sub‑optimal splash at this point; you’ve already committed to a three‑color base and the card isn’t a bomb or removal, so it adds little immediate value and forces a weaker mana base. Take the stronger Sultai Monument instead, which fits your colors and is a higher‑impact card.
+```
+
+I may be incorrect here, but that feels totally not true.
 
 # Ideas:
 
@@ -350,7 +384,7 @@ The architecture, the data pipeline and the deploy story are all documented in
 7. **Do not add a task-level `env` key to `turbo.json`** — it _replaces_ rather
    than merges with `globalEnv` and has already silently dropped a variable
    once. Verified with `turbo run build --dry=json`.
-9. **What the score reads, and what it deliberately does not.** `cardValue` is
+8. **What the score reads, and what it deliberately does not.** `cardValue` is
    frozen: bots pick by it, so it decides the deal, and every context-dependent
    judgement lives in `contextValue` instead where it can change without
    stranding a draft. Three terms, none tuned — archetype fit and splash cost
@@ -368,7 +402,7 @@ The architecture, the data pipeline and the deploy story are all documented in
    **A basic land is worth 0**, which is not a knob: you are handed as many as
    you want when you build, so taking one adds nothing you did not already have.
 
-8. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
+9. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
    cosmetic and stays.** Convex kills the request on an unhandled rejection and
    discards the response body with it, so a no-output stream returned
    200-with-nothing and both clients rendered a blank panel. Fixed 2026-07-30 by
