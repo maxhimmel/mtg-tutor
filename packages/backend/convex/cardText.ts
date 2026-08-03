@@ -74,10 +74,6 @@ export function engineHalf(c: StoredCard): StoredEngineCard {
     colors: c.colors,
     slot: c.slot,
     packRate: c.packRate,
-    gihWinRate: c.gihWinRate,
-    gihGames: c.gihGames,
-    alsa: c.alsa,
-    rarityBaseline: c.rarityBaseline,
     value: c.value,
   });
 }
@@ -86,6 +82,10 @@ export function textHalf(c: StoredCard): StoredCardText {
   return defined({
     name: c.name,
     colorIdentity: c.colorIdentity,
+    gihWinRate: c.gihWinRate,
+    gihGames: c.gihGames,
+    alsa: c.alsa,
+    rarityBaseline: c.rarityBaseline,
     manaCost: c.manaCost,
     cmc: c.cmc,
     typeLine: c.typeLine,

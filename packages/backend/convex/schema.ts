@@ -7,6 +7,7 @@ import {
   colorCode,
   draftSummary,
   engineCard,
+  packSnapshot,
   llmCall,
   packCard,
   packComposition,
@@ -227,7 +228,7 @@ export default defineSchema({
     pickNo: v.number(),
     // The pack as it was offered, in the engine's half of a card. The rules text
     // is joined from setCardText when a prompt needs it.
-    pack: v.array(engineCard),
+    pack: v.array(packSnapshot),
     pickedName: v.string(),
     // The pool as it stood BEFORE this pick, as the prompts consume it: names
     // grouped by colour, and nothing else. ~30 bytes a card, which is what lets

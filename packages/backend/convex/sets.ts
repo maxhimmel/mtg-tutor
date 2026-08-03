@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import {
   type Card,
+  type UnvaluedCard,
   type ScryfallCard,
   type SeventeenLandsCard,
   computeCardValue,
@@ -69,9 +70,11 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // The values are opaque tags whose only job is to differ from their
 // predecessors. Bumping POOL_REVISION re-crawls every set, so it is only worth
 // it when the stored card shape actually changed -- "3-card-stats" added iwd and
-// maindeckRate to the card, and "4-card-split" put the pack slot on it and moved
-// the rules text, art and reading statistics out to setCardText.
-const POOL_REVISION = "4-card-split";
+// maindeckRate to the card, "4-card-split" put the pack slot on it and moved
+// the rules text, art and reading statistics out to setCardText, and
+// "5-value-precomputed" settled cardValue at ingest and sent the five fields it
+// was computed from after them.
+const POOL_REVISION = "5-value-precomputed";
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -259,15 +262,15 @@ async function fetchByPrinting(
 // never made a deck is missing from them -- MKM's `Possibility Storm` is exactly
 // that, and keying on ratings alone would fetch it and then drop it again.
 function pickDraftable(
-  cards: Card[],
+  cards: UnvaluedCard[],
   ratings: SeventeenLandsCard[],
   packCards: { name: string }[] = [],
-): Card[] {
+): UnvaluedCard[] {
   const manifest = new Set(
     [...ratings.map((r) => r.name), ...packCards.map((p) => p.name)].map(normalizeName),
   );
   const seen = new Set<string>();
-  const out: Card[] = [];
+  const out: UnvaluedCard[] = [];
 
   for (const c of cards) {
     const key = normalizeName(c.name);

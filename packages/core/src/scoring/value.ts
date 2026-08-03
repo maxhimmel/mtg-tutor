@@ -1,5 +1,14 @@
-import type { EngineCard, Rarity } from "../model/card.js";
+import type { Card, EngineCard, Rarity } from "../model/card.js";
 import { RARITY_BASELINE, SCORING } from "../config.js";
+
+// What ingest computes `EngineCard.value` with. Named as the fields it reads
+// rather than a whole card, because after the engine/text split no single stored
+// half carries all five -- only ingest, holding a card before it comes apart,
+// can call the functions below.
+export type ValueInputs = Pick<
+  Card,
+  "rarity" | "gihWinRate" | "gihGames" | "rarityBaseline" | "alsa"
+>;
 
 // Enough rated cards of a rarity for its median to mean anything.
 const MIN_RATED_PER_RARITY = 5;
@@ -20,7 +29,7 @@ function median(xs: number[]): number {
 // alone, every unrated rare scores as though it were the worst card in the set.
 //
 // Medians, not means, so one absurd bomb does not drag a whole rarity up.
-export function observedRarityBaselines(cards: readonly EngineCard[]): Map<Rarity, number> {
+export function observedRarityBaselines(cards: readonly ValueInputs[]): Map<Rarity, number> {
   const rated = cards.filter(
     (c) => c.gihWinRate != null && (c.gihGames ?? 0) >= SCORING.minSampleForWinRate,
   );
@@ -51,22 +60,14 @@ export function observedRarityBaselines(cards: readonly EngineCard[]): Map<Rarit
 // the baseline onto the format's scale (see EngineCard.rarityBaseline), not by
 // shifting the win rates -- so a gap between two cards stays in real win-rate
 // points and SCORING.winRateGapK keeps its meaning.
-// Ingest resolves this once and stores it (see EngineCard.value); everything
-// else reads it.
-//
-// Falling back to the formula is transitional, not a permanent second path: it
-// is what lets a set ingested before the field existed keep scoring identically
-// until it is re-ingested. It stops being reachable in the same change that
-// takes gihWinRate, gihGames, rarityBaseline, alsa and rarity off EngineCard --
-// after that there is nothing left on the card to compute from, and `value`
-// becomes required rather than optional.
+// Resolved once at ingest and read from the card ever after. There is no second
+// path: the formula's inputs are on CardText now, so an EngineCard cannot be
+// scored any other way.
 export function cardValue(card: EngineCard): number {
-  return card.value ?? computeCardValue(card);
+  return card.value;
 }
 
-// The formula itself. Ingest is the only caller that needs it directly -- every
-// other reader wants `cardValue`, which prefers the stored answer.
-export function computeCardValue(card: EngineCard): number {
+export function computeCardValue(card: ValueInputs): number {
   const games = card.gihGames ?? 0;
   if (card.gihWinRate != null && games >= SCORING.minSampleForWinRate) {
     return card.gihWinRate;

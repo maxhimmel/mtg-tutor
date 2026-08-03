@@ -22,6 +22,10 @@ export type PackSlot = "common" | "uncommon" | "rare" | "mythic" | "bonus" | "la
  */
 export interface EngineCard {
   name: string;
+  // Still here, unlike the four statistics that left with `value`. Moving it
+  // costs ~10% of this document and nothing reads it after ingest -- but it is
+  // also what `withPackSlots` and `computeCardValue` run on, so taking it off
+  // storage means giving ingest its own card type. Worth doing, separately.
   rarity: Rarity;
   colors: ColorCode[];
   // Which pool this card is dealt from, decided at ingest rather than derived
@@ -40,36 +44,19 @@ export interface EngineCard {
   // which keep drawing uniformly and so keep replaying identically.
   packRate?: number;
 
-  // 17Lands ratings (undefined when the set/card has no data).
-  gihWinRate?: number; // ever_drawn_win_rate, 0-1
-  gihGames?: number; // ever_drawn_game_count (sample size)
-  // What an unrated card of this rarity is worth in this set, measured from the
-  // set's own rated cards instead of guessed (see observedRarityBaselines).
-  // A per-rarity constant, denormalised onto every card so `cardValue(card)`
-  // needs no set context -- otherwise bots, the deck builder and scoring would
-  // all have to thread it through their signatures. Costs ~8KB on a 164KB set
-  // document. Absent for sets ingested before this, which fall back to
-  // RARITY_BASELINE and score exactly as they did.
-  rarityBaseline?: number;
-  // The mean pick number over every time a drafter saw this card in a pack --
-  // 17Lands calls it "average last seen at", but it is a mean over all sightings,
-  // not the last one, which is why it sits BELOW avgPick rather than above it
-  // (a circulating card is seen by many drafters early and taken by one late).
-  // The gap avgPick - alsa is how long it survives once people start seeing it.
+  // What `cardValue` resolves to, settled once at ingest.
   //
-  // On this half of the card because cardValue nudges an unrated card by it.
-  alsa?: number;
-
-  // What `cardValue` resolves to, settled once at ingest instead of recomputed
-  // on every read. Its inputs -- gihWinRate, gihGames, rarityBaseline, alsa,
-  // rarity -- do not change between ingests, so recomputing them 42 times a
-  // draft was only ever paying to carry them on the hot path.
+  // This field is why the rest of them left. `cardValue` read gihWinRate,
+  // gihGames, rarityBaseline, alsa and rarity, and none of those change between
+  // ingests -- so a draft replay was re-deriving a constant for every card in
+  // the set on every one of 42 picks, and the five inputs were on the hot path
+  // only because the formula was. They are on CardText now, where the readers
+  // that actually want to SHOW them already look.
   //
-  // Absent for sets ingested before this, which fall back to computing it and
-  // deal identically. Bots pick by this number, so a set where it disagrees with
-  // the formula deals differently and strands its drafts: the two must stay
-  // exactly equal, which `corpus.test.ts` asserts.
-  value?: number;
+  // Required, not optional: the formula's inputs no longer exist here, so a card
+  // without this cannot be scored at all. Ingestion writes it for every card and
+  // the schema push is what proves no stored pool is missing one.
+  value: number;
 }
 
 /**
@@ -96,6 +83,22 @@ export interface CardText {
   avgPick?: number; // ATA — the mean pick number it is actually taken at
   winRate?: number; // GP WR — games-played win rate
 
+  // 17Lands ratings (undefined when the set/card has no data). These are what
+  // `EngineCard.value` is computed FROM at ingest, so they moved here with it:
+  // once the answer is stored, the inputs are only ever shown to a person or
+  // written into a prompt, and both of those read a handful of cards.
+  gihWinRate?: number; // ever_drawn_win_rate, 0-1
+  gihGames?: number; // ever_drawn_game_count (sample size)
+  // What an unrated card of this rarity is worth in this set, measured from the
+  // set's own rated cards instead of guessed (see observedRarityBaselines).
+  rarityBaseline?: number;
+  // The mean pick number over every time a drafter saw this card in a pack --
+  // 17Lands calls it "average last seen at", but it is a mean over all sightings,
+  // not the last one, which is why it sits BELOW avgPick rather than above it
+  // (a circulating card is seen by many drafters early and taken by one late).
+  // The gap avgPick - alsa is how long it survives once people start seeing it.
+  alsa?: number;
+
   // gihWinRate minus the win rate of games where the card sat in the deck and was
   // never drawn. Both halves come from the same decks, so deck quality cancels and
   // what is left is the card's own contribution -- which raw GIH WR confounds: a
@@ -111,6 +114,17 @@ export interface CardText {
 
 /** A whole card: what the engine reads, plus what a person reads. */
 export type Card = EngineCard & CardText;
+
+/**
+ * A card between the Scryfall/17Lands merge and ingest settling its `value`.
+ *
+ * `value` depends on the set's measured rarity baselines, which cannot be
+ * computed until every card has been merged -- so there is a real stage where a
+ * card is complete except for that one field. Naming it stops the alternative,
+ * which is making `value` optional on EngineCard and letting every reader
+ * downstream wonder whether a card might not have one.
+ */
+export type UnvaluedCard = Omit<Card, "value">;
 
 /**
  * The least a pool needs to be worth summarising.

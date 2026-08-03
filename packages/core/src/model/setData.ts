@@ -83,8 +83,3 @@ export function buildSetData(
   };
 }
 
-// How many cards actually carry 17Lands data. Below a couple dozen, scoring is
-// leaning on rarity baselines and the caller should say so.
-export function ratedCardCount(set: SetData): number {
-  return set.cards.filter((c) => c.gihWinRate != null).length;
-}

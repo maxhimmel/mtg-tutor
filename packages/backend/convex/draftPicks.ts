@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 import type { Card, EngineCard, PoolCard, RecordedPick, TextIndex } from "@mtg-tutor/core";
-import { hydrate, hydrateCard } from "@mtg-tutor/core";
+import { computeCardValue, hydrate, hydrateCard } from "@mtg-tutor/core";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 
@@ -66,10 +66,22 @@ function inPack(pack: EngineCard[], name: string): EngineCard {
   return card;
 }
 
+// A pack stored before `value` existed still carries the statistics it was
+// computed from, so the number is recoverable rather than lost -- and it is the
+// value that pick actually saw, not today's. Settling it here instead of
+// backfilling the rows keeps the record untouched and costs one pass over the
+// ~14 cards a coach call reads.
+const asEngineCards = (pack: Doc<"draftPicks">["pack"]): EngineCard[] =>
+  pack.map((c) => ({
+    ...c,
+    value: c.value ?? computeCardValue({ ...c, rarity: c.rarity ?? "common" }),
+  }));
+
 /** The stored row as the engine would have handed it over, cards and all. */
 export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): RecordedPick<Card> {
-  const pack = hydrate(row.pack, text);
-  const picked = hydrateCard(inPack(row.pack, row.pickedName), text);
+  const stored = asEngineCards(row.pack);
+  const pack = hydrate(stored, text);
+  const picked = hydrateCard(inPack(stored, row.pickedName), text);
 
   return {
     packNo: row.packNo,
@@ -79,8 +91,8 @@ export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): Recorde
     score: {
       score: row.score.score,
       grade: row.score.grade,
-      picked: hydrateCard(inPack(row.pack, row.score.pickedName), text),
-      best: hydrateCard(inPack(row.pack, row.score.bestName), text),
+      picked: hydrateCard(inPack(stored, row.score.pickedName), text),
+      best: hydrateCard(inPack(stored, row.score.bestName), text),
       pickedValue: row.score.pickedValue,
       bestValue: row.score.bestValue,
       isBest: row.score.isBest,

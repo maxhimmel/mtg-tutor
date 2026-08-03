@@ -199,16 +199,18 @@ export const results = query({
       engine.history.flatMap((h) => [h.picked.name, h.score.best.name]),
     );
 
+    // The gap the score is actually made of, not a raw GIH delta. They used to
+    // disagree -- a pick could be ranked the worst mistake while scoring better
+    // than one ranked below it -- and the old guard silently dropped every
+    // mistake involving a card 17Lands had no data for.
     const mistakes = engine.history
-      .filter(
-        (h) => !h.score.isBest && h.picked.gihWinRate != null && h.score.best.gihWinRate != null,
-      )
+      .filter((h) => !h.score.isBest)
       .map((h) => ({
         packNo: h.packNo,
         pickNo: h.pickNo,
         picked: hydrateCard(h.picked, text),
         best: hydrateCard(h.score.best, text),
-        cost: h.score.best.gihWinRate! - h.picked.gihWinRate!,
+        cost: h.score.bestValue - h.score.pickedValue,
       }))
       .sort((a, b) => b.cost - a.cost)
       .slice(0, args.mistakeLimit ?? 5);

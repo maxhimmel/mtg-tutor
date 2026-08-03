@@ -33,6 +33,9 @@ export const packSlot = v.union(
 // scoring a pick. Convex charges for the whole document a function retrieved
 // rather than the fields it used, and a replay reads every card in the set on
 // every pick -- so what is NOT in here is the point. See core's EngineCard.
+// Five fields per card, and every one of them is read by dealing a pack or
+// scoring a pick. This document is retrieved 42 times a draft and Convex bills
+// the whole of it, so anything a reader only wants to SHOW belongs in cardText.
 export const engineCard = v.object({
   name: v.string(),
   rarity,
@@ -43,16 +46,45 @@ export const engineCard = v.object({
   // existed, which a re-ingest fills in.
   slot: v.optional(packSlot),
   packRate: v.optional(v.number()),
+  // Required, not optional -- see EngineCard.value. The formula's inputs are on
+  // cardText now, so a card without this cannot be scored at all, and a push
+  // validates every stored document: this deploying is the proof that no pool
+  // anywhere is still missing one.
+  value: v.number(),
+
+  // TRANSITIONAL. These moved to cardText and no engine reader touches them --
+  // the TS type dropped them, so the compiler already refuses. They stay here
+  // only until every pool has been re-ingested into the smaller shape, because
+  // a push validates existing documents and the stored pools still carry them.
+  // The commit that removes these lines is what proves none do.
   gihWinRate: v.optional(v.number()),
   gihGames: v.optional(v.number()),
-  // Here rather than with the other 17Lands numbers because cardValue nudges an
-  // unrated card by it, so scoring cannot be done without it.
   alsa: v.optional(v.number()),
   rarityBaseline: v.optional(v.number()),
-  // Resolved at ingest -- see EngineCard.value. Optional only until every set
-  // has been re-ingested; the change that shrinks this validator makes it
-  // required, and the push is what proves no pool still lacks it.
+});
+
+// What a stored pick saw, which is NOT the same shape as a pool.
+//
+// A pool document is read 42 times a draft and every byte is billed each time,
+// so it carries the minimum. A pick's pack is read a handful of rows at a time
+// by the coach, and is a permanent record that can never be rebuilt -- the set
+// it was dealt from may have been re-ingested since. So it keeps the statistics
+// as they stood when the pick was made, on purpose: hydration lets the engine
+// half win over the text half, which is what makes the coach describe the card
+// the player actually saw rather than the card it has since become.
+//
+// `value` is optional only until the backfill has run; see migrations.ts.
+export const packSnapshot = v.object({
+  name: v.string(),
+  colors: v.array(colorCode),
+  slot: v.optional(packSlot),
+  packRate: v.optional(v.number()),
   value: v.optional(v.number()),
+  rarity,
+  gihWinRate: v.optional(v.number()),
+  gihGames: v.optional(v.number()),
+  alsa: v.optional(v.number()),
+  rarityBaseline: v.optional(v.number()),
 });
 
 // The half a person reads, and the half a prompt writes. One row per card in
@@ -62,6 +94,13 @@ export const engineCard = v.object({
 export const cardText = v.object({
   name: v.string(),
   colorIdentity: v.array(colorCode),
+  // The numbers `value` is computed from at ingest. Once the answer is stored,
+  // these are only ever shown to a person or written into a prompt, and both
+  // read a handful of cards rather than the set.
+  gihWinRate: v.optional(v.number()),
+  gihGames: v.optional(v.number()),
+  alsa: v.optional(v.number()),
+  rarityBaseline: v.optional(v.number()),
   manaCost: v.string(),
   cmc: v.number(),
   typeLine: v.string(),

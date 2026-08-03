@@ -1,8 +1,16 @@
 // Synthetic set data for tests. Lives outside the build (see tsconfig exclude)
 // so it never ships in dist.
 
-import type { Card, ColorCode, PackComposition, Rarity, SetData } from "../model/card.js";
+import type {
+  Card,
+  ColorCode,
+  PackComposition,
+  Rarity,
+  SetData,
+  UnvaluedCard,
+} from "../model/card.js";
 import { buildSetData, withPackSlots } from "../model/setData.js";
+import { computeCardValue } from "../scoring/value.js";
 
 export function mkCard(
   name: string,
@@ -11,7 +19,7 @@ export function mkCard(
   gih: number,
   overrides: Partial<Card> = {},
 ): Card {
-  return {
+  const base: UnvaluedCard = {
     name,
     rarity,
     colors,
@@ -26,6 +34,10 @@ export function mkCard(
     alsa: 8,
     ...overrides,
   };
+  // Settled the same way ingest settles it, and after the overrides, so a
+  // fixture that sets rarityBaseline or a thin gihGames gets the value that
+  // implies rather than the default's.
+  return { ...base, value: overrides.value ?? computeCardValue(base) };
 }
 
 // A set with enough cards in every rarity pool to generate real packs.

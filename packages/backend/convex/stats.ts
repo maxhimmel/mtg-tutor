@@ -50,8 +50,8 @@ export const overview = query({
     const mistakes: {
       pickedName: string;
       bestName: string;
-      pickedGih: number;
-      bestGih: number;
+      pickedValue: number;
+      bestValue: number;
       score: number;
       packNo: number;
       pickNo: number;
@@ -79,12 +79,15 @@ export const overview = query({
         const pack = byPackNo.get(h.packNo) ?? { total: 0, n: 0 };
         byPackNo.set(h.packNo, { total: pack.total + h.score.score, n: pack.n + 1 });
 
-        if (!h.score.isBest && h.picked.gihWinRate != null && h.score.best.gihWinRate != null) {
+        // Ranked by the gap the score is made of. A raw GIH delta ranked
+        // differently from the grade beside it, and dropped any pick whose
+        // cards 17Lands had never rated.
+        if (!h.score.isBest) {
           mistakes.push({
             pickedName: h.picked.name,
             bestName: h.score.best.name,
-            pickedGih: h.picked.gihWinRate,
-            bestGih: h.score.best.gihWinRate,
+            pickedValue: h.score.pickedValue,
+            bestValue: h.score.bestValue,
             score: h.score.score,
             packNo: h.packNo,
             pickNo: h.pickNo,
@@ -121,7 +124,7 @@ export const overview = query({
       byPickNo: avg(byPickNo).map((r) => ({ pickNo: r.key, avgScore: r.avgScore })),
       byPackNo: avg(byPackNo).map((r) => ({ packNo: r.key, avgScore: r.avgScore })),
       topMistakes: mistakes
-        .sort((a, b) => b.bestGih - b.pickedGih - (a.bestGih - a.pickedGih))
+        .sort((a, b) => b.bestValue - b.pickedValue - (a.bestValue - a.pickedValue))
         .slice(0, args.mistakeLimit ?? 10),
       // So the caller can say what it could not see, rather than implying totals.
       truncated,

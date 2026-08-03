@@ -82,16 +82,16 @@ export async function showStats() {
 
   if (topMistakes.length) {
     const mt = new Table({
-      head: ["Where", "Set", "Took", "GIH", "Should've", "GIH"].map((h) => pc.cyan(h)),
+      head: ["Where", "Set", "Took", "Value", "Should've", "Value"].map((h) => pc.cyan(h)),
     });
     for (const m of topMistakes.slice(0, 8)) {
       mt.push([
         `P${m.packNo}P${m.pickNo}`,
         m.setCode.toUpperCase(),
         m.pickedName,
-        pct(m.pickedGih),
+        pct(m.pickedValue),
         m.bestName,
-        pct(m.bestGih),
+        pct(m.bestValue),
       ]);
     }
     p.log.message(pc.bold("Biggest recurring mistakes\n") + mt.toString());

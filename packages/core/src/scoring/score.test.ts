@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
-import type { Card } from "../model/card.js";
+import type { Card, UnvaluedCard } from "../model/card.js";
 import { scorePick, gradeFor, committedColors, isDecisionPick, isCorrectGuess } from "./score.js";
-import { cardValue } from "./value.js";
+import { computeCardValue } from "./value.js";
 
+// Settles `value` the way ingest does, so a fixture reads the number its stats
+// imply rather than one written by hand beside them.
 function card(name: string, over: Partial<Card> = {}): Card {
-  return {
+  const base: UnvaluedCard = {
     name,
     rarity: "common",
     colors: [],
@@ -19,18 +21,22 @@ function card(name: string, over: Partial<Card> = {}): Card {
     alsa: 8,
     ...over,
   };
+  return { ...base, value: over.value ?? computeCardValue(base) };
 }
 
-describe("cardValue", () => {
+// These read computeCardValue directly now. `cardValue` returns the stored
+// answer and nothing else, so asking it about a formula would only be asking
+// this factory what it just wrote.
+describe("computeCardValue", () => {
   it("uses GIH WR when sample is large", () => {
-    expect(cardValue(card("a", { gihWinRate: 0.6, gihGames: 5000 }))).toBe(0.6);
+    expect(computeCardValue(card("a", { gihWinRate: 0.6, gihGames: 5000 }))).toBe(0.6);
   });
   it("falls back to rarity baseline when no data", () => {
-    const v = cardValue(card("b", { gihWinRate: undefined, gihGames: 0, alsa: undefined, rarity: "rare" }));
+    const v = computeCardValue(card("b", { gihWinRate: undefined, gihGames: 0, alsa: undefined, rarity: "rare" }));
     expect(v).toBeCloseTo(0.55, 2);
   });
   it("never returns NaN", () => {
-    expect(Number.isNaN(cardValue(card("c", { gihWinRate: undefined, gihGames: undefined, alsa: undefined })))).toBe(false);
+    expect(Number.isNaN(computeCardValue(card("c", { gihWinRate: undefined, gihGames: undefined, alsa: undefined })))).toBe(false);
   });
 });
 
