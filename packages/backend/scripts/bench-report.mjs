@@ -389,7 +389,7 @@ function pickSection(p) {
   return `<section class="pick">
     <h3>
       <span class="pi">pick ${p.pickIndex}</span>
-      <span class="muted">${p.cardsInPack} cards · best: ${esc(p.bestName)}</span>
+      <span class="muted">${p.cardsInPack} cards · raw best: ${esc(p.bestName)}</span>
       <span class="spacer"></span>
       ${
         base

@@ -169,7 +169,13 @@ while (!state.complete) {
     packNames: pack.map((c) => c.name),
     poolNames: [...poolBefore, picked.name],
     cardsInPack: pack.length,
-    bestName: result.score.best.name,
+    // The RAW-power best. `score.best` stopped existing when a pick score was
+    // made to say which best it means (cb85b22) and this went unnoticed, because
+    // nothing runs this harness on a schedule -- it threw on the first pick of
+    // the next run. rawBest is what the metric downstream wants: divergenceRate
+    // asks how often the model's context-best differs from what raw win rate
+    // says, so comparing it against contextBest would measure nothing.
+    bestName: result.score.rawBest.name,
   });
 
   state = { complete: result.complete, pack: result.pack, pool: result.pool };

@@ -209,15 +209,34 @@ Ordered by value × readiness. Each is a candidate feature branch.
      not "is this advice actually good". A blind, order-randomized pairwise judge
      over baseline-vs-candidate answers would — at real token cost and with its
      own noise. For release candidates, not for every run.
-   - **Rules text is now in every prompt, and the baseline predates it.** Fixing
-     the coach (2026-08-04) put `oracleText` through `describeCard`, which every
-     card in every prompt goes through. Measured over tdm's 427 cards: 152
-     characters a card once reminder text is stripped (stripping saves 9%), so
-     roughly **+230 input tokens per coached pick** and **+530 per review pick
-     prompt**, since `listPack` writes the whole pack. Input, not output, and
-     small against the 25.4k of verdict output below — but it is the first change
-     to move prompt size since the harness was built, so regenerate before
-     comparing anything to the old numbers.
+   - **Rules text is now in every prompt. Measured 2026-08-04, and the stored
+     baseline is stale.** `pnpm bench-llm --area coach` against `claude-sonnet-5`
+     (fdn/TradDraft seed 42, 30 calls) vs the 2026-07-30 baseline:
+
+     | | baseline | now | |
+     |---|---|---|---|
+     | total input | 162,376 | 190,773 | **+17.5%** |
+     | uncached input | 23,266 | 32,133 | +38.1% |
+     | output | 4,897 | 4,076 | **−16.8%** |
+     | cost @ $2/$10 intro | $0.1340 | $0.1489 | +11.1% |
+
+     **+947 input tokens per coached pick**, of which ~296 is uncached. A
+     pre-run estimate of +230 was wrong by 4x: it counted only the rules text on
+     the ~6 cards a pick shows, and missed that the system prompt grew too and is
+     re-read on every call (at 0.1x, but every call). Output FELL, which pays
+     back about a third of the input cost — a coach that can see the card says
+     less about it.
+
+     Accuracy held: 0 invented citations of 75, 0 empty answers, 0 truncated, 21
+     distinct principles both runs.
+
+     Two caveats. The baseline is 2026-07-30, so it spans the whole Aug 3 scoring
+     phase as well as this change; a static comparison on one fixed pick puts
+     roughly three quarters of the prompt growth on this change and a quarter on
+     that phase. And `bench-llm` now exits 1 on it — that is the regression gate
+     working, not a failure. **Regenerate with `--update-baseline` before reading
+     any future run**, or every one of them fails against a prompt that no longer
+     exists.
    - **A dashboard / live query over accumulated `llmUsage`.** The table is
      written from the first pass; nothing reads it yet except the benchmark
      harness filtering by session. Needs prod traffic to be worth building.
