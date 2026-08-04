@@ -43,6 +43,20 @@ describe("buildDeck", () => {
 
     expect(deck.curve).toEqual([1, 0, 0, 0, 0, 1]);
   });
+
+  // Scryfall gives a split card the combined mana value of both halves, so the
+  // deck's own curve has to go through the same casting-value rule the chart
+  // does or a Room turns up among the six-drops of a deck that has none.
+  it("curves a split card on the half you would cast", () => {
+    const room = mkCard("Dazzling Theater // Prop Room", "common", ["W"], 0.55, {
+      cmc: 7,
+      manaCost: "{3}{W} // {2}{W}",
+      typeLine: "Enchantment — Room",
+    });
+    const deck = buildDeck([room], 17);
+
+    expect(deck.curve).toEqual([0, 0, 1, 0, 0, 0]);
+  });
 });
 
 describe("compareDecks", () => {
