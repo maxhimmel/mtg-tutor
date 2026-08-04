@@ -65,40 +65,6 @@ left empty rather than renumbering everything under it.
 4. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
 
-5. Terrible coaching/scoring going on:
-
-```
-Last pick
-A+
-98/100
-You took
-Dragonstorm Globe
-Best was
-−0.0%
-Dragonstorm Globe
-Coach
-Take Kin-Tree Nurturer instead — it’s a solid three‑drop creature that actually fits your Black‑Green curve and provides board presence, while Dragonstorm Globe is a generic mid‑range artifact that doesn’t improve your deck’s synergy.
-```
-
-That doesn't seem like it's working correctly. Also, I have like 7 dragons in my deck at this point and a lot of different colors. Dragonstorm Globe creates mana in any color and buffs dragons. The coach is inaccurate and the last pick is redundant.
-
-6. This just claimed that "Stormplain Detainment" wasn't removal:
-
-```
-Last pick
-A
-91/100
-You took
-Stormplain Detainment
-Best was
-−1.0%
-Sultai Monument
-Coach
-Stormplain Detainment is a sub‑optimal splash at this point; you’ve already committed to a three‑color base and the card isn’t a bomb or removal, so it adds little immediate value and forces a weaker mana base. Take the stronger Sultai Monument instead, which fits your colors and is a higher‑impact card.
-```
-
-I may be incorrect here, but that feels totally not true.
-
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -243,6 +209,15 @@ Ordered by value × readiness. Each is a candidate feature branch.
      not "is this advice actually good". A blind, order-randomized pairwise judge
      over baseline-vs-candidate answers would — at real token cost and with its
      own noise. For release candidates, not for every run.
+   - **Rules text is now in every prompt, and the baseline predates it.** Fixing
+     the coach (2026-08-04) put `oracleText` through `describeCard`, which every
+     card in every prompt goes through. Measured over tdm's 427 cards: 152
+     characters a card once reminder text is stripped (stripping saves 9%), so
+     roughly **+230 input tokens per coached pick** and **+530 per review pick
+     prompt**, since `listPack` writes the whole pack. Input, not output, and
+     small against the 25.4k of verdict output below — but it is the first change
+     to move prompt size since the harness was built, so regenerate before
+     comparing anything to the old numbers.
    - **A dashboard / live query over accumulated `llmUsage`.** The table is
      written from the first pass; nothing reads it yet except the benchmark
      harness filtering by session. Needs prod traffic to be worth building.
@@ -282,7 +257,16 @@ to the data work.
    format's own rate, which is higher than a measured wider archetype. Every
    test fixture had contiguous archetype widths; the real data had a hole. Found
    by reading a stored pick.
-3. **A test that cannot fail reads as coverage.** Both the replay corpus and the
+3. **Most of the gaps a pick is graded on are smaller than the error bars on the
+   win rates they came from.** A GIH WR is a proportion over `gihGames`, so it
+   carries a standard error of sqrt(p(1-p)/n), and a difference of two carries
+   the sum of their variances — about **±1pp between two well-sampled commons**,
+   against a `winRateGapK` of 750 that turns 1pp into 7.5 points of grade. A 94
+   and a 100 can be the same pick. `gapMargin` computes it and the coach prompt
+   states it, because a scorer that reports a difference the data cannot resolve,
+   with no error bar beside it, gets believed. One sigma deliberately: two would
+   call nearly every pick in the format a tie.
+4. **A test that cannot fail reads as coverage.** Both the replay corpus and the
    value fingerprint were written with input batteries that could not have
    noticed the change they existed to catch — every ALSA value sat at the nudge's
    pivot or past its clamp. Perturb the thing under test and watch the guard go
@@ -398,6 +382,32 @@ The architecture, the data pipeline and the deploy story are all documented in
    from `1 - corr^2`, and how redundant a signal is says nothing about how far
    it should move an answer. A term whose magnitude cannot be justified does not
    belong in the score.
+
+   **A gap is never reported without its margin, and nothing labels a card
+   "better" without one** (2026-08-04). See measurement trap #3: at 17Lands
+   sample sizes the error bars are wider than most of the gaps being graded, so
+   both the coach prompt and the verdict panel state the gap and its margin, and
+   the panel says "Graded against" rather than "Better for your deck" — which
+   asserted exactly what the margin exists to deny.
+
+9. **Every card written into a prompt carries its rules text, and the model is
+   told the page beats its own recall** (2026-08-04). This looks like an easy
+   token saving and is not one. Without it the coach has a type line and a name,
+   and a type line cannot say whether a card kills something — so it answers from
+   the NAME, which is how it came to tell a player their removal spell "isn't
+   removal" and call a five-colour mana rock "a generic mid-range artifact". The
+   sets this app is most useful for are the ones released after a model's
+   training data, which is exactly where recall is worst. Cost is measured and
+   noted under roadmap #4; reminder text is stripped because it restates
+   keywords the model already knows.
+
+10. **A surface that shows a "best" card shows `contextBest`.** The grade,
+    `isBest` and the missed-picks filter all key off it, and this has now been
+    got wrong twice in three different places — the biggest-misses table
+    (c00fc81), then the live draft panel and `explainPick`. Showing `rawBest`
+    under a grade computed against `contextBest` produces rows that name the same
+    card twice with a 0.0 gap. `rawBest` is worth showing only when it is a
+    THIRD card, where the divergence is the lesson.
 
    **A basic land is worth 0**, which is not a knob: you are handed as many as
    you want when you build, so taking one adds nothing you did not already have.
