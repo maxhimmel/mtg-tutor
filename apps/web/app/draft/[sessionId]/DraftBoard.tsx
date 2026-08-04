@@ -297,8 +297,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     setSelected(card.name);
   }
 
-  async function onPick(card: Card) {
+  // `bench` takes the card without adding it to the deck. Said at the moment of
+  // picking rather than corrected afterwards, so the tallies the coach reads
+  // never briefly count a card the player already knew they would not play.
+  async function onPick(card: Card, opts?: { bench?: boolean }) {
     if (picking || !text) return;
+    const bench = opts?.bench ?? false;
     setPicking(true);
     setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
@@ -315,7 +319,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     );
 
     try {
-      const result = await pickCard({ sessionId: id, cardName: card.name });
+      const result = await pickCard({ sessionId: id, cardName: card.name, bench });
       const score = result.score as PickScore;
       // `pick` returns the whole next board, which is the reason this component
       // needs no subscription. Everything not listed here -- the set's name,
@@ -329,6 +333,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           totalPicks: result.totalPicks,
           pack: result.pack,
           pool: result.pool,
+          sideboard: result.sideboard,
         },
       );
       setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
@@ -525,17 +530,30 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
                 <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
                   <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={picking}
-                    onClick={() => void onPick(selectedCard)}
-                  >
-                    Confirm pick
-                  </button>
+                  {/* Both destinations are named now that there are two of them.
+                      "Maindeck" and "Sideboard" are the words on the sections
+                      these fill, and a button should say the name of the pile
+                      the card lands in. */}
+                  <span className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={picking}
+                      onClick={() => void onPick(selectedCard)}
+                    >
+                      Pick to maindeck
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      disabled={picking}
+                      onClick={() => void onPick(selectedCard, { bench: true })}
+                    >
+                      Pick to sideboard
+                    </button>
+                  </span>
                   <span className="hidden text-xs text-base-content/50 sm:inline">
-                    Double-click a card to skip this step · <kbd className="kbd kbd-xs">esc</kbd> to
-                    clear
+                    Double-click to maindeck · <kbd className="kbd kbd-xs">esc</kbd> to clear
                   </span>
                 </div>
               </div>
