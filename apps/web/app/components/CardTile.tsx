@@ -100,12 +100,18 @@ export function CardTile({
   const hover = useCardHover(card, showStats ?? settings.guiderails);
   const hidePreview = useHidePreview();
 
+  // A card being carried is selected -- it is the one under consideration -- but
+  // it is not half-pulled from the row any more, because it is not in the row.
+  // The lift and the ring travel with it and are drawn under the cursor; what is
+  // left here is the gap it came out of.
+  const lifted = selected && !dragging;
+
   return (
     <button
       type="button"
       // select-none so the double-click shortcut does not also highlight the
       // name on the tiles that have no art to cover it.
-      className={`card-focus hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""} ${dragging ? "opacity-20" : ""}`}
+      className={`card-focus hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${lifted ? "-translate-y-3" : ""} ${dragging ? "opacity-20" : ""}`}
       onClick={() => {
         hidePreview();
         onPick(card);
@@ -125,7 +131,7 @@ export function CardTile({
           ::before is absolute -- not leftover from the win-rate badge. */}
       <CardFace
         card={card}
-        className={selected ? "card-lit" : "border border-transparent group-hover:border-primary"}
+        className={lifted ? "card-lit" : "border border-transparent group-hover:border-primary"}
       />
 
       {TILT_ZONES.map((i) => (

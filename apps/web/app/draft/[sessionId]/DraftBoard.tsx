@@ -474,7 +474,15 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // The two buttons say where a card is going; this lets the player show it, and
   // it is the same decision either way.
   function onDragStart(e: DragStartEvent) {
-    setCarrying((e.active.data.current as { card: Card }).card);
+    const card = (e.active.data.current as { card: Card }).card;
+    setCarrying(card);
+    // Picking a card up is choosing it, so the selection follows the hand. Any
+    // other card stops being lit -- two cards under consideration at once, one
+    // of them named by a confirm bar you are dragging away from, was the state
+    // this avoids. It also means letting go over nothing leaves the card
+    // selected, which is the honest reading of the gesture: you meant this card
+    // and have not yet said which pile.
+    setSelected(card.name);
     // For the whole gesture, not just its start: the cursor crosses every card
     // in the pack and every row in the deck on its way across the board.
     suspendPreview(true);
@@ -662,7 +670,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 </div>
               )}
 
-              {selectedCard && (
+              {/* Not while a card is in the air. The bar and the two lit piles
+                  ask the same question, and during a drag the piles are the ones
+                  being answered -- a second copy of the choice, at the bottom of
+                  the screen, is one you are dragging away from. It is back the
+                  moment the card is let go. */}
+              {selectedCard && !carrying && (
                 <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
                   <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
                     <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
