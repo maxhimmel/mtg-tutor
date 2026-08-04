@@ -24,6 +24,7 @@ interface HoverState {
 interface HoverPreviewValue {
   show: (card: Card, el: HTMLElement, showStats: boolean) => void;
   hide: () => void;
+  suspend: (on: boolean) => void;
 }
 
 const HoverPreviewContext = createContext<HoverPreviewValue | null>(null);
@@ -53,6 +54,15 @@ export function useCardHover(card: Card | undefined, showStats = false) {
 export function useHidePreview() {
   const ctx = useContext(HoverPreviewContext);
   return ctx?.hide ?? (() => {});
+}
+
+// Hold the preview back for the duration of a gesture. Hiding once is not enough
+// when the cursor is being dragged across the board: every card and every deck
+// row it passes over fires its own onMouseEnter, so the preview would reopen
+// under the hand carrying a card. Turned off again when the gesture ends.
+export function useSuspendPreview() {
+  const ctx = useContext(HoverPreviewContext);
+  return ctx?.suspend ?? (() => {});
 }
 
 const PREVIEW_W = 320; // px; height follows the card aspect ratio
@@ -121,13 +131,25 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // and must stay unclickable, or moving toward it would dismiss the hover.
   const explain = useHeldKey("Shift") && stats;
 
+  // A ref, not state: suspending must not re-render every card on the page, and
+  // nothing renders differently for it -- `show` simply declines.
+  const suspended = useRef(false);
+
   const show = useCallback((card: Card, el: HTMLElement, showStats: boolean) => {
+    if (suspended.current) return;
     setHover({ card, anchor: el.getBoundingClientRect(), showStats });
   }, []);
   const hide = useCallback(() => {
     setHover(null);
     setPos(null);
   }, []);
+  const suspend = useCallback(
+    (on: boolean) => {
+      suspended.current = on;
+      if (on) hide();
+    },
+    [hide],
+  );
 
   // Clicking a nav link while hovering a card leaves the preview stranded: the
   // element under the cursor unmounts with the page it was on, so onMouseLeave
@@ -142,8 +164,12 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     if (hover) setPos(place(hover.anchor, panel));
   }, [hover, panel]);
 
+  // Memoised because every hoverable card on the page consumes this context, and
+  // a fresh object here would re-render all of them each time a preview opens.
+  const value = useMemo(() => ({ show, hide, suspend }), [show, hide, suspend]);
+
   return (
-    <HoverPreviewContext.Provider value={{ show, hide }}>
+    <HoverPreviewContext.Provider value={value}>
       {children}
       {hover?.card.imageUrl && (
         <>
