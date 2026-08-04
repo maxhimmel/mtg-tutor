@@ -27,6 +27,31 @@ const NAME_RULE = [
   "  and a shortened one is left as plain text.",
 ];
 
+// Every card is written with its rules text now. Before that the model had a
+// type line and a name, and answered from the name — calling a removal
+// enchantment "not removal" and a five-colour mana rock "a generic mid-range
+// artifact". Sets released after a model's training data are exactly where a
+// draft tutor is most useful and where guessing from a name is worst, so the
+// rule is that the text on the page wins over anything recalled.
+const CARD_TEXT_RULE = [
+  "- Every card is shown with its rules text. Say what a card DOES from that text and",
+  "  nothing else — never from its name, its type line, or what you recall of the set.",
+  "  Many of these sets are newer than you are. If a card you want to talk about has no",
+  "  rules text shown, you have not been given it: reason from its data instead.",
+];
+
+// The verdict names a better card; without the gap the model read every
+// divergence as a blunder. `gapMargin` is what makes "inside the margin"
+// a measured fact rather than a threshold someone picked.
+const GAP_RULE = [
+  "- When you were not the best card for the deck, the verdict says by how much and",
+  "  gives the margin of error on it. Match the advice to that gap. If the gap is inside",
+  "  the margin the two cards are indistinguishable in the data — the pick is fine, say",
+  "  what it does for the deck, and do NOT tell the player to take the other card. Only",
+  "  recommend a swap when the gap is outside the margin, and keep the strength of the",
+  "  recommendation in proportion to its size.",
+];
+
 // Builds the grounding system prompt from the principles corpus. Pure string
 // work — no SDK dependency — so any transport (CLI now, web later) can reuse it.
 export function buildSystemPrompt(doc: PrinciplesDoc): string {
@@ -52,6 +77,8 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "  colors — those picks are expendable and staying open is correct [SIG-01]. Once",
     "  committed colors are named, that latitude is gone.",
     "- If the data verdict and your read disagree, say so briefly and explain why.",
+    ...CARD_TEXT_RULE,
+    ...GAP_RULE,
     // Handed only a filtered pool, a model coaches whatever deck it is shown. The
     // player asked for a coach, not an assistant, so the pivot has to arrive as
     // something with an opinion attached rather than a fact to accommodate.
@@ -85,6 +112,7 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "Rules:",
     "- Be concrete and specific; no filler or restating the situation back.",
     ...NAME_RULE,
+    ...CARD_TEXT_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
     "  Only cite ids that appear in the list below; never invent one. Put a citation",
     "  at the end of the sentence it supports, never mid-clause as part of the",

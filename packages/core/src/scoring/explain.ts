@@ -25,22 +25,33 @@ function wheelNote(alsa?: number): string {
 
 // Reads the rules text to name what the best card actually does, so it wants a
 // hydrated score rather than the engine's.
+//
+// Names `contextBest` throughout, because `isBest` tracks it: naming the raw
+// best under a verdict decided by the context best produced lines reading "you
+// took X; the data favors X — a 0.0% gap". The gap is quoted in the units the
+// grade was computed in for the same reason -- `pickedContextValue` exists so
+// that pair cannot be mixed across two scales.
 export function explainPick(ps: PickScore<Card>): string[] {
   const lines: string[] = [];
-  const { picked, rawBest } = ps;
+  const { picked, contextBest, rawBest } = ps;
 
   if (ps.isBest) {
     lines.push(`✅ Best available. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ${wheelNote(picked.alsa)}.`);
   } else {
-    const delta = (ps.rawBestValue - ps.pickedValue) * 100;
+    const delta = (ps.contextBestValue - ps.pickedContextValue) * 100;
     lines.push(
       `You took ${picked.name} (GIH WR ${pct(picked.gihWinRate)}); ` +
-        `the data favors ${rawBest.name} (GIH WR ${pct(rawBest.gihWinRate)}) — a ${delta.toFixed(1)}% win-rate gap.`,
+        `${contextBest.name} was worth ${delta.toFixed(1)}pp more to this deck.`,
     );
-    const bestRole = detectRole(rawBest);
-    if (bestRole === "removal") lines.push(`${rawBest.name} is efficient removal — premium in most archetypes.`);
-    if (rawBest.alsa != null)
-      lines.push(`${rawBest.name} ${wheelNote(rawBest.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);
+    // Only when it is a third card. The lesson is the divergence between raw
+    // power and deck fit, and there is none to draw when the strongest card in
+    // the pack is the one you took or the one you are being pointed at.
+    if (rawBest.name !== contextBest.name && rawBest.name !== picked.name)
+      lines.push(`Strongest card in the pack was ${rawBest.name} (GIH WR ${pct(rawBest.gihWinRate)}).`);
+    if (detectRole(contextBest) === "removal")
+      lines.push(`${contextBest.name} is efficient removal — premium in most archetypes.`);
+    if (contextBest.alsa != null)
+      lines.push(`${contextBest.name} ${wheelNote(contextBest.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);
   }
 
   if (!ps.onColor) {

@@ -16,6 +16,12 @@ const COLOR_NAMES: Record<ColorCode, string> = {
 
 export const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 
+// A quantity that is ALREADY the gap between two win rates. Written in points
+// rather than as a percentage because rendering it like the rates it came from
+// is how "0.3pp better" reads as "0.3% win rate".
+export const pp = (v: number) => `${Math.abs(v * 100).toFixed(1)}pp`;
+export const signedPp = (v: number) => `${v >= 0 ? "+" : "-"}${pp(v)}`;
+
 const WUBRG = "WUBRG";
 
 // Colors as prose, in WUBRG order -- a set of committed colors comes out in pool
@@ -36,11 +42,44 @@ export function colorLabel(c: PoolCard): string {
 // digits of game count in every line of a fifteen-card pack is noise.
 const count = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
+// Reminder text says again, in brackets, what a keyword already means. The model
+// knows what flying does; it is a third of the characters on a card with three
+// keywords, repeated for every card in every pack of the draft.
+//
+// Newlines become " / " so a card stays one line: describeCard's callers own the
+// indentation of the block a card sits in, and a multi-line card would break out
+// of it.
+export function rulesText(c: { oracleText: string }): string {
+  return c.oracleText
+    .replace(/\([^)]*\)/g, " ")
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join(" / ");
+}
+
+// The body, for a card that has one. A creature is its size as much as its cost.
+function bodyOf(c: Card): string {
+  if (c.loyalty != null) return ` [${c.loyalty} loyalty]`;
+  if (c.power != null && c.toughness != null) return ` [${c.power}/${c.toughness}]`;
+  return "";
+}
+
 // What the card IS. Every card the model is shown gets this, not just the picked
 // one: rendering the rest as bare names is why the coach used to invent mana
 // costs for cards it was reasoning about.
+//
+// Rules text is part of that and was the last thing missing. A type line says a
+// card is an Artifact or an Enchantment, and nothing about whether it kills
+// something -- so a coach handed only the type line answered from the NAME, and
+// told a player that a removal spell "isn't removal" and that a mana rock that
+// fixes five colours was "a generic mid-range artifact". The text is stored, it
+// is already hydrated onto every card that reaches a prompt, and it was being
+// dropped here.
 export function describeCard(c: Card): string {
-  return `${c.name} — ${c.cmc} mana, ${colorLabel(c)}, ${c.typeLine}`;
+  const head = `${c.name} — ${c.cmc} mana, ${colorLabel(c)}, ${c.typeLine}${bodyOf(c)}`;
+  const rules = rulesText(c);
+  return rules ? `${head} — ${rules}` : head;
 }
 
 // What the DATA says. Absent stats are dropped rather than printed as "n/a": a

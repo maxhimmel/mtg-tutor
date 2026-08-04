@@ -45,6 +45,40 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   rankInPack: number; // 1 = best available, by raw power
 }
 
+/**
+ * The margin of error on the gap between two cards, in win-rate points.
+ *
+ * A GIH win rate is a proportion measured over `gihGames` games, so it carries
+ * a standard error of sqrt(p(1-p)/n), and the difference between two of them
+ * carries the sum of their variances. At the sample sizes 17Lands publishes
+ * that is around ±0.9pp between two commons -- which is LARGER than most of the
+ * gaps a pick is graded on.
+ *
+ * This is what tells a coach the difference between "you missed" and "the data
+ * cannot tell these apart". Without it the prompt named a better card and never
+ * said by how much, and a 0.3pp gap on a 98/100 pick came back as "take the
+ * other card instead".
+ *
+ * One standard error, not two: the question is whether the data can separate
+ * the cards at all, not whether it can at 95% confidence, and a 2-sigma band
+ * would call almost every pick in the format a tie.
+ *
+ * Undefined when either card is unrated. Their values then come from a rarity
+ * baseline rather than a measurement, and a baseline has no sample to have
+ * error bars over -- saying nothing is honest where inventing a margin is not.
+ */
+export function gapMargin(a: Card, b: Card): number | undefined {
+  const variance = (c: Card): number | undefined => {
+    const { gihWinRate: p, gihGames: n } = c;
+    if (p == null || n == null || n <= 0) return undefined;
+    return (p * (1 - p)) / n;
+  };
+  const va = variance(a);
+  const vb = variance(b);
+  if (va == null || vb == null) return undefined;
+  return Math.sqrt(va + vb);
+}
+
 export function gradeFor(score: number): string {
   if (score >= 97) return "A+";
   if (score >= 90) return "A";
