@@ -4,17 +4,17 @@
 export const pct = (v?: number | null): string =>
   v == null ? "—" : `${(v * 100).toFixed(1)}%`;
 
-// The gap between two win rates, in the percentage points players compare them
-// in. Undefined rather than "—" when either side is missing, so a caller can
-// drop the whole line instead of printing a dash next to a minus sign.
-export const pctPoints = (a?: number | null, b?: number | null): string | undefined =>
-  a == null || b == null ? undefined : `${((a - b) * 100).toFixed(1)}%`;
-
 // A value that is ALREADY a difference between two rates -- IWD is stored
-// pre-differenced, so it has no second operand for pctPoints. Signed and labelled
-// "pp" because rendering it like the win rates beside it would read as one.
+// pre-differenced, and a scoring gap is the subtraction itself. Signed and
+// labelled "pp" because rendering it like the win rates beside it would read as
+// one, and with a typographic minus rather than the hyphen toFixed emits.
+//
+// There used to be a `pctPoints(a, b)` beside this that did the subtraction for
+// you and labelled the answer "%". Its only caller was the pick verdict, which
+// was differencing the wrong pair of numbers; the pair it should difference is
+// already a gap by the time it gets here.
 export const points = (v?: number | null): string =>
-  v == null ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}pp`;
+  v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(1)}pp`;
 
 // "{2}{U}{U}" -> "2UU". The spoken form of a cost the ManaCost component draws
 // as symbols, so a screen reader gets something better than a row of icons.
