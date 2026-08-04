@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Card } from "../model/card.js";
-import { describeCard, statLine } from "./cardLine.js";
+import { describeCard, rulesText, statLine } from "./cardLine.js";
 
 function card(over: Partial<Card> = {}): Card {
   return {
@@ -35,6 +35,53 @@ describe("describeCard", () => {
   it("names multicolor and colorless cards rather than printing an empty color", () => {
     expect(describeCard(card({ colors: ["W", "U"] }))).toContain("White/Blue");
     expect(describeCard(card({ colors: [] }))).toContain("Colorless");
+  });
+
+  // The bug this exists to prevent: a coach given a type line and a name told a
+  // player their removal spell "isn't removal", and called a five-colour mana
+  // rock a generic artifact. A type line cannot say what a card does.
+  it("says what the card does, not only what it is", () => {
+    const line = describeCard(card({ oracleText: "Lightning Strike deals 3 damage to any target." }));
+    expect(line).toContain("deals 3 damage to any target");
+  });
+
+  it("gives a creature its size", () => {
+    const line = describeCard(
+      card({ typeLine: "Creature — Elf Warrior", power: "2", toughness: "3" }),
+    );
+    expect(line).toContain("Creature — Elf Warrior [2/3]");
+  });
+
+  it("gives a planeswalker its loyalty", () => {
+    expect(describeCard(card({ typeLine: "Legendary Planeswalker — Jace", loyalty: "4" }))).toContain(
+      "[4 loyalty]",
+    );
+  });
+
+  it("leaves a vanilla card exactly as it was", () => {
+    expect(describeCard(card())).toBe("Lightning Strike — 2 mana, Red, Instant");
+  });
+});
+
+describe("rulesText", () => {
+  // Reminder text restates keywords the model already knows, on every card of
+  // every pack of a 42-pick draft.
+  it("drops reminder text", () => {
+    expect(rulesText({ oracleText: "Flying (This creature can't be blocked except by...)" })).toBe(
+      "Flying",
+    );
+  });
+
+  // describeCard's callers own the indent of the block a card sits in, so a card
+  // that spans lines breaks out of it.
+  it("keeps a multi-line card on one line", () => {
+    expect(rulesText({ oracleText: "Vigilance\nTrample\n{T}: Add {G}." })).toBe(
+      "Vigilance / Trample / {T}: Add {G}.",
+    );
+  });
+
+  it("says nothing for a card with no rules text", () => {
+    expect(rulesText({ oracleText: "" })).toBe("");
   });
 });
 
