@@ -242,6 +242,49 @@ export const storedPickScore = v.object({
   rankInPack: v.number(),
 });
 
+// What the player committed to before the pick was graded: why they took it,
+// how sure they said they were, and what they did when another card was put up
+// against theirs.
+//
+// Optional on the row and every field inside it required, which is the right way
+// round. A pick either went through the challenge or it did not -- a forced pick
+// at the bottom of a pack has nothing to defend -- and a half-filled defense
+// would mean a reader had to guess which half it got. Rows written by a client
+// that knows nothing about this simply have no `defense`, which is what keeps
+// the same deployment serving both.
+//
+// The confidence levels are literals rather than a number, because each one is a
+// specific claim about `gapMargin` (see core's CONFIDENCE) and a 1-5 slider would
+// be four claims the data cannot settle.
+export const confidence = v.union(
+  v.literal("sure"),
+  v.literal("close"),
+  v.literal("guess"),
+);
+
+export const pickDefense = v.object({
+  reason: v.string(),
+  confidence,
+  // The card put up against theirs. Absent when the pack was too small for the
+  // challenge to have anything to say.
+  challengedName: v.optional(v.string()),
+  switched: v.boolean(),
+});
+
+// The same defense as the client states it, before `draft.pick` settles it.
+//
+// It sends the card it first proposed; the mutation derives `switched` from
+// whether the card actually taken is that one. Deriving rather than accepting
+// keeps the row from being able to disagree with itself -- a stored
+// `switched: true` beside a pick that never moved is a lesson taught about
+// something that did not happen, and there is no way to notice it later.
+export const pickDefenseInput = v.object({
+  reason: v.string(),
+  confidence,
+  challengedName: v.optional(v.string()),
+  proposedName: v.string(),
+});
+
 // One set-aside pick: where it sits in the pool, and when the player decided.
 // See the `sideboard` note in schema.ts and `Bench` in core.
 export const benchEntry = v.object({

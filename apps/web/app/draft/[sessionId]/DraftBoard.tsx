@@ -20,14 +20,25 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import {
   type Card,
+  type CardContext,
+  type Challenge,
+  type ChallengeOutcome,
+  type Confidence,
   type TextIndex,
   type PickScore,
+  calibrationLine,
+  challengeFor,
+  claimOutcome,
   explainPick,
   hydrate,
   hydrateScore,
   isDecisionPick,
   loadPrinciples,
+  normalizeName,
+  packScoringContext,
+  resolveChallenge,
   splitCitations,
+  splitPool,
   textIndex,
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
@@ -45,6 +56,7 @@ import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
 import { webpImage } from "../../lib/cardImage";
 import { preloadImages } from "../../lib/preloadImages";
+import { StateYourCase, TheChallenge } from "./Commitment";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
@@ -154,6 +166,40 @@ function PackTile({
 
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
+// The card taken and the pile it is going to, carried through the two screens
+// between choosing it and spending the pick. `carried` means the player pulled
+// it out of the pack by hand, which changes nothing about the pick and
+// everything about what is left behind -- see the pass animation below.
+interface Proposal {
+  card: Card;
+  bench: boolean;
+  carried: boolean;
+}
+
+// Where a pick is between being chosen and being made. Two screens, in the order
+// the argument has to happen in: you say what you think, and only then are you
+// argued with. Turning those round would be a quiz with the answer on the card.
+type Pending =
+  | { stage: "reason"; proposal: Proposal }
+  | {
+      stage: "challenge";
+      proposal: Proposal;
+      reason: string;
+      confidence: Confidence;
+      challenge: Challenge;
+    };
+
+// What the player committed to, on its way to the mutation. `outcome` never
+// goes to the server: it is the resolved pair for the reveal to read, and the
+// row keeps the four facts the coach needs instead.
+interface Defense {
+  reason: string;
+  confidence: Confidence;
+  challengedName?: string;
+  proposedName?: string;
+  outcome?: ChallengeOutcome;
+}
+
 interface LastPick {
   score: PickScore;
   signal?: string;
@@ -161,6 +207,11 @@ interface LastPick {
   // The pack this pick chose from, captured before the mutation swaps it for
   // the next one. The coach talks about these cards and nothing else holds them.
   pack: DraftState["pack"];
+  // How the challenge went. Kept apart from the score because it is about the
+  // PAIR the player was actually shown, which is not always the pair the grade
+  // is measured over: someone who switches to the context-best is graded against
+  // a card they took, and the interesting comparison is the one they left.
+  call?: { confidence: Confidence; outcome: ChallengeOutcome };
 }
 
 export function DraftBoard({ sessionId }: { sessionId: string }) {
@@ -197,6 +248,15 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // not what updates one -- so once is exactly right.
   const [text, setText] = useState<TextIndex | undefined>(undefined);
 
+  // What scoring reads to rank THIS pack against the deck being built. Fetched
+  // per pack rather than per set: fourteen rows, against the ~50KB the set's
+  // would cost. undefined while it is in flight, null when it could not be read
+  // -- and those are different, because a challenge computed without it would
+  // argue for a card the server then does not grade against.
+  const [packContext, setPackContext] = useState<Map<string, CardContext> | null | undefined>(
+    undefined,
+  );
+
   const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
   // The pack on its way to the next drafter. Held separately from the board
@@ -214,6 +274,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   // The card in hand, drawn under the cursor for as long as it is being carried.
   const [carrying, setCarrying] = useState<Card | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -264,6 +325,33 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       cancelled = true;
     };
   }, [convex, setCode, format]);
+
+  // Fetched the moment a pack lands, not when the player commits: they spend
+  // seconds reading the pack, and the challenge should already be waiting when
+  // they finish typing.
+  const packNames = useMemo(() => (state?.pack ?? []).map((c) => c.name), [state?.pack]);
+  useEffect(() => {
+    if (!setCode || !format || packNames.length === 0) return;
+    let cancelled = false;
+    setPackContext(undefined);
+
+    convex
+      .query(api.sets.packContext, { setCode, format, names: packNames })
+      .then((rows) => {
+        if (!cancelled) setPackContext(new Map(rows.map((r) => [r.key, r.context])));
+      })
+      // Not fatal, and not silently degraded either: with no context the browser
+      // would rank the pack on raw power alone and argue for a card the server
+      // will not grade against. The flow drops the challenge instead of making
+      // an argument it cannot stand behind.
+      .catch(() => {
+        if (!cancelled) setPackContext(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, setCode, format, packNames]);
 
   const streamCoach = useCallback(
     async (pickIndex: number, score: PickScore<Card>, cardsInPack: number, force = false) => {
@@ -333,6 +421,22 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [last, text],
   );
 
+  // The deck as the player has defined it, and what a pack is judged against.
+  // Built by core's own helper from the same inputs `draft.pick` uses, because
+  // the card this board argues for and the card the server grades against have
+  // to be the same card -- see packScoringContext.
+  const scoringContext = useMemo(() => {
+    if (!state || !packContext) return undefined;
+    const maindeck = splitPool(pool, state.sideboard, pool.length).maindeck;
+    return packScoringContext(
+      maindeck,
+      pool.length,
+      state.totalPicks,
+      state.colorWinRates,
+      (c) => packContext.get(normalizeName(c.name)),
+    );
+  }, [state, pool, packContext]);
+
   const selectedCard = useMemo(
     () => pack.find((card) => card.name === selected),
     [pack, selected],
@@ -344,13 +448,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   );
 
   useEffect(() => {
-    if (!selected) return;
+    // Not while a pick is being defended: the card is on the screen above, and
+    // clearing the selection underneath it would leave nothing lit to come back
+    // to.
+    if (!selected || pending) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected]);
+  }, [selected, pending]);
 
   // Held back until every card in it can be drawn. A pack is dealt all at once,
   // so the alternative is watching it assemble itself frame by frame.
@@ -396,7 +503,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // someone rereading the card, not someone deciding. The shortcut for deciding
   // fast is a real double-click, which is a gesture rather than a repetition.
   function onTileClick(card: Card) {
-    if (picking) return;
+    if (picking || pending) return;
     setSelected(card.name);
   }
 
@@ -404,18 +511,76 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // majority of picks go. Choosing the other pile is a deliberate act: a button
   // that names it, or carrying the card there.
   function onQuickPick(card: Card) {
-    void onPick(card);
+    propose({ card, bench: false, carried: false });
+  }
+
+  /**
+   * Choosing a card no longer spends the pick. It opens the case for it.
+   *
+   * The gate is `isDecisionPick`, the same threshold that decides whether the
+   * coach is worth spending tokens on, and for the same reason rather than a
+   * matching one: a pack down to its last few cards is picking for you, and
+   * being asked to defend a forced pick is a chore that teaches nothing. So the
+   * bottom of every pack still plays exactly as it did.
+   */
+  function propose(proposal: Proposal) {
+    if (picking || pending || !text) return;
+    if (!isDecisionPick(pack.length, settings.coachMinPackCards)) {
+      void commit(proposal);
+      return;
+    }
+    setSelected(proposal.card.name);
+    setPending({ stage: "reason", proposal });
+  }
+
+  // The case is made; now it gets argued with. The challenger is the best
+  // remaining card in the pack for this deck, which when the player has already
+  // taken that card is the runner-up -- see challengeFor for why that rule is
+  // what keeps the screen from being its own answer.
+  function onCommit(reason: string, confidence: Confidence) {
+    if (!pending) return;
+    const { proposal } = pending;
+    const challenge = scoringContext
+      ? challengeFor(pack, proposal.card, scoringContext)
+      : undefined;
+
+    // Nothing to argue with -- a pack of one, or a context we could not read.
+    // The defense still stands and still reaches the coach; only the second
+    // screen is skipped.
+    if (!challenge) {
+      void commit(proposal, { reason, confidence });
+      return;
+    }
+    setPending({ stage: "challenge", proposal, reason, confidence, challenge });
+  }
+
+  // Standing and switching are the same act with a different answer, so they are
+  // one function: the card taken is whichever one they named, and everything
+  // else about the pick is unchanged. `switched` is not sent -- `draft.pick`
+  // derives it from the card proposed against the card taken, so the stored row
+  // cannot claim a change of mind that did not happen.
+  function resolve(take: Card) {
+    if (!pending || pending.stage !== "challenge") return;
+    const { proposal, reason, confidence, challenge } = pending;
+    const stood = take.name === proposal.card.name;
+    void commit(
+      { ...proposal, card: take },
+      {
+        reason,
+        confidence,
+        challengedName: challenge.challenger.name,
+        proposedName: proposal.card.name,
+        outcome: resolveChallenge(challenge, stood),
+      },
+    );
   }
 
   // `bench` takes the card without adding it to the deck. Said at the moment of
   // picking rather than corrected afterwards, so the tallies the coach reads
   // never briefly count a card the player already knew they would not play.
-  //
-  // `carried` means the player took the card out of the pack by hand. It changes
-  // nothing about the pick and everything about what is left behind: see below.
-  async function onPick(card: Card, opts?: { bench?: boolean; carried?: boolean }) {
+  async function commit(proposal: Proposal, defense?: Defense) {
     if (picking || !text) return;
-    const bench = opts?.bench ?? false;
+    const { card, bench, carried } = proposal;
     setPicking(true);
     setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
@@ -431,7 +596,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // player is no longer looking at.
     setOutgoing({
       cards: passing,
-      picked: opts?.carried ? "" : card.name,
+      picked: carried ? "" : card.name,
       packNo: state?.packNo ?? 1,
     });
     const sweep = window.setTimeout(
@@ -440,7 +605,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     );
 
     try {
-      const result = await pickCard({ sessionId: id, cardName: card.name, bench });
+      const result = await pickCard({
+        sessionId: id,
+        cardName: card.name,
+        bench,
+        ...(defense
+          ? {
+              defense: {
+                reason: defense.reason,
+                confidence: defense.confidence,
+                ...(defense.challengedName === undefined
+                  ? {}
+                  : { challengedName: defense.challengedName }),
+                proposedName: defense.proposedName ?? card.name,
+              },
+            }
+          : {}),
+      });
       const score = result.score as PickScore;
       // `pick` returns the whole next board, which is the reason this component
       // needs no subscription. Everything not listed here -- the set's name,
@@ -457,11 +638,22 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           sideboard: result.sideboard,
         },
       );
-      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
+      setPending(null);
+      setSelected(null);
+      setLast({
+        score,
+        signal: result.signal,
+        pickIndex: result.pickIndex,
+        pack: packBefore,
+        ...(defense?.outcome
+          ? { call: { confidence: defense.confidence, outcome: defense.outcome } }
+          : {}),
+      });
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
     } catch (e) {
       // Nothing was passed after all, so put the pack back rather than let it
-      // finish leaving.
+      // finish leaving. The defense survives too -- retyping it because the
+      // network blinked would be the worst moment this flow could pick.
       window.clearTimeout(sweep);
       setOutgoing(null);
       alert(e instanceof Error ? e.message : String(e));
@@ -500,7 +692,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // Released anywhere but on a pile. Nothing was decided, so nothing happens
     // -- the card is still in the pack and still unpicked.
     if (!card || !zone) return;
-    void onPick(card, { bench: zone.bench, carried: true });
+    propose({ card, bench: zone.bench, carried: true });
   }
 
   // Moved locally first and reconciled with what the server returns, because
@@ -651,7 +843,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       key={card.name}
                       card={card}
                       index={i}
-                      disabled={picking}
+                      disabled={picking || pending !== null}
                       selected={selected === card.name}
                       onClick={onTileClick}
                       onQuickPick={onQuickPick}
@@ -670,12 +862,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 </div>
               )}
 
-              {/* Not while a card is in the air. The bar and the two lit piles
-                  ask the same question, and during a drag the piles are the ones
-                  being answered -- a second copy of the choice, at the bottom of
-                  the screen, is one you are dragging away from. It is back the
-                  moment the card is let go. */}
-              {selectedCard && !carrying && (
+              {/* Not while a card is in the air, and not while one is being
+                  defended. The bar and the two lit piles ask the same question,
+                  and during a drag the piles are the ones being answered -- a
+                  second copy of the choice, at the bottom of the screen, is one
+                  you are dragging away from. It is back the moment the card is
+                  let go. */}
+              {selectedCard && !carrying && !pending && (
                 <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
                   <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
                     <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
@@ -688,7 +881,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         type="button"
                         className="btn btn-primary btn-sm"
                         disabled={picking}
-                        onClick={() => void onPick(selectedCard)}
+                        onClick={() =>
+                          propose({ card: selectedCard, bench: false, carried: false })
+                        }
                       >
                         Pick to maindeck
                       </button>
@@ -696,7 +891,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         type="button"
                         className="btn btn-outline btn-sm"
                         disabled={picking}
-                        onClick={() => void onPick(selectedCard, { bench: true })}
+                        onClick={() =>
+                          propose({ card: selectedCard, bench: true, carried: false })
+                        }
                       >
                         Pick to sideboard
                       </button>
@@ -723,6 +920,37 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     <div key={lastView.pickIndex} className="motion-safe:animate-verdict">
                       <Verdict score={lastView.score} />
                     </div>
+
+                    {lastView.call && (
+                      // What the certainty they stated was actually worth. Its own
+                      // block rather than a line in the verdict, because it grades
+                      // a different thing: the verdict is about the card, and this
+                      // is about the claim they made before they saw it.
+                      <div className="border-t border-base-300 pt-3">
+                        <div className="eyebrow mb-1.5 flex items-center justify-between gap-2">
+                          <span>Your call</span>
+                          {claimOutcome(lastView.call.confidence, lastView.call.outcome) !==
+                            "none" && (
+                            <span
+                              className={`badge badge-sm ${
+                                claimOutcome(lastView.call.confidence, lastView.call.outcome) ===
+                                "held"
+                                  ? "badge-success"
+                                  : "badge-warning"
+                              }`}
+                            >
+                              {claimOutcome(lastView.call.confidence, lastView.call.outcome) ===
+                              "held"
+                                ? "read it right"
+                                : "misread"}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm leading-relaxed text-base-content/80">
+                          {calibrationLine(lastView.call.confidence, lastView.call.outcome)}
+                        </p>
+                      </div>
+                    )}
 
                     {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
 
@@ -751,7 +979,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     </div>
                   </>
                 ) : (
-                  <p className="text-base-content/60">Pick a card to see how it scored.</p>
+                  <p className="text-base-content/60">
+                    Take a card and say why. Nothing is graded until you have.
+                  </p>
                 )}
               </Panel>
 
@@ -780,6 +1010,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               />
             )}
           </DragOverlay>
+
+          {pending?.stage === "reason" && (
+            <StateYourCase
+              card={pending.proposal.card}
+              onBack={() => setPending(null)}
+              onCommit={onCommit}
+            />
+          )}
+          {pending?.stage === "challenge" && (
+            <TheChallenge
+              yours={pending.proposal.card}
+              challenger={pending.challenge.challenger}
+              reason={pending.reason}
+              busy={picking}
+              onStand={() => resolve(pending.proposal.card)}
+              onSwitch={() => resolve(pending.challenge.challenger)}
+            />
+          )}
         </DndContext>
       )}
     </PageShell>

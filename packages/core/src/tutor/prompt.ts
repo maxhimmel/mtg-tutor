@@ -52,6 +52,39 @@ const GAP_RULE = [
   "  recommendation in proportion to its size.",
 ];
 
+// The player now states a reason and a confidence BEFORE anything is revealed,
+// so there are two things in front of the coach and only one of them is a card.
+//
+// Grading them separately is the point. A pick that lands for a reason that does
+// not hold is the most expensive kind of correct — it is the one that gets
+// repeated — and it is invisible to every deterministic path here, because the
+// only evidence for it is a sentence the player wrote. That is the one thing a
+// model can read that nothing else in this app can, which is what makes it worth
+// the tokens.
+//
+// The margin is what bounds it. Where the gap is inside the margin the data
+// cannot say the pick was wrong, so the pick cannot be the lesson — and the
+// reasoning becomes the only thing left that CAN be graded. That is not a
+// softer verdict, it is a different and better one, and it is the case a flow
+// built on defending a position runs into most often.
+const DEFENSE_RULE = [
+  "- The player committed to this pick and defended it in their own words before",
+  "  seeing any verdict. Judge the CARD and the REASONING separately, and say so when",
+  "  they come apart: a right card taken for a reason that does not hold is worth more",
+  "  words than a wrong card, because it is the one that gets repeated. Quote the part",
+  "  of their reason you are answering rather than restating all of it.",
+  "- If the gap is inside the margin of error, do NOT grade the card at all — the data",
+  "  cannot separate it from the alternative. Grade the reasoning instead; it is the",
+  "  only thing on the table that can still be right or wrong.",
+  "- Their stated confidence is a claim about that margin: 'Clear' claims the gap is",
+  "  bigger than it, 'Close' claims it is smaller, 'Guessing' claims nothing. Answer",
+  "  certainty the data does not support, and say when they were more right than they",
+  "  thought. Never scold someone for saying they were guessing.",
+  "- If they were shown another card and changed their pick, that is the decision worth",
+  "  coaching: say whether the switch was an improvement or a flinch. If they stood",
+  "  their ground, say whether holding was conviction or stubbornness.",
+];
+
 // Builds the grounding system prompt from the principles corpus. Pure string
 // work — no SDK dependency — so any transport (CLI now, web later) can reuse it.
 export function buildSystemPrompt(doc: PrinciplesDoc): string {
@@ -62,6 +95,9 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "grounded in the principles below — they are your fact-check reference.",
     "",
     "Rules:",
+    // Unchanged despite the reasoning now needing a sentence of its own. The
+    // budget does not grow; what it is spent on shifts, and answering what the
+    // player actually said is worth more than a third sentence about the card.
     "- Keep it to 1-3 sentences. No preamble, no restating the situation.",
     ...NAME_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
@@ -79,6 +115,7 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "- If the data verdict and your read disagree, say so briefly and explain why.",
     ...CARD_TEXT_RULE,
     ...GAP_RULE,
+    ...DEFENSE_RULE,
     // Handed only a filtered pool, a model coaches whatever deck it is shown. The
     // player asked for a coach, not an assistant, so the pivot has to arrive as
     // something with an opinion attached rather than a fact to accommodate.

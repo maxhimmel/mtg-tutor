@@ -1,6 +1,7 @@
 "use client";
 
 import type { Card, PickScore } from "@mtg-tutor/core";
+import { gapMargin } from "@mtg-tutor/core";
 import { gradeColor, points } from "../lib/format";
 import { CardPlacard } from "./CardPlacard";
 
@@ -29,7 +30,19 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
   // rate difference between two cards is a third scale -- neither the score nor
   // anything the coach was told -- and it read as 0.0% whenever the pick and the
   // raw best were the same card.
-  const lost = points(score.pickedContextValue - score.contextBestValue);
+  const gap = score.contextBestValue - score.pickedContextValue;
+  const lost = points(-gap);
+
+  // The error bars on the two win rates the gap is a difference of. The panel
+  // used to show the gap alone, which is the exact defect the prompt was fixed
+  // for and left standing on the screen: at 17Lands sample sizes the bars run to
+  // about a point, so a 0.3pp miss is a coin flip rendered as two grades. It
+  // matters more now that the player has just been asked to defend a position --
+  // being told they were wrong by an amount the data cannot see is the one way
+  // this flow could teach something false. Undefined when either card is
+  // unrated, and then it says so rather than inventing one.
+  const margin = gapMargin(score.contextBest, score.picked);
+  const unresolved = margin != null && gap <= margin;
 
   return (
     <div className="flex items-start gap-4">
@@ -58,9 +71,25 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
           <div>
             <div className="eyebrow mb-1.5 flex items-baseline justify-between gap-2">
               <span>Graded against</span>
-              <span className="tabular-nums normal-case tracking-normal">{lost}</span>
+              <span className="tabular-nums normal-case tracking-normal">
+                {lost}
+                <span className="text-base-content/45">
+                  {margin == null ? " · no margin" : ` ± ${points(margin).slice(1)}`}
+                </span>
+              </span>
             </div>
             <CardPlacard card={score.contextBest} />
+            {/* Said in words, not left to be read off two numbers. The whole
+                point of carrying the margin is that a gap smaller than it is not
+                a gap, and a grade sitting above this row is about to imply
+                otherwise. */}
+            <p className="mt-1.5 text-xs leading-relaxed text-base-content/60">
+              {margin == null
+                ? "One of these cards is unrated, so there are no error bars on this gap."
+                : unresolved
+                  ? "That is inside the margin of error: the data cannot tell these two apart."
+                  : "That gap is larger than the margin of error on the two win rates."}
+            </p>
           </div>
         )}
       </div>
