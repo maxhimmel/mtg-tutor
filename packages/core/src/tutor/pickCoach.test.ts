@@ -177,6 +177,49 @@ describe("buildPickContext showing the verdict's working", () => {
     expect(out).toContain("also the best one for this deck: Big Bomb");
   });
 
+  // Issue #5: the prompt named a better card and never said by how much, so the
+  // model read a rounding error as a blunder and told a player to swap an A+
+  // pick for a card worth 0.3pp more.
+  it("says how much better the context-best card was", () => {
+    const out = buildPickContext(base({ isBest: false, contextBest: other, contextBestValue: 0.62 }), []);
+    expect(out).toContain("Big Bomb was worth 4.0pp more to this deck than Lightning Strike");
+  });
+
+  it("gives the margin of error on that gap", () => {
+    const out = buildPickContext(base({ isBest: false, contextBest: other, contextBestValue: 0.62 }), []);
+    expect(out).toContain("margin of error");
+  });
+
+  // The 98/100 case. Both cards are sampled at 5000 games, so the error bars run
+  // to roughly ±1pp and a 0.2pp gap is not a gap the data can see.
+  it("says outright when the gap is inside the margin, so the pick stands", () => {
+    const out = buildPickContext(base({ isBest: false, contextBest: other, contextBestValue: 0.582 }), []);
+    expect(out).toContain("INSIDE the margin");
+    expect(out).toContain("cannot tell these two cards apart");
+  });
+
+  it("does not claim a tie when the gap is real", () => {
+    const out = buildPickContext(base({ isBest: false, contextBest: other, contextBestValue: 0.62 }), []);
+    expect(out).not.toContain("INSIDE the margin");
+  });
+
+  it("says nothing about a gap when the player took the best card", () => {
+    expect(buildPickContext(base({}), [])).not.toContain("margin of error");
+  });
+
+  // Fitting a deck is not the same ranking as raw power, so the context-best can
+  // sit outside the top four by win rate -- and it is the one card the answer is
+  // most likely to be about.
+  it("lists the context-best card even when its win rate would not make the cut", () => {
+    const fillers = Array.from({ length: 6 }, (_, i) =>
+      card(`Filler ${i}`, { gihWinRate: 0.6, colors: ["R"] }),
+    );
+    const niche = card("Niche Fit", { gihWinRate: 0.5, colors: ["R"] });
+    const rec = base({ contextBest: niche, contextBestValue: 0.5, isBest: false });
+    const out = buildPickContext({ ...rec, pack: [picked, ...fillers, niche] }, []);
+    expect(out).toContain("Niche Fit — 2 mana, Red, Creature");
+  });
+
   it("lists the reasons the pick was worth what it was", () => {
     const out = buildPickContext(
       base({ terms: [{ label: "archetype", delta: 0.023 }, { label: "splash", delta: -0.008 }] }),

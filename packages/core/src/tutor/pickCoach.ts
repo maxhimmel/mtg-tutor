@@ -1,6 +1,7 @@
 import type { Card, PoolCard } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
-import { colorLabel, describeCard, pct, statLine } from "./cardLine.js";
+import { gapMargin } from "../scoring/score.js";
+import { colorLabel, describeCard, pct, pp, signedPp, statLine } from "./cardLine.js";
 import { type Pivot, commitmentLine, pivotLines, situationLine } from "./situation.js";
 
 // Renders a single draft pick into a compact prompt for the coach. Pure string
@@ -41,12 +42,18 @@ export function buildPickContext(
   // the two cannot drift apart.
   const pool = [...poolBefore, picked];
 
-  const passed = pack
+  const others = pack
     .filter((c) => c.name !== picked.name)
-    .sort((a, b) => (b.gihWinRate ?? 0) - (a.gihWinRate ?? 0))
-    .slice(0, 4)
-    .map((c) => `  - ${describeCard(c)}\n    ${statLine(c)}`)
-    .join("\n");
+    .sort((a, b) => (b.gihWinRate ?? 0) - (a.gihWinRate ?? 0));
+  const shown = others.slice(0, 4);
+  // The verdict names the context-best card, and a top-four-by-win-rate listing
+  // can leave it out -- fitting a deck is not the same ranking as raw power, so
+  // the one card the answer is most likely to be about was the one the model
+  // might have nothing but a name for.
+  const ctxBest = others.find((c) => c.name === score.contextBest.name);
+  if (ctxBest && !shown.includes(ctxBest)) shown.push(ctxBest);
+
+  const passed = shown.map((c) => `  - ${describeCard(c)}\n    ${statLine(c)}`).join("\n");
 
   // Both answers, always, because the gap between them is the lesson. Naming
   // the raw best even when the player took it is what lets the coach say "the
@@ -58,18 +65,37 @@ export function buildPickContext(
       : `Strongest card in the pack: ${score.rawBest.name} ` +
         `(GIH WR ${pct(score.rawBest.gihWinRate)}). Best for THIS deck: ${score.contextBest.name}.`;
 
+  // How big the miss was, and how much of it the data can actually resolve.
+  //
+  // The grade is `100 - gap * k`, so naming a better card without the gap left
+  // the model unable to tell a rout from a rounding error -- and it read every
+  // divergence as a rout. A 98/100 pick came back as "take the other card
+  // instead" over 0.3pp, against error bars three times that wide on the two
+  // win rates it was the difference of.
+  const gap = score.contextBestValue - score.pickedContextValue;
+  const margin = gapMargin(score.contextBest, picked);
+  const gapLine = score.isBest
+    ? null
+    : `${score.contextBest.name} was worth ${pp(gap)} more to this deck than ` +
+      `${picked.name}` +
+      (margin == null
+        ? "."
+        : gap <= margin
+          ? `, against a ±${pp(margin)} margin of error on those win rates. The gap is ` +
+            `INSIDE the margin: the data cannot tell these two cards apart.`
+          : `, against a ±${pp(margin)} margin of error on those win rates.`);
+
   const verdict = [
     score.isBest
       ? `${score.score}/100 (${score.grade}) — you took the best card for this deck.`
       : `${score.score}/100 (${score.grade}), rank ${score.rankInPack} of ${pack.length} on raw power.`,
+    gapLine,
     divergence,
     // Only the reasons that moved this pick, so the model is not handed a
     // column of zeroes to read meaning into.
     score.terms.length > 0
       ? `Why ${picked.name} is worth what it is here: ` +
-        score.terms
-          .map((t) => `${t.label} ${t.delta >= 0 ? "+" : ""}${(t.delta * 100).toFixed(1)}pp`)
-          .join(", ") +
+        score.terms.map((t) => `${t.label} ${signedPp(t.delta)}`).join(", ") +
         "."
       : null,
   ]

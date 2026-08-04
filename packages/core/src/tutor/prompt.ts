@@ -40,6 +40,18 @@ const CARD_TEXT_RULE = [
   "  rules text shown, you have not been given it: reason from its data instead.",
 ];
 
+// The verdict names a better card; without the gap the model read every
+// divergence as a blunder. `gapMargin` is what makes "inside the margin"
+// a measured fact rather than a threshold someone picked.
+const GAP_RULE = [
+  "- When you were not the best card for the deck, the verdict says by how much and",
+  "  gives the margin of error on it. Match the advice to that gap. If the gap is inside",
+  "  the margin the two cards are indistinguishable in the data — the pick is fine, say",
+  "  what it does for the deck, and do NOT tell the player to take the other card. Only",
+  "  recommend a swap when the gap is outside the margin, and keep the strength of the",
+  "  recommendation in proportion to its size.",
+];
+
 // Builds the grounding system prompt from the principles corpus. Pure string
 // work — no SDK dependency — so any transport (CLI now, web later) can reuse it.
 export function buildSystemPrompt(doc: PrinciplesDoc): string {
@@ -66,6 +78,7 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "  committed colors are named, that latitude is gone.",
     "- If the data verdict and your read disagree, say so briefly and explain why.",
     ...CARD_TEXT_RULE,
+    ...GAP_RULE,
     // Handed only a filtered pool, a model coaches whatever deck it is shown. The
     // player asked for a coach, not an assistant, so the pivot has to arrive as
     // something with an opinion attached rather than a fact to accommodate.

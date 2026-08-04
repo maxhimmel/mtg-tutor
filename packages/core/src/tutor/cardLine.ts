@@ -16,6 +16,12 @@ const COLOR_NAMES: Record<ColorCode, string> = {
 
 export const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 
+// A quantity that is ALREADY the gap between two win rates. Written in points
+// rather than as a percentage because rendering it like the rates it came from
+// is how "0.3pp better" reads as "0.3% win rate".
+export const pp = (v: number) => `${Math.abs(v * 100).toFixed(1)}pp`;
+export const signedPp = (v: number) => `${v >= 0 ? "+" : "-"}${pp(v)}`;
+
 const WUBRG = "WUBRG";
 
 // Colors as prose, in WUBRG order -- a set of committed colors comes out in pool

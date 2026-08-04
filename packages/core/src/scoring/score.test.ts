@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
 import type { Card, ColorCode, IngestCard } from "../model/card.js";
 import type { ScoringContext } from "./context.js";
-import { scorePick, gradeFor, committedColors, isDecisionPick, isCorrectGuess } from "./score.js";
+import {
+  scorePick,
+  gradeFor,
+  gapMargin,
+  committedColors,
+  isDecisionPick,
+  isCorrectGuess,
+} from "./score.js";
 import { computeCardValue } from "./value.js";
 
 // Settles `value` the way ingest does, so a fixture reads the number its stats
@@ -192,5 +199,43 @@ describe("scorePick with a scoring context", () => {
     const seeing = scorePick(three, dud, pool, ctx);
     expect(seeing.contextBest.name).toBe("Mid");
     expect(seeing.score).toBe(Math.round(100 - (0.58 - 0.5) * 750));
+  });
+});
+
+// What separates a real miss from a gap the data cannot resolve. Without it the
+// prompt named a better card and never said by how much, and a 0.3pp gap on a
+// 98/100 pick came back as "take the other card instead".
+describe("gapMargin", () => {
+  const rated = (n: number, wr: number) => card("x", { gihWinRate: wr, gihGames: n }) as Card;
+
+  it("is the standard error of the difference between two measured win rates", () => {
+    const a = rated(7464, 0.6243);
+    const b = rated(2395, 0.6159);
+    const expected = Math.sqrt(
+      (0.6243 * 0.3757) / 7464 + (0.6159 * 0.3841) / 2395,
+    );
+    expect(gapMargin(a, b)).toBeCloseTo(expected, 12);
+  });
+
+  // The number that matters: at 17Lands sample sizes the error bars are wider
+  // than most of the gaps a pick is graded on, which is the whole finding.
+  it("is around a percentage point between two well-sampled commons", () => {
+    const margin = gapMargin(rated(7464, 0.6243), rated(6267, 0.617))!;
+    expect(margin * 100).toBeGreaterThan(0.5);
+    expect(margin * 100).toBeLessThan(1.5);
+  });
+
+  it("narrows as the samples grow", () => {
+    const thin = gapMargin(rated(300, 0.6), rated(300, 0.6))!;
+    const thick = gapMargin(rated(30000, 0.6), rated(30000, 0.6))!;
+    expect(thick).toBeLessThan(thin);
+  });
+
+  // An unrated card's value comes from a rarity baseline, which is an inference
+  // rather than a measurement and has no sample to have error bars over.
+  it("says nothing about a card with no measured win rate", () => {
+    const unrated = card("u", { gihWinRate: undefined, gihGames: undefined }) as Card;
+    expect(gapMargin(rated(5000, 0.6), unrated)).toBeUndefined();
+    expect(gapMargin(unrated, rated(5000, 0.6))).toBeUndefined();
   });
 });
