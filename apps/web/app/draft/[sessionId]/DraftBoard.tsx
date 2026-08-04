@@ -564,7 +564,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     const { proposal, reason, confidence, challenge } = pending;
     const stood = take.name === proposal.card.name;
     void commit(
-      { ...proposal, card: take },
+      {
+        ...proposal,
+        card: take,
+        // "I am taking this but will not play it" was said about the OTHER card.
+        // A switch cannot inherit it, so the new card goes to the deck and the
+        // picks column is there if they want it set aside after all.
+        bench: stood ? proposal.bench : false,
+      },
       {
         reason,
         confidence,
