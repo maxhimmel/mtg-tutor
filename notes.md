@@ -71,6 +71,22 @@ left empty rather than renumbering everything under it.
    already draws three boxes on a double-faced card with a stats panel, so where
    a token goes is a layout question before it is a data one.
 
+6. **A split card sits in the wrong mana-curve bucket, and `cmc` is not wrong.**
+   Found while counting layouts for the card-shape work, and left alone because
+   it belongs to the curve rather than to rendering. Scryfall gives a split card
+   the COMBINED mana value — Dazzling Theater // Prop Room is `cmc` 7 for a
+   {3}{W} and a {2}{W}, Cease // Desist is 8 — which is what the rules say a
+   split card's mana value is everywhere but the stack. `manaCurve` buckets on
+   `cmc`, so all 29 split cards in the pool (23 of them Duskmourn Rooms) show up
+   as seven- and eight-drops. Adventures, Omens and `prepare` cards are fine:
+   Scryfall gives those the FRONT face's value, which is the one you pay first.
+
+   The fix is in `manaCurve`, not in the stored `cmc`. That function already
+   says it asks "on which turn can this deck act", and for a card you may cast
+   either half of, the answer is the cheaper half — readable off `manaCost`,
+   which carries both halves, without storing anything new. Nothing on this list
+   is fixed by changing the stored mana value, which is correct as it stands.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
