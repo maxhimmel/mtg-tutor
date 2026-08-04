@@ -8,6 +8,7 @@ left empty rather than renumbering everything under it.
    - It'd be nice to have a helpful tool-tip (like the Haste, Trample, etc) for Adventures and Omens and sub-cards of that variety.
    - It'd also be awesome to have double-sided cards have an additional enlarged popup on hover showing the backside.
    - I don't know if there are other card types/varieties that fit this shape but let's be thorough.
+   - Related but perhaps worth a different investigation: rendering tokens that are mentioned from a card.
 
 1. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
 
@@ -213,12 +214,12 @@ Ordered by value × readiness. Each is a candidate feature branch.
      baseline is stale.** `pnpm bench-llm --area coach` against `claude-sonnet-5`
      (fdn/TradDraft seed 42, 30 calls) vs the 2026-07-30 baseline:
 
-     | | baseline | now | |
-     |---|---|---|---|
-     | total input | 162,376 | 190,773 | **+17.5%** |
-     | uncached input | 23,266 | 32,133 | +38.1% |
-     | output | 4,897 | 4,076 | **−16.8%** |
-     | cost @ $2/$10 intro | $0.1340 | $0.1489 | +11.1% |
+     |                     | baseline | now     |            |
+     | ------------------- | -------- | ------- | ---------- |
+     | total input         | 162,376  | 190,773 | **+17.5%** |
+     | uncached input      | 23,266   | 32,133  | +38.1%     |
+     | output              | 4,897    | 4,076   | **−16.8%** |
+     | cost @ $2/$10 intro | $0.1340  | $0.1489 | +11.1%     |
 
      **+947 input tokens per coached pick**, of which ~296 is uncached. A
      pre-run estimate of +230 was wrong by 4x: it counted only the rules text on
@@ -237,6 +238,7 @@ Ordered by value × readiness. Each is a candidate feature branch.
      working, not a failure. **Regenerate with `--update-baseline` before reading
      any future run**, or every one of them fails against a prompt that no longer
      exists.
+
    - **A dashboard / live query over accumulated `llmUsage`.** The table is
      written from the first pass; nothing reads it yet except the benchmark
      harness filtering by session. Needs prod traffic to be worth building.
@@ -428,21 +430,21 @@ The architecture, the data pipeline and the deploy story are all documented in
     card twice with a 0.0 gap. `rawBest` is worth showing only when it is a
     THIRD card, where the divergence is the lesson.
 
-   **A basic land is worth 0**, which is not a knob: you are handed as many as
-   you want when you build, so taking one adds nothing you did not already have.
+    **A basic land is worth 0**, which is not a knob: you are handed as many as
+    you want when you build, so taking one adds nothing you did not already have.
 
-9. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
-   cosmetic and stays.** Convex kills the request on an unhandled rejection and
-   discards the response body with it, so a no-output stream returned
-   200-with-nothing and both clients rendered a blank panel. Fixed 2026-07-30 by
-   treating an empty 200 as the coach being unavailable, in each client's own
-   `coach.ts` (`apps/web/app/lib`, `apps/cli/src/core/tutor`) — the seam exists
-   in the web client so this decision is testable there too, and both tests stub
-   the response and spend nothing. The log line
-   itself is not reachable from our side: `.catch()` on all 21 public result
-   promises, on the 5 private `DelayedPromise` slots, and patching
-   `DelayedPromise.reject` outright all failed to defuse it, nothing in our stack
-   ever awaits it, and Convex fires no `unhandledrejection`. Still present in ai
-   7.0.42. Only `generateText` would fix it — **rejected**, token-by-token
-   streaming is worth more than a clean log. Reproduce by pointing `LLM_MODEL` at
-   a model that does not exist.
+11. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
+    cosmetic and stays.** Convex kills the request on an unhandled rejection and
+    discards the response body with it, so a no-output stream returned
+    200-with-nothing and both clients rendered a blank panel. Fixed 2026-07-30 by
+    treating an empty 200 as the coach being unavailable, in each client's own
+    `coach.ts` (`apps/web/app/lib`, `apps/cli/src/core/tutor`) — the seam exists
+    in the web client so this decision is testable there too, and both tests stub
+    the response and spend nothing. The log line
+    itself is not reachable from our side: `.catch()` on all 21 public result
+    promises, on the 5 private `DelayedPromise` slots, and patching
+    `DelayedPromise.reject` outright all failed to defuse it, nothing in our stack
+    ever awaits it, and Convex fires no `unhandledrejection`. Still present in ai
+    7.0.42. Only `generateText` would fix it — **rejected**, token-by-token
+    streaming is worth more than a clean log. Reproduce by pointing `LLM_MODEL` at
+    a model that does not exist.
