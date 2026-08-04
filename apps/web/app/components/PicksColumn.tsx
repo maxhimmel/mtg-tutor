@@ -1,5 +1,6 @@
 "use client";
 
+import { useDroppable } from "@dnd-kit/core";
 import { type Bench, type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
 import { ringFor } from "../lib/cardFrame";
 import { COLOR_NAMES } from "../lib/format";
@@ -21,6 +22,18 @@ interface Pick {
 
 const byCurve = (a: Pick, b: Pick) =>
   a.card.cmc - b.card.cmc || a.card.name.localeCompare(b.card.name);
+
+// The two piles, as places to put a card rather than as lists of one. A section
+// wearing a card is where it will land; the wash and the ring are the same gold
+// a card takes when it is pulled out of the pack, because it is the same
+// statement about the same card.
+const zoneClass = (over: boolean) =>
+  `rounded-box motion-safe:transition-colors ${
+    over ? "bg-primary/10 ring-1 ring-primary/50 ring-inset" : ""
+  }`;
+
+const eyebrowClass = (over: boolean, offered: boolean) =>
+  `eyebrow ${over ? "text-primary" : offered ? "text-base-content" : "text-base-content/50"}`;
 
 function BenchButton({
   card,
@@ -62,6 +75,7 @@ export function PicksColumn({
   pool,
   sideboard,
   onBench,
+  offering = false,
 }: {
   pool: Card[];
   // Positions in `pool`, which is the pool in pick order — see the field's note
@@ -69,7 +83,19 @@ export function PicksColumn({
   // when, so it reads `pos` and ignores the clock.
   sideboard: Bench[];
   onBench: (pickIndex: number, benched: boolean) => void;
+  // A card is being carried, so this panel is offering somewhere to put it
+  // rather than reporting what is already in it.
+  //
+  // Passed in rather than read from useDndContext: that context carries the
+  // measured rectangles of every drop zone and changes on every frame of a drag,
+  // and this panel renders up to forty-five rows.
+  offering?: boolean;
 }) {
+  // The section wrapper, not the list inside it: the list scrolls, and a box
+  // whose rectangle moves as its contents scroll is not where a card was aimed.
+  const main = useDroppable({ id: "maindeck", data: { bench: false } });
+  const side = useDroppable({ id: "sideboard", data: { bench: true } });
+
   const benched = new Set(sideboard.map((b) => b.pos));
   const picks = pool.map((card, pickIndex) => ({ card, pickIndex }));
 
@@ -149,36 +175,52 @@ export function PicksColumn({
         </div>
       )}
 
-      {maindeck.length === 0 ? (
-        <p className="text-sm text-base-content/60">
-          {picks.length === 0 ? "Nothing drafted yet." : "Every pick is in the sideboard."}
-        </p>
-      ) : (
-        // Labelled like the sideboard below it, because since benching shipped
-        // the panel's title counts both and neither number could be read off the
-        // other. The title is what you have drafted; this is what you are
-        // playing, which is the one the tallies above already describe.
-        <div className="flex flex-col gap-1.5">
-          <div className="eyebrow text-base-content/50">Maindeck ({maindeck.length})</div>
+      {/* Labelled like the sideboard below it, because since benching shipped
+          the panel's title counts both and neither number could be read off the
+          other. The title is what you have drafted; this is what you are
+          playing, which is the one the tallies above already describe. */}
+      <div ref={main.setNodeRef} className={`flex flex-col gap-1.5 p-1.5 ${zoneClass(main.isOver)}`}>
+        <div className={eyebrowClass(main.isOver, offering)}>Maindeck ({maindeck.length})</div>
+        {maindeck.length === 0 ? (
+          <p className="text-sm text-base-content/60">
+            {picks.length === 0 ? "Nothing drafted yet." : "Every pick is in the sideboard."}
+          </p>
+        ) : (
           <CardPlacardList
             cards={deck}
             trailing={trailingFor(maindeck, false)}
             className="max-h-[45vh] overflow-y-auto pr-1"
           />
-        </div>
-      )}
+        )}
+      </div>
 
-      {bench.length > 0 && (
-        <div className="flex flex-col gap-1.5 border-t border-base-300 pt-2.5">
-          <div className="eyebrow text-base-content/50">Sideboard ({bench.length})</div>
-          {/* Dimmed rather than hidden: these are still yours, and a card you
-              benched early is the one you most need to see when the lane you
-              left starts coming back. */}
-          <CardPlacardList
-            cards={bench.map((p) => p.card)}
-            trailing={trailingFor(bench, true)}
-            className="max-h-[25vh] overflow-y-auto pr-1 opacity-60"
-          />
+      {/* Empty, this section is nothing to read -- but it is somewhere to put a
+          card, so a drag brings it out even on the first pick of a draft. */}
+      {(bench.length > 0 || offering) && (
+        <div className="border-t border-base-300 pt-2.5">
+          <div
+            ref={side.setNodeRef}
+            className={`flex flex-col gap-1.5 p-1.5 ${zoneClass(side.isOver)}`}
+          >
+            <div className={eyebrowClass(side.isOver, offering)}>Sideboard ({bench.length})</div>
+            {bench.length === 0 ? (
+              <p className="rounded-box border border-dashed border-base-content/25 px-3 py-5 text-center text-sm text-base-content/60">
+                Drop here to take it without playing it
+              </p>
+            ) : (
+              // Dimmed rather than hidden: these are still yours, and a card you
+              // benched early is the one you most need to see when the lane you
+              // left starts coming back. Full strength while a card is being
+              // carried, because then it is a destination and not a footnote.
+              <CardPlacardList
+                cards={bench.map((p) => p.card)}
+                trailing={trailingFor(bench, true)}
+                className={`max-h-[25vh] overflow-y-auto pr-1 motion-safe:transition-opacity ${
+                  offering ? "" : "opacity-60"
+                }`}
+              />
+            )}
+          </div>
         </div>
       )}
     </Panel>

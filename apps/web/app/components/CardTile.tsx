@@ -1,5 +1,6 @@
 "use client";
 
+import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 import type { Card } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
 import { useSettings } from "../lib/useSettings";
@@ -30,6 +31,10 @@ export function CardFace({ card, className }: { card: Card; className?: string }
           src={webpImage(card.imageUrl)}
           alt={card.name}
           loading="eager"
+          // The browser's own image drag, which would put a translucent copy of
+          // the art under the cursor alongside the card the board is already
+          // drawing there.
+          draggable={false}
           className="h-full w-full object-cover"
         />
       ) : (
@@ -50,6 +55,8 @@ export function CardTile({
   showStats,
   label,
   selected,
+  dragListeners,
+  dragging,
 }: {
   card: Card;
   onPick: (card: Card) => void;
@@ -70,6 +77,20 @@ export function CardTile({
   // The accessible name defaults to "Pick <card>", which is a lie anywhere the
   // click is a guess rather than a pick.
   label?: string;
+  // What starts a drag. With a mouse sensor this is a single onMouseDown, so it
+  // composes with the click handlers below instead of replacing them: a press
+  // that never travels far enough to arm the drag is still just a click.
+  //
+  // Deliberately not useDraggable's `attributes`. Those put role and tabIndex on
+  // an element that is already a button, overwrite aria-pressed with the drag
+  // state so a selected card stops announcing itself, and point aria-describedby
+  // at instructions for picking a card up with the keyboard -- which this app
+  // does not implement, because the keyboard's path to both piles is the pair of
+  // buttons in the confirm bar.
+  dragListeners?: DraggableSyntheticListeners;
+  // Being carried. The card is drawn under the cursor instead, so what is left
+  // in the pack is the gap it came out of.
+  dragging?: boolean;
 }) {
   const { settings } = useSettings();
   // Guiderails now show up only on hover. The tile used to also carry a win-rate
@@ -84,7 +105,7 @@ export function CardTile({
       type="button"
       // select-none so the double-click shortcut does not also highlight the
       // name on the tiles that have no art to cover it.
-      className={`card-focus hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""}`}
+      className={`card-focus hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${selected ? "-translate-y-3" : ""} ${dragging ? "opacity-20" : ""}`}
       onClick={() => {
         hidePreview();
         onPick(card);
@@ -97,6 +118,7 @@ export function CardTile({
       aria-label={label ?? `Pick ${card.name}`}
       aria-pressed={selected}
       {...hover}
+      {...dragListeners}
     >
       {/* First child is the face that tilts; hover-3d clips it and applies the
           shine. `relative` is that shine's positioning context -- the effect's
