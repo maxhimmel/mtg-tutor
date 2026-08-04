@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { parseManaCost } from "@mtg-tutor/core";
 import { manaText } from "../lib/format";
 
@@ -76,25 +77,38 @@ export function ManaCost({
   shadow?: boolean;
   className?: string;
 }) {
-  const symbols = parseManaCost(cost);
-  if (symbols.length === 0) return null;
+  // A two-in-one card carries both halves in the one cost string -- Picklock
+  // Prankster's is "{1}{U} // {1}{U}" -- and running them together prints four
+  // pips, which reads as a four-mana card rather than two two-mana halves. The
+  // divider is printed for the same reason it is printed on the card.
+  const halves = (cost ?? "").split("//").map(parseManaCost).filter((h) => h.length > 0);
+  if (halves.length === 0) return null;
 
   return (
     <span className={className} role="img" aria-label={`Mana cost ${manaText(cost)}`}>
-      {symbols.map((symbol, i) => {
-        const code = codeFor(symbol);
-        return code ? (
-          <i
-            key={i}
-            className={`ms ms-${code} ms-cost${shadow ? " ms-shadow" : ""}`}
-            aria-hidden="true"
-          />
-        ) : (
-          <span key={i} className="font-mono text-xs" aria-hidden="true">
-            {symbol}
-          </span>
-        );
-      })}
+      {halves.map((symbols, half) => (
+        <Fragment key={half}>
+          {half > 0 && (
+            <span aria-hidden="true" className="px-0.5 font-mono text-[0.85em] opacity-60">
+              //
+            </span>
+          )}
+          {symbols.map((symbol, i) => {
+            const code = codeFor(symbol);
+            return code ? (
+              <i
+                key={i}
+                className={`ms ms-${code} ms-cost${shadow ? " ms-shadow" : ""}`}
+                aria-hidden="true"
+              />
+            ) : (
+              <span key={i} className="font-mono text-xs" aria-hidden="true">
+                {symbol}
+              </span>
+            );
+          })}
+        </Fragment>
+      ))}
     </span>
   );
 }

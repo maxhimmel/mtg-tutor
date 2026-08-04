@@ -26,6 +26,9 @@ export interface ScryfallCard {
   loyalty?: string;
   image_uris?: { normal?: string; small?: string };
   card_faces?: ScryfallFace[];
+  // How the card is printed: "normal", "adventure", "split", "transform",
+  // "prepare", "saga", "class", "case" are the eight the ingested sets contain.
+  layout: string;
   collector_number: string;
   booster: boolean;
   set: string; // Scryfall set code; a bonus-sheet card's differs from the set drafted.

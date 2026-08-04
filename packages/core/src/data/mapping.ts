@@ -19,6 +19,20 @@ function imageOf(sc: ScryfallCard): string | undefined {
   return sc.image_uris?.normal ?? sc.card_faces?.[0]?.image_uris?.normal;
 }
 
+// The back face's art -- which is also the test for whether a card HAS a back
+// face rather than two halves of one picture. A transforming card's faces each
+// carry their own `image_uris`; an Adventure's, an Omen's, a Room's and a split
+// card's do not, because there is nothing to turn over.
+function backImageOf(sc: ScryfallCard): string | undefined {
+  return sc.card_faces?.[1]?.image_uris?.normal;
+}
+
+// `normal` says nothing and is what nine cards in ten are, so it is not worth a
+// field on every row of a table that is read whole to review a draft.
+function layoutOf(sc: ScryfallCard): string | undefined {
+  return sc.layout === "normal" ? undefined : sc.layout;
+}
+
 // Oracle text lives at the top level for single-faced cards, or split across
 // card_faces for double-faced / split cards -- combine both faces there.
 function oracleOf(sc: ScryfallCard): string {
@@ -75,6 +89,8 @@ export function mergeCards(
       toughness: combat.toughness,
       loyalty: combat.loyalty,
       imageUrl: imageOf(sc),
+      layout: layoutOf(sc),
+      backImageUrl: backImageOf(sc),
       collectorNumber: sc.collector_number,
       setCode: sc.set,
       gihWinRate: r?.ever_drawn_win_rate ?? undefined,
