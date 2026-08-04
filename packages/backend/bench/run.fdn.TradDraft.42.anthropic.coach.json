@@ -36,6 +36,565 @@
     "divergenceRate": 0,
     "emptyFrames": 0
   },
+  "draft": [
+    {
+      "pickIndex": 0,
+      "packNo": 1,
+      "pickNo": 1,
+      "name": "Sylvan Scavenging",
+      "colors": [
+        "G"
+      ],
+      "cmc": 3,
+      "typeLine": "Enchantment",
+      "manaCost": "{1}{G}{G}",
+      "rarity": "rare",
+      "gihWinRate": 0.634
+    },
+    {
+      "pickIndex": 1,
+      "packNo": 1,
+      "pickNo": 2,
+      "name": "Bigfin Bouncer",
+      "colors": [
+        "U"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Shark Pirate",
+      "manaCost": "{3}{U}",
+      "rarity": "common",
+      "gihWinRate": 0.6067
+    },
+    {
+      "pickIndex": 2,
+      "packNo": 1,
+      "pickNo": 3,
+      "name": "Ruby, Daring Tracker",
+      "colors": [
+        "G",
+        "R"
+      ],
+      "cmc": 2,
+      "typeLine": "Legendary Creature — Human Scout",
+      "manaCost": "{R}{G}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.6074
+    },
+    {
+      "pickIndex": 3,
+      "packNo": 1,
+      "pickNo": 4,
+      "name": "Eager Trufflesnout",
+      "colors": [
+        "G"
+      ],
+      "cmc": 3,
+      "typeLine": "Creature — Boar",
+      "manaCost": "{2}{G}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.6175
+    },
+    {
+      "pickIndex": 4,
+      "packNo": 1,
+      "pickNo": 5,
+      "name": "Involuntary Employment",
+      "colors": [
+        "R"
+      ],
+      "cmc": 4,
+      "typeLine": "Sorcery",
+      "manaCost": "{3}{R}",
+      "rarity": "common",
+      "gihWinRate": 0.5927
+    },
+    {
+      "pickIndex": 5,
+      "packNo": 1,
+      "pickNo": 6,
+      "name": "Luminous Rebuke",
+      "colors": [
+        "W"
+      ],
+      "cmc": 5,
+      "typeLine": "Instant",
+      "manaCost": "{4}{W}",
+      "rarity": "common",
+      "gihWinRate": 0.6176
+    },
+    {
+      "pickIndex": 6,
+      "packNo": 1,
+      "pickNo": 7,
+      "name": "Quilled Greatwurm",
+      "colors": [
+        "G"
+      ],
+      "cmc": 6,
+      "typeLine": "Creature — Wurm",
+      "manaCost": "{4}{G}{G}",
+      "rarity": "mythic",
+      "gihWinRate": 0.5974
+    },
+    {
+      "pickIndex": 7,
+      "packNo": 1,
+      "pickNo": 8,
+      "name": "Felidar Savior",
+      "colors": [
+        "W"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Cat Beast",
+      "manaCost": "{3}{W}",
+      "rarity": "common",
+      "gihWinRate": 0.6088
+    },
+    {
+      "pickIndex": 8,
+      "packNo": 1,
+      "pickNo": 9,
+      "name": "Bloodfell Caves",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5727
+    },
+    {
+      "pickIndex": 9,
+      "packNo": 1,
+      "pickNo": 10,
+      "name": "Apothecary Stomper",
+      "colors": [
+        "G"
+      ],
+      "cmc": 6,
+      "typeLine": "Creature — Elephant",
+      "manaCost": "{4}{G}{G}",
+      "rarity": "common",
+      "gihWinRate": 0.562
+    },
+    {
+      "pickIndex": 10,
+      "packNo": 1,
+      "pickNo": 11,
+      "name": "Thornwood Falls",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5789
+    },
+    {
+      "pickIndex": 11,
+      "packNo": 1,
+      "pickNo": 12,
+      "name": "Wind-Scarred Crag",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5714
+    },
+    {
+      "pickIndex": 12,
+      "packNo": 1,
+      "pickNo": 13,
+      "name": "Burnished Hart",
+      "colors": [],
+      "cmc": 3,
+      "typeLine": "Artifact Creature — Elk",
+      "manaCost": "{3}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.5177
+    },
+    {
+      "pickIndex": 13,
+      "packNo": 1,
+      "pickNo": 14,
+      "name": "Quick-Draw Katana",
+      "colors": [],
+      "cmc": 2,
+      "typeLine": "Artifact — Equipment",
+      "manaCost": "{2}",
+      "rarity": "common",
+      "gihWinRate": 0.5353
+    },
+    {
+      "pickIndex": 14,
+      "packNo": 2,
+      "pickNo": 1,
+      "name": "Mischievous Mystic",
+      "colors": [
+        "U"
+      ],
+      "cmc": 2,
+      "typeLine": "Creature — Human Wizard",
+      "manaCost": "{1}{U}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.6221
+    },
+    {
+      "pickIndex": 15,
+      "packNo": 2,
+      "pickNo": 2,
+      "name": "Ashroot Animist",
+      "colors": [
+        "G",
+        "R"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Lizard Druid",
+      "manaCost": "{2}{R}{G}",
+      "rarity": "rare",
+      "gihWinRate": 0.6209
+    },
+    {
+      "pickIndex": 16,
+      "packNo": 2,
+      "pickNo": 3,
+      "name": "Loot, Exuberant Explorer",
+      "colors": [
+        "G"
+      ],
+      "cmc": 3,
+      "typeLine": "Legendary Creature — Beast Noble",
+      "manaCost": "{2}{G}",
+      "rarity": "rare",
+      "gihWinRate": 0.6008
+    },
+    {
+      "pickIndex": 17,
+      "packNo": 2,
+      "pickNo": 4,
+      "name": "Scrawling Crawler",
+      "colors": [],
+      "cmc": 3,
+      "typeLine": "Artifact Creature — Phyrexian Construct",
+      "manaCost": "{3}",
+      "rarity": "rare",
+      "gihWinRate": 0.6085
+    },
+    {
+      "pickIndex": 18,
+      "packNo": 2,
+      "pickNo": 5,
+      "name": "Dismal Backwater",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.6035
+    },
+    {
+      "pickIndex": 19,
+      "packNo": 2,
+      "pickNo": 6,
+      "name": "Soul-Shackled Zombie",
+      "colors": [
+        "B"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Zombie",
+      "manaCost": "{3}{B}",
+      "rarity": "common",
+      "gihWinRate": 0.5969
+    },
+    {
+      "pickIndex": 20,
+      "packNo": 2,
+      "pickNo": 7,
+      "name": "Evolving Wilds",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.585
+    },
+    {
+      "pickIndex": 21,
+      "packNo": 2,
+      "pickNo": 8,
+      "name": "Arcane Epiphany",
+      "colors": [
+        "U"
+      ],
+      "cmc": 5,
+      "typeLine": "Instant",
+      "manaCost": "{3}{U}{U}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.593
+    },
+    {
+      "pickIndex": 22,
+      "packNo": 2,
+      "pickNo": 9,
+      "name": "Tranquil Cove",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5855
+    },
+    {
+      "pickIndex": 23,
+      "packNo": 2,
+      "pickNo": 10,
+      "name": "Scoured Barrens",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5822
+    },
+    {
+      "pickIndex": 24,
+      "packNo": 2,
+      "pickNo": 11,
+      "name": "Erudite Wizard",
+      "colors": [
+        "U"
+      ],
+      "cmc": 3,
+      "typeLine": "Creature — Human Wizard",
+      "manaCost": "{2}{U}",
+      "rarity": "common",
+      "gihWinRate": 0.5607
+    },
+    {
+      "pickIndex": 25,
+      "packNo": 2,
+      "pickNo": 12,
+      "name": "Apothecary Stomper",
+      "colors": [
+        "G"
+      ],
+      "cmc": 6,
+      "typeLine": "Creature — Elephant",
+      "manaCost": "{4}{G}{G}",
+      "rarity": "common",
+      "gihWinRate": 0.562
+    },
+    {
+      "pickIndex": 26,
+      "packNo": 2,
+      "pickNo": 13,
+      "name": "Campus Guide",
+      "colors": [],
+      "cmc": 2,
+      "typeLine": "Artifact Creature — Golem",
+      "manaCost": "{2}",
+      "rarity": "common",
+      "gihWinRate": 0.5607
+    },
+    {
+      "pickIndex": 27,
+      "packNo": 2,
+      "pickNo": 14,
+      "name": "Island",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Basic Land — Island",
+      "manaCost": "",
+      "rarity": "common"
+    },
+    {
+      "pickIndex": 28,
+      "packNo": 3,
+      "pickNo": 1,
+      "name": "Sphinx of Forgotten Lore",
+      "colors": [
+        "U"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Sphinx",
+      "manaCost": "{2}{U}{U}",
+      "rarity": "mythic",
+      "gihWinRate": 0.6218
+    },
+    {
+      "pickIndex": 29,
+      "packNo": 3,
+      "pickNo": 2,
+      "name": "Luminous Rebuke",
+      "colors": [
+        "W"
+      ],
+      "cmc": 5,
+      "typeLine": "Instant",
+      "manaCost": "{4}{W}",
+      "rarity": "common",
+      "gihWinRate": 0.6176
+    },
+    {
+      "pickIndex": 30,
+      "packNo": 3,
+      "pickNo": 3,
+      "name": "Felidar Savior",
+      "colors": [
+        "W"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Cat Beast",
+      "manaCost": "{3}{W}",
+      "rarity": "common",
+      "gihWinRate": 0.6088
+    },
+    {
+      "pickIndex": 31,
+      "packNo": 3,
+      "pickNo": 4,
+      "name": "Stab",
+      "colors": [
+        "B"
+      ],
+      "cmc": 1,
+      "typeLine": "Instant",
+      "manaCost": "{B}",
+      "rarity": "common",
+      "gihWinRate": 0.6127
+    },
+    {
+      "pickIndex": 32,
+      "packNo": 3,
+      "pickNo": 5,
+      "name": "Strongbox Raider",
+      "colors": [
+        "R"
+      ],
+      "cmc": 4,
+      "typeLine": "Creature — Orc Pirate",
+      "manaCost": "{2}{R}{R}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.5919
+    },
+    {
+      "pickIndex": 33,
+      "packNo": 3,
+      "pickNo": 6,
+      "name": "Cathar Commando",
+      "colors": [
+        "W"
+      ],
+      "cmc": 2,
+      "typeLine": "Creature — Human Soldier",
+      "manaCost": "{1}{W}",
+      "rarity": "common",
+      "gihWinRate": 0.6041
+    },
+    {
+      "pickIndex": 34,
+      "packNo": 3,
+      "pickNo": 7,
+      "name": "Make Your Move",
+      "colors": [
+        "W"
+      ],
+      "cmc": 3,
+      "typeLine": "Instant",
+      "manaCost": "{2}{W}",
+      "rarity": "common",
+      "gihWinRate": 0.5885
+    },
+    {
+      "pickIndex": 35,
+      "packNo": 3,
+      "pickNo": 8,
+      "name": "Tolarian Terror",
+      "colors": [
+        "U"
+      ],
+      "cmc": 7,
+      "typeLine": "Creature — Serpent",
+      "manaCost": "{6}{U}",
+      "rarity": "common",
+      "gihWinRate": 0.5672
+    },
+    {
+      "pickIndex": 36,
+      "packNo": 3,
+      "pickNo": 9,
+      "name": "Scoured Barrens",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5822
+    },
+    {
+      "pickIndex": 37,
+      "packNo": 3,
+      "pickNo": 10,
+      "name": "Tranquil Cove",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.5855
+    },
+    {
+      "pickIndex": 38,
+      "packNo": 3,
+      "pickNo": 11,
+      "name": "Rogue's Passage",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "uncommon",
+      "gihWinRate": 0.5791
+    },
+    {
+      "pickIndex": 39,
+      "packNo": 3,
+      "pickNo": 12,
+      "name": "Dismal Backwater",
+      "colors": [],
+      "cmc": 0,
+      "typeLine": "Land",
+      "manaCost": "",
+      "rarity": "common",
+      "gihWinRate": 0.6035
+    },
+    {
+      "pickIndex": 40,
+      "packNo": 3,
+      "pickNo": 13,
+      "name": "An Offer You Can't Refuse",
+      "colors": [
+        "U"
+      ],
+      "cmc": 1,
+      "typeLine": "Instant",
+      "manaCost": "{U}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.4879
+    },
+    {
+      "pickIndex": 41,
+      "packNo": 3,
+      "pickNo": 14,
+      "name": "Savannah Lions",
+      "colors": [
+        "W"
+      ],
+      "cmc": 1,
+      "typeLine": "Creature — Cat",
+      "manaCost": "{W}",
+      "rarity": "uncommon",
+      "gihWinRate": 0.5494
+    }
+  ],
   "picks": [
     {
       "pickIndex": 0,

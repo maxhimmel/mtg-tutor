@@ -10,6 +10,7 @@
   },
   "scripts": {
     "backtest-scoring": "pnpm --filter @mtg-tutor/backend backtest-scoring",
+    "bench-backfill-draft": "pnpm --filter @mtg-tutor/backend bench-backfill-draft",
     "bench-io": "pnpm --filter @mtg-tutor/backend bench-io",
     "bench-llm": "pnpm --filter @mtg-tutor/backend bench-llm",
     "bench-report": "pnpm --filter @mtg-tutor/backend bench-report",

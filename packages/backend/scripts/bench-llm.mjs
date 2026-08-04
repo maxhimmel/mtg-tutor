@@ -168,6 +168,12 @@ while (!state.complete) {
     pickIndex: result.pickIndex,
     packNames: pack.map((c) => c.name),
     poolNames: [...poolBefore, picked.name],
+    // The card taken. Identical to `bestName` under the policy above, and
+    // recorded separately anyway: the report reads this to rebuild the pool, and
+    // it should not silently break the day the policy stops being greedy.
+    pickedName: picked.name,
+    packNo: state.packNo,
+    pickNo: state.pickNo,
     cardsInPack: pack.length,
     // The RAW-power best. `score.best` stopped existing when a pick score was
     // made to say which best it means (cb85b22) and this went unnoticed, because
@@ -178,7 +184,15 @@ while (!state.complete) {
     bestName: result.score.rawBest.name,
   });
 
-  state = { complete: result.complete, pack: result.pack, pool: result.pool };
+  // packNo/pickNo carried too: the pick above reads them off the PRE-pick state,
+  // and dropping them here left every pick after the first labelled `undefined`.
+  state = {
+    complete: result.complete,
+    pack: result.pack,
+    pool: result.pool,
+    packNo: result.packNo,
+    pickNo: result.pickNo,
+  };
 }
 console.log(`drafted ${picks.length} picks`);
 
@@ -478,8 +492,33 @@ const costOf = (area, id) => {
 const coachByPick = new Map(coached.map((c) => [c.pickIndex, c]));
 const verdictByPick = new Map(verdicts.map((v) => [v.pickIndex, v]));
 
+// The whole draft, in take order, with enough of each card to render it.
+//
+// The report needs this to answer "what deck was being built" beside the advice,
+// and it cannot be derived from `picks` below: those are the DECISION picks
+// only, so a pool rebuilt from them silently omits the forced end-of-pack picks
+// and shows a deck the player never had. `sets.get` is already read at startup
+// and returns hydrated cards, so the facts cost nothing extra.
+const cardFacts = new Map(stored.cards.map((c) => [c.name, c]));
+const draft = picks.map((p) => {
+  const c = cardFacts.get(p.pickedName) ?? {};
+  return {
+    pickIndex: p.pickIndex,
+    packNo: p.packNo,
+    pickNo: p.pickNo,
+    name: p.pickedName,
+    colors: c.colors ?? [],
+    cmc: c.cmc ?? 0,
+    typeLine: c.typeLine ?? "",
+    manaCost: c.manaCost ?? "",
+    rarity: c.rarity,
+    gihWinRate: c.gihWinRate,
+  };
+});
+
 const transcript = {
   ...record,
+  draft,
   picks: [...new Set([...coachByPick.keys(), ...verdictByPick.keys()])]
     .sort((a, b) => a - b)
     .map((pickIndex) => {

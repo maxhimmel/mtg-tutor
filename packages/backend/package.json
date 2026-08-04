@@ -17,6 +17,7 @@
   },
   "scripts": {
     "backtest-scoring": "node scripts/backtest-scoring.mjs",
+    "bench-backfill-draft": "node scripts/bench-backfill-draft.mjs",
     "bench-io": "node scripts/bench-io.mjs",
     "bench-llm": "node scripts/bench-llm.mjs",
     "bench-report": "node scripts/bench-report.mjs",

@@ -354,6 +354,96 @@ function slot(title, text, cost) {
   </div>`;
 }
 
+// ------------------------------------------------------------------ the deck
+//
+// Advice about a pick is unreadable without the pool it was given for -- "fits
+// your Black-Green curve" means nothing next to a name and a win rate. The
+// transcript carries the whole draft in take order, so the pool at any pick is
+// a prefix of it, and the panel below is that prefix rendered.
+//
+// Absent on transcripts recorded before `draft` existed; the panel degrades to
+// a line telling you which script fills it in rather than disappearing, because
+// a missing feature that explains itself costs one sentence and a missing
+// feature that stays silent costs a bug report.
+const draft = Array.isArray(run.draft) ? run.draft : [];
+
+// Whether the two runs actually drafted the same cards.
+//
+// The whole comparison rests on the deal being pinned: same seed, same greedy
+// policy, so both runs see byte-identical prompts and every difference is the
+// prompt change. A scoring change breaks that silently -- `cardValue` decides
+// the policy's pick, so moving it re-drafts the whole tail, and the report goes
+// on rendering two answers side by side as though they were about one pick.
+// Found when a basic-land fix (72a877d) moved 6 of 30 picks and the two decks
+// stopped being the same deck.
+const divergedPicks = base
+  ? (() => {
+      const baseBest = new Map((base.picks ?? []).map((p) => [p.pickIndex, p.bestName]));
+      return (run.picks ?? []).filter(
+        (p) => baseBest.has(p.pickIndex) && baseBest.get(p.pickIndex) !== p.bestName,
+      ).length;
+    })()
+  : 0;
+
+const COLOR_META = {
+  W: { name: "White", hex: "#f6e3b4" },
+  U: { name: "Blue", hex: "#a8cbe8" },
+  B: { name: "Black", hex: "#9c9186" },
+  R: { name: "Red", hex: "#eda98c" },
+  G: { name: "Green", hex: "#a7ceab" },
+};
+
+// Which pick each coached answer belongs to, so the drawer's scrubber and the
+// per-answer buttons address the same thing.
+const coachedIndices = picks.map((p) => p.pickIndex);
+
+function deckPanel() {
+  const empty = draft.length === 0;
+  const data = JSON.stringify({ draft, coached: coachedIndices, colors: COLOR_META });
+
+  // One shell either way. The empty case still opens and still says why it is
+  // empty; rendering no drawer at all would leave the "deck here" buttons and
+  // the D shortcut pointing at nothing.
+  const bodyHtml = empty
+    ? `<p class="muted">This transcript was recorded before a run stored its draft,
+       so there is no deck to show. <code>pnpm bench-backfill-draft</code> replays
+       the same deal and fills it in &mdash; it spends no model tokens.</p>`
+    : `<div id="deck-step-bar" class="step-bar" hidden>
+        <div class="step-nav">
+          <button class="step-b" data-step="-1" aria-label="Previous pick">&larr;</button>
+          <input id="deck-range" type="range" min="0" max="${draft.length - 1}"
+                 value="${draft.length - 1}" aria-label="Pick">
+          <button class="step-b" data-step="1" aria-label="Next pick">&rarr;</button>
+        </div>
+        <div id="deck-step-label" class="step-label"></div>
+      </div>
+      <div id="deck-curve" class="curve"></div>
+      <div id="deck-list"></div>`;
+
+  return `<button id="deck-open" class="deck-fab" data-deck-open="final"
+    title="View the drafted deck (D)">
+    <span class="fab-pip"></span>Deck${empty ? "" : ` <span class="muted">${draft.length}</span>`}
+  </button>
+  <div id="deck-scrim" class="scrim" data-deck-close></div>
+  <aside id="deck" class="drawer" aria-hidden="true" aria-label="Drafted deck">
+    <div class="drawer-head">
+      <strong>Deck</strong>
+      ${
+        empty
+          ? ""
+          : `<div class="seg" role="tablist">
+        <button class="seg-b is-on" data-mode="final" role="tab">Final pool</button>
+        <button class="seg-b" data-mode="step" role="tab">Step through</button>
+      </div>`
+      }
+      <span class="spacer"></span>
+      <button class="x" data-deck-close aria-label="Close">&times;</button>
+    </div>
+    <div class="drawer-body">${bodyHtml}</div>
+  </aside>
+  <script type="application/json" id="deck-data">${data.replace(/</g, "\\u003c")}</script>`;
+}
+
 function pickSection(p) {
   const pair = (title, a, b) =>
     base
@@ -386,10 +476,19 @@ function pickSection(p) {
   const outNow = outTokens(p.coach) + outTokens(p.verdict);
   const outThen = p.prev ? outTokens(p.prev.coach) + outTokens(p.prev.verdict) : null;
 
+  // The pool AS IT STOOD when this advice was written -- one click from the
+  // advice, because the two are only meaningful together.
+  const atPick =
+    draft.length > 0
+      ? `<button class="deck-at" data-deck-open="step" data-pick="${p.pickIndex}"
+           title="Show the deck as it stood at this pick">deck here</button>`
+      : "";
+
   return `<section class="pick">
     <h3>
       <span class="pi">pick ${p.pickIndex}</span>
       <span class="muted">${p.cardsInPack} cards · raw best: ${esc(p.bestName)}</span>
+      ${atPick}
       <span class="spacer"></span>
       ${
         base
@@ -436,6 +535,9 @@ const html = `<!doctype html>
   h2 { font-size:.8rem; text-transform:uppercase; letter-spacing:.09em; color:var(--muted);
        margin:2.5rem 0 .85rem; font-weight:600; }
   .sub { color:var(--muted); font-size:.9rem; margin:0 0 2rem; }
+  .notpaired { background:var(--warnbg); border:1px solid var(--bad); border-left-width:4px;
+    border-radius:9px; padding:.7rem .9rem; font-size:.85rem; margin:0 0 2rem; }
+  .notpaired strong { color:var(--bad); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.25rem; }
   .muted { color:var(--muted); }
   .mono, .tok, .bar-nums, .chip-val, .areas, .slot-cost { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
@@ -489,6 +591,72 @@ const html = `<!doctype html>
   .warn { background:var(--warnbg); color:var(--bad); border-radius:4px; padding:0 .3rem; font-weight:700; }
   .prose { white-space:pre-wrap; overflow-wrap:anywhere; font-size:.87rem; }
   .cite { color:var(--live); font-weight:600; }
+
+  /* ---- deck drawer ---- */
+  .deck-fab { position:fixed; right:1.25rem; bottom:1.25rem; z-index:40;
+    display:flex; align-items:center; gap:.5rem; padding:.6rem .95rem;
+    font:600 .85rem/1 ui-sans-serif,-apple-system,'Segoe UI',sans-serif; color:var(--fg);
+    background:var(--card); border:1px solid var(--line); border-radius:999px; cursor:pointer;
+    box-shadow:0 6px 22px rgba(0,0,0,.13); transition:transform .13s, box-shadow .13s; }
+  .deck-fab:hover { transform:translateY(-1px); box-shadow:0 9px 26px rgba(0,0,0,.18); }
+  .deck-fab .muted { font-family:ui-monospace,monospace; font-weight:500; }
+  .fab-pip { width:.62rem; height:.62rem; border-radius:50%; background:var(--live); }
+
+  .deck-at { font:600 .68rem/1 ui-sans-serif,-apple-system,sans-serif; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--live); background:transparent; cursor:pointer;
+    border:1px solid var(--line); border-radius:999px; padding:.24rem .55rem; }
+  .deck-at:hover { border-color:var(--live); background:var(--bg); }
+
+  .scrim { position:fixed; inset:0; z-index:45; background:rgba(10,10,14,.34);
+    opacity:0; pointer-events:none; transition:opacity .2s; }
+  body.deck-on .scrim { opacity:1; pointer-events:auto; }
+
+  .drawer { position:fixed; top:0; right:0; z-index:50; width:min(30rem,100vw);
+    height:100dvh; display:flex; flex-direction:column; background:var(--card);
+    border-left:1px solid var(--line); box-shadow:-14px 0 40px rgba(0,0,0,.17);
+    transform:translateX(101%); transition:transform .22s cubic-bezier(.4,0,.2,1); }
+  body.deck-on .drawer { transform:none; }
+  @media (prefers-reduced-motion:reduce) { .drawer,.scrim,.deck-fab { transition:none; } }
+
+  .drawer-head { display:flex; align-items:center; gap:.7rem; padding:.85rem 1rem;
+    border-bottom:1px solid var(--line); flex:0 0 auto; }
+  .drawer-body { overflow-y:auto; padding:1rem; flex:1 1 auto; }
+  .x { font-size:1.35rem; line-height:1; background:none; border:none; cursor:pointer;
+    color:var(--muted); padding:0 .2rem; }
+  .x:hover { color:var(--fg); }
+
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg-b { font:600 .72rem/1 ui-sans-serif,-apple-system,sans-serif; padding:.4rem .65rem;
+    background:transparent; color:var(--muted); border:none; cursor:pointer; }
+  .seg-b.is-on { background:var(--live); color:#fff; }
+
+  .step-bar { margin-bottom:.9rem; }
+  .step-nav { display:flex; align-items:center; gap:.55rem; }
+  .step-b { font-size:.9rem; line-height:1; padding:.3rem .55rem; cursor:pointer;
+    background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:7px; }
+  .step-b:hover { border-color:var(--live); }
+  #deck-range { flex:1; accent-color:var(--live); }
+  .step-label { margin-top:.5rem; font-size:.8rem; color:var(--muted); }
+  .step-label strong { color:var(--fg); }
+
+  .curve { display:flex; align-items:flex-end; gap:3px; height:38px; margin-bottom:1rem; }
+  .curve-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .curve-bar { width:100%; background:var(--live); border-radius:2px 2px 0 0; min-height:2px; opacity:.75; }
+  .curve-n { font:500 .6rem/1 ui-monospace,monospace; color:var(--muted); }
+
+  .cgroup { margin-bottom:.85rem; }
+  .cgroup-h { display:flex; align-items:center; gap:.45rem; margin-bottom:.35rem;
+    font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); font-weight:600; }
+  .pip { width:.7rem; height:.7rem; border-radius:50%; border:1px solid rgba(0,0,0,.18); flex:0 0 auto; }
+  .cgroup-n { font-family:ui-monospace,monospace; font-weight:500; }
+  .crow { display:flex; align-items:baseline; gap:.5rem; padding:.2rem .35rem;
+    border-radius:6px; font-size:.83rem; }
+  .crow:nth-child(odd) { background:var(--bg); }
+  .crow.is-new { background:var(--warnbg); box-shadow:inset 2px 0 0 var(--live); }
+  .crow-mv { font-family:ui-monospace,monospace; font-size:.72rem; color:var(--muted);
+    min-width:1.1rem; text-align:right; flex:0 0 auto; }
+  .crow-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .crow-t { font-size:.7rem; color:var(--muted); white-space:nowrap; }
 </style>
 </head><body><div class="wrap">
 
@@ -502,6 +670,16 @@ const html = `<!doctype html>
     ? ` &middot; <span class="warn">partial: ${esc(runAreas.join(", "))} only</span>`
     : ""
 }${run.callErrors ? ` &middot; <span class="warn">${run.callErrors} call errors</span>` : ""}</p>
+${
+  divergedPicks > 0
+    ? `<p class="notpaired"><strong>Not a paired comparison.</strong> The two runs took
+       different cards at ${divergedPicks} of ${run.picks.length} picks, so from the first
+       divergence on they drafted different decks and each pair below is two answers about
+       two different pools. Token deltas include that, not just the prompt change. A
+       scoring change moves the greedy policy's picks; re-record the baseline against the
+       current scorer before reading these numbers as a prompt diff.</p>`
+    : ""
+}
 
 <h2>Tokens</h2>
 <div class="card">
@@ -536,7 +714,181 @@ ${run.frames
   })
   .join("")}
 
-</div></body></html>
+</div>
+${deckPanel()}
+<script>
+(() => {
+  const el = document.getElementById("deck-data");
+  if (!el) return;
+  const { draft, colors } = JSON.parse(el.textContent);
+  const body = document.body;
+  const drawer = document.getElementById("deck");
+  const list = document.getElementById("deck-list");
+  const curve = document.getElementById("deck-curve");
+  const bar = document.getElementById("deck-step-bar");
+  const range = document.getElementById("deck-range");
+  const label = document.getElementById("deck-step-label");
+  const last = draft.length - 1;
+  // Open/close still wires up with no draft -- the drawer explains itself then.
+  const hasDraft = draft.length > 0;
+
+  // The whole state: which mode, and how far through the draft. Everything
+  // rendered is a function of these two, so opening at a pick and dragging the
+  // scrubber cannot disagree.
+  let mode = "final";
+  let at = last;
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  // Front face only: a creature that transforms into a land is a creature.
+  const isLand = (t) => /\\bLand\\b/.test(String(t).split("//")[0]);
+  const shortType = (t) => {
+    const front = String(t).split("//")[0];
+    const main = front.split("—")[0].trim().split(/\\s+/).pop() || "";
+    return main.replace(/^Basic$/, "Land");
+  };
+
+  // Colourless and multicolour are their own buckets: a gold card belongs to a
+  // pair, not to each half, and bucketing it twice would make the counts lie.
+  const bucketOf = (c) => {
+    if (isLand(c.typeLine)) return "Land";
+    if (!c.colors || c.colors.length === 0) return "Colorless";
+    if (c.colors.length > 1) return c.colors.join("");
+    return c.colors[0];
+  };
+  const ORDER = ["W", "U", "B", "R", "G"];
+  const rank = (k) => {
+    if (k === "Land") return 100;
+    if (k === "Colorless") return 90;
+    if (k.length > 1) return 50 + k.length;
+    return ORDER.indexOf(k);
+  };
+  const pipOf = (k) => {
+    const cs = k === "Land" || k === "Colorless" ? [] : k.split("");
+    if (cs.length === 0) return '<span class="pip" style="background:#cfcfd8"></span>';
+    if (cs.length === 1) return \`<span class="pip" style="background:\${colors[cs[0]].hex}"></span>\`;
+    const stops = cs.map((c, i) =>
+      \`\${colors[c].hex} \${(i / cs.length) * 100}% \${((i + 1) / cs.length) * 100}%\`).join(",");
+    return \`<span class="pip" style="background:linear-gradient(90deg,\${stops})"></span>\`;
+  };
+  const groupName = (k) =>
+    k === "Land" || k === "Colorless" ? k : k.split("").map((c) => colors[c].name).join("/");
+
+  function render() {
+    if (!hasDraft) return;
+    const upto = mode === "final" ? draft : draft.slice(0, at + 1);
+    const justTook = mode === "step" ? draft[at] : null;
+
+    // Curve over castable spells; lands have no mana value worth plotting.
+    const spells = upto.filter((c) => !isLand(c.typeLine));
+    const buckets = [0, 0, 0, 0, 0, 0, 0, 0];
+    for (const c of spells) buckets[Math.min(7, Math.max(0, Math.round(c.cmc)))]++;
+    const peak = Math.max(1, ...buckets);
+    curve.innerHTML = buckets
+      .map((n, i) =>
+        \`<div class="curve-col" title="\${n} at mana value \${i === 7 ? "7+" : i}">
+           <div class="curve-bar" style="height:\${(n / peak) * 26}px"></div>
+           <span class="curve-n">\${i === 7 ? "7+" : i}</span>
+         </div>\`)
+      .join("");
+
+    const groups = new Map();
+    for (const c of upto) {
+      const k = bucketOf(c);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(c);
+    }
+    list.innerHTML = [...groups.entries()]
+      .sort((a, b) => rank(a[0]) - rank(b[0]))
+      .map(([k, cards]) => {
+        const rows = cards
+          .slice()
+          .sort((a, b) => a.cmc - b.cmc || a.name.localeCompare(b.name))
+          .map((c) => {
+            const hot = justTook && c.pickIndex === justTook.pickIndex;
+            return \`<div class="crow\${hot ? " is-new" : ""}">
+              <span class="crow-mv">\${isLand(c.typeLine) ? "&middot;" : c.cmc}</span>
+              <span class="crow-name">\${esc(c.name)}</span>
+              <span class="crow-t">\${esc(shortType(c.typeLine))}</span>
+            </div>\`;
+          })
+          .join("");
+        return \`<div class="cgroup">
+          <div class="cgroup-h">\${pipOf(k)}\${esc(groupName(k))}
+            <span class="cgroup-n">\${cards.length}</span></div>\${rows}</div>\`;
+      })
+      .join("");
+
+    bar.hidden = mode !== "step";
+    if (mode === "step") {
+      range.value = String(at);
+      const d = draft[at];
+      label.innerHTML =
+        \`P\${d.packNo}P\${d.pickNo} &middot; pick \${d.pickIndex} &middot; took <strong>\${esc(d.name)}</strong>\`
+        + \` &middot; \${upto.length} card\${upto.length === 1 ? "" : "s"}\`;
+    }
+  }
+
+  function open(nextMode, pickIndex) {
+    mode = nextMode || "final";
+    if (typeof pickIndex === "number") {
+      const i = draft.findIndex((d) => d.pickIndex === pickIndex);
+      // A pick the draft does not contain would silently render the whole pool;
+      // clamping to the end is at least honest about being the end.
+      at = i === -1 ? last : i;
+    }
+    for (const b of document.querySelectorAll(".seg-b")) b.classList.toggle("is-on", b.dataset.mode === mode);
+    body.classList.add("deck-on");
+    drawer.setAttribute("aria-hidden", "false");
+    render();
+  }
+  function close() {
+    body.classList.remove("deck-on");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+
+  document.addEventListener("click", (e) => {
+    const opener = e.target.closest("[data-deck-open]");
+    if (opener) {
+      const p = opener.dataset.pick;
+      return open(opener.dataset.deckOpen, p === undefined ? undefined : Number(p));
+    }
+    if (e.target.closest("[data-deck-close]")) return close();
+    const seg = e.target.closest(".seg-b");
+    if (seg) return open(seg.dataset.mode);
+    const step = e.target.closest("[data-step]");
+    if (step) {
+      at = Math.min(last, Math.max(0, at + Number(step.dataset.step)));
+      mode = "step";
+      return open("step");
+    }
+  });
+
+  if (range) {
+    range.addEventListener("input", () => { at = Number(range.value); mode = "step"; render(); });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    const on = body.classList.contains("deck-on");
+    if (e.key === "Escape" && on) return close();
+    // A bare "d" from anywhere: the panel is meant to be reachable at any point
+    // in the page, and reaching for the mouse breaks reading.
+    if (!on && (e.key === "d" || e.key === "D") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const t = e.target;
+      if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      e.preventDefault();
+      return open("final");
+    }
+    if (on && mode === "step" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      at = Math.min(last, Math.max(0, at + (e.key === "ArrowRight" ? 1 : -1)));
+      render();
+    }
+  });
+})();
+</script>
+</body></html>
 `;
 
 writeFileSync(outFile, html);
