@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { type Bench, type Card, DECK, buildDeck } from "@mtg-tutor/core";
+import { type Bench, type Card, DECK, buildDeck, castingValue } from "@mtg-tutor/core";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { ringFor } from "../lib/cardFrame";
@@ -12,18 +12,12 @@ import { ManaCurve } from "./ManaCurve";
 import { Panel } from "./Panel";
 
 const byCurve = (a: { card: Card }, b: { card: Card }) =>
-  a.card.cmc - b.card.cmc || a.card.name.localeCompare(b.card.name);
+  castingValue(a.card) - castingValue(b.card) || a.card.name.localeCompare(b.card.name);
 
-function MoveButton({
-  card,
-  benched,
-  onClick,
-}: {
-  card: Card;
-  benched: boolean;
-  onClick: () => void;
-}) {
-  const label = benched ? `Play ${card.name}` : `Cut ${card.name}`;
+function MoveButton({ card, cut, onClick }: { card: Card; cut: boolean; onClick: () => void }) {
+  // The button names the pile the card lands in, which is the rule the draft
+  // screen's confirm bar already works to.
+  const label = cut ? `Play ${card.name}` : `Cut ${card.name}`;
   return (
     <button
       type="button"
@@ -35,7 +29,7 @@ function MoveButton({
       <svg
         viewBox="0 0 16 16"
         aria-hidden
-        className={`size-3.5 ${benched ? "rotate-180" : ""}`}
+        className={`size-3.5 ${cut ? "rotate-180" : ""}`}
         fill="none"
         stroke="currentColor"
         strokeWidth="1.6"
@@ -50,13 +44,51 @@ function MoveButton({
 }
 
 /**
- * The 40, built by the person who drafted it.
+ * Forty slots, drawn as forty cards.
+ *
+ * A Limited deck is exactly forty cards and the whole of building one is
+ * counting down to that, so the count is this screen's instrument rather than a
+ * number in a corner. Discrete marks rather than a progress bar, because the
+ * question is how many slots are LEFT -- and the split between spells and lands
+ * then comes for free in the same picture.
+ *
+ * The deck turns gold the moment it is a legal forty, in the light this app
+ * already uses for the card you are holding. It is the same statement -- this is
+ * the live thing -- and it means you can stop counting without reading a number.
+ */
+function DeckSlots({ spells, lands, size }: { spells: number; lands: number; size: number }) {
+  const full = size === DECK.size;
+  const fill = (i: number) => {
+    if (i < spells) return full ? "bg-primary" : "bg-base-content/70";
+    if (i < spells + lands) return full ? "bg-primary/45" : "bg-base-content/25";
+    return "border border-base-content/20";
+  };
+
+  return (
+    <div
+      role="img"
+      aria-label={`${size} of ${DECK.size} cards: ${spells} spells, ${lands} lands`}
+      className="grid w-[13rem] shrink-0 grid-cols-[repeat(20,minmax(0,1fr))] gap-[2px]"
+    >
+      {Array.from({ length: DECK.size }, (_, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={`card-aspect rounded-[1px] motion-safe:transition-colors ${fill(i)}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The forty, built by the person who drafted it.
  *
  * The cards are the same maindeck/sideboard split the draft screen has been
  * writing since pick one, edited through the same `bench` mutation -- so
  * finishing a draft does not start a second deck somewhere else. The land count
- * is the only thing this screen adds, because it is the only part of a 40 that
- * is not a pick.
+ * is the only thing this screen adds, because it is the only part of a forty
+ * that is not a pick.
  */
 export function DeckBuilder({
   sessionId,
@@ -103,104 +135,68 @@ export function DeckBuilder({
     playing.map((p) => p.card),
     basicLands,
   );
+  const lands = deck.nonbasicLands.length + deck.basicLands;
+  const over = deck.size - DECK.size;
 
   const colors = new Map<string, number>();
-  for (const c of deck.spells) for (const col of c.colors) colors.set(col, (colors.get(col) ?? 0) + 1);
+  for (const c of deck.spells) {
+    for (const col of c.colors) colors.set(col, (colors.get(col) ?? 0) + 1);
+  }
 
   const trailingFor = (list: { pickIndex: number }[], isCut: boolean) => (card: Card, i: number) => (
     <span className="flex items-center gap-2">
       <span className="tabular-nums text-base-content/45">{pct(card.gihWinRate)}</span>
-      <MoveButton card={card} benched={isCut} onClick={() => move(list[i].pickIndex, !isCut)} />
+      <MoveButton card={card} cut={isCut} onClick={() => move(list[i].pickIndex, !isCut)} />
     </span>
   );
 
   return (
-    <div className="grid items-start gap-4 md:grid-cols-2">
-      <Panel
-        title={`Playing (${deck.spells.length + deck.nonbasicLands.length})`}
-        aside={
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            {[...colors]
-              .sort((a, b) => b[1] - a[1])
-              .map(([color, n]) => (
-                <span
-                  key={color}
-                  className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
-                  title={COLOR_NAMES[color] ?? color}
-                >
+    <>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <Panel
+          title={`Playing (${deck.spells.length + deck.nonbasicLands.length})`}
+          aside={
+            // The one place in the chrome that carries Magic's colours, earned
+            // here for the reason it is earned during the draft: which colours
+            // the deck is in is the question this panel answers.
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              {[...colors]
+                .sort((a, b) => b[1] - a[1])
+                .map(([color, n]) => (
                   <span
-                    aria-hidden
-                    className="size-2.5 rounded-full ring-1 ring-black/40"
-                    style={{ background: ringFor(color) }}
-                  />
-                  {n}
-                </span>
-              ))}
-          </div>
-        }
-      >
-        <ManaCurve cards={deck.spells} />
-        {playing.length === 0 ? (
-          <p className="text-sm text-base-content/60">Every card is cut.</p>
-        ) : (
-          <CardPlacardList
-            cards={playing.map((p) => p.card)}
-            trailing={trailingFor(playing, false)}
-          />
-        )}
-      </Panel>
-
-      <div className="flex flex-col gap-4">
-        <Panel title="Lands" bodyClassName="gap-3">
-          <LandStepper
-            value={basicLands}
-            drafted={deck.nonbasicLands.length}
-            onChange={setBasicLands}
-          />
-        </Panel>
-
-        <Panel bodyClassName="gap-3">
-          <div className="flex items-baseline justify-between gap-4">
-            <span className="text-sm text-base-content/60">Deck</span>
-            <span
-              className={`font-display text-2xl font-semibold tabular-nums ${
-                deck.size === DECK.size ? "text-success" : "text-base-content/50"
-              }`}
-            >
-              {deck.size}
-              <span className="text-sm font-normal text-base-content/45">/{DECK.size}</span>
-            </span>
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary w-full"
-            disabled={deck.size !== DECK.size || locking}
-            onClick={async () => {
-              setLocking(true);
-              try {
-                await lockIn({ sessionId, basicLands });
-                onBuilt();
-              } finally {
-                setLocking(false);
-              }
-            }}
-          >
-            {locking ? "Locking in…" : "Lock in the 40"}
-          </button>
-          <p className="text-xs text-base-content/50">
-            {deck.size === DECK.size
-              ? "Then you get to see what the numbers would have built."
-              : deck.size > DECK.size
-                ? `Cut ${deck.size - DECK.size} more, or play fewer lands.`
-                : `${DECK.size - deck.size} short — play more cards, or more lands.`}
-          </p>
+                    key={color}
+                    className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
+                    title={COLOR_NAMES[color] ?? color}
+                  >
+                    <span
+                      aria-hidden
+                      className="size-2.5 rounded-full ring-1 ring-black/40"
+                      style={{ background: ringFor(color) }}
+                    />
+                    {n}
+                    <span className="sr-only">{COLOR_NAMES[color] ?? color}</span>
+                  </span>
+                ))}
+            </div>
+          }
+        >
+          <ManaCurve cards={deck.spells} />
+          {playing.length === 0 ? (
+            <p className="text-sm text-base-content/60">
+              Everything is cut. Move a card back to start a deck.
+            </p>
+          ) : (
+            <CardPlacardList
+              cards={playing.map((p) => p.card)}
+              trailing={trailingFor(playing, false)}
+            />
+          )}
         </Panel>
 
         <Panel title={`Cut (${cut.length})`}>
           {cut.length === 0 ? (
-            <p className="rounded-box border border-dashed border-base-content/25 px-3 py-5 text-center text-sm text-base-content/60">
-              Nothing cut yet. A 40 is roughly {DECK.spellCount} spells and{" "}
-              {DECK.size - DECK.spellCount} lands.
+            <p className="rounded-box border border-dashed border-base-content/25 px-3 py-6 text-center text-sm text-base-content/60">
+              Cut the cards you are not playing. Forty-five went into the pool and forty come out.
             </p>
           ) : (
             <CardPlacardList
@@ -211,12 +207,61 @@ export function DeckBuilder({
           )}
         </Panel>
       </div>
-    </div>
+
+      {/* Where the draft screen puts its confirm bar, because it is the same
+          kind of thing: the deck as it stands, and the one action on it. */}
+      <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
+        <div className="popup-surface flex flex-wrap items-center justify-center gap-x-5 gap-y-3 px-4 py-3">
+          <DeckSlots spells={deck.spells.length} lands={lands} size={deck.size} />
+
+          <span className="flex items-baseline gap-1.5">
+            <span
+              className={`font-display text-2xl font-semibold leading-none tabular-nums ${
+                over === 0 ? "text-primary" : ""
+              }`}
+            >
+              {deck.size}
+            </span>
+            <span className="text-sm tabular-nums text-base-content/45">/{DECK.size}</span>
+            {over !== 0 && (
+              <span className="text-xs text-base-content/60">
+                {over > 0 ? `${over} too many` : `${-over} short`}
+              </span>
+            )}
+          </span>
+
+          <LandStepper
+            value={basicLands}
+            drafted={deck.nonbasicLands.length}
+            onChange={setBasicLands}
+          />
+
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={over !== 0 || locking}
+            onClick={async () => {
+              setLocking(true);
+              try {
+                await lockIn({ sessionId, basicLands });
+                onBuilt();
+              } finally {
+                setLocking(false);
+              }
+            }}
+          >
+            {locking ? "Locking in…" : "Lock in the forty"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
 // Basics are not picks, so there is nothing in the pool to move -- you are
-// handed as many as you want. The stepper is the whole of that decision.
+// handed as many as you want. The stepper is the whole of that decision, and it
+// reads out total lands rather than basics because that is the number a deck is
+// described by.
 function LandStepper({
   value,
   drafted,
@@ -227,33 +272,31 @@ function LandStepper({
   onChange: (n: number) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-baseline gap-2">
-        <span className="font-display text-4xl font-semibold leading-none tabular-nums">
-          {value + drafted}
-        </span>
-        <span className="text-sm text-base-content/50">
-          lands{drafted > 0 && ` (${drafted} drafted + ${value} basic)`}
-        </span>
-      </div>
-      <div className="join">
+    <span className="flex items-center gap-2">
+      <span className="text-sm tabular-nums text-base-content/70">
+        {value + drafted} land{value + drafted === 1 ? "" : "s"}
+        {drafted > 0 && <span className="text-base-content/45"> ({drafted} drafted)</span>}
+      </span>
+      <span className="join">
         <button
           type="button"
-          className="btn btn-sm join-item"
-          onClick={() => onChange(Math.max(0, value - 1))}
+          className="btn btn-xs join-item"
+          disabled={value === 0}
+          onClick={() => onChange(value - 1)}
           aria-label="One fewer basic land"
         >
           −
         </button>
         <button
           type="button"
-          className="btn btn-sm join-item"
-          onClick={() => onChange(Math.min(DECK.size, value + 1))}
+          className="btn btn-xs join-item"
+          disabled={value >= DECK.size}
+          onClick={() => onChange(value + 1)}
           aria-label="One more basic land"
         >
           +
         </button>
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }
