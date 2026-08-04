@@ -241,7 +241,7 @@ export const pick = mutation({
 export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
     // Once per finished draft, for the pool the deck is built from and the few
     // cards the mistakes name -- not the whole set.
     const text = await cardTextFor(
@@ -282,8 +282,10 @@ export const results = query({
     return {
       summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
       // The deck builder reads type lines and colour identity to tell a land
-      // from a spell and a splash from a lane, so it wants whole cards.
-      deck: suggestDeck(hydrate(maindeck, text)),
+      // from a spell and a splash from a lane, so it wants whole cards. The
+      // archetype table is what lets it consider three colours at all: it is
+      // the only thing that says what the third one costs in this format.
+      deck: suggestDeck(hydrate(maindeck, text), { archetypes: cardsDoc.colorWinRates }),
       // So the screen can show what was set aside rather than silently drop it.
       sideboard: hydrate(sideboard, text),
       mistakes,
