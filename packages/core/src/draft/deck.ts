@@ -11,7 +11,7 @@ export interface DeckSuggestion {
   nonbasicLands: Card[]; // drafted lands that take land slots, not spell slots
   basicLands: number; // basics to add on top
   // Spells per `manaCurve` bucket, counted rather than carried. Reported, never
-  // selected on -- see `curveOf`.
+  // selected on -- see `curveCounts`.
   curve: number[];
 }
 
@@ -78,7 +78,8 @@ const measures = (archetypes: readonly ColorWinRate[], width: number) =>
 // card's copies to a yes/no, so neither the land count nor the field's real
 // curve survives into anything the engine can read. Selecting on a curve we
 // cannot measure would be inventing the number this was meant to replace.
-const curveOf = (spells: Card[]): number[] => manaCurve(spells).map((b) => b.cards.length);
+export const curveCounts = (spells: readonly Card[]): number[] =>
+  manaCurve(spells).map((b) => b.cards.length);
 
 // Pick the color set whose on-color playables are worth the most, then take the
 // best spells in those colors and fill the land slots.
@@ -113,7 +114,7 @@ export function suggestDeck(pool: Card[], options: DeckOptions = {}): DeckSugges
       spells,
       nonbasicLands,
       basicLands: deckSize - spells.length - nonbasicLands.length,
-      curve: curveOf(spells),
+      curve: curveCounts(spells),
     };
   };
 
