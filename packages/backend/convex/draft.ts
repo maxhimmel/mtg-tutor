@@ -133,7 +133,20 @@ export const bench = mutation({
 });
 
 export const pick = mutation({
-  args: { sessionId: v.id("draftSessions"), cardName: v.string() },
+  args: {
+    sessionId: v.id("draftSessions"),
+    cardName: v.string(),
+    /**
+     * Take the card, but not to play it. Folded into this mutation rather than
+     * left to a follow-up `bench` call for two reasons: that call stamps
+     * `atPick` with the pick count it finds, which after this one has landed is
+     * one past the card's own position, and it would re-read and re-write the
+     * whole session document to append one entry. Set aside here, `atPick`
+     * equals `pos` -- the strongest statement the shape can make, and the one
+     * the field was designed to hold.
+     */
+    bench: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
     const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
 
@@ -184,14 +197,20 @@ export const pick = mutation({
       contextFor: (c) => context.get(normalizeName(c.name)),
     });
     const complete = engine.isComplete();
+    const pickIndex = session.pickedNames.length;
+
+    const sideboard = args.bench
+      ? [...bench, { pos: pickIndex, atPick: pickIndex }].sort((a, b) => a.pos - b.pos)
+      : bench;
 
     // What this pick saw, written as it happens. Nothing recomputes it: the
     // coach and the review verdict read this instead of replaying the draft to
     // rebuild one pick out of the set's whole card pool.
-    await recordPick(ctx, args.sessionId, session.pickedNames.length, record, poolBefore);
+    await recordPick(ctx, args.sessionId, pickIndex, record, poolBefore);
 
     await ctx.db.patch(args.sessionId, {
       pickedNames: [...session.pickedNames, chosen.name],
+      ...(args.bench ? { sideboard } : {}),
       ...(complete
         ? {
             status: "complete" as const,
@@ -208,7 +227,11 @@ export const pick = mutation({
     return {
       score: record.score,
       signal: record.signal,
-      pickIndex: session.pickedNames.length,
+      pickIndex,
+      // Returned every time, not only when it changed, so a client never has to
+      // reconstruct what it just asked for. Forty-five entries of two numbers is
+      // nothing beside the pack and pool this response already carries.
+      sideboard,
       ...boardView(engine),
     };
   },
