@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { EngineCard, PickScore } from "@mtg-tutor/core";
+import type { Bench, EngineCard, PickScore } from "@mtg-tutor/core";
 import { type MutationCtx, type QueryCtx, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { reviewVerdict } from "./validators.js";
@@ -58,10 +58,16 @@ export const stateCost = query({
 // the one probe that returns what it wrapped makes the type self-referential --
 // and TypeScript answers that by widening the whole `api` object to `any`,
 // which surfaces as a pile of implicit-any errors in unrelated modules.
+//
+// The cost of spelling it out is that nothing makes this follow the real return
+// type: a field added there and not here still typechecks, because the wider
+// object is assignable to the narrower one, and the probe would then under-count
+// the response it exists to measure. Keep the two in step by hand.
 interface PickOutcome {
   score: PickScore;
   signal?: string;
   pickIndex: number;
+  sideboard: Bench[];
   packNo: number;
   pickNo: number;
   complete: boolean;

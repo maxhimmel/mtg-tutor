@@ -2,6 +2,18 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConvex, useConvexAuth, useMutation } from "convex/react";
+import {
+  DndContext,
+  DragOverlay,
+  MeasuringStrategy,
+  MouseSensor,
+  pointerWithin,
+  useDraggable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import type { FunctionReturnType } from "convex/server";
 import { useAccessToken } from "@workos-inc/authkit-nextjs/components";
 import { api } from "@mtg-tutor/backend";
@@ -27,6 +39,7 @@ import { PrincipleBadges } from "../../components/PrincipleBadge";
 import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
+import { useSuspendPreview } from "../../components/CardPreview";
 import { useSettings } from "../../lib/useSettings";
 import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
@@ -61,6 +74,84 @@ const motionOK = () =>
   typeof window === "undefined" ||
   !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// How far the mouse has to travel before a press becomes a drag. Under it, the
+// press is still a click and the card is only being selected.
+const DRAG_THRESHOLD = 8;
+
+// Re-measured every frame rather than once at the start of a drag, because the
+// sideboard section appears the moment a card is lifted -- which moves the
+// maindeck section a drag measured before it existed would still be aiming at.
+// Hoisted because DndContext keeps this by reference.
+const MEASURING = { droppable: { strategy: MeasuringStrategy.Always } } as const;
+
+// One card in the pack, and the box a drag measures. The ref goes here rather
+// than on the tile because this element's rectangle is the card's true size --
+// hover-3d tilts and scales the tile's first child, not the tile -- and because
+// animate-deal fills `both`, so its final transform and opacity outlive the
+// animation and beat anything set on this element afterwards. Everything that
+// changes while dragging is therefore set inside the tile.
+function PackTile({
+  card,
+  index,
+  disabled,
+  selected,
+  onClick,
+  onQuickPick,
+}: {
+  card: Card;
+  index: number;
+  disabled: boolean;
+  selected: boolean;
+  onClick: (card: Card) => void;
+  onQuickPick: (card: Card) => void;
+}) {
+  const { setNodeRef, listeners, isDragging } = useDraggable({
+    // By position, not by name: a pack can hold two of the same card, and two
+    // draggables cannot share an id.
+    id: `pack-${index}`,
+    data: { card },
+    disabled,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="relative flex motion-safe:animate-deal"
+      style={{ animationDelay: `${index * PACK_STAGGER}ms` }}
+    >
+      <CardTile
+        card={card}
+        onPick={onClick}
+        onQuickPick={onQuickPick}
+        disabled={disabled}
+        selected={selected}
+        dragListeners={listeners}
+        dragging={isDragging}
+        // What one click does, which is the same whether or not the card is
+        // already selected. Being selected is state, and aria-pressed is what
+        // carries it.
+        label={`Select ${card.name}`}
+      />
+      {/* Sits in the gap the card leaves as it lifts, so the label is revealed
+          by the pull rather than pasted over the art, and its top edge meets the
+          card's ring -- same material, same turn, so the light reads as one
+          thing.
+
+          bottom-3 is the lift (-translate-y-3), which puts this box's bottom
+          edge on the card's; translate-y-1/2 then drops it by half its own
+          height, centring the badge on that edge whatever size the card is drawn
+          at. */}
+      {selected && !isDragging && (
+        <span className="pointer-events-none absolute inset-x-0 bottom-3 flex translate-y-1/2 justify-center">
+          <span className="badge-lit px-2.5 py-0.5 text-[0.6875rem] font-semibold tracking-[0.14em] uppercase">
+            Selected
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
 interface LastPick {
@@ -79,6 +170,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const pickCard = useMutation(api.draft.pick);
   const benchCard = useMutation(api.draft.bench);
   const { getAccessToken } = useAccessToken();
+  const suspendPreview = useSuspendPreview();
+
+  // A mouse sensor, not a pointer one. Pointer events also fire for touch, where
+  // a vertical flick past the threshold arms a drag and then cancels the scroll
+  // it was actually meant to be -- and the pack grid is the whole screen on a
+  // phone. Dragging is what a mouse adds; the confirm bar's two buttons are the
+  // path for everyone, and they reach both piles.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: DRAG_THRESHOLD } }),
+  );
 
   // Loaded once, then advanced from what `pick` returns, rather than held open
   // as a live subscription. Replaying a draft costs a ~240KB read of the set's
@@ -111,6 +212,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // The card pulled out of the row and not yet taken. By name, because that is
   // what identifies a card everywhere else on the board.
   const [selected, setSelected] = useState<string | null>(null);
+  // The card in hand, drawn under the cursor for as long as it is being carried.
+  const [carrying, setCarrying] = useState<Card | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -297,8 +400,22 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     setSelected(card.name);
   }
 
-  async function onPick(card: Card) {
+  // The shortcut takes the card to the deck, which is where the overwhelming
+  // majority of picks go. Choosing the other pile is a deliberate act: a button
+  // that names it, or carrying the card there.
+  function onQuickPick(card: Card) {
+    void onPick(card);
+  }
+
+  // `bench` takes the card without adding it to the deck. Said at the moment of
+  // picking rather than corrected afterwards, so the tallies the coach reads
+  // never briefly count a card the player already knew they would not play.
+  //
+  // `carried` means the player took the card out of the pack by hand. It changes
+  // nothing about the pick and everything about what is left behind: see below.
+  async function onPick(card: Card, opts?: { bench?: boolean; carried?: boolean }) {
     if (picking || !text) return;
+    const bench = opts?.bench ?? false;
     setPicking(true);
     setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
@@ -308,14 +425,22 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // rather than swapped out. It leaves on its own clock -- waiting for the
     // server first would make the wait feel like the animation.
     const passing = pack;
-    setOutgoing({ cards: passing, picked: card.name, packNo: state?.packNo ?? 1 });
+    // A carried card has already left the pack -- the player pulled it out and
+    // dropped it in a pile, and their eye is over there. Naming no card as kept
+    // means the whole pack sweeps and nothing lifts out of an empty slot the
+    // player is no longer looking at.
+    setOutgoing({
+      cards: passing,
+      picked: opts?.carried ? "" : card.name,
+      packNo: state?.packNo ?? 1,
+    });
     const sweep = window.setTimeout(
       () => setOutgoing(null),
       motionOK() ? passDuration(passing.length) : 0,
     );
 
     try {
-      const result = await pickCard({ sessionId: id, cardName: card.name });
+      const result = await pickCard({ sessionId: id, cardName: card.name, bench });
       const score = result.score as PickScore;
       // `pick` returns the whole next board, which is the reason this component
       // needs no subscription. Everything not listed here -- the set's name,
@@ -329,6 +454,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           totalPicks: result.totalPicks,
           pack: result.pack,
           pool: result.pool,
+          sideboard: result.sideboard,
         },
       );
       setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
@@ -342,6 +468,39 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     } finally {
       setPicking(false);
     }
+  }
+
+  // The other way to confirm a pick: carry the card to the pile it belongs in.
+  // The two buttons say where a card is going; this lets the player show it, and
+  // it is the same decision either way.
+  function onDragStart(e: DragStartEvent) {
+    const card = (e.active.data.current as { card: Card }).card;
+    setCarrying(card);
+    // Picking a card up is choosing it, so the selection follows the hand. Any
+    // other card stops being lit -- two cards under consideration at once, one
+    // of them named by a confirm bar you are dragging away from, was the state
+    // this avoids. It also means letting go over nothing leaves the card
+    // selected, which is the honest reading of the gesture: you meant this card
+    // and have not yet said which pile.
+    setSelected(card.name);
+    // For the whole gesture, not just its start: the cursor crosses every card
+    // in the pack and every row in the deck on its way across the board.
+    suspendPreview(true);
+  }
+
+  function endDrag() {
+    setCarrying(null);
+    suspendPreview(false);
+  }
+
+  function onDragEnd(e: DragEndEvent) {
+    endDrag();
+    const card = (e.active.data.current as { card: Card } | undefined)?.card;
+    const zone = e.over?.data.current as { bench: boolean } | undefined;
+    // Released anywhere but on a pile. Nothing was decided, so nothing happens
+    // -- the card is still in the pack and still unpicked.
+    if (!card || !zone) return;
+    void onPick(card, { bench: zone.bench, carried: true });
   }
 
   // Moved locally first and reconciled with what the server returns, because
@@ -401,199 +560,227 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       {state.complete ? (
         <Results sessionId={id} />
       ) : (
-        <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          {/* The set's mark, stamped on the board the way it is stamped on every
-              card in the pack: oversized and sitting behind the pack rather than
-              beside it. Quiet enough at 5% to be chrome, until the sheen crosses
-              it while a pack loads and it becomes the one thing saying the board
-              is working.
+        <DndContext
+          id="draft-board"
+          sensors={sensors}
+          // Only the cursor being inside a pile counts. The default asks whether
+          // the dragged card's box overlaps one, which a 150px card does to both
+          // sections at once -- and closest-centre always names a winner, so a
+          // card released over the pack grid would be picked.
+          collisionDetection={pointerWithin}
+          measuring={MEASURING}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragCancel={endDrag}
+        >
+          <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+            {/* The set's mark, stamped on the board the way it is stamped on every
+                card in the pack: oversized and sitting behind the pack rather than
+                beside it. Quiet enough at 5% to be chrome, until the sheen crosses
+                it while a pack loads and it becomes the one thing saying the board
+                is working.
 
-              It is placed against the window rather than against the board, so
-              it holds one position for the whole draft instead of moving with a
-              pack that is emptying. Centred on the cards: half the window, less
-              half of what the side panel and its gap take (384px), which is
-              where the middle of the pack column falls at any width the page is
-              capped and guttered to. Below lg the panel stacks under the pack
-              and the middle is simply the middle. */}
-          <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)]">
-              {/* Two and a half rows of cards tall, measured rather than
-                  guessed: the pack's own grid, dealt one item two and a half
-                  cards tall (488x680 is a card, so 488x1700 is two and a half of
-                  them) at the width the pack column has -- the page's 1500px cap
-                  and gutters, less the side panel and the gap beside it. So the
-                  mark is sized in cards at any viewport width, and stays that way
-                  if the grid's columns ever change. */}
-              <div className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)]`}>
-                <span style={{ aspectRatio: "488 / 1700" }} />
-              </div>
-
-              <SetIcon
-                uri={state.setIcon}
-                className={`absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
-                // One pass of the light has landed. If the pack is here the sheen
-                // stops; if it is not, this simply runs again rather than starting
-                // a pass it cannot finish.
-                onAnimationIteration={() => {
-                  if (packReady) setGlyphPhase("done");
-                }}
-              />
-            </div>
-          </div>
-
-          <div>
-            {outgoing ? (
-              <div
-                key="outgoing"
-                className={PACK_GRID}
-                aria-hidden
-                style={{ "--pass-dir": passDirection(outgoing.packNo) } as CSSProperties}
-              >
-                {outgoing.cards.map((card, i) => {
-                  const kept = card.name === outgoing.picked;
-                  return (
-                    <div
-                      key={card.name}
-                      className={`flex ${kept ? "motion-safe:animate-keep" : "motion-safe:animate-pass"}`}
-                      // The card you took holds its place for as long as the rest
-                      // of the pack takes to go, so it is the last thing on screen.
-                      style={
-                        kept
-                          ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
-                          : { animationDelay: `${i * PACK_STAGGER}ms` }
-                      }
-                    >
-                      <CardFace card={card} />
-                    </div>
-                  );
-                })}
-              </div>
-            ) : packReady ? (
-              <div
-                key={`pack-${state.packNo}-${state.pickNo}`}
-                className={PACK_GRID}
-                style={{ "--pass-dir": passDirection(state.packNo) } as CSSProperties}
-              >
-                {pack.map((card, i) => (
-                  <div
-                    key={card.name}
-                    className="relative flex motion-safe:animate-deal"
-                    style={{ animationDelay: `${i * PACK_STAGGER}ms` }}
-                  >
-                    <CardTile
-                      card={card}
-                      onPick={onTileClick}
-                      onQuickPick={onPick}
-                      disabled={picking}
-                      selected={selected === card.name}
-                      // What one click does, which is the same whether or not
-                      // the card is already selected. Being selected is state,
-                      // and aria-pressed is what carries it.
-                      label={`Select ${card.name}`}
-                    />
-                    {/* Sits in the gap the card leaves as it lifts, so the label
-                        is revealed by the pull rather than pasted over the art,
-                        and its top edge meets the card's ring -- same material,
-                        same turn, so the light reads as one thing. */}
-                    {selected === card.name && (
-                      // bottom-3 is the lift (-translate-y-3), which puts this
-                      // box's bottom edge on the card's; translate-y-1/2 then
-                      // drops it by half its own height, centring the badge on
-                      // that edge whatever size the card is drawn at.
-                      <span className="pointer-events-none absolute inset-x-0 bottom-3 flex translate-y-1/2 justify-center">
-                        <span className="badge-lit px-2.5 py-0.5 text-[0.6875rem] font-semibold tracking-[0.14em] uppercase">
-                          Selected
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              // Waiting for the pack's art. Nothing is drawn in the cards' place
-              // -- the set symbol behind the board is what says the board is
-              // working. These hold the pack's shape and nothing else, so the
-              // cards land where the page already had room for them.
-              <div className={PACK_GRID}>
-                {pack.map((card) => (
-                  <span key={card.name} className="card-aspect block w-full" />
-                ))}
-              </div>
-            )}
-
-            {selectedCard && (
-              <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
-                <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
-                  <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={picking}
-                    onClick={() => void onPick(selectedCard)}
-                  >
-                    Confirm pick
-                  </button>
-                  <span className="hidden text-xs text-base-content/50 sm:inline">
-                    Double-click a card to skip this step · <kbd className="kbd kbd-xs">esc</kbd> to
-                    clear
-                  </span>
+                It is placed against the window rather than against the board, so
+                it holds one position for the whole draft instead of moving with a
+                pack that is emptying. Centred on the cards: half the window, less
+                half of what the side panel and its gap take (384px), which is
+                where the middle of the pack column falls at any width the page is
+                capped and guttered to. Below lg the panel stacks under the pack
+                and the middle is simply the middle. */}
+            <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)]">
+                {/* Two and a half rows of cards tall, measured rather than
+                    guessed: the pack's own grid, dealt one item two and a half
+                    cards tall (488x680 is a card, so 488x1700 is two and a half of
+                    them) at the width the pack column has -- the page's 1500px cap
+                    and gutters, less the side panel and the gap beside it. So the
+                    mark is sized in cards at any viewport width, and stays that way
+                    if the grid's columns ever change. */}
+                <div className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)]`}>
+                  <span style={{ aspectRatio: "488 / 1700" }} />
                 </div>
+
+                <SetIcon
+                  uri={state.setIcon}
+                  className={`absolute top-0 left-1/2 aspect-square h-full -translate-x-1/2 text-base-content/[0.05] ${sheening ? "pack-glyph" : ""}`}
+                  // One pass of the light has landed. If the pack is here the sheen
+                  // stops; if it is not, this simply runs again rather than starting
+                  // a pass it cannot finish.
+                  onAnimationIteration={() => {
+                    if (packReady) setGlyphPhase("done");
+                  }}
+                />
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* The right-hand wall for card previews: the coach is talking here,
-              and a card image landing on top of it covers the thing you are
-              drafting by. */}
-          <aside data-preview-edge className="flex flex-col gap-4">
-            <Panel title="Last pick" bodyClassName="gap-3">
-              {lastView ? (
-                <>
-                  {/* Keyed by pick so each new verdict re-mounts and replays the
-                      entrance -- the one animation in the app, on the one moment
-                      the player is waiting for. */}
-                  <div key={lastView.pickIndex} className="motion-safe:animate-verdict">
-                    <Verdict score={lastView.score} />
-                  </div>
-
-                  {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
-
-                  <div className="border-t border-base-300 pt-3">
-                    <div className="eyebrow mb-1.5">
-                      {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
-                    </div>
-                    <div className="min-h-[3.2rem] whitespace-pre-wrap leading-relaxed">
-                      {coach ? (
-                        <CardText text={advice.prose} cards={boardCards} />
-                      ) : (
-                        <span className="text-base-content/60">thinking…</span>
-                      )}
-                    </div>
-                    <PrincipleBadges principles={advice.principles} />
-                    {skipped && (
-                      <button
-                        className="btn btn-outline btn-xs mt-3"
-                        onClick={() =>
-                          void streamCoach(lastView.pickIndex, lastView.score, lastView.pack.length, true)
+            <div>
+              {outgoing ? (
+                <div
+                  key="outgoing"
+                  className={PACK_GRID}
+                  aria-hidden
+                  style={{ "--pass-dir": passDirection(outgoing.packNo) } as CSSProperties}
+                >
+                  {outgoing.cards.map((card, i) => {
+                    const kept = card.name === outgoing.picked;
+                    return (
+                      <div
+                        key={card.name}
+                        className={`flex ${kept ? "motion-safe:animate-keep" : "motion-safe:animate-pass"}`}
+                        // The card you took holds its place for as long as the rest
+                        // of the pack takes to go, so it is the last thing on screen.
+                        style={
+                          kept
+                            ? { animationDuration: `${passDuration(outgoing.cards.length)}ms` }
+                            : { animationDelay: `${i * PACK_STAGGER}ms` }
                         }
                       >
-                        Coach this pick anyway
-                      </button>
-                    )}
-                  </div>
-                </>
+                        <CardFace card={card} />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : packReady ? (
+                <div
+                  key={`pack-${state.packNo}-${state.pickNo}`}
+                  className={PACK_GRID}
+                  style={{ "--pass-dir": passDirection(state.packNo) } as CSSProperties}
+                >
+                  {pack.map((card, i) => (
+                    <PackTile
+                      key={card.name}
+                      card={card}
+                      index={i}
+                      disabled={picking}
+                      selected={selected === card.name}
+                      onClick={onTileClick}
+                      onQuickPick={onQuickPick}
+                    />
+                  ))}
+                </div>
               ) : (
-                <p className="text-base-content/60">Pick a card to see how it scored.</p>
+                // Waiting for the pack's art. Nothing is drawn in the cards' place
+                // -- the set symbol behind the board is what says the board is
+                // working. These hold the pack's shape and nothing else, so the
+                // cards land where the page already had room for them.
+                <div className={PACK_GRID}>
+                  {pack.map((card) => (
+                    <span key={card.name} className="card-aspect block w-full" />
+                  ))}
+                </div>
               )}
-            </Panel>
 
-            <PicksColumn
-              pool={pool}
-              sideboard={state.sideboard}
-              onBench={(pickIndex, benched) => void onBench(pickIndex, benched)}
-            />
-          </aside>
-        </div>
+              {/* Not while a card is in the air. The bar and the two lit piles
+                  ask the same question, and during a drag the piles are the ones
+                  being answered -- a second copy of the choice, at the bottom of
+                  the screen, is one you are dragging away from. It is back the
+                  moment the card is let go. */}
+              {selectedCard && !carrying && (
+                <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
+                  <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
+                    <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
+                    {/* Both destinations are named now that there are two of them.
+                        "Maindeck" and "Sideboard" are the words on the sections
+                        these fill, and a button should say the name of the pile
+                        the card lands in. */}
+                    <span className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={picking}
+                        onClick={() => void onPick(selectedCard)}
+                      >
+                        Pick to maindeck
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        disabled={picking}
+                        onClick={() => void onPick(selectedCard, { bench: true })}
+                      >
+                        Pick to sideboard
+                      </button>
+                    </span>
+                    <span className="hidden text-xs text-base-content/50 sm:inline">
+                      Drag a card to choose a pile · double-click to maindeck ·{" "}
+                      <kbd className="kbd kbd-xs">esc</kbd> to clear
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* The right-hand wall for card previews: the coach is talking here,
+                and a card image landing on top of it covers the thing you are
+                drafting by. */}
+            <aside data-preview-edge className="flex flex-col gap-4">
+              <Panel title="Last pick" bodyClassName="gap-3">
+                {lastView ? (
+                  <>
+                    {/* Keyed by pick so each new verdict re-mounts and replays the
+                        entrance -- the one animation in the app, on the one moment
+                        the player is waiting for. */}
+                    <div key={lastView.pickIndex} className="motion-safe:animate-verdict">
+                      <Verdict score={lastView.score} />
+                    </div>
+
+                    {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
+
+                    <div className="border-t border-base-300 pt-3">
+                      <div className="eyebrow mb-1.5">
+                        {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
+                      </div>
+                      <div className="min-h-[3.2rem] whitespace-pre-wrap leading-relaxed">
+                        {coach ? (
+                          <CardText text={advice.prose} cards={boardCards} />
+                        ) : (
+                          <span className="text-base-content/60">thinking…</span>
+                        )}
+                      </div>
+                      <PrincipleBadges principles={advice.principles} />
+                      {skipped && (
+                        <button
+                          className="btn btn-outline btn-xs mt-3"
+                          onClick={() =>
+                            void streamCoach(lastView.pickIndex, lastView.score, lastView.pack.length, true)
+                          }
+                        >
+                          Coach this pick anyway
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-base-content/60">Pick a card to see how it scored.</p>
+                )}
+              </Panel>
+
+              <PicksColumn
+                pool={pool}
+                sideboard={state.sideboard}
+                onBench={(pickIndex, benched) => void onBench(pickIndex, benched)}
+                offering={carrying !== null}
+              />
+            </aside>
+          </div>
+
+          {/* Outside the grid, not inside it: `isolate` above makes a stacking
+              context, and anything drawn in there -- however high its z-index --
+              still composites below the card preview's fixed layer.
+
+              No drop animation. The card does not travel back to the pack; the
+              pack leaves, and that is the motion the eye should be following. */}
+          <DragOverlay dropAnimation={null} style={{ pointerEvents: "none" }}>
+            {carrying && (
+              // Lit like a card pulled out of the row, because that is what it
+              // is -- the same gold, one gesture further on.
+              <CardFace
+                card={carrying}
+                className="card-lit motion-safe:rotate-[3deg] motion-safe:scale-105"
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
       )}
     </PageShell>
   );
