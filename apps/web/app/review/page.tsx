@@ -129,27 +129,46 @@ function DraftList() {
                     {pct(draft.accuracy)}
                   </td>
 
-                  <td className="text-right whitespace-nowrap">
-                    <Link href={`/review/${draft.id}`} className="btn btn-sm btn-primary">
-                      Review
-                    </Link>
-                    <Link
-                      href={`/review/${draft.id}/breakdown`}
-                      className="btn btn-sm btn-ghost ml-1.5"
-                    >
-                      Breakdown
-                    </Link>
-                    {/* The other two are about the picks. This is about what
-                        the picks became, and until now nothing led back to it
-                        once the results screen had been left. A draft can also
-                        be finished and never built, and then the deck is still
-                        to be made rather than to be read. */}
-                    <Link
-                      href={`/review/${draft.id}/deck`}
-                      className="btn btn-sm btn-ghost ml-1.5"
-                    >
-                      {draft.built ? "Deck" : "Build the deck"}
-                    </Link>
+                  {/* Every slot is a fixed track. The deck action is the only
+                      label on this table that changes between rows, and left to
+                      size itself it moved the two buttons beside it as well --
+                      so a column of rows disagreed about where its own actions
+                      were. Widths hold the longest label each slot can carry. */}
+                  <td className="whitespace-nowrap">
+                    <span className="flex justify-end gap-1.5">
+                      <Link
+                        href={`/review/${draft.id}`}
+                        className="btn btn-sm btn-primary w-[5.5rem]"
+                      >
+                        Review
+                      </Link>
+                      <Link
+                        href={`/review/${draft.id}/breakdown`}
+                        className="btn btn-sm btn-ghost w-[6.5rem]"
+                      >
+                        Breakdown
+                      </Link>
+                      {/* The other two are about the picks. This is about what
+                          the picks became, and until now nothing led back to it
+                          once the results screen had been left.
+
+                          A draft can also be finished and never built, and then
+                          the deck is still to be made rather than to be read --
+                          which is a different KIND of thing to click, so it does
+                          not look like its neighbours. Dashed because that is
+                          already what a dashed outline means on the screen this
+                          leads to: a side with nothing on it yet. */}
+                      <Link
+                        href={`/review/${draft.id}/deck`}
+                        className={`btn btn-sm w-[8rem] ${
+                          draft.built
+                            ? "btn-ghost"
+                            : "btn-outline border-dashed border-base-content/25 font-normal text-base-content/70"
+                        }`}
+                      >
+                        {draft.built ? "Deck" : "Build the deck"}
+                      </Link>
+                    </span>
                   </td>
                 </tr>
               );
