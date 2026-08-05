@@ -7,12 +7,15 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isCorrectGuess, isDecisionPick } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
+import { PageHeading } from "../../components/PageHeading";
+import { PickTrack, type Tick } from "../../components/PickTrack";
 import { CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
 import { SetIcon } from "../../components/SetIcon";
 import { pct } from "../../lib/format";
 import { PickReveal } from "../PickReveal";
 import { ReviewFrame } from "../ReviewFrame";
+import { ReviewViews } from "../ReviewViews";
 import type { ReviewPick } from "../types";
 import { useVerdicts } from "../useVerdicts";
 
@@ -102,42 +105,75 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
       ? isCorrectGuess(guess, current.bestName, verdict?.contextBestName ?? current.bestName)
       : null;
 
+  // The draft as a run of decisions, with how each one went. Position alone
+  // would be the stepper at the foot of the page said twice; what this adds is
+  // the shape of the session -- where the misses cluster, how much is left --
+  // and somewhere to click, which the ±1 stepper never gave anyone.
+  const track: Tick[] = decisions.map((pick, i) => {
+    const guessed = guesses.get(pick.pickIndex);
+    const answer = get(pick.pickIndex);
+    const graded =
+      guessed != null && answer !== undefined
+        ? isCorrectGuess(guessed, pick.bestName, answer?.contextBestName ?? pick.bestName)
+        : undefined;
+
+    return {
+      state:
+        i === step && !finished
+          ? "current"
+          : graded === true
+            ? "hit"
+            : graded === false
+              ? "miss"
+              : i < step
+                ? "past"
+                : "ahead",
+      label:
+        `Go to pack ${pick.packNo}, pick ${pick.pickNo}` +
+        (graded === undefined ? "" : graded ? " — you read it right" : " — you missed it"),
+    };
+  });
+
   return (
-    <PageShell
-      headerAside={
-        <div className="flex flex-wrap items-center gap-3 text-sm text-base-content/60">
-          <span className="flex items-center gap-1.5 text-base-content/80" title={set?.name}>
-            <SetIcon uri={set?.iconUri} name={set?.name} className="size-4" />
-            {draft.setCode.toUpperCase()}
-          </span>
-          <span aria-hidden className="h-3.5 w-px bg-base-300" />
-          <span className="tabular-nums">
-            {finished ? (
-              <strong className="font-semibold text-base-content">Review complete</strong>
-            ) : (
-              <>
-                Pick <strong className="font-semibold text-base-content">{step + 1}</strong> of{" "}
-                {decisions.length}
-              </>
+    <PageShell>
+      <PageHeading
+        icon={<SetIcon uri={set?.iconUri} name={set?.name} className="size-6 text-base-content/50" />}
+        title={
+          <>
+            {set?.name ?? draft.setCode.toUpperCase()}
+            {draft.colorPair && (
+              <span className="ml-2 text-base-content/45">{draft.colorPair}</span>
             )}
-          </span>
-          <span aria-hidden className="h-3.5 w-px bg-base-300" />
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              className="toggle toggle-primary toggle-sm"
-              checked={quiz}
-              onChange={(e) => setQuiz(e.target.checked)}
-              aria-label="Quiz mode — guess before each reveal"
-            />
-            Quiz
-          </label>
-          <Link href={`/review/${sessionId}/breakdown`} className="link link-hover">
-            Full breakdown →
-          </Link>
-        </div>
-      }
-    >
+          </>
+        }
+        controls={
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Says what it does rather than naming a mode: with this on, the
+                pack comes up before the answer does. */}
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-base-content/70">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary toggle-sm"
+                checked={quiz}
+                onChange={(e) => setQuiz(e.target.checked)}
+              />
+              Guess first
+            </label>
+            <ReviewViews sessionId={sessionId} current="walkthrough" />
+          </div>
+        }
+      >
+        <PickTrack
+          groups={[track]}
+          label={
+            finished
+              ? `Review complete: ${decisions.length} decision picks.`
+              : `Pick ${step + 1} of ${decisions.length}. Select one to go to it.`
+          }
+          onSelect={setStep}
+        />
+      </PageHeading>
+
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-4">
           {skipped.length > 0 && (
