@@ -1,11 +1,22 @@
 "use client";
 
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Card } from "@mtg-tutor/core";
-import { CONFIDENCE, type Confidence, REASON_LIMIT, REASON_STARTERS } from "@mtg-tutor/core";
+import type { Card, Challenge } from "@mtg-tutor/core";
+import {
+  CONFIDENCE,
+  type Confidence,
+  REASON_LIMIT,
+  REASON_STARTERS,
+  challengeFor,
+  isDecisionPick,
+  resolveChallenge,
+} from "@mtg-tutor/core";
 import { CardFace } from "../../components/CardTile";
+import { useSettings } from "../../lib/useSettings";
+import type { Ceremony, CeremonyBoard, Defense, Proposal } from "./ceremony";
 
-// The two screens between choosing a card and being told how it went.
+// The two screens between choosing a card and being told how it went, and the
+// ceremony that drives them.
 //
 // Everything here is deliberately statistics-free. A drafter at a table has the
 // cards and their own pool and nothing else, so that is what these show -- the
@@ -13,6 +24,147 @@ import { CardFace } from "../../components/CardTile";
 // nothing 17Lands knows. Turning the numbers back on is what the reveal is FOR,
 // and showing them here would turn the challenge into a reading comprehension
 // exercise: the higher win rate would simply be the answer.
+
+// Where a pick is between being chosen and being made. Two screens, in the order
+// the argument has to happen in: you say what you think, and only then are you
+// argued with. Turning those round would be a quiz with the answer on the card.
+type Pending =
+  | { stage: "reason"; proposal: Proposal }
+  | {
+      stage: "challenge";
+      proposal: Proposal;
+      reason: string;
+      confidence: Confidence;
+      challenge: Challenge;
+    };
+
+/**
+ * State a reason and a confidence, get one card put up against yours, stand or
+ * switch, and only then see the grade.
+ *
+ * The gate is `isDecisionPick`, the same threshold that decides whether the
+ * coach is worth spending tokens on, and for the same reason rather than a
+ * matching one: a pack down to its last few cards is picking for you, and being
+ * asked to defend a forced pick is a chore that teaches nothing. It lives here
+ * rather than on the board because it is a claim about arguing, not about
+ * picking -- which is what makes the bottom of a pack play identically under
+ * both ceremonies: neither of them has anything to say there.
+ */
+export function useChallenge({
+  pack,
+  scoring,
+  busy,
+  error,
+  clearError,
+  commit,
+}: CeremonyBoard): Ceremony {
+  const { settings } = useSettings();
+  const [pending, setPending] = useState<Pending | null>(null);
+
+  // The stage comes down only when the pick actually landed. A commit that fails
+  // leaves it standing, so the sentence the player typed survives a network
+  // blink -- retyping it is the worst thing this flow could ask for, and the
+  // message goes onto the stage itself, which is also where the way out of it
+  // is.
+  const spend = async (proposal: Proposal, defense?: Defense) => {
+    if (await commit(proposal, defense)) setPending(null);
+  };
+
+  // Back to the pack with nothing spent. Reachable from the first screen at any
+  // time and from the challenge only after a pick has failed to go through --
+  // being argued with is the point, so it is not a thing you can simply decline.
+  const abandon = () => {
+    setPending(null);
+    clearError();
+  };
+
+  // The case is made; now it gets argued with. The challenger is the best
+  // remaining card in the pack for this deck, which when the player has already
+  // taken that card is the runner-up -- see challengeFor for why that rule is
+  // what keeps the screen from being its own answer.
+  const argue = (proposal: Proposal, reason: string, confidence: Confidence) => {
+    const challenge = scoring ? challengeFor(pack, proposal.card, scoring) : undefined;
+
+    // Nothing to argue with -- a pack of one, or a context we could not read.
+    // The defense still stands and still reaches the coach; only the second
+    // screen is skipped.
+    if (!challenge) {
+      void spend(proposal, { reason, confidence });
+      return;
+    }
+    setPending({ stage: "challenge", proposal, reason, confidence, challenge });
+  };
+
+  // Standing and switching are the same act with a different answer, so they are
+  // one function: the card taken is whichever one they named, and everything
+  // else about the pick is unchanged. `switched` is not sent -- `draft.pick`
+  // derives it from the card proposed against the card taken, so the stored row
+  // cannot claim a change of mind that did not happen.
+  const resolve = (open: Extract<Pending, { stage: "challenge" }>, take: Card) => {
+    const { proposal, reason, confidence, challenge } = open;
+    const stood = take.name === proposal.card.name;
+    const outcome = resolveChallenge(challenge, stood);
+    void spend(
+      {
+        ...proposal,
+        card: take,
+        // "I am taking this but will not play it" was said about the OTHER card.
+        // A switch cannot inherit it, so the new card goes to the deck and the
+        // picks column is there if they want it set aside after all.
+        bench: stood ? proposal.bench : false,
+        // Nor can it inherit having been lifted out of the pack by hand. The
+        // card they carried is going back with the pack; naming no card as kept
+        // would sweep the whole thing while the card they actually took was
+        // never picked up at all.
+        carried: stood ? proposal.carried : false,
+      },
+      {
+        reason,
+        confidence,
+        challengedName: challenge.challenger.name,
+        proposedName: proposal.card.name,
+        outcome,
+        // The better of the pair by the browser's own ranking, which is what the
+        // whole pack's context-best must be: the challenger was the best card
+        // that was not the proposed one.
+        expectedBestName: outcome.edge > 0 ? proposal.card.name : challenge.challenger.name,
+      },
+    );
+  };
+
+  return {
+    begin: (proposal) => {
+      if (!isDecisionPick(pack.length, settings.coachMinPackCards)) {
+        void spend(proposal);
+        return;
+      }
+      setPending({ stage: "reason", proposal });
+    },
+    open: pending !== null,
+    invitation: "Take a card and say why. Nothing is graded until you have.",
+    stage:
+      pending === null ? null : pending.stage === "reason" ? (
+        <StateYourCase
+          card={pending.proposal.card}
+          busy={busy}
+          error={error}
+          onBack={abandon}
+          onCommit={(reason, confidence) => argue(pending.proposal, reason, confidence)}
+        />
+      ) : (
+        <TheChallenge
+          yours={pending.proposal.card}
+          challenger={pending.challenge.challenger}
+          reason={pending.reason}
+          busy={busy}
+          error={error}
+          onAbandon={abandon}
+          onStand={() => resolve(pending, pending.proposal.card)}
+          onSwitch={() => resolve(pending, pending.challenge.challenger)}
+        />
+      ),
+  };
+}
 
 /**
  * How far the stage stops short of the right-hand edge.
