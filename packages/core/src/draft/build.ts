@@ -14,14 +14,22 @@ export interface DeckPick<C> {
   pos: number;
 }
 
+// The order a deck list is read in, and the only one this app has. Lifted out of
+// `deckPiles` because the results screen lays the suggestion beside the pool the
+// builder sorted, and a comparison whose two sides are sorted differently is not
+// one.
+//
+// By `castingValue` rather than `cmc`, so a split card sits on the half you
+// would actually cast -- the same rule the curve beside it is bucketed by.
+const byCurve = <C extends { name: string; cmc: number; manaCost?: string }>(a: C, b: C) =>
+  castingValue(a) - castingValue(b) || a.name.localeCompare(b.name);
+
 /**
  * The pool as the two piles a build screen shows, in the order a deck list is
  * read: what it can do on turn one, first.
  *
- * Sorted by `castingValue` rather than `cmc`, so a split card sits on the half
- * you would actually cast -- the same rule the curve beside it is bucketed by.
  * A pool with two conventions for when a card comes down is one more than the
- * subject supports.
+ * subject supports, so the sort is `byCurve` above and nothing else.
  */
 export function deckPiles<C extends { name: string; cmc: number; manaCost?: string }>(
   pool: readonly C[],
@@ -33,13 +41,12 @@ export function deckPiles<C extends { name: string; cmc: number; manaCost?: stri
   // answers what the player is playing NOW, and every bench they have made
   // counts toward it however late it was made.
   const benched = new Set(bench.map((b) => b.pos));
-  const byCurve = (a: DeckPick<C>, b: DeckPick<C>) =>
-    castingValue(a.card) - castingValue(b.card) || a.card.name.localeCompare(b.card.name);
+  const inOrder = (a: DeckPick<C>, b: DeckPick<C>) => byCurve(a.card, b.card);
 
   const picks = pool.map((card, pos) => ({ card, pos }));
   return {
-    maindeck: picks.filter((p) => !benched.has(p.pos)).sort(byCurve),
-    sideboard: picks.filter((p) => benched.has(p.pos)).sort(byCurve),
+    maindeck: picks.filter((p) => !benched.has(p.pos)).sort(inOrder),
+    sideboard: picks.filter((p) => benched.has(p.pos)).sort(inOrder),
   };
 }
 
@@ -174,3 +181,43 @@ export function compareDecks(built: BuiltDeck, suggested: DeckSuggestion): DeckD
 // empty says, and the headline every results screen leads with.
 export const decksAgree = (diff: DeckDiff): boolean =>
   diff.onlyBuilt.length === 0 && diff.onlySuggested.length === 0;
+
+/** One line of the comparison. At least one side is always present. */
+export interface DeckRow {
+  built?: Card;
+  suggested?: Card;
+}
+
+/**
+ * The two decks as one list, a card to a row.
+ *
+ * `compareDecks` answers what the disagreement IS; this answers where it falls,
+ * which is the question you can only ask with both decks in front of you. A card
+ * both play takes one row and holds both sides of it, so the comparison is as
+ * long as the union of the two forties -- forty-six rows for a six-card
+ * disagreement -- rather than the eighty that stacking two whole decks costs.
+ *
+ * The merge is a two-pointer walk and not a lookup, which is what keeps the rows
+ * in curve order on both sides at once. It works because both lists are sorted
+ * by the same key: a name in both decks reaches the same place in each, so the
+ * two copies meet. Two copies of a common pair up one at a time and the third
+ * copy, if only one side plays it, is left on its own row -- the same count
+ * `compareDecks` reaches by multiset.
+ */
+export function alignDecks(built: BuiltDeck, suggested: DeckSuggestion): DeckRow[] {
+  const mine = [...built.spells, ...built.nonbasicLands].sort(byCurve);
+  const theirs = [...suggested.spells, ...suggested.nonbasicLands].sort(byCurve);
+
+  const rows: DeckRow[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < mine.length || j < theirs.length) {
+    const a = mine[i];
+    const b = theirs[j];
+    if (a && b && a.name === b.name) rows.push({ built: mine[i++], suggested: theirs[j++] });
+    else if (b === undefined || (a !== undefined && byCurve(a, b) <= 0))
+      rows.push({ built: mine[i++] });
+    else rows.push({ suggested: theirs[j++] });
+  }
+  return rows;
+}
