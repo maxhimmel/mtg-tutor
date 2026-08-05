@@ -2,7 +2,10 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import {
   COACH,
+  CURVE_TOP,
+  DECK,
   cardValue,
+  decksAgree,
   explainPick,
   hydrate,
   hydrateScore,
@@ -11,12 +14,14 @@ import {
 } from "@mtg-tutor/core";
 import type { Card, PickScore } from "@mtg-tutor/core";
 import type { ConvexHttpClient } from "convex/browser";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { gradeColor, pct } from "../../core/ui/format.js";
-import { pickCard } from "../../core/ui/cardPicker.js";
+import { pickFromPack } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { streamCoach } from "../../core/tutor/coach.js";
+import { buildTheForty, managePiles } from "./deck.js";
 
 // The draft loop drives the deployment: the engine, the bots and the scoring all
 // live in Convex, and this only renders. That is the point -- a feature added
@@ -38,19 +43,41 @@ export async function runDraft(
 
   while (!state.complete) {
     const pack = hydrate(state.pack, text).sort((a, b) => cardValue(b) - cardValue(a));
+    // The pool as two numbers rather than one, so the pile a card was sent to is
+    // visible from the screen that sent it there.
     const header =
       `Pack ${state.packNo} · Pick ${state.pickNo}` +
-      `  (${pack.length} cards · pool ${state.pool.length})`;
+      `  (${pack.length} cards · deck ${state.pool.length - state.sideboard.length}` +
+      (state.sideboard.length ? ` · sideboard ${state.sideboard.length})` : ")");
 
-    const picked = await pickCard(pack, header);
-    if (!picked) {
+    const choice = await pickFromPack(pack, header);
+    if (!choice) {
       p.cancel(`Draft abandoned. Resume it any time: mtg-tutor draft --resume ${sessionId}`);
       return;
     }
 
+    // Editing the split does not pass the pack, so the same pick comes back
+    // around. Which is the point: you look at what you have, then decide.
+    if (choice.kind === "piles") {
+      state = {
+        ...state,
+        sideboard: await managePiles(
+          convex,
+          sessionId,
+          hydrate(state.pool, text),
+          state.sideboard,
+        ),
+      };
+      continue;
+    }
+
     const result = await convex.mutation(api.draft.pick, {
       sessionId,
-      cardName: picked.name,
+      cardName: choice.card.name,
+      // Said as the card is taken rather than corrected afterwards, so the
+      // tallies the coach reads never briefly count a card the player already
+      // knew they would not play.
+      bench: choice.bench,
     });
 
     await showPickFeedback(
@@ -68,10 +95,11 @@ export async function runDraft(
       pickNo: result.pickNo,
       pack: result.pack,
       pool: result.pool,
+      sideboard: result.sideboard,
     };
   }
 
-  await showResults(convex, sessionId);
+  await finishDraft(convex, sessionId);
 }
 
 async function showPickFeedback(
@@ -136,34 +164,115 @@ async function streamCoaching(
   return true;
 }
 
-async function showResults(convex: ConvexHttpClient, sessionId: Id<"draftSessions">) {
-  const results = await convex.query(api.draft.results, { sessionId });
-  const { summary, deck, mistakes, ratedCardCount } = results;
+/**
+ * The end of a draft: build the forty, then read the verdict on it.
+ *
+ * Exported because a draft can be left between those two steps -- the picks are
+ * all made and stored, and the deck is not built -- and `--resume` on a finished
+ * session lands here rather than telling the player it is too late.
+ */
+export async function finishDraft(convex: ConvexHttpClient, sessionId: Id<"draftSessions">) {
+  let results = await convex.query(api.draft.results, { sessionId });
 
-  // The suggestion is withheld until the player has built a 40 of their own, and
-  // building one means cutting cards -- which needs the maindeck/sideboard split
-  // this client has never had. So the CLI reports the draft and points at the
-  // screen that can do the rest, rather than pretending the exercise happened.
-  const deckLines = deck
-    ? [...deck.spells, ...deck.nonbasicLands]
-        .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
-        .join("\n")
-    : "";
+  if (!results.build) {
+    p.note(
+      "Forty-five cards. Forty slots. Cut what you are not playing and decide how much land\n" +
+        "the rest wants. The suggested build and your grade are behind the lock.",
+      "Draft complete",
+    );
+    if (!(await buildTheForty(convex, sessionId, results.pool, results.sideboard))) {
+      p.cancel(
+        "Deck not built. Your picks are saved — finish it any time: " +
+          `mtg-tutor draft --resume ${sessionId}`,
+      );
+      return;
+    }
+    // Re-read rather than patched in: locking the deck in is what puts the
+    // suggestion and the diff on the wire in the first place.
+    results = await convex.query(api.draft.results, { sessionId });
+  }
 
-  const landLine = deck
-    ? deck.nonbasicLands.length
-      ? `${deck.nonbasicLands.length} drafted lands, +${deck.basicLands} basics`
-      : `+${deck.basicLands} basics`
-    : "";
+  showResults(results);
+}
+
+type Results = FunctionReturnType<typeof api.draft.results>;
+
+// Two curves on one axis, bucketed by the turn a spell comes down on -- the same
+// buckets the build screen counted, so the shape you were watching is the shape
+// being compared.
+function curveDiff(built: number[], suggested: number[]): string {
+  const turn = (i: number) => (i + 1 === CURVE_TOP ? `${CURVE_TOP}+` : `${i + 1}`);
+  const row = (label: string, counts: number[]) =>
+    `  ${label.padEnd(10)}${counts.map((n, i) => `${turn(i)}:${n}`.padEnd(6)).join("")}`;
+  return [row("Yours", built), row("Suggested", suggested)].join("\n");
+}
+
+function showResults(results: Results) {
+  const { summary, deck, diff, mistakes, ratedCardCount } = results;
+
+  // Both of these are stored together and the query returns them together, so
+  // one present and the other missing is not a state that exists. Narrowed
+  // rather than assumed, because the type says it could be.
+  if (!deck || !diff) {
+    p.log.error("The deck was locked in but the suggestion did not come back with it.");
+    return;
+  }
+
+  const agreed = decksAgree(diff);
+  const landLine = deck.nonbasicLands.length
+    ? `${deck.nonbasicLands.length} drafted lands, +${deck.basicLands} basics`
+    : `+${deck.basicLands} basics`;
 
   p.note(
-    `Overall score: ${pc.bold(summary.overallScore.toFixed(1))}/100\n` +
-      `Best-pick accuracy: ${pc.bold((summary.accuracy * 100).toFixed(0))}%\n` +
-      (deck
-        ? `Suggested deck (${deck.colors.join("") || "splashy"}, ${landLine}):\n${deckLines}`
-        : `Pool: ${results.pool.length} cards. Build the 40 in the web app to see ` +
-          `the suggested deck and how it differs from yours.`),
-    "Draft complete",
+    (agreed
+      ? pc.green("The same forty, card for card.")
+      : `${pc.bold(String(diff.shared))} of your ${DECK.size} match the suggested build.`) +
+      "\n" +
+      pc.dim(
+        "The suggestion is what the card values and this format's price on a third color\n" +
+          "come to. It is an argument, not an answer.",
+      ) +
+      "\n\n" +
+      `Overall score: ${pc.bold(summary.overallScore.toFixed(1))}/100\n` +
+      `Best-pick accuracy: ${pc.bold((summary.accuracy * 100).toFixed(0))}%`,
+    "Deck locked in",
+  );
+
+  if (!agreed) {
+    const side = (title: string, cards: Card[]) =>
+      [
+        pc.bold(title),
+        ...(cards.length
+          ? cards.map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
+          : [pc.dim("  Nothing.")]),
+      ].join("\n");
+
+    p.note(
+      [
+        side("Only in your build", diff.onlyBuilt),
+        "",
+        side("Only in the suggestion", diff.onlySuggested),
+      ].join("\n"),
+      `${diff.onlyBuilt.length + diff.onlySuggested.length} cards apart`,
+    );
+  }
+
+  p.note(
+    [
+      curveDiff(diff.curve.built, diff.curve.suggested),
+      "",
+      `  Lands      yours ${diff.lands.built}  ·  suggested ${diff.lands.suggested}`,
+      `  Colors     yours ${diff.colors.built.join("") || "—"}  ·  ` +
+        `suggested ${diff.colors.suggested.join("") || "—"}`,
+    ].join("\n"),
+    "Shape",
+  );
+
+  p.note(
+    [...deck.spells, ...deck.nonbasicLands]
+      .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
+      .join("\n"),
+    `The suggested build — ${deck.colors.join("") || "splashy"}, ${landLine}`,
   );
 
   if (ratedCardCount === 0) {
