@@ -91,6 +91,12 @@ export const cardText = v.object({
   toughness: v.optional(v.string()),
   loyalty: v.optional(v.string()),
   imageUrl: v.optional(v.string()),
+  // How the card is printed, and the other side's art when there is one. Both
+  // absent for an ordinary card, which is nine in ten, so the pair costs almost
+  // nothing across a set -- see Card.layout for why neither can be derived from
+  // the type line already on this row.
+  layout: v.optional(v.string()),
+  backImageUrl: v.optional(v.string()),
   collectorNumber: v.string(),
   setCode: v.optional(v.string()),
   avgPick: v.optional(v.number()),

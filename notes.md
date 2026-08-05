@@ -4,20 +4,6 @@ Numbering is stable and therefore gappy, for the same reason the ideas below
 are: `corpus.test.ts` cites issue #4. A fixed issue is deleted and its number
 left empty rather than renumbering everything under it.
 
-0. We gotta figure out how to handle rendering certain types of cards that are 2-in-one. (This relates to the "Adventure" issue below.)
-   - It'd be nice to have a helpful tool-tip (like the Haste, Trample, etc) for Adventures and Omens and sub-cards of that variety.
-   - It'd also be awesome to have double-sided cards have an additional enlarged popup on hover showing the backside.
-   - I don't know if there are other card types/varieties that fit this shape but let's be thorough.
-   - Related but perhaps worth a different investigation: rendering tokens that are mentioned from a card.
-
-1. Here are some missing keyword-type words that I feel should have the side-popup with more info (like Haste, Trample, etc already do):
-
-- "Adventure" sub-card/split-card type (see: "Picklock Prankster")
-- Bargain
-- Storm
-- Backup
-- Discover
-
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
    data that would fix this.)
@@ -65,6 +51,41 @@ left empty rather than renumbering everything under it.
 
 4. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
+
+5. **Show the tokens a card makes.** Split out of the card-shape work, which
+   covered the rest of what was issue #0. A card that reads "create a Map token"
+   is asking you to know what a Map is, and nothing in the app says.
+
+   The data supports it and costs one extra request per set. Scryfall's
+   `all_parts` names each related piece with a `component`, so filtering to
+   `component === "token"` gives the tokens a card makes — and the field is
+   absent entirely on a card that makes none, so it costs nothing on the many
+   that don't. The art is not in there, but every set publishes its tokens as
+   their own set under `t` + the code (`twoe`, `tdsk`): 15-19 cards each,
+   ordinary `image_uris`, resolvable by name in one `set:t<code>` search. Same
+   shape as the release-day bonus-sheet crawl `fetchScryfallPool` already does.
+
+   Two things to get right. `all_parts` also lists `combo_piece` entries and the
+   card itself — Kellan, Daring Traveler's three parts are two combo pieces and
+   one token — so it has to be filtered rather than taken whole. And the hover
+   already draws three boxes on a double-faced card with a stats panel, so where
+   a token goes is a layout question before it is a data one.
+
+6. **A split card sits in the wrong mana-curve bucket, and `cmc` is not wrong.**
+   Found while counting layouts for the card-shape work, and left alone because
+   it belongs to the curve rather than to rendering. Scryfall gives a split card
+   the COMBINED mana value — Dazzling Theater // Prop Room is `cmc` 7 for a
+   {3}{W} and a {2}{W}, Cease // Desist is 8 — which is what the rules say a
+   split card's mana value is everywhere but the stack. `manaCurve` buckets on
+   `cmc`, so all 29 split cards in the pool (23 of them Duskmourn Rooms) show up
+   as seven- and eight-drops. Adventures, Omens and `prepare` cards are fine:
+   Scryfall gives those the FRONT face's value, which is the one you pay first.
+
+   The fix is in `manaCurve`, not in the stored `cmc`. That function already
+   says it asks "on which turn can this deck act", and for a card you may cast
+   either half of, the answer is the cheaper half — readable off `manaCost`,
+   which carries both halves, without storing anything new. Nothing on this list
+   is fixed by changing the stored mana value, which is correct as it stands.
 
 # Ideas:
 

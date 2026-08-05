@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
-import { type Card, keywordsOf } from "@mtg-tutor/core";
+import { type Card, cardShapeOf, keywordsOf } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
 import { useHeldKey } from "../lib/useHeldKey";
 import { CardStats, hasStats } from "./CardStats";
@@ -73,6 +73,10 @@ const GAP = 12;
 interface Placement {
   left: number;
   top: number;
+  // Where the back face's own popup goes. Null when the card has no back face,
+  // and also when there is no room for two cards side by side -- the face the
+  // player hovered is the one they asked for, so the back yields first.
+  backLeft: number | null;
   // Null when there is no room for the keyword panel on either side of the
   // preview; the card image is what the player asked for and always wins.
   panelLeft: number | null;
@@ -90,14 +94,20 @@ function rightEdge(anchor: DOMRect): number {
   return box && box.left > anchor.right ? box.left : window.innerWidth;
 }
 
-function place(anchor: DOMRect, wantsPanel: boolean): Placement {
+function place(anchor: DOMRect, wantsPanel: boolean, wantsBack: boolean): Placement {
   const right = rightEdge(anchor);
   const vh = window.innerHeight;
 
+  // Two cards where a double-faced one has room for both, one otherwise. Decided
+  // before the horizontal placement because everything below positions against
+  // the block as a whole.
+  const showBack = wantsBack && PREVIEW_W * 2 + GAP * 3 <= right;
+  const width = showBack ? PREVIEW_W * 2 + GAP : PREVIEW_W;
+
   // Prefer the right of the anchor; flip left when it would overflow.
   let left = anchor.right + GAP;
-  if (left + PREVIEW_W > right - GAP) left = anchor.left - GAP - PREVIEW_W;
-  left = Math.max(GAP, Math.min(left, right - GAP - PREVIEW_W));
+  if (left + width > right - GAP) left = anchor.left - GAP - width;
+  left = Math.max(GAP, Math.min(left, right - GAP - width));
 
   // Vertically center on the anchor, clamped to the viewport.
   let top = anchor.top + anchor.height / 2 - PREVIEW_H / 2;
@@ -107,25 +117,69 @@ function place(anchor: DOMRect, wantsPanel: boolean): Placement {
   // room for it.
   let panelLeft: number | null = null;
   if (wantsPanel) {
-    const beyond = left + PREVIEW_W + GAP;
+    const beyond = left + width + GAP;
     const before = left - GAP - PANEL_W;
     if (beyond + PANEL_W <= right - GAP) panelLeft = beyond;
     else if (before >= GAP) panelLeft = before;
   }
 
-  return { left, top, panelLeft };
+  return { left, top, backLeft: showBack ? left + PREVIEW_W + GAP : null, panelLeft };
+}
+
+// One card image. Unplaced until the effect below has measured the viewport,
+// which is what `left` being null means -- parked offscreen at opacity 0 so
+// there is no flash where the first render put it.
+//
+// Flush to the border, and the two rules that keep it there. Scryfall's art is
+// full-bleed with square corners, so any inset shows as a band of base-200 --
+// and the surface's own padding used to leave one that widened at the corners,
+// where the card's clip and the border's curve pull apart. The surface clips to
+// its own radius instead. `block` because an inline image sits on a text
+// baseline, which put a few more pixels of that band under the bottom edge only.
+function Face({
+  src,
+  alt,
+  left,
+  top,
+}: {
+  src: string;
+  alt: string;
+  left: number | null;
+  top: number | null;
+}) {
+  return (
+    <div
+      className="popup-surface pointer-events-none fixed z-50 overflow-hidden transition-opacity"
+      style={{
+        left: left ?? -9999,
+        top: top ?? -9999,
+        width: PREVIEW_W,
+        opacity: left != null ? 1 : 0,
+      }}
+    >
+      <img src={webpImage(src)} alt={alt} className="block w-full" draggable={false} />
+    </div>
+  );
 }
 
 export function HoverPreviewProvider({ children }: { children: React.ReactNode }) {
   const [hover, setHover] = useState<HoverState | null>(null);
   const [pos, setPos] = useState<Placement | null>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const keywords = useMemo(() => (hover ? keywordsOf(hover.card) : []), [hover]);
+  // How the card is printed leads the list. On a two-in-one card the keywords
+  // under it belong to one half or the other, and which is which is unreadable
+  // until you know the card has halves at all.
+  const notes = useMemo(() => {
+    if (!hover) return [];
+    const shape = cardShapeOf(hover.card);
+    const keywords = keywordsOf(hover.card);
+    return shape ? [shape, ...keywords] : keywords;
+  }, [hover]);
   // Stats can be the panel's only content -- a vanilla creature with no keywords
   // still has draft data worth reading -- so placement has to count them too, or
   // the panel gets no position and never appears.
   const stats = hover != null && hover.showStats && hasStats(hover.card);
-  const panel = keywords.length > 0 || stats;
+  const panel = notes.length > 0 || stats;
+  const back = hover?.card.backImageUrl;
   // Hold Shift to swap the stat rows for what they mean. A key rather than a
   // click because the panel is pointer-events:none -- it sits under the cursor
   // and must stay unclickable, or moving toward it would dismiss the hover.
@@ -161,8 +215,8 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // useEffect (not layout) keeps this off the server render; the box stays at
   // opacity 0 until a position is set, so there is no visible flash.
   useEffect(() => {
-    if (hover) setPos(place(hover.anchor, panel));
-  }, [hover, panel]);
+    if (hover) setPos(place(hover.anchor, panel, back != null));
+  }, [hover, panel, back]);
 
   // Memoised because every hoverable card on the page consumes this context, and
   // a fresh object here would re-render all of them each time a preview opens.
@@ -173,31 +227,26 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
       {children}
       {hover?.card.imageUrl && (
         <>
-          <div
-            ref={boxRef}
-            className="popup-surface pointer-events-none fixed z-50 overflow-hidden transition-opacity"
-            style={{
-              left: pos?.left ?? -9999,
-              top: pos?.top ?? -9999,
-              width: PREVIEW_W,
-              opacity: pos ? 1 : 0,
-            }}
-          >
-            {/* Flush to the border, and the two rules that keep it there.
-                Scryfall's art is full-bleed with square corners, so any inset
-                shows as a band of base-200 -- and the surface's own padding used
-                to leave one that widened at the corners, where the card's clip
-                and the border's curve pull apart. The surface clips to its own
-                radius instead. `block` because an inline image sits on a text
-                baseline, which put a few more pixels of that band under the
-                bottom edge only. */}
-            <img
-              src={webpImage(hover.card.imageUrl)}
-              alt={hover.card.name}
-              className="block w-full"
-              draggable={false}
+          <Face
+            src={hover.card.imageUrl}
+            alt={hover.card.name}
+            left={pos?.left ?? null}
+            top={pos?.top ?? null}
+          />
+
+          {/* The back of a double-faced card, beside the front rather than
+              instead of it: the two sides are one card and the question the
+              player is asking is what it turns INTO, which needs both. Named by
+              the second half of "Front // Back", which is what the back face is
+              actually called. */}
+          {back && pos?.backLeft != null && (
+            <Face
+              src={back}
+              alt={hover.card.name.split("//").at(-1)?.trim() ?? hover.card.name}
+              left={pos.backLeft}
+              top={pos.top}
             />
-          </div>
+          )}
 
           {panel && pos?.panelLeft != null && (
             <div
@@ -230,13 +279,13 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                   panel cannot be scrolled (pointer-events:none). Someone holding
                   Shift is asking what the numbers mean, not what Flying does, so
                   the reminders yield rather than overflow out of reach. */}
-              {!explain && stats && keywords.length > 0 && (
+              {!explain && stats && notes.length > 0 && (
                 <hr className="border-base-300" />
               )}
 
-              {!explain && keywords.length > 0 && (
+              {!explain && notes.length > 0 && (
                 <ul className="flex flex-col gap-2.5">
-                  {keywords.map((k) => (
+                  {notes.map((k) => (
                     <li key={k.name}>
                       <span className="text-sm font-semibold">{k.name}</span>
                       <p className="text-xs leading-snug text-base-content/70">{k.reminder}</p>
