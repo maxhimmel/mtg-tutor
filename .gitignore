@@ -35,3 +35,8 @@ datasets/
 # never be reproduced -- least of all the runs whose cut got REJECTED, which
 # never become a baseline and would otherwise leave no record of why.
 packages/backend/bench/report.*.html
+
+# Scratch checkouts the agent harness makes to work on several branches at once.
+# They are real worktrees of this repo, so they carry a full tree each and would
+# otherwise be offered for commit from whichever one is being worked in.
+.claude/worktrees
