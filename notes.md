@@ -6,6 +6,14 @@ left empty rather than renumbering everything under it.
 
 1. Room type cards and battle cards have text that is sideways and hard to read when they're enlarged. Can we rotate them or see if there's an alternate image to render in their enlarged state that has the text rotated so it's easier to read.
 
+   Both are findable without guessing now: `CardText.layout` is stored, Rooms are
+   Duskmourn's 23 `split` cards and battles are `transform`. Scryfall does publish
+   the rotated art — a battle's `card_faces[0].image_uris` is the sideways one, so
+   "is there an alternate image" is a question about which URI to ask for rather
+   than about rotating in CSS. Careful: `layout` alone does not separate a Room
+   from an ordinary split card (both are `split`) — `cardShapeOf` already tells
+   them apart by printed subtype and is the thing to reuse.
+
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
    data that would fix this.)
@@ -49,7 +57,14 @@ left empty rather than renumbering everything under it.
    Worth knowing: the 2026-07-29 `POOL_REVISION` bump re-ingested all 17 sets on
    both deployments and stranded **nothing** — the backfill replayed every prod
    session successfully. A re-crawl from unchanged artifacts is safe; it was the
-   `packRate` rebuild that broke EOE, not re-ingestion as such.
+   `packRate` rebuild that broke EOE, not re-ingestion as such. The 2026-08-05
+   `9-card-shape` bump behaved the same way on the two sets it was run against.
+
+   `/review/[id]/deck` (2026-08-05) is the third reader to hit this and the first
+   to handle it deliberately: it catches the `ConvexError` and renders the message
+   in place with a way back, rather than a blank page. That is containment, not
+   the fix — the list still cannot know before you click, and the `sourceHash`
+   fingerprint above is still what would let it.
 
 4. We should create a favicon/logo for the app!
    - Minimalist + cute + easy to see at a glance.
@@ -102,7 +117,7 @@ Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
 below cite these by number, so a shipped idea is deleted and its number left
 empty rather than renumbering everything under it. 4, 5 and 10 shipped on
 2026-07-30; the sideboard and mana-curve ideas that took 10 and 11 after that
-shipped on 2026-07-31.
+shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -137,7 +152,9 @@ shipped on 2026-07-31.
      worse than its raw GIH WR implies, and right now nothing in scoring knows
      how fast a format is.
    - **Curve and land-count truth.** End-of-turn lands in play vs winning,
-     measured rather than assumed. Feeds the deck-builder work (roadmap #2).
+     measured rather than assumed. This is now the *second* route to a number
+     the deck builder wanted and could not get — see the `DECK` note in
+     `core/config.ts` for why the game dataset cannot supply it either.
    - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
      _draft_ tutor; per-turn play coaching is a different product, and the data
      existing is not a reason to build it.
@@ -153,19 +170,13 @@ shipped on 2026-07-31.
    pick, so we can say "34% of drafters took this card at this pick" instead of
    only "this card has the higher win rate". A pick-order distribution is a
    better teacher than a scalar, and it is the same new draft-data pass that
-   roadmap #3 (`human-bots`) needs — the bots consume it, the player sees it.
+   `human-bots` in the roadmap needs — the bots consume it, the player sees it.
 
 5. **Sealed mode.** Six packs, no passing, build the 40. `makePack` and
    `suggestDeck` already exist, so this is mostly a new screen — and it is a
    different skill (pool evaluation and deck construction rather than pick
    order).
    - Not too interested in this format. Low priority.
-
-6. **A deck-building step.** Today `suggestDeck` just shows you the answer on
-   the results screen. Building the 40 is half of Limited and the app currently
-   does it for you; making the player build it and then diffing against the
-   suggestion (and against real winning curves, roadmap #2) is a whole second
-   practice surface on top of data we already have.
 
 7. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
@@ -206,11 +217,22 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
 
 # Roadmap (pick per future session):
 
-Ordered by value × readiness. Each is a candidate feature branch.
+Ordered by value × readiness. Each is a candidate feature branch. Cite these by
+NAME rather than number — the numbers have drifted from what cites them twice
+already.
 
-1. **`deck-builder`** — replace the `DECK` 23-spell/17-land convention with real
-   winning-deck land counts & curves from the data. `core/draft/deck.ts`; `DECK`
-   in `core/config.ts` is the single tuning point. Small, self-contained.
+`deck-builder` shipped 2026-08-05, and half of it did not. Three-colour decks
+priced from measured `splashCost`, the interactive build step and the
+side-by-side comparison all landed. **Real winning-deck land counts did not, and
+are not recoverable from anything stored**: the 17Lands game dataset has a
+`deck_<card>` column per card and would answer it exactly, but
+`build-set-stats.mjs` skips basic lands entirely and collapses every other column
+to presence rather than copies. So the artifact knows a winning deck ran 19.4-22.7
+DISTINCT non-basics and cannot say how many were the same card twice, which is
+the whole of the gap to 23. `DECK` stays 23/17, honestly labelled in
+`core/config.ts`. Recovering it means a new pass over the game CSVs and a
+re-ingest — see Ideas #2 for the other route to the same number.
+
 2. **`human-bots`** — fit bot picks to the 438k real human picks in the draft
    data (needs a new draft-data pass) instead of greedy `cardValue` + colour
    bias, so signals/wheeling feel like a real pod. `core/draft/bots.ts` is still
@@ -322,6 +344,19 @@ to the data work.
    noticed the change they existed to catch — every ALSA value sat at the nudge's
    pivot or past its clamp. Perturb the thing under test and watch the guard go
    red before trusting it.
+5. **A test one function upstream of the hole also reads as coverage, and this
+   one passes.** Trap #4 is a test that cannot go red. This is a test that is
+   correct, goes red properly, and is pointed at the wrong function. `layout` and
+   `backImageUrl` were added to `ScryfallCard`, to `CardText`, to `mergeCards` and
+   to the validator, with tests on `mergeCards` — and every stored row had
+   neither, because `textHalf` in `convex/cardText.ts` is a hand-written
+   projection that nobody added them to. Scryfall returned them, the mapping
+   mapped them, the validator accepted the narrower object, the re-crawl reported
+   success. **Adding a card field takes five edits and the fifth is the one no
+   test was watching**; `test/cardText.test.ts` now compares whole key sets rather
+   than named fields, so the class fails rather than the instance. When a pipeline
+   both produces and consumes a shape, test the last hop before storage, not the
+   first.
 
 # Deferred trade-offs (revisit when the premise changes):
 
@@ -361,28 +396,6 @@ to the data work.
    point fold raw rows into daily per-area totals and prune the raw rows on a
    retention window. The benchmark harness is unaffected either way — it filters
    by `runId` and only ever reads one run.
-
-3. **`draftPicks.defense` is declared on `main` with no reader and no writer, and
-   has an expiry.** Added 2026-08-05. Convex validates stored documents on push,
-   so once the `draft-v2` branch has written a pick carrying `defense`, pushing a
-   schema that has never heard of the field fails against those rows — and `main`
-   is exactly what you fall back to when the experiment is not what you want to
-   run. Declaring the field on both sides is what lets one local deployment serve
-   both without a wipe between every switch.
-
-   This is convenience with a deadline, and it was taken knowingly. **The premise
-   changes the moment `draft-v2` is judged**, in one of two directions:
-   - **Adopted** — the field grows real readers and writers, and this note goes
-     away because there is nothing left to explain.
-   - **Rejected** — `defense`, `pickDefense` and `confidence` come out of
-     `validators.ts` and `schema.ts`, and the user tables get wiped (they are
-     disposable). A schema is a claim about what the data means, and a field
-     nothing has ever written is a false one.
-
-   The failure mode this note exists to prevent is the third direction: nobody
-   decides, the field sits there for a year, and the next person to read the
-   schema assumes it is load-bearing and builds on it. If `draft-v2` is still
-   undecided when you next read this, that is the thing to fix.
 
 # Decisions worth not re-litigating:
 
@@ -517,3 +530,58 @@ The architecture, the data pipeline and the deploy story are all documented in
     7.0.42. Only `generateText` would fix it — **rejected**, token-by-token
     streaming is worth more than a clean log. Reproduce by pointing `LLM_MODEL` at
     a model that does not exist.
+
+13. **There is more than one way to make a pick, on purpose, and no column says
+    which** (2026-08-05). The challenge flow was built as a replacement and spent
+    a week on its own branch because merging it meant CHOOSING it. It is now one
+    of two, selected by the player and switchable mid-draft, because which one
+    teaches better is a question for users rather than for us.
+
+    The earlier objection to this — that a mode toggle is unwieldy to maintain
+    for the database's sake — was right about what it was aimed at and does not
+    apply, for two reasons worth not rediscovering:
+    - **The preference is `settings.pickCeremony`, in the localStorage-backed
+      `useSettings` beside `guiderails`.** No Convex read, no write, no migration.
+    - **Which experience produced a pick is already recorded, per pick.** A row
+      carrying a `defense` went through the challenge; one without it did not.
+      Nothing ever asks what mode a *draft* was in, which is exactly why
+      switching mid-draft costs nothing — there is no session-level claim to keep
+      consistent.
+
+    **The seam is between a card being chosen and the pick landing, and nowhere
+    wider.** That location is forced rather than picked: the whole 409-line
+    divergence between the two boards reduced to `propose` no longer calling
+    `commit` itself. Pack grid, drag, picks column, sideboard, verdict, results
+    and the pass animation were byte-identical. A third experience implements
+    `begin`/`open`/`stage`/`invitation` and three one-line registrations; it was
+    verified by wiring a throwaway one through and reverting it, not asserted.
+    Deliberately not a registry or a plugin loader — `ceremonies` is a two-key
+    object literal, and an abstraction sized for hypothetical variants would cost
+    more than the duplication it prevents.
+
+    **The CLI has only the passive flow**, which is a standing asymmetry rather
+    than a decision. `challenge.ts` is already client-agnostic — no React, no DOM
+    — so what it would need is the two prompts and one added `sets.packContext`
+    query. The web's hook is an async
+    `(proposal, pack, scoring) => Defense | undefined` turned inside out for
+    React; if both clients ever want it, that function is what belongs in core,
+    not the React-shaped interface.
+
+14. **The hover preview clips at a card's corner radius, not at `rounded-box`,
+    and that is not a style choice** (2026-08-05). A Magic card is 63mm wide with
+    a 3mm corner, so the clip is `PREVIEW_W * 3 / 63` — 15.24px at the 320px
+    preview, against `rounded-box`'s 16.
+
+    That 0.76px gap sat there unnoticed for a week because **Scryfall does not
+    serve an alpha channel consistently**: WOE's adventures come back `VP8X` with
+    one, MOM's transform faces as plain `VP8` without. Outside the card's own
+    rounding an image with alpha is transparent, so the gap showed base-200
+    against a base-200 surface and was invisible. An opaque image has to put a
+    colour in those corners and it is white — which is why this presented as "MOM
+    is broken and WOE is fine" rather than as a rendering bug.
+
+    Still exactly ONE clipping curve, the surface's, which is the older ruling
+    this refines rather than replaces (`144b865`): the image carries no radius and
+    no inset, because two curves a pixel apart open a band that widens at the
+    corners. Do not restore `rounded-box` here; it is the design system's number
+    and this is the card's.
