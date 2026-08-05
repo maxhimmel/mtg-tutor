@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useConvex, useConvexAuth } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { type Card, CURVE_TOP, DECK } from "@mtg-tutor/core";
+import { type Card, CURVE_TOP, DECK, decksAgree } from "@mtg-tutor/core";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
@@ -88,7 +88,7 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
   }
 
   const { summary, deck, diff, mistakes } = results;
-  const agreed = diff.onlyBuilt.length === 0 && diff.onlySuggested.length === 0;
+  const agreed = decksAgree(diff);
 
   return (
     <div className="flex flex-col gap-5">
