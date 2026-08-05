@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import type { Card } from "@mtg-tutor/core";
 import { CONFIDENCE, type Confidence, REASON_LIMIT } from "@mtg-tutor/core";
 import { CardFace } from "../../components/CardTile";
@@ -14,14 +14,45 @@ import { CardFace } from "../../components/CardTile";
 // and showing them here would turn the challenge into a reading comprehension
 // exercise: the higher win rate would simply be the answer.
 
+/**
+ * How far the stage stops short of the right-hand edge.
+ *
+ * The dim covers the PACK, which is the thing being asked about. It must not
+ * cover the deck: "is this better than what I have" is the whole question on the
+ * second screen, and a player who has to dismiss the question to look at their
+ * pool cannot answer it. So the overlay stops where the hover preview already
+ * stops -- `[data-preview-edge]`, the one place this app names that edge, marked
+ * on the board's side rail for exactly this reason.
+ *
+ * Zero when the rail is not beside the board. Below `lg` it stacks under the
+ * pack, where covering it costs nothing and stopping short would leave a band of
+ * undimmed page above the fold.
+ */
+function useRailEdge(): number {
+  const [inset, setInset] = useState(0);
+  // Layout, not effect: measured before paint, so the stage never opens
+  // full-bleed for a frame and then snaps in.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const box = document.querySelector("[data-preview-edge]")?.getBoundingClientRect();
+      setInset(box && box.left > window.innerWidth / 2 ? window.innerWidth - box.left : 0);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  return inset;
+}
+
 // The board is still behind this, dimmed. It is not decoration: the pack you
 // were looking at is the thing you are being asked about, and replacing the
 // screen outright would make this feel like a different exercise instead of the
 // same one, one beat later.
 //
-// A real dialog, not a div that looks like one: it takes the whole screen and
-// the board behind it is inert, so a screen reader that cannot see the dim has
-// to be told the same thing the dim says.
+// A real dialog, not a div that looks like one: the board behind it is inert, so
+// a screen reader that cannot see the dim has to be told the same thing the dim
+// says. That is unaffected by the deck staying visible beside it -- readable and
+// reachable are different things, and the rail is only the first.
 function Stage({
   title,
   hint,
@@ -40,6 +71,8 @@ function Stage({
   onEscape?: () => void;
   children: ReactNode;
 }) {
+  const railEdge = useRailEdge();
+
   useEffect(() => {
     if (!onEscape) return;
     const onKey = (e: KeyboardEvent) => {
@@ -54,9 +87,13 @@ function Stage({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-base-100/85 p-4 backdrop-blur-sm"
+      style={{ right: railEdge }}
+      className="fixed top-0 bottom-0 left-0 z-40 flex items-center justify-center overflow-y-auto bg-base-100/85 p-4 backdrop-blur-sm"
     >
-      <div className="popup-surface w-full max-w-3xl p-6 motion-safe:animate-verdict">
+      {/* No `max-w-3xl` any more. The stage is now the pack column's width, and
+          the cards are the reason it is open -- a 230px card you have to lean
+          in to read is not a fair thing to be asked to decide between. */}
+      <div className="popup-surface w-full max-w-5xl p-6 motion-safe:animate-verdict">
         <div className="mb-4">
           <h2 className="font-display text-2xl leading-tight">{title}</h2>
           <p className="mt-1 text-sm text-base-content/60">{hint}</p>
@@ -80,10 +117,15 @@ function Stage({
 // A card at the size you would hold one, with nothing attached. Capped rather
 // than stretched so two of them sit side by side on a laptop without either
 // running off the bottom of the stage.
+//
+// 360px, not the 230 it opened at. These screens ask the player to decide
+// between two cards from their rules text alone -- no win rates, no grade, see
+// the note at the top of this file -- so the text has to be readable without
+// leaning in, or the exercise is a memory test on cards they half-saw.
 function Held({ card, label }: { card: Card; label: string }) {
   return (
     <figure className="flex min-w-0 flex-col items-center gap-2">
-      <span className="w-full max-w-[230px]">
+      <span className="w-full max-w-[360px]">
         <CardFace card={card} />
       </span>
       <figcaption className="eyebrow text-center">{label}</figcaption>
@@ -257,7 +299,7 @@ export function TheChallenge({
         {reason}
       </blockquote>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-2 justify-items-center gap-6">
         <Held card={yours} label="Your pick" />
         <Held card={challenger} label="Also in this pack" />
       </div>

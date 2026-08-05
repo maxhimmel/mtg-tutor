@@ -992,7 +992,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             {/* The right-hand wall for card previews: the coach is talking here,
                 and a card image landing on top of it covers the thing you are
                 drafting by. */}
-            <aside data-preview-edge className="flex flex-col gap-4">
+            {/* Readable through a commitment stage, and untouchable during one.
+                The stage stops at this rail so the player can see the deck they
+                are deciding for -- and benching a card from here mid-challenge
+                would move committedColors under a challenge already computed
+                against the old pool, which the reveal would catch as a
+                disagreement and answer by saying nothing at all. */}
+            <aside
+              data-preview-edge
+              inert={pending !== null}
+              className="flex flex-col gap-4"
+            >
               <Panel title="Last pick" bodyClassName="gap-3">
                 {lastView ? (
                   <>
