@@ -332,6 +332,28 @@ to the data work.
    retention window. The benchmark harness is unaffected either way — it filters
    by `runId` and only ever reads one run.
 
+3. **`draftPicks.defense` is declared on `main` with no reader and no writer, and
+   has an expiry.** Added 2026-08-05. Convex validates stored documents on push,
+   so once the `draft-v2` branch has written a pick carrying `defense`, pushing a
+   schema that has never heard of the field fails against those rows — and `main`
+   is exactly what you fall back to when the experiment is not what you want to
+   run. Declaring the field on both sides is what lets one local deployment serve
+   both without a wipe between every switch.
+
+   This is convenience with a deadline, and it was taken knowingly. **The premise
+   changes the moment `draft-v2` is judged**, in one of two directions:
+   - **Adopted** — the field grows real readers and writers, and this note goes
+     away because there is nothing left to explain.
+   - **Rejected** — `defense`, `pickDefense` and `confidence` come out of
+     `validators.ts` and `schema.ts`, and the user tables get wiped (they are
+     disposable). A schema is a claim about what the data means, and a field
+     nothing has ever written is a false one.
+
+   The failure mode this note exists to prevent is the third direction: nobody
+   decides, the field sits there for a year, and the next person to read the
+   schema assumes it is load-bearing and builds on it. If `draft-v2` is still
+   undecided when you next read this, that is the thing to fix.
+
 # Decisions worth not re-litigating:
 
 The architecture, the data pipeline and the deploy story are all documented in

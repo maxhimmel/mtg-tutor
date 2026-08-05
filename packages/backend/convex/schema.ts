@@ -13,6 +13,7 @@ import {
   llmCall,
   packCard,
   packComposition,
+  pickDefense,
   reviewVerdict,
   storedPickScore,
 } from "./validators.js";
@@ -254,6 +255,10 @@ export default defineSchema({
     poolBefore: v.array(v.object({ name: v.string(), colors: v.array(colorCode) })),
     score: storedPickScore,
     signal: v.optional(v.string()),
+    // Declared but never written here, so that one deployment can serve this
+    // branch and `draft-v2` at once. See the note on `pickDefense`; it is on a
+    // clock, not here to stay.
+    defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
 
   // Frozen on first review so re-reviews are stable. Keyed by position in the

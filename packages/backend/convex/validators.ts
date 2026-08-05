@@ -242,6 +242,39 @@ export const storedPickScore = v.object({
   rankInPack: v.number(),
 });
 
+// What a player committed to before a pick was graded: why they took it, how
+// sure they said they were, and what they did when another card was put up
+// against theirs.
+//
+// **Nothing on this branch writes or reads it, and that is the whole point.**
+// Convex validates stored documents on push, so a deployment that has served the
+// `draft-v2` branch holds draftPicks rows carrying `defense`, and pushing a
+// schema that has never heard of the field fails against them. Declaring it here
+// is what lets one deployment serve both while that experiment is judged.
+//
+// It is a placeholder with an expiry, not a feature. See notes.md, "Deferred
+// trade-offs" -- either the challenge flow is adopted and this grows readers, or
+// it is dropped and this comes out with a wipe. Do not build on it meanwhile.
+//
+// Optional on the row and every field inside it required, which is the right way
+// round: a pick either went through the challenge or it did not -- a forced pick
+// at the bottom of a pack has nothing to defend -- and a half-filled defense
+// would mean a reader had to guess which half it got.
+//
+// The confidence levels are literals rather than a number, because each one is a
+// specific claim about `gapMargin` and a 1-5 slider would be four claims the data
+// cannot settle.
+export const confidence = v.union(v.literal("sure"), v.literal("close"), v.literal("guess"));
+
+export const pickDefense = v.object({
+  reason: v.string(),
+  confidence,
+  // The card put up against theirs. Absent when the pack was too small for the
+  // challenge to have anything to say.
+  challengedName: v.optional(v.string()),
+  switched: v.boolean(),
+});
+
 // One set-aside pick: where it sits in the pool, and when the player decided.
 // See the `sideboard` note in schema.ts and `Bench` in core.
 export const benchEntry = v.object({
