@@ -21,14 +21,12 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import {
   type Card,
   type CardContext,
-  type Challenge,
   type ChallengeOutcome,
   type Confidence,
   type TextIndex,
   type PickScore,
   applyBench,
   calibrationLine,
-  challengeFor,
   claimOutcome,
   explainPick,
   hydrate,
@@ -37,7 +35,6 @@ import {
   loadPrinciples,
   normalizeName,
   packScoringContext,
-  resolveChallenge,
   splitCitations,
   splitPool,
   textIndex,
@@ -52,12 +49,19 @@ import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSuspendPreview } from "../../components/CardPreview";
-import { useSettings } from "../../lib/useSettings";
+import { type PickCeremony, useSettings } from "../../lib/useSettings";
 import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
 import { webpImage } from "../../lib/cardImage";
 import { preloadImages } from "../../lib/preloadImages";
-import { StateYourCase, TheChallenge } from "./Commitment";
+import {
+  type Ceremony,
+  type CeremonyBoard,
+  type Defense,
+  type Proposal,
+  usePassivePick,
+} from "./ceremony";
+import { useChallenge } from "./Commitment";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
@@ -167,54 +171,6 @@ function PackTile({
 
 type DraftState = FunctionReturnType<typeof api.draft.state>;
 
-// The card taken and the pile it is going to, carried through the two screens
-// between choosing it and spending the pick. `carried` means the player pulled
-// it out of the pack by hand, which changes nothing about the pick and
-// everything about what is left behind -- see the pass animation below.
-interface Proposal {
-  card: Card;
-  bench: boolean;
-  carried: boolean;
-}
-
-// Where a pick is between being chosen and being made. Two screens, in the order
-// the argument has to happen in: you say what you think, and only then are you
-// argued with. Turning those round would be a quiz with the answer on the card.
-type Pending =
-  | { stage: "reason"; proposal: Proposal }
-  | {
-      stage: "challenge";
-      proposal: Proposal;
-      reason: string;
-      confidence: Confidence;
-      challenge: Challenge;
-    };
-
-// What the player committed to, on its way to the mutation. `outcome` never
-// goes to the server: it is the resolved pair for the reveal to read, and the
-// row keeps the four facts the coach needs instead.
-interface Defense {
-  reason: string;
-  confidence: Confidence;
-  challengedName?: string;
-  proposedName?: string;
-  outcome?: ChallengeOutcome;
-  /**
-   * The card the BROWSER made the pack's context-best while building the
-   * challenge -- the better of the pair it put up. Kept so the reveal can check
-   * it against the card the server actually graded against.
-   *
-   * Both sides rank the same pack through `packScoringContext` and should always
-   * agree. This is what happens when they do not: rather than grade a player's
-   * stated certainty over a pair the server has since contradicted, the reveal
-   * drops the calibration reading entirely. Being told nothing is recoverable;
-   * being argued into defending one comparison and then scored on a different
-   * one is exactly the failure that makes a demanding flow worse than a passive
-   * one.
-   */
-  expectedBestName?: string;
-}
-
 interface LastPick {
   score: PickScore;
   signal?: string;
@@ -293,9 +249,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   // The card in hand, drawn under the cursor for as long as it is being carried.
   const [carrying, setCarrying] = useState<Card | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
-  // A pick that would not go through. Shown on the stage the player is standing
-  // on rather than in an alert, because that stage is also where the way out is.
+  // A pick that would not go through. Shown wherever the player is standing --
+  // on the ceremony's stage if one is open, and beside the card in the confirm
+  // bar if none is -- rather than in an alert, because that is also where the
+  // way out is.
   const [commitError, setCommitError] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
@@ -464,6 +421,47 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     );
   }, [state, pool, packContext]);
 
+  /**
+   * The one thing the two ways of drafting do not share.
+   *
+   * Everything else on this board -- the pack grid, the drag, the picks column,
+   * the sideboard, the verdict, the results -- is the same under both, so the
+   * seam is drawn as narrowly as it can be: it starts where a card is chosen and
+   * ends where the pick is spent. Passive does nothing in that gap; the
+   * challenge argues. A third goes beside these two and implements the same
+   * four things.
+   */
+  const board: CeremonyBoard = {
+    pack,
+    scoring: scoringContext,
+    busy: picking,
+    error: commitError,
+    clearError: () => setCommitError(null),
+    commit,
+  };
+  // Typed by the setting rather than inferred, so a third name added to
+  // `PickCeremony` will not compile until it has something standing behind it.
+  const ceremonies: Record<PickCeremony, Ceremony> = {
+    passive: usePassivePick(board),
+    challenge: useChallenge(board),
+  };
+
+  /**
+   * The ceremony currently holding the screen, if any.
+   *
+   * Read by who is standing rather than by who is selected, which is what makes
+   * switching mid-draft safe at every moment including the worst one: change the
+   * setting while a commitment is open and the open one keeps the screen and
+   * finishes the pick it started, so the sentence already typed is never thrown
+   * away and no warning is needed to say so. The choice takes effect on the next
+   * card chosen, which is the same rule as "picks already made keep whatever
+   * they recorded", one pick earlier.
+   *
+   * At most one can ever be standing: a card is only proposed from an idle
+   * board.
+   */
+  const standing = Object.values(ceremonies).find((ceremony) => ceremony.open);
+
   const selectedCard = useMemo(
     () => pack.find((card) => card.name === selected),
     [pack, selected],
@@ -478,13 +476,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // Not while a pick is being defended: the card is on the screen above, and
     // clearing the selection underneath it would leave nothing lit to come back
     // to.
-    if (!selected || pending) return;
+    if (!selected || standing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, pending]);
+  }, [selected, standing]);
 
   // Held back until every card in it can be drawn. A pack is dealt all at once,
   // so the alternative is watching it assemble itself frame by frame.
@@ -530,8 +528,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // someone rereading the card, not someone deciding. The shortcut for deciding
   // fast is a real double-click, which is a gesture rather than a repetition.
   function onTileClick(card: Card) {
-    if (picking || pending) return;
+    if (picking || standing) return;
     setSelected(card.name);
+    // A failed pick's message names the card it failed on, and the bar it sits
+    // in is about whichever card is lit -- so choosing another one retires it.
+    setCommitError(null);
   }
 
   // The shortcut takes the card to the deck, which is where the overwhelming
@@ -542,16 +543,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   }
 
   /**
-   * Choosing a card no longer spends the pick. It opens the case for it.
+   * A card has been chosen. What happens next is the ceremony's business.
    *
-   * The gate is `isDecisionPick`, the same threshold that decides whether the
-   * coach is worth spending tokens on, and for the same reason rather than a
-   * matching one: a pack down to its last few cards is picking for you, and
-   * being asked to defend a forced pick is a chore that teaches nothing. So the
-   * bottom of every pack still plays exactly as it did.
+   * The board's part ends here: it settles the pack, lights the card and hands
+   * the proposal over. Whether that opens a screen or spends the pick on the
+   * spot is the one difference between the two ways of drafting, and it is read
+   * now rather than held anywhere, which is what lets the setting move between
+   * one pick and the next.
    */
   async function propose(proposal: Proposal) {
-    if (picking || pending || !text) return;
+    if (picking || standing || !text) return;
     setCommitError(null);
     // The one way the browser's ranking and the server's grade can be built from
     // different decks. `onBench` moves a card locally before the server has
@@ -564,91 +565,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // Only reachable here: once a stage is open the board behind it is inert, so
     // no bench can land between this and the pick.
     await benchInFlight.current?.catch(() => {});
-    if (!isDecisionPick(pack.length, settings.coachMinPackCards)) {
-      void commit(proposal);
-      return;
-    }
     setSelected(proposal.card.name);
-    setPending({ stage: "reason", proposal });
-  }
-
-  // Back to the pack with nothing spent. Reachable from the first screen at any
-  // time and from the challenge only after a pick has failed to go through --
-  // being argued with is the point, so it is not a thing you can simply decline.
-  function abandon() {
-    setPending(null);
-    setCommitError(null);
-  }
-
-  // The case is made; now it gets argued with. The challenger is the best
-  // remaining card in the pack for this deck, which when the player has already
-  // taken that card is the runner-up -- see challengeFor for why that rule is
-  // what keeps the screen from being its own answer.
-  function onCommit(reason: string, confidence: Confidence) {
-    if (!pending) return;
-    const { proposal } = pending;
-    const challenge = scoringContext
-      ? challengeFor(pack, proposal.card, scoringContext)
-      : undefined;
-
-    // Nothing to argue with -- a pack of one, or a context we could not read.
-    // The defense still stands and still reaches the coach; only the second
-    // screen is skipped.
-    if (!challenge) {
-      void commit(proposal, { reason, confidence });
-      return;
-    }
-    setPending({ stage: "challenge", proposal, reason, confidence, challenge });
-  }
-
-  // Standing and switching are the same act with a different answer, so they are
-  // one function: the card taken is whichever one they named, and everything
-  // else about the pick is unchanged. `switched` is not sent -- `draft.pick`
-  // derives it from the card proposed against the card taken, so the stored row
-  // cannot claim a change of mind that did not happen.
-  function resolve(take: Card) {
-    if (!pending || pending.stage !== "challenge") return;
-    const { proposal, reason, confidence, challenge } = pending;
-    const stood = take.name === proposal.card.name;
-    const outcome = resolveChallenge(challenge, stood);
-    void commit(
-      {
-        ...proposal,
-        card: take,
-        // "I am taking this but will not play it" was said about the OTHER card.
-        // A switch cannot inherit it, so the new card goes to the deck and the
-        // picks column is there if they want it set aside after all.
-        bench: stood ? proposal.bench : false,
-        // Nor can it inherit having been lifted out of the pack by hand. The
-        // card they carried is going back with the pack; naming no card as kept
-        // would sweep the whole thing while the card they actually took was
-        // never picked up at all.
-        carried: stood ? proposal.carried : false,
-      },
-      {
-        reason,
-        confidence,
-        challengedName: challenge.challenger.name,
-        proposedName: proposal.card.name,
-        outcome,
-        // The better of the pair by the browser's own ranking, which is what the
-        // whole pack's context-best must be: the challenger was the best card
-        // that was not the proposed one.
-        expectedBestName:
-          outcome.edge > 0 ? proposal.card.name : challenge.challenger.name,
-      },
-    );
+    ceremonies[settings.pickCeremony].begin(proposal);
   }
 
   // `bench` takes the card without adding it to the deck. Said at the moment of
   // picking rather than corrected afterwards, so the tallies the coach reads
   // never briefly count a card the player already knew they would not play.
-  async function commit(proposal: Proposal, defense?: Defense) {
+  //
+  // Returns whether the pick landed, which is the only thing a ceremony needs to
+  // know about the mutation: on false the pack is back, the card is lit again
+  // and `commitError` is set, and whatever is standing should stay standing.
+  async function commit(proposal: Proposal, defense?: Defense): Promise<boolean> {
     // A ref, not the `picking` state: two clicks dispatched before React
     // re-renders both read the same stale `false`, and the second one spends a
     // pick the player did not make. The modal's buttons make that a good deal
     // easier to do than the confirm bar did.
-    if (committing.current || !text) return;
+    if (committing.current || !text) return false;
     committing.current = true;
 
     const { card, bench, carried } = proposal;
@@ -710,7 +643,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           sideboard: result.sideboard,
         },
       );
-      setPending(null);
       setSelected(null);
       setLast({
         score,
@@ -728,16 +660,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           : {}),
       });
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
+      return true;
     } catch (e) {
       // Nothing was passed after all, so put the pack back rather than let it
-      // finish leaving. `pending` is left standing so the defense survives --
-      // retyping it because the network blinked would be the worst moment this
-      // flow could pick -- and the message goes onto the stage itself, which is
-      // also where the way out of it is.
+      // finish leaving. Saying so instead of closing anything is what lets a
+      // ceremony keep its stage up -- retyping a defense because the network
+      // blinked would be the worst moment this flow could pick.
       window.clearTimeout(sweep);
       setOutgoing(null);
       setSelected(card.name);
       setCommitError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       committing.current = false;
       setPicking(false);
@@ -925,7 +858,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       key={card.name}
                       card={card}
                       index={i}
-                      disabled={picking || pending !== null}
+                      disabled={picking || standing !== undefined}
                       selected={selected === card.name}
                       onClick={onTileClick}
                       onQuickPick={onQuickPick}
@@ -950,7 +883,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                   second copy of the choice, at the bottom of the screen, is one
                   you are dragging away from. It is back the moment the card is
                   let go. */}
-              {selectedCard && !carrying && !pending && (
+              {selectedCard && !carrying && !standing && (
                 <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
                   <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
                     <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
@@ -980,10 +913,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         Pick to sideboard
                       </button>
                     </span>
-                    <span className="hidden text-xs text-base-content/50 sm:inline">
-                      Drag a card to choose a pile · double-click to maindeck ·{" "}
-                      <kbd className="kbd kbd-xs">esc</kbd> to clear
-                    </span>
+                    {/* A pick that failed with no ceremony open has nowhere else
+                        to be said: the card is back and lit, so the reason it is
+                        still there belongs beside it. */}
+                    {commitError ? (
+                      <span className="w-full text-center text-xs text-error">{commitError}</span>
+                    ) : (
+                      <span className="hidden text-xs text-base-content/50 sm:inline">
+                        Drag a card to choose a pile · double-click to maindeck ·{" "}
+                        <kbd className="kbd kbd-xs">esc</kbd> to clear
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -1000,7 +940,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 disagreement and answer by saying nothing at all. */}
             <aside
               data-preview-edge
-              inert={pending !== null}
+              inert={standing !== undefined}
               className="flex flex-col gap-4"
             >
               <Panel title="Last pick" bodyClassName="gap-3">
@@ -1076,8 +1016,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     </div>
                   </>
                 ) : (
+                  // The ceremony's own line, because it is the one that knows
+                  // what the player is about to be asked for.
                   <p className="text-base-content/60">
-                    Take a card and say why. Nothing is graded until you have.
+                    {ceremonies[settings.pickCeremony].invitation}
                   </p>
                 )}
               </Panel>
@@ -1108,27 +1050,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             )}
           </DragOverlay>
 
-          {pending?.stage === "reason" && (
-            <StateYourCase
-              card={pending.proposal.card}
-              busy={picking}
-              error={commitError}
-              onBack={abandon}
-              onCommit={onCommit}
-            />
-          )}
-          {pending?.stage === "challenge" && (
-            <TheChallenge
-              yours={pending.proposal.card}
-              challenger={pending.challenge.challenger}
-              reason={pending.reason}
-              busy={picking}
-              error={commitError}
-              onAbandon={abandon}
-              onStand={() => resolve(pending.proposal.card)}
-              onSwitch={() => resolve(pending.challenge.challenger)}
-            />
-          )}
+          {/* The slot. Whatever is standing draws here, over the dimmed board
+              and short of the rail -- and nothing does when nothing is. */}
+          {standing?.stage}
         </DndContext>
       )}
     </PageShell>
