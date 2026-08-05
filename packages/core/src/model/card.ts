@@ -78,6 +78,23 @@ export interface CardText {
   toughness?: string;
   loyalty?: string;
   imageUrl?: string;
+  // Scryfall's own word for how the card is printed, stored only when it is not
+  // `normal`. 4,776 of the 5,079 cards across the seventeen ingested sets are
+  // normal, so the field is absent on 94% of rows and the other 303 are the
+  // whole reason it exists.
+  //
+  // Nothing else stored can stand in for it. A two-in-one card's type line is
+  // "Creature — Faerie Rogue // Instant — Adventure" and a transforming card's
+  // is "Legendary Creature — Kithkin Warrior // Legendary Creature — Kithkin
+  // Soldier": both halves are visible at once in the first case and one has to
+  // be turned over in the second, and only this says which.
+  layout?: string;
+  // The other side's art, and only for the layouts that print one. `transform`
+  // is the sole one in the pool whose faces carry their own `image_uris`; an
+  // Adventure, an Omen, a Room and a split card all put both halves on the
+  // single picture the player is already looking at, so a "see the back" popup
+  // for those would show a second copy of the front.
+  backImageUrl?: string;
   collectorNumber: string;
   // Scryfall set code. Differs from the set being drafted for bonus-sheet and
   // Special Guest cards, which appear in packs without belonging to the set.

@@ -94,6 +94,8 @@ export function textHalf(c: StoredCard): StoredCardText {
     toughness: c.toughness,
     loyalty: c.loyalty,
     imageUrl: c.imageUrl,
+    layout: c.layout,
+    backImageUrl: c.backImageUrl,
     collectorNumber: c.collectorNumber,
     setCode: c.setCode,
     avgPick: c.avgPick,

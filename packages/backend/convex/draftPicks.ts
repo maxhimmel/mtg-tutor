@@ -1,5 +1,12 @@
 import { ConvexError } from "convex/values";
-import type { Card, EngineCard, PoolCard, RecordedPick, TextIndex } from "@mtg-tutor/core";
+import type {
+  Card,
+  EngineCard,
+  PickDefense,
+  PoolCard,
+  RecordedPick,
+  TextIndex,
+} from "@mtg-tutor/core";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
@@ -18,6 +25,7 @@ export async function recordPick(
   pickIndex: number,
   rec: RecordedPick,
   poolBefore: readonly PoolCard[],
+  defense?: PickDefense,
 ): Promise<void> {
   await ctx.db.insert("draftPicks", {
     sessionId,
@@ -43,6 +51,7 @@ export async function recordPick(
       rankInPack: rec.score.rankInPack,
     },
     ...(rec.signal === undefined ? {} : { signal: rec.signal }),
+    ...(defense === undefined ? {} : { defense }),
   });
 }
 

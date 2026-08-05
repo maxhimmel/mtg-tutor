@@ -1,7 +1,14 @@
-import type { Card, ColorCode, EngineCard, PoolCard } from "../model/card.js";
+import type {
+  Card,
+  CardContext,
+  ColorCode,
+  ColorWinRate,
+  EngineCard,
+  PoolCard,
+} from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
-import { type ScoringContext, type ValueTerm, contextValue } from "./context.js";
+import { type ScoringContext, type ValueTerm, commitment, contextValue } from "./context.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -107,6 +114,36 @@ export function committedColors(pool: readonly PoolCard[]): Set<ColorCode> {
 // different things is the bug that sentence is most able to hide.
 export function isOnColor(committed: ReadonlySet<ColorCode>, colors: readonly ColorCode[]): boolean {
   return committed.size === 0 || colors.length === 0 || colors.some((c) => committed.has(c));
+}
+
+/**
+ * The context a pack is judged against, from the deck as it stands.
+ *
+ * One function because there are now two callers and they must not drift: the
+ * mutation that scores a pick, and the browser that ranks the same pack to name
+ * a challenger BEFORE the pick is made. If those two built the context
+ * differently the app would argue for one card and then grade against another,
+ * and nothing would report the disagreement -- the same failure mode `isOnColor`
+ * is shared to avoid.
+ *
+ * `maindeck` is the pool minus what the player has set aside, and `picksMade` is
+ * how many picks have been made before this one. Both are the caller's to
+ * derive, because only the caller knows which moment it is asking about.
+ */
+export function packScoringContext(
+  maindeck: readonly EngineCard[],
+  picksMade: number,
+  totalPicks: number,
+  archetypes: readonly ColorWinRate[],
+  contextFor: (card: EngineCard) => CardContext | undefined,
+): ScoringContext {
+  const colors = committedColors(maindeck);
+  return {
+    colors,
+    commitment: commitment(maindeck, colors, picksMade, totalPicks),
+    archetypes,
+    contextFor,
+  };
 }
 
 // A pick worth thinking about: the pack still has enough cards that the choice

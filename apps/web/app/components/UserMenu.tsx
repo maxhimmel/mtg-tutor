@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
-import { useSettings } from "../lib/useSettings";
+import { PICK_CEREMONIES, useSettings } from "../lib/useSettings";
 
 // 2 is "coach everything except the literally forced last card"; 9 stops at the
 // halfway point of a Play Booster pack.
@@ -121,6 +121,47 @@ export function UserMenu() {
           </div>
 
           <div className="mb-1 border-t border-base-300" />
+
+          {/* First in the menu because it is the largest thing the app does
+              differently, and because this menu is in the masthead of the draft
+              board itself -- a player halfway through a pack who wants the other
+              flow reaches it here, without leaving the draft. */}
+          <div className="flex flex-col gap-1.5 px-2 py-1.5 text-sm">
+            <span>Making a pick</span>
+            <div
+              className="flex rounded-lg bg-base-300 p-0.5"
+              role="group"
+              aria-label="What happens between choosing a card and the pick landing"
+            >
+              {PICK_CEREMONIES.map(({ id, label }) => {
+                const selected = settings.pickCeremony === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={`flex-1 cursor-pointer rounded-md py-1 text-xs transition-colors ${
+                      selected
+                        ? "bg-primary font-semibold text-primary-content"
+                        : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
+                    }`}
+                    aria-pressed={selected}
+                    onClick={() => update({ pickCeremony: id })}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* The blurb describes the one that is on, not all of them. Two
+                descriptions side by side would be a comparison to read; this is
+                a statement about what the next pick will ask of you. */}
+            <span className="text-xs text-base-content/60">
+              {PICK_CEREMONIES.find((c) => c.id === settings.pickCeremony)?.blurb}
+            </span>
+            <span className="text-xs text-base-content/45">
+              Safe to change mid-draft — it applies to your next pick.
+            </span>
+          </div>
 
           <label className="flex cursor-pointer items-start justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-base-300">
             <span className="flex flex-col">

@@ -91,6 +91,12 @@ export const cardText = v.object({
   toughness: v.optional(v.string()),
   loyalty: v.optional(v.string()),
   imageUrl: v.optional(v.string()),
+  // How the card is printed, and the other side's art when there is one. Both
+  // absent for an ordinary card, which is nine in ten, so the pair costs almost
+  // nothing across a set -- see Card.layout for why neither can be derived from
+  // the type line already on this row.
+  layout: v.optional(v.string()),
+  backImageUrl: v.optional(v.string()),
   collectorNumber: v.string(),
   setCode: v.optional(v.string()),
   avgPick: v.optional(v.number()),
@@ -242,28 +248,22 @@ export const storedPickScore = v.object({
   rankInPack: v.number(),
 });
 
-// What a player committed to before a pick was graded: why they took it, how
-// sure they said they were, and what they did when another card was put up
+// What the player committed to before the pick was graded: why they took it,
+// how sure they said they were, and what they did when another card was put up
 // against theirs.
 //
-// **Nothing on this branch writes or reads it, and that is the whole point.**
-// Convex validates stored documents on push, so a deployment that has served the
-// `draft-v2` branch holds draftPicks rows carrying `defense`, and pushing a
-// schema that has never heard of the field fails against them. Declaring it here
-// is what lets one deployment serve both while that experiment is judged.
-//
-// It is a placeholder with an expiry, not a feature. See notes.md, "Deferred
-// trade-offs" -- either the challenge flow is adopted and this grows readers, or
-// it is dropped and this comes out with a wipe. Do not build on it meanwhile.
-//
 // Optional on the row and every field inside it required, which is the right way
-// round: a pick either went through the challenge or it did not -- a forced pick
+// round. A pick either went through the challenge or it did not -- a forced pick
 // at the bottom of a pack has nothing to defend -- and a half-filled defense
-// would mean a reader had to guess which half it got.
+// would mean a reader had to guess which half it got. Rows written by a client
+// that knows nothing about this simply have no `defense`, which is what keeps
+// the same deployment serving both -- and why `main` declares the field it never
+// writes. See notes.md, "Deferred trade-offs": that declaration expires when this
+// branch is judged, in whichever direction it goes.
 //
 // The confidence levels are literals rather than a number, because each one is a
-// specific claim about `gapMargin` and a 1-5 slider would be four claims the data
-// cannot settle.
+// specific claim about `gapMargin` (see core's CONFIDENCE) and a 1-5 slider would
+// be four claims the data cannot settle.
 export const confidence = v.union(v.literal("sure"), v.literal("close"), v.literal("guess"));
 
 export const pickDefense = v.object({
@@ -273,6 +273,20 @@ export const pickDefense = v.object({
   // challenge to have anything to say.
   challengedName: v.optional(v.string()),
   switched: v.boolean(),
+});
+
+// The same defense as the client states it, before `draft.pick` settles it.
+//
+// It sends the card it first proposed; the mutation derives `switched` from
+// whether the card actually taken is that one. Deriving rather than accepting
+// keeps the row from being able to disagree with itself -- a stored
+// `switched: true` beside a pick that never moved is a lesson taught about
+// something that did not happen, and there is no way to notice it later.
+export const pickDefenseInput = v.object({
+  reason: v.string(),
+  confidence,
+  challengedName: v.optional(v.string()),
+  proposedName: v.string(),
 });
 
 // One set-aside pick: where it sits in the pool, and when the player decided.

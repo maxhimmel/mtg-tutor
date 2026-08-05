@@ -233,3 +233,74 @@ describe("buildPickContext showing the verdict's working", () => {
     expect(buildPickContext(base({}), [])).not.toContain("is worth what it is here");
   });
 });
+
+describe("buildPickContext with a defended pick", () => {
+  const picked = card("Lightning Strike", { colors: ["R"], gihWinRate: 0.58 });
+  const other = card("Big Bomb", { colors: ["R"], gihWinRate: 0.62 });
+  const rec: RecordedPick<Card> = {
+    packNo: 1,
+    pickNo: 2,
+    pack: [picked, other],
+    picked,
+    score: {
+      score: 84,
+      grade: "B+",
+      picked,
+      pickedValue: 0.58,
+      pickedContextValue: 0.58,
+      rawBest: other,
+      rawBestValue: 0.62,
+      contextBest: picked,
+      contextBestValue: 0.6,
+      terms: [],
+      isBest: true,
+      onColor: true,
+      rankInPack: 2,
+    },
+  };
+
+  const defended = buildPickContext(rec, [], [], [], {
+    reason: "cheap removal is what this deck is short of",
+    confidence: "sure",
+    challengedName: "Big Bomb",
+    switched: false,
+  });
+
+  it("puts the player's own words in the prompt", () => {
+    expect(defended).toContain("cheap removal is what this deck is short of");
+  });
+
+  // Graded against a claim they were never shown is not a lesson, so the claim
+  // travels with the level rather than being implied by its name.
+  it("spells out what the stated confidence was claiming", () => {
+    expect(defended).toContain("Clear");
+    expect(defended).toContain("margin of error");
+  });
+
+  it("says which card was put to them, and what they did about it", () => {
+    expect(defended).toContain("Shown Big Bomb");
+    expect(defended).toContain("stood by Lightning Strike");
+  });
+
+  it("reports a switch as a switch", () => {
+    const switched = buildPickContext(rec, [], [], [], {
+      reason: "on reflection the bomb wins games on its own",
+      confidence: "close",
+      challengedName: "Big Bomb",
+      switched: true,
+    });
+    expect(switched).toContain("changed their pick to it");
+  });
+
+  // A model handed a sentence and no instruction reads it as colour and coaches
+  // the card anyway, which is the one thing this flow exists to stop.
+  it("asks for the reasoning to be coached, not just the pick", () => {
+    expect(defended).toContain("AND the reasoning");
+  });
+
+  it("is absent entirely on a pick that was never defended", () => {
+    const plain = buildPickContext(rec, []);
+    expect(plain).not.toContain("committed to this pick");
+    expect(plain).toContain("Coach this pick.");
+  });
+});

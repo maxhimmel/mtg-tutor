@@ -222,6 +222,19 @@ export default defineSchema({
     completedAt: v.optional(v.string()),
     // Denormalized on completion so the stats screen doesn't replay every draft.
     summary: v.optional(draftSummary),
+    // That the player has built their 40, and the one part of it `sideboard`
+    // cannot say.
+    //
+    // No deck list. Which cards are in the deck is the maindeck half of
+    // `splitPool`, which the draft screen has been writing all along -- storing
+    // the deck again would be a second copy of the same decision, free to
+    // disagree with the first. Lands are the half that split cannot express:
+    // basics are not picks, so nothing in the session refers to them.
+    //
+    // Absent means the deck has not been built yet, which is what `results`
+    // gates the suggestion on. Every draft finished before this existed is in
+    // that state and can be built whenever the player goes back to it.
+    build: v.optional(v.object({ basicLands: v.number(), builtAt: v.string() })),
   }).index("by_user", ["userId"]),
 
   // What one pick actually saw and scored, written as it happens.
@@ -255,9 +268,10 @@ export default defineSchema({
     poolBefore: v.array(v.object({ name: v.string(), colors: v.array(colorCode) })),
     score: storedPickScore,
     signal: v.optional(v.string()),
-    // Declared but never written here, so that one deployment can serve this
-    // branch and `draft-v2` at once. See the note on `pickDefense`; it is on a
-    // clock, not here to stay.
+    // What the player said for this pick before it was graded, and what they did
+    // when it was argued with. Optional because it is a property of HOW a pick
+    // was made rather than of the pick: a forced pick is never challenged, and a
+    // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
 

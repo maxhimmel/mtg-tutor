@@ -20,14 +20,23 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import {
   type Card,
+  type CardContext,
+  type ChallengeOutcome,
+  type Confidence,
   type TextIndex,
   type PickScore,
+  applyBench,
+  calibrationLine,
+  claimOutcome,
   explainPick,
   hydrate,
   hydrateScore,
   isDecisionPick,
   loadPrinciples,
+  normalizeName,
+  packScoringContext,
   splitCitations,
+  splitPool,
   textIndex,
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
@@ -40,11 +49,19 @@ import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSuspendPreview } from "../../components/CardPreview";
-import { useSettings } from "../../lib/useSettings";
+import { type PickCeremony, useSettings } from "../../lib/useSettings";
 import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
 import { webpImage } from "../../lib/cardImage";
 import { preloadImages } from "../../lib/preloadImages";
+import {
+  type Ceremony,
+  type CeremonyBoard,
+  type Defense,
+  type Proposal,
+  usePassivePick,
+} from "./ceremony";
+import { useChallenge } from "./Commitment";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
@@ -161,6 +178,11 @@ interface LastPick {
   // The pack this pick chose from, captured before the mutation swaps it for
   // the next one. The coach talks about these cards and nothing else holds them.
   pack: DraftState["pack"];
+  // How the challenge went. Kept apart from the score because it is about the
+  // PAIR the player was actually shown, which is not always the pair the grade
+  // is measured over: someone who switches to the context-best is graded against
+  // a card they took, and the interesting comparison is the one they left.
+  call?: { confidence: Confidence; outcome: ChallengeOutcome };
 }
 
 export function DraftBoard({ sessionId }: { sessionId: string }) {
@@ -197,6 +219,19 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // not what updates one -- so once is exactly right.
   const [text, setText] = useState<TextIndex | undefined>(undefined);
 
+  // What scoring reads to rank THIS pack against the deck being built. Fetched
+  // per pack rather than per set: fourteen rows, against the ~50KB the set's
+  // would cost.
+  //
+  // Absent means no challenge, and in-flight and unreadable are deliberately the
+  // same absence -- there is nothing useful to say differently about them, and a
+  // challenge computed WITHOUT this would rank the pack on raw power and argue
+  // for a card the server then does not grade against. Better to skip the
+  // argument than to make one the reveal will contradict.
+  const [packContext, setPackContext] = useState<Map<string, CardContext> | undefined>(
+    undefined,
+  );
+
   const { settings } = useSettings();
   const [last, setLast] = useState<LastPick | null>(null);
   // The pack on its way to the next drafter. Held separately from the board
@@ -214,6 +249,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   // The card in hand, drawn under the cursor for as long as it is being carried.
   const [carrying, setCarrying] = useState<Card | null>(null);
+  // A pick that would not go through. Shown wherever the player is standing --
+  // on the ceremony's stage if one is open, and beside the card in the confirm
+  // bar if none is -- rather than in an alert, because that is also where the
+  // way out is.
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -221,6 +261,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // Guards against an earlier pick's stream overwriting a later one when the
   // player picks faster than the coach can answer.
   const streamRun = useRef(0);
+  // The double-submit latch. State cannot do this job: two clicks in the same
+  // tick both read the pre-render value.
+  const committing = useRef(false);
+  // The last sideboard write, so a pick can wait for it. See `propose`.
+  const benchInFlight = useRef<Promise<unknown> | null>(null);
 
   // Ownership is checked server-side, so this has to wait for the token: the
   // subscription this replaced re-ran itself once auth arrived, and a one-shot
@@ -264,6 +309,33 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       cancelled = true;
     };
   }, [convex, setCode, format]);
+
+  // Fetched the moment a pack lands, not when the player commits: they spend
+  // seconds reading the pack, and the challenge should already be waiting when
+  // they finish typing.
+  const packNames = useMemo(() => (state?.pack ?? []).map((c) => c.name), [state?.pack]);
+  useEffect(() => {
+    if (!setCode || !format || packNames.length === 0) return;
+    let cancelled = false;
+    setPackContext(undefined);
+
+    convex
+      .query(api.sets.packContext, { setCode, format, names: packNames })
+      .then((rows) => {
+        if (!cancelled) setPackContext(new Map(rows.map((r) => [r.key, r.context])));
+      })
+      // Not fatal, and not silently degraded either: with no context the browser
+      // would rank the pack on raw power alone and argue for a card the server
+      // will not grade against. The flow drops the challenge instead of making
+      // an argument it cannot stand behind.
+      .catch(() => {
+        if (!cancelled) setPackContext(undefined);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, setCode, format, packNames]);
 
   const streamCoach = useCallback(
     async (pickIndex: number, score: PickScore<Card>, cardsInPack: number, force = false) => {
@@ -333,6 +405,63 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     [last, text],
   );
 
+  // The deck as the player has defined it, and what a pack is judged against.
+  // Built by core's own helper from the same inputs `draft.pick` uses, because
+  // the card this board argues for and the card the server grades against have
+  // to be the same card -- see packScoringContext.
+  const scoringContext = useMemo(() => {
+    if (!state || !packContext) return undefined;
+    const maindeck = splitPool(pool, state.sideboard, pool.length).maindeck;
+    return packScoringContext(
+      maindeck,
+      pool.length,
+      state.totalPicks,
+      state.colorWinRates,
+      (c) => packContext.get(normalizeName(c.name)),
+    );
+  }, [state, pool, packContext]);
+
+  /**
+   * The one thing the two ways of drafting do not share.
+   *
+   * Everything else on this board -- the pack grid, the drag, the picks column,
+   * the sideboard, the verdict, the results -- is the same under both, so the
+   * seam is drawn as narrowly as it can be: it starts where a card is chosen and
+   * ends where the pick is spent. Passive does nothing in that gap; the
+   * challenge argues. A third goes beside these two and implements the same
+   * four things.
+   */
+  const board: CeremonyBoard = {
+    pack,
+    scoring: scoringContext,
+    busy: picking,
+    error: commitError,
+    clearError: () => setCommitError(null),
+    commit,
+  };
+  // Typed by the setting rather than inferred, so a third name added to
+  // `PickCeremony` will not compile until it has something standing behind it.
+  const ceremonies: Record<PickCeremony, Ceremony> = {
+    passive: usePassivePick(board),
+    challenge: useChallenge(board),
+  };
+
+  /**
+   * The ceremony currently holding the screen, if any.
+   *
+   * Read by who is standing rather than by who is selected, which is what makes
+   * switching mid-draft safe at every moment including the worst one: change the
+   * setting while a commitment is open and the open one keeps the screen and
+   * finishes the pick it started, so the sentence already typed is never thrown
+   * away and no warning is needed to say so. The choice takes effect on the next
+   * card chosen, which is the same rule as "picks already made keep whatever
+   * they recorded", one pick earlier.
+   *
+   * At most one can ever be standing: a card is only proposed from an idle
+   * board.
+   */
+  const standing = Object.values(ceremonies).find((ceremony) => ceremony.open);
+
   const selectedCard = useMemo(
     () => pack.find((card) => card.name === selected),
     [pack, selected],
@@ -344,13 +473,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   );
 
   useEffect(() => {
-    if (!selected) return;
+    // Not while a pick is being defended: the card is on the screen above, and
+    // clearing the selection underneath it would leave nothing lit to come back
+    // to.
+    if (!selected || standing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected]);
+  }, [selected, standing]);
 
   // Held back until every card in it can be drawn. A pack is dealt all at once,
   // so the alternative is watching it assemble itself frame by frame.
@@ -396,27 +528,65 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // someone rereading the card, not someone deciding. The shortcut for deciding
   // fast is a real double-click, which is a gesture rather than a repetition.
   function onTileClick(card: Card) {
-    if (picking) return;
+    if (picking || standing) return;
     setSelected(card.name);
+    // A failed pick's message names the card it failed on, and the bar it sits
+    // in is about whichever card is lit -- so choosing another one retires it.
+    setCommitError(null);
   }
 
   // The shortcut takes the card to the deck, which is where the overwhelming
   // majority of picks go. Choosing the other pile is a deliberate act: a button
   // that names it, or carrying the card there.
   function onQuickPick(card: Card) {
-    void onPick(card);
+    void propose({ card, bench: false, carried: false });
+  }
+
+  /**
+   * A card has been chosen. What happens next is the ceremony's business.
+   *
+   * The board's part ends here: it settles the pack, lights the card and hands
+   * the proposal over. Whether that opens a screen or spends the pick on the
+   * spot is the one difference between the two ways of drafting, and it is read
+   * now rather than held anywhere, which is what lets the setting move between
+   * one pick and the next.
+   */
+  async function propose(proposal: Proposal) {
+    if (picking || standing || !text) return;
+    setCommitError(null);
+    // The one way the browser's ranking and the server's grade can be built from
+    // different decks. `onBench` moves a card locally before the server has
+    // confirmed it, so a player who sideboards something and immediately picks
+    // would have the client scoring against the new maindeck and the server
+    // against the old one -- which moves committedColors, which can move the
+    // context-best. Waiting for the write to land costs nothing on every pick
+    // that did not just bench something, because there is nothing to wait for.
+    //
+    // Only reachable here: once a stage is open the board behind it is inert, so
+    // no bench can land between this and the pick.
+    await benchInFlight.current?.catch(() => {});
+    setSelected(proposal.card.name);
+    ceremonies[settings.pickCeremony].begin(proposal);
   }
 
   // `bench` takes the card without adding it to the deck. Said at the moment of
   // picking rather than corrected afterwards, so the tallies the coach reads
   // never briefly count a card the player already knew they would not play.
   //
-  // `carried` means the player took the card out of the pack by hand. It changes
-  // nothing about the pick and everything about what is left behind: see below.
-  async function onPick(card: Card, opts?: { bench?: boolean; carried?: boolean }) {
-    if (picking || !text) return;
-    const bench = opts?.bench ?? false;
+  // Returns whether the pick landed, which is the only thing a ceremony needs to
+  // know about the mutation: on false the pack is back, the card is lit again
+  // and `commitError` is set, and whatever is standing should stay standing.
+  async function commit(proposal: Proposal, defense?: Defense): Promise<boolean> {
+    // A ref, not the `picking` state: two clicks dispatched before React
+    // re-renders both read the same stale `false`, and the second one spends a
+    // pick the player did not make. The modal's buttons make that a good deal
+    // easier to do than the confirm bar did.
+    if (committing.current || !text) return false;
+    committing.current = true;
+
+    const { card, bench, carried } = proposal;
     setPicking(true);
+    setCommitError(null);
     setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
     const packBefore = state?.pack ?? [];
@@ -431,7 +601,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // player is no longer looking at.
     setOutgoing({
       cards: passing,
-      picked: opts?.carried ? "" : card.name,
+      picked: carried ? "" : card.name,
       packNo: state?.packNo ?? 1,
     });
     const sweep = window.setTimeout(
@@ -440,7 +610,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     );
 
     try {
-      const result = await pickCard({ sessionId: id, cardName: card.name, bench });
+      const result = await pickCard({
+        sessionId: id,
+        cardName: card.name,
+        bench,
+        ...(defense
+          ? {
+              defense: {
+                reason: defense.reason,
+                confidence: defense.confidence,
+                ...(defense.challengedName === undefined
+                  ? {}
+                  : { challengedName: defense.challengedName }),
+                proposedName: defense.proposedName ?? card.name,
+              },
+            }
+          : {}),
+      });
       const score = result.score as PickScore;
       // `pick` returns the whole next board, which is the reason this component
       // needs no subscription. Everything not listed here -- the set's name,
@@ -457,15 +643,36 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           sideboard: result.sideboard,
         },
       );
-      setLast({ score, signal: result.signal, pickIndex: result.pickIndex, pack: packBefore });
+      setSelected(null);
+      setLast({
+        score,
+        signal: result.signal,
+        pickIndex: result.pickIndex,
+        pack: packBefore,
+        // Only when the server graded against the same card the browser argued
+        // over. They are built from the same inputs by the same function and
+        // should never differ; if they ever do, the honest move is to say
+        // nothing about the player's certainty rather than score it against a
+        // comparison they were never shown.
+        ...(defense?.outcome &&
+        defense.expectedBestName === (score.contextBest as { name: string }).name
+          ? { call: { confidence: defense.confidence, outcome: defense.outcome } }
+          : {}),
+      });
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
+      return true;
     } catch (e) {
       // Nothing was passed after all, so put the pack back rather than let it
-      // finish leaving.
+      // finish leaving. Saying so instead of closing anything is what lets a
+      // ceremony keep its stage up -- retyping a defense because the network
+      // blinked would be the worst moment this flow could pick.
       window.clearTimeout(sweep);
       setOutgoing(null);
-      alert(e instanceof Error ? e.message : String(e));
+      setSelected(card.name);
+      setCommitError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
+      committing.current = false;
       setPicking(false);
     }
   }
@@ -500,7 +707,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // Released anywhere but on a pile. Nothing was decided, so nothing happens
     // -- the card is still in the pack and still unpicked.
     if (!card || !zone) return;
-    void onPick(card, { bench: zone.bench, carried: true });
+    void propose({ card, bench: zone.bench, carried: true });
   }
 
   // Moved locally first and reconciled with what the server returns, because
@@ -508,22 +715,22 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // round trip would leave a card sitting in a list it has been dragged out of.
   async function onBench(pickIndex: number, benched: boolean) {
     const before = state?.sideboard ?? [];
-    const without = before.filter((b) => b.pos !== pickIndex);
-    // Benching now, so the clock is the picks made so far. The server keeps an
-    // existing entry's `atPick` on a repeat call and this reconciles to it.
-    const after = benched
-      ? [...without, { pos: pickIndex, atPick: state?.pool.length ?? pickIndex }].sort(
-          (a, b) => a.pos - b.pos,
-        )
-      : without;
+    // Benching now, so the clock is the picks made so far. Through the same
+    // `applyBench` the mutation runs, so the predicted answer is the stored one.
+    const after = applyBench(before, pickIndex, benched, state?.pool.length ?? pickIndex);
     setState((prev) => prev && { ...prev, sideboard: after });
 
     try {
-      const stored = await benchCard({ sessionId: id, pickIndex, benched });
+      // Held so a pick made straight afterwards can wait for it -- see propose.
+      const write = benchCard({ sessionId: id, pickIndex, benched });
+      benchInFlight.current = write;
+      const stored = await write;
       setState((prev) => prev && { ...prev, sideboard: stored });
     } catch (e) {
       setState((prev) => prev && { ...prev, sideboard: before });
       alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      benchInFlight.current = null;
     }
   }
 
@@ -651,7 +858,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       key={card.name}
                       card={card}
                       index={i}
-                      disabled={picking}
+                      disabled={picking || standing !== undefined}
                       selected={selected === card.name}
                       onClick={onTileClick}
                       onQuickPick={onQuickPick}
@@ -670,12 +877,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 </div>
               )}
 
-              {/* Not while a card is in the air. The bar and the two lit piles
-                  ask the same question, and during a drag the piles are the ones
-                  being answered -- a second copy of the choice, at the bottom of
-                  the screen, is one you are dragging away from. It is back the
-                  moment the card is let go. */}
-              {selectedCard && !carrying && (
+              {/* Not while a card is in the air, and not while one is being
+                  defended. The bar and the two lit piles ask the same question,
+                  and during a drag the piles are the ones being answered -- a
+                  second copy of the choice, at the bottom of the screen, is one
+                  you are dragging away from. It is back the moment the card is
+                  let go. */}
+              {selectedCard && !carrying && !standing && (
                 <div className="sticky bottom-4 z-20 mt-4 flex justify-center">
                   <div className="popup-surface flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-2.5">
                     <span className="font-display text-lg leading-tight">{selectedCard.name}</span>
@@ -688,7 +896,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         type="button"
                         className="btn btn-primary btn-sm"
                         disabled={picking}
-                        onClick={() => void onPick(selectedCard)}
+                        onClick={() =>
+                          void propose({ card: selectedCard, bench: false, carried: false })
+                        }
                       >
                         Pick to maindeck
                       </button>
@@ -696,15 +906,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         type="button"
                         className="btn btn-outline btn-sm"
                         disabled={picking}
-                        onClick={() => void onPick(selectedCard, { bench: true })}
+                        onClick={() =>
+                          void propose({ card: selectedCard, bench: true, carried: false })
+                        }
                       >
                         Pick to sideboard
                       </button>
                     </span>
-                    <span className="hidden text-xs text-base-content/50 sm:inline">
-                      Drag a card to choose a pile · double-click to maindeck ·{" "}
-                      <kbd className="kbd kbd-xs">esc</kbd> to clear
-                    </span>
+                    {/* A pick that failed with no ceremony open has nowhere else
+                        to be said: the card is back and lit, so the reason it is
+                        still there belongs beside it. */}
+                    {commitError ? (
+                      <span className="w-full text-center text-xs text-error">{commitError}</span>
+                    ) : (
+                      <span className="hidden text-xs text-base-content/50 sm:inline">
+                        Drag a card to choose a pile · double-click to maindeck ·{" "}
+                        <kbd className="kbd kbd-xs">esc</kbd> to clear
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -713,7 +932,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             {/* The right-hand wall for card previews: the coach is talking here,
                 and a card image landing on top of it covers the thing you are
                 drafting by. */}
-            <aside data-preview-edge className="flex flex-col gap-4">
+            {/* Readable through a commitment stage, and untouchable during one.
+                The stage stops at this rail so the player can see the deck they
+                are deciding for -- and benching a card from here mid-challenge
+                would move committedColors under a challenge already computed
+                against the old pool, which the reveal would catch as a
+                disagreement and answer by saying nothing at all. */}
+            <aside
+              data-preview-edge
+              inert={standing !== undefined}
+              className="flex flex-col gap-4"
+            >
               <Panel title="Last pick" bodyClassName="gap-3">
                 {lastView ? (
                   <>
@@ -723,6 +952,42 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     <div key={lastView.pickIndex} className="motion-safe:animate-verdict">
                       <Verdict score={lastView.score} />
                     </div>
+
+                    {lastView.call && (
+                      // What the certainty they stated was actually worth. Its own
+                      // block rather than a line in the verdict, because it grades
+                      // a different thing: the verdict is about the card, and this
+                      // is about the claim they made before they saw it.
+                      <div className="border-t border-base-300 pt-3">
+                        <div className="eyebrow mb-1.5 flex items-center justify-between gap-2">
+                          {/* Named for what it grades. Sitting under an A+ and
+                              "nothing scored higher", a bare "misread" reads as
+                              a second opinion on the card -- and it is not one:
+                              the grade is about the card and this is about the
+                              gap the player claimed to see. */}
+                          <span>Your call on the gap</span>
+                          {claimOutcome(lastView.call.confidence, lastView.call.outcome) !==
+                            "none" && (
+                            <span
+                              className={`badge badge-sm ${
+                                claimOutcome(lastView.call.confidence, lastView.call.outcome) ===
+                                "held"
+                                  ? "badge-success"
+                                  : "badge-warning"
+                              }`}
+                            >
+                              {claimOutcome(lastView.call.confidence, lastView.call.outcome) ===
+                              "held"
+                                ? "read it right"
+                                : "misread"}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm leading-relaxed text-base-content/80">
+                          {calibrationLine(lastView.call.confidence, lastView.call.outcome)}
+                        </p>
+                      </div>
+                    )}
 
                     {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
 
@@ -751,7 +1016,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     </div>
                   </>
                 ) : (
-                  <p className="text-base-content/60">Pick a card to see how it scored.</p>
+                  // The ceremony's own line, because it is the one that knows
+                  // what the player is about to be asked for.
+                  <p className="text-base-content/60">
+                    {ceremonies[settings.pickCeremony].invitation}
+                  </p>
                 )}
               </Panel>
 
@@ -780,6 +1049,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               />
             )}
           </DragOverlay>
+
+          {/* The slot. Whatever is standing draws here, over the dimmed board
+              and short of the rail -- and nothing does when nothing is. */}
+          {standing?.stage}
         </DndContext>
       )}
     </PageShell>

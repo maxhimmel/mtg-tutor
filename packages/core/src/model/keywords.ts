@@ -3,6 +3,12 @@
 // a set with its own named mechanic can be appended here without touching
 // anything else. Reminder text is the printed wording, trimmed of the reminder
 // parentheses and of cost placeholders that vary per card.
+//
+// The bottom of the file answers the same question about the card's SHAPE
+// rather than its abilities, in the same {name, reminder} pair, because a
+// reader that can render one can render the other and the two belong side by
+// side: on a two-in-one card, which half a keyword is on is the first thing
+// anybody needs to know.
 
 export interface Keyword {
   name: string;
@@ -144,6 +150,25 @@ const GLOSSARY: Keyword[] = [
     name: "Fight",
     reminder: "Each creature deals damage equal to its power to the other.",
   },
+  {
+    name: "Bargain",
+    reminder: "You may sacrifice an artifact, enchantment, or token as you cast this spell.",
+  },
+  {
+    name: "Backup",
+    reminder:
+      "When this creature enters, put that many +1/+1 counters on target creature. If that's another creature, it also gains this card's other abilities until end of turn.",
+  },
+  {
+    name: "Discover",
+    reminder:
+      "Exile cards from the top of your library until you exile a nonland card with that mana value or less. Cast it without paying its mana cost or put it into your hand, then put the rest on the bottom in a random order.",
+  },
+  {
+    name: "Storm",
+    reminder:
+      "When you cast this spell, copy it for each spell cast before it this turn. You may choose new targets for the copies.",
+  },
 ];
 
 const MATCHERS = GLOSSARY.map((keyword) => ({
@@ -168,4 +193,90 @@ export function keywordsOf(card: { oracleText: string }): Keyword[] {
   }
 
   return found.sort((a, b) => a.at - b.at).map((f) => f.keyword);
+}
+
+// How a card is PRINTED, where that is itself a rule -- two spells sharing one
+// card, or one card with a second side.
+//
+// Keyed by what the card names itself, because a name it prints is more precise
+// than the layout it is filed under: `adventure` covers both Adventure and Omen
+// and the two differ in exactly the way that matters here -- an Adventure waits
+// in exile to be cast again, an Omen is shuffled away.
+const SHAPE_BY_SUBTYPE: Record<string, Keyword> = {
+  Adventure: {
+    name: "Adventure",
+    reminder:
+      "Two cards in one. Cast the Adventure half as an instant or sorcery and it exiles itself instead of going to the graveyard, and you may cast the creature from exile later.",
+  },
+  Omen: {
+    name: "Omen",
+    reminder:
+      "Two cards in one. Cast the Omen half as an instant or sorcery, then shuffle the card back into your library — so the creature is still in there to be drawn again.",
+  },
+  Room: {
+    name: "Room",
+    reminder:
+      "Two halves of one enchantment. Cast either door for its own cost; the other stays locked on the battlefield until you pay its mana cost as a sorcery, and then you have both.",
+  },
+};
+
+// The shapes no card names on itself. Scryfall's layout is the only thing that
+// distinguishes them: "Creature — X // Sorcery" is a spell you choose between
+// and "Creature — X // Creature — Y" is a card you turn over, and neither type
+// line says so.
+//
+// `adventure` is here as well as above, and is unreachable in the sets we hold,
+// because that layout has already been given a second subtype once -- Omen is
+// Adventure's frame under new rules -- so a third arriving with no entry of its
+// own is the likely case rather than the impossible one.
+const SHAPE_BY_LAYOUT: Record<string, Keyword> = {
+  adventure: {
+    name: "Two-part card",
+    reminder:
+      "Two cards in one. Cast the lower half as a spell, and the creature above it becomes available afterwards.",
+  },
+  split: {
+    name: "Split card",
+    reminder: "Two spells on one card. Choose one half to cast; the whole card goes to the graveyard.",
+  },
+  prepare: {
+    name: "Prepared spell",
+    reminder:
+      "A creature with a spell attached. Cast the creature, and while it is prepared you may cast a copy of the spell half — once, unless something prepares it again.",
+  },
+  // `transform` is deliberately absent. Every other shape here needs saying
+  // because the card does not show it: a split card and an Adventure look alike
+  // and are not. A double-faced card explains itself the moment its back is
+  // drawn beside its front, so a note saying it has a back is a caption on a
+  // picture of the back.
+};
+
+// Everything after the last "//" -- the half that names the shape. An Adventure
+// and an Omen are always the SECOND half, so reading the whole type line would
+// find "Creature" first and say nothing useful.
+function backSubtypes(typeLine: string): string[] {
+  const back = typeLine.split("//").at(-1) ?? "";
+  return (back.split("—")[1] ?? "").trim().split(/\s+/);
+}
+
+/**
+ * How this card is printed, when that is something the player has to be told.
+ *
+ * Undefined for the ordinary card and for the layouts that are only a frame --
+ * Saga, Class and Case are their own Scryfall layouts and are still one card
+ * with one rules box, so there is nothing here to explain.
+ *
+ * Also undefined for a card ingested before `layout` was stored, which is the
+ * same answer a normal card gets. That is deliberate: guessing the shape from
+ * the type line would report split cards and double-faced cards as each other.
+ */
+export function cardShapeOf(card: { layout?: string; typeLine: string }): Keyword | undefined {
+  if (!card.layout) return undefined;
+
+  for (const subtype of backSubtypes(card.typeLine)) {
+    const named = SHAPE_BY_SUBTYPE[subtype];
+    if (named) return named;
+  }
+
+  return SHAPE_BY_LAYOUT[card.layout];
 }

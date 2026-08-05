@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { keywordsOf } from "./keywords.js";
+import { cardShapeOf, keywordsOf } from "./keywords.js";
 
 const names = (oracleText: string) => keywordsOf({ oracleText }).map((k) => k.name);
 
@@ -33,5 +33,58 @@ describe("keywordsOf", () => {
 
   it("is empty for vanilla rules text", () => {
     expect(names("When this creature dies, draw a card.")).toEqual([]);
+  });
+
+  // The five the app was missing, each in the wording its own set prints.
+  it("finds the set mechanics", () => {
+    expect(names("Bargain\nWhen this enchantment enters, destroy target creature.")).toEqual([
+      "Bargain",
+    ]);
+    expect(names("Backup 1\nFlying")).toEqual(["Backup", "Flying"]);
+    expect(names("When you cast this spell, discover 4.")).toEqual(["Discover"]);
+    expect(names("Storm\nTarget player loses 2 life.")).toEqual(["Storm"]);
+  });
+});
+
+// Names as Scryfall prints them, so the type line and the layout are the pair
+// cardShapeOf actually has to read apart.
+const shape = (layout: string | undefined, typeLine: string) =>
+  cardShapeOf({ layout, typeLine })?.name;
+
+describe("cardShapeOf", () => {
+  it("tells an Adventure from an Omen, which share a layout", () => {
+    expect(shape("adventure", "Creature — Faerie Rogue // Instant — Adventure")).toBe("Adventure");
+    expect(shape("adventure", "Creature — Dragon // Sorcery — Omen")).toBe("Omen");
+  });
+
+  it("tells a Room from a split card, which share a layout", () => {
+    expect(shape("split", "Enchantment — Room // Enchantment — Room")).toBe("Room");
+    expect(shape("split", "Sorcery // Sorcery")).toBe("Split card");
+  });
+
+  it("names the shapes no card names on itself", () => {
+    expect(shape("prepare", "Creature — Human Wizard // Sorcery")).toBe("Prepared spell");
+  });
+
+  // The preview draws the back face beside the front, which says everything the
+  // note would have said and does not need reading.
+  it("says nothing about a card whose back is already on screen", () => {
+    expect(
+      shape("transform", "Legendary Creature — Kithkin Warrior // Legendary Creature — Kithkin Soldier"),
+    ).toBeUndefined();
+  });
+
+  it("says nothing about a layout that is only a frame", () => {
+    expect(shape("saga", "Enchantment — Saga")).toBeUndefined();
+    expect(shape("class", "Enchantment — Class")).toBeUndefined();
+    expect(shape("case", "Enchantment — Case")).toBeUndefined();
+  });
+
+  // A card ingested before the field existed gets the ordinary card's answer
+  // rather than a guess: the type line alone cannot tell a split card from a
+  // double-faced one.
+  it("says nothing when the layout is unknown", () => {
+    expect(shape(undefined, "Creature — Faerie Rogue // Instant — Adventure")).toBeUndefined();
+    expect(shape(undefined, "Creature — Human")).toBeUndefined();
   });
 });

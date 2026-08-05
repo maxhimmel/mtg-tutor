@@ -1,7 +1,15 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { type Bench, type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
+import {
+  type Bench,
+  type Card,
+  type DeckPick,
+  cardTypes,
+  creatureTypes,
+  deckPiles,
+  tally,
+} from "@mtg-tutor/core";
 import { ringFor } from "../lib/cardFrame";
 import { COLOR_NAMES } from "../lib/format";
 import { CardPlacardList } from "./CardPlacard";
@@ -11,17 +19,6 @@ import { Panel } from "./Panel";
 // Enough to see what the deck is becoming without turning the panel into a
 // wall of one-off tribes; the rest stay in the tooltip.
 const TOP_CREATURE_TYPES = 6;
-
-// A pick and where it sits in the draft. The position is what benching is keyed
-// on -- two copies of the same card are two different picks -- so it has to
-// survive the sort into curve order.
-interface Pick {
-  card: Card;
-  pickIndex: number;
-}
-
-const byCurve = (a: Pick, b: Pick) =>
-  a.card.cmc - b.card.cmc || a.card.name.localeCompare(b.card.name);
 
 // The two piles, as places to put a card rather than as lists of one. A section
 // wearing a card is where it will land; the wash and the ring are the same gold
@@ -79,8 +76,7 @@ export function PicksColumn({
 }: {
   pool: Card[];
   // Positions in `pool`, which is the pool in pick order — see the field's note
-  // in the backend schema. The panel only asks whether a card is set aside, not
-  // when, so it reads `pos` and ignores the clock.
+  // in the backend schema.
   sideboard: Bench[];
   onBench: (pickIndex: number, benched: boolean) => void;
   // A card is being carried, so this panel is offering somewhere to put it
@@ -96,13 +92,7 @@ export function PicksColumn({
   const main = useDroppable({ id: "maindeck", data: { bench: false } });
   const side = useDroppable({ id: "sideboard", data: { bench: true } });
 
-  const benched = new Set(sideboard.map((b) => b.pos));
-  const picks = pool.map((card, pickIndex) => ({ card, pickIndex }));
-
-  // Ascending mana value, name as the tie-break. Copied before sorting -- the
-  // pool is shared React state and must not be mutated.
-  const maindeck = picks.filter((p) => !benched.has(p.pickIndex)).sort(byCurve);
-  const bench = picks.filter((p) => benched.has(p.pickIndex)).sort(byCurve);
+  const { maindeck, sideboard: bench } = deckPiles(pool, sideboard);
 
   // Everything the panel counts, counts the deck being built. Cards in the
   // sideboard are cards the player has said they are not playing, so leaving
@@ -110,19 +100,13 @@ export function PicksColumn({
   // which is exactly what the coach is being told to stop doing.
   const deck = maindeck.map((p) => p.card);
 
-  const colors = new Map<string, number>();
-  for (const c of deck) for (const col of c.colors) colors.set(col, (colors.get(col) ?? 0) + 1);
-
+  const colors = tally(deck, (c) => c.colors);
   const types = tally(deck, cardTypes);
   const tribes = tally(deck, creatureTypes);
   const asCounts = (counts: [string, number][]) => counts.map(([n, c]) => `${n} ${c}`).join(" · ");
 
-  const trailingFor = (list: Pick[], isBenched: boolean) => (card: Card, i: number) => (
-    <BenchButton
-      card={card}
-      benched={isBenched}
-      onClick={() => onBench(list[i].pickIndex, !isBenched)}
-    />
+  const trailingFor = (list: DeckPick<Card>[], isBenched: boolean) => (card: Card, i: number) => (
+    <BenchButton card={card} benched={isBenched} onClick={() => onBench(list[i].pos, !isBenched)} />
   );
 
   return (
@@ -183,7 +167,7 @@ export function PicksColumn({
         <div className={eyebrowClass(main.isOver, offering)}>Maindeck ({maindeck.length})</div>
         {maindeck.length === 0 ? (
           <p className="text-sm text-base-content/60">
-            {picks.length === 0 ? "Nothing drafted yet." : "Every pick is in the sideboard."}
+            {pool.length === 0 ? "Nothing drafted yet." : "Every pick is in the sideboard."}
           </p>
         ) : (
           <CardPlacardList
