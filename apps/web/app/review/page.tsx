@@ -139,6 +139,17 @@ function DraftList() {
                     >
                       Breakdown
                     </Link>
+                    {/* The other two are about the picks. This is about what
+                        the picks became, and until now nothing led back to it
+                        once the results screen had been left. A draft can also
+                        be finished and never built, and then the deck is still
+                        to be made rather than to be read. */}
+                    <Link
+                      href={`/review/${draft.id}/deck`}
+                      className="btn btn-sm btn-ghost ml-1.5"
+                    >
+                      {draft.built ? "Deck" : "Build the deck"}
+                    </Link>
                   </td>
                 </tr>
               );

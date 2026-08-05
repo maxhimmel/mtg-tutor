@@ -4,6 +4,7 @@ import {
   COACH,
   CURVE_TOP,
   DECK,
+  byCurve,
   cardValue,
   decksAgree,
   explainPick,
@@ -270,6 +271,7 @@ function showResults(results: Results) {
 
   p.note(
     [...deck.spells, ...deck.nonbasicLands]
+      .sort(byCurve)
       .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
       .join("\n"),
     `The suggested build — ${deck.colors.join("") || "splashy"}, ${landLine}`,

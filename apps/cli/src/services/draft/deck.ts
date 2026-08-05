@@ -6,6 +6,7 @@ import {
   applyBench,
   benchChanges,
   buildDeck,
+  byCurve,
   deckPiles,
   deckSizeNote,
   isLandCount,
@@ -93,9 +94,9 @@ function deckReadout(deck: BuiltDeck, benched: number): string {
       `${benched} in the sideboard`,
     curveLine(deck.curve),
     "",
-    ...[...deck.spells, ...deck.nonbasicLands].map(
-      (c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`,
-    ),
+    ...[...deck.spells, ...deck.nonbasicLands]
+      .sort(byCurve)
+      .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`),
     pc.dim(`  + ${deck.basicLands} basic lands`),
   ].join("\n");
 }

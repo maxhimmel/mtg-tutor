@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mkCard } from "../testing/fakeSet.js";
 import {
+  alignDecks,
   buildDeck,
   compareDecks,
   deckPiles,
@@ -9,7 +10,7 @@ import {
   isLandCount,
   isLegalDeck,
 } from "./build.js";
-import { suggestDeck } from "./deck.js";
+import { suggestDeck, type DeckSuggestion } from "./deck.js";
 import type { Bench } from "../model/bench.js";
 import type { Card } from "../model/card.js";
 
@@ -223,5 +224,68 @@ describe("compareDecks", () => {
     // The suggestion plays the fixer and 16 basics; the player plays it and 16
     // too, so the totals agree even though the basics do not have to.
     expect(diff.lands).toEqual({ built: 17, suggested: 17 });
+  });
+});
+
+describe("alignDecks", () => {
+  const at = (name: string, cmc: number) => spell(name, "W", 0.55, cmc);
+  const asSuggestion = (spells: Card[], nonbasicLands: Card[] = []): DeckSuggestion => ({
+    colors: ["W"],
+    spells,
+    nonbasicLands,
+    basicLands: 40 - spells.length - nonbasicLands.length,
+    curve: [],
+  });
+
+  it("gives a card both decks play one row, not two", () => {
+    const shared = Array.from({ length: 22 }, (_, i) => spell(`W${i}`, "W", 0.6));
+    const pool = [...shared, spell("Keeper", "U", 0.59), spell("Cut", "U", 0.58)];
+
+    const suggested = suggestDeck(pool);
+    const built = buildDeck([...shared, pool[23]], 17);
+    const rows = alignDecks(built, suggested);
+
+    // Twenty-three cards a side, laid out in twenty-four rows rather than
+    // forty-six: the whole reason the comparison fits on a screen.
+    expect(rows).toHaveLength(24);
+    expect(rows.filter((r) => r.built && r.suggested)).toHaveLength(
+      compareDecks(built, suggested).shared,
+    );
+    expect(rows.filter((r) => !r.built).map((r) => r.suggested?.name)).toEqual(["Keeper"]);
+    expect(rows.filter((r) => !r.suggested).map((r) => r.built?.name)).toEqual(["Cut"]);
+  });
+
+  it("reads down the curve on both sides at once", () => {
+    const built = buildDeck([at("Five", 5), at("One", 1)], 17);
+    const suggested = asSuggestion([at("Three", 3), at("One", 1)]);
+
+    expect(alignDecks(built, suggested).map((r) => [r.built?.name, r.suggested?.name])).toEqual([
+      ["One", "One"],
+      [undefined, "Three"],
+      ["Five", undefined],
+    ]);
+  });
+
+  // Drafting two of a common is normal. Pairing by name alone would put both
+  // copies opposite the one the suggestion plays and lose the disagreement.
+  it("pairs copies one at a time and leaves the odd one on its own row", () => {
+    const built = buildDeck([at("Twin", 2), at("Twin", 2)], 17);
+    const rows = alignDecks(built, asSuggestion([at("Twin", 2)]));
+
+    expect(rows.map((r) => [r.built?.name, r.suggested?.name])).toEqual([
+      ["Twin", "Twin"],
+      ["Twin", undefined],
+    ]);
+  });
+
+  it("lays a drafted land out with the spells it comes down beside", () => {
+    const fixer = land("Evolving Wilds", { cmc: 0 });
+    const built = buildDeck([at("Two", 2), fixer], 17);
+    const rows = alignDecks(built, asSuggestion([at("Two", 2)], [fixer]));
+
+    expect(rows.map((r) => [r.built?.name, r.suggested?.name])).toEqual([
+      ["Evolving Wilds", "Evolving Wilds"],
+      ["Two", "Two"],
+    ]);
   });
 });
