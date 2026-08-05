@@ -110,6 +110,16 @@ export interface ChallengeOutcome {
   /** The player finally took the card they first proposed. */
   stood: boolean;
   /**
+   * The card theirs was argued against.
+   *
+   * Carried on the outcome rather than looked up beside it because
+   * `calibrationLine` is the only prose in the app that describes this pair, and
+   * without a name it could only say "the two cards" -- which reads, to the
+   * player who has just been told a gap they cannot see the other end of, as the
+   * app declining to say what it compared them to.
+   */
+  challengerName: string;
+  /**
    * `contextValue(proposed) - contextValue(challenger)`, in win-rate points.
    *
    * The card they PROPOSED, whichever one they ended up taking, because that is
@@ -130,6 +140,7 @@ export function resolveChallenge<C extends Card>(
 ): ChallengeOutcome {
   return {
     stood,
+    challengerName: challenge.challenger.name,
     // The gap is measured challenger-minus-proposed, and the claim was about the
     // proposed card, so this is that one subtraction read from the other end.
     // Deliberately independent of `stood` -- see the field's note.
@@ -172,6 +183,10 @@ export function claimOutcome(confidence: Confidence, o: ChallengeOutcome): Claim
  * Never states a gap without its margin, and never states a margin it does not
  * have -- an unrated card leaves the size of the miss genuinely unknown, and
  * that is what it says.
+ *
+ * It also never says "the two cards". Half of this pair is named on the panel
+ * directly above -- it is the card they took -- and the other half is the one
+ * the sentence exists to tell them about, so that is the one it names.
  */
 export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): string {
   // The amount and its error bars are assembled separately so the margin clause
@@ -183,8 +198,10 @@ export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): st
       ? ", with no margin available — one of these cards is unrated"
       : `, against a ±${pp(o.margin)} margin of error`;
 
+  const other = o.challengerName;
+
   if (!o.separable) {
-    const tie = `The two cards are ${amount} apart${bars}: the data cannot tell them apart.`;
+    const tie = `The gap to ${other} is ${amount}${bars}: the data cannot tell the two apart.`;
     const move = o.stood ? "" : " Switching neither gained nor lost anything the data can see.";
     if (confidence === "close") return `${tie} You read that correctly.${move}`;
     if (confidence === "sure") {
@@ -198,11 +215,11 @@ export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): st
   const named = o.edge > 0;
   const stated = named
     ? o.stood
-      ? `You took the better of the two by ${amount}${bars}.`
-      : `The card you named first was worth ${amount} more${bars} — and you moved off it.`
+      ? `You took the card worth ${amount} more than ${other}${bars}.`
+      : `The card you named first was worth ${amount} more than ${other}${bars} — and you moved off it.`
     : o.stood
-      ? `The other card was worth ${amount} more to this deck${bars}.`
-      : `Switching was right: the card you moved to was worth ${amount} more${bars}.`;
+      ? `${other} was worth ${amount} more to this deck${bars}.`
+      : `Switching was right: ${other} was worth ${amount} more${bars}.`;
 
   if (confidence === "sure") {
     if (named) {

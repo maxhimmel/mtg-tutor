@@ -113,11 +113,18 @@ describe("resolveChallenge", () => {
     expect(resolveChallenge(challenge, true).stood).toBe(true);
     expect(resolveChallenge(challenge, false).stood).toBe(false);
   });
+
+  // The reading is the only prose describing this pair, and it cannot name a
+  // card the outcome does not carry.
+  it("carries the challenger's name for the reading to use", () => {
+    expect(resolveChallenge(challenge, true).challengerName).toBe("Big Bomb");
+  });
 });
 
 describe("claimOutcome", () => {
   const outcome = (over: Partial<ReturnType<typeof resolveChallenge>>) => ({
     stood: true,
+    challengerName: "Big Bomb",
     edge: 0.04,
     margin: 0.01,
     separable: true,
@@ -163,8 +170,30 @@ describe("claimOutcome", () => {
 });
 
 describe("calibrationLine", () => {
-  const separable = { stood: true, edge: -0.04, margin: 0.01, separable: true };
-  const tied = { stood: true, edge: -0.002, margin: 0.01, separable: false };
+  const separable = {
+    stood: true,
+    challengerName: "Big Bomb",
+    edge: -0.04,
+    margin: 0.01,
+    separable: true,
+  };
+  const tied = { ...separable, edge: -0.002, separable: false };
+
+  // "The two cards are 0.0pp apart" named one card and described the other, and
+  // the panel above it names only the card that was taken -- so the half of the
+  // pair the sentence exists to report was the half nothing on screen said.
+  it("names the card theirs was argued against, in every branch", () => {
+    const readings = [
+      calibrationLine("sure", tied),
+      calibrationLine("close", tied),
+      calibrationLine("guess", tied),
+      calibrationLine("sure", separable),
+      calibrationLine("sure", { ...separable, edge: 0.04 }),
+      calibrationLine("close", { ...separable, stood: false }),
+      calibrationLine("guess", { ...separable, edge: 0.04, stood: false }),
+    ];
+    for (const line of readings) expect(line).toContain("Big Bomb");
+  });
 
   // notes.md measurement trap #3 and decision #8: a gap without its margin is
   // how a rounding error came to read as a blunder.
@@ -175,7 +204,7 @@ describe("calibrationLine", () => {
 
   it("says the data cannot separate the pair rather than naming a winner", () => {
     const line = calibrationLine("close", tied);
-    expect(line).toContain("cannot tell them apart");
+    expect(line).toContain("cannot tell the two apart");
     expect(line).toContain("You read that correctly");
   });
 
@@ -227,7 +256,7 @@ describe("calibrationLine", () => {
     // about a switch is that it changed nothing the data can see.
     it("says a switch inside the margin cost and gained nothing", () => {
       const line = calibrationLine("close", { ...tied, stood: false });
-      expect(line).toContain("cannot tell them apart");
+      expect(line).toContain("cannot tell the two apart");
       expect(line).toContain("neither gained nor lost");
     });
 
