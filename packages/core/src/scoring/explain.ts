@@ -1,5 +1,5 @@
 import type { Card, EngineCard } from "../model/card.js";
-import type { PickScore } from "./score.js";
+import { type PickScore, gapMargin } from "./score.js";
 import { cardValue } from "./value.js";
 
 const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
@@ -38,10 +38,23 @@ export function explainPick(ps: PickScore<Card>): string[] {
   if (ps.isBest) {
     lines.push(`✅ Best available. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ${wheelNote(picked.alsa)}.`);
   } else {
-    const delta = (ps.contextBestValue - ps.pickedContextValue) * 100;
+    const gap = ps.contextBestValue - ps.pickedContextValue;
+    // With its margin, like every other gap this app reports. This is the
+    // FALLBACK text -- what the panel shows when the coach cannot be reached --
+    // and it was the last surface still naming a better card without saying
+    // whether the data can see the difference. It sits in the same panel as a
+    // verdict that does say so, which is how a player would have learned to
+    // trust the wrong one of the two. See notes.md decision #8.
+    const margin = gapMargin(contextBest, picked);
+    const size = `${(gap * 100).toFixed(1)}pp`;
     lines.push(
       `You took ${picked.name} (GIH WR ${pct(picked.gihWinRate)}); ` +
-        `${contextBest.name} was worth ${delta.toFixed(1)}pp more to this deck.`,
+        `${contextBest.name} was worth ${size} more to this deck` +
+        (margin == null
+          ? ", though one of the two is unrated so there are no error bars on that."
+          : gap <= margin
+            ? `, inside the ±${(margin * 100).toFixed(1)}pp margin of error — the data cannot tell these two apart.`
+            : `, against a ±${(margin * 100).toFixed(1)}pp margin of error.`),
     );
     // Only when it is a third card. The lesson is the divergence between raw
     // power and deck fit, and there is none to draw when the strongest card in

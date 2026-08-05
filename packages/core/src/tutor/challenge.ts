@@ -109,7 +109,16 @@ export function challengeFor<C extends Card>(
 export interface ChallengeOutcome {
   /** The player finally took the card they first proposed. */
   stood: boolean;
-  /** `contextValue(taken) - contextValue(the other one)`, win-rate points. */
+  /**
+   * `contextValue(proposed) - contextValue(challenger)`, in win-rate points.
+   *
+   * The card they PROPOSED, whichever one they ended up taking, because that is
+   * the card the confidence was a claim about. Reading it from the card they
+   * finished with congratulates the player who says "this is clearly right", is
+   * shown the card that beats it, switches, and is told they read it correctly.
+   * They did not: they were wrong and then recovered, which is a different thing
+   * and a better one to be told.
+   */
   edge: number;
   margin?: number;
   separable: boolean;
@@ -121,9 +130,10 @@ export function resolveChallenge<C extends Card>(
 ): ChallengeOutcome {
   return {
     stood,
-    // The gap is measured challenger-minus-proposed, so standing flips its sign
-    // and switching keeps it. One subtraction, read from either end.
-    edge: stood ? -challenge.gap : challenge.gap,
+    // The gap is measured challenger-minus-proposed, and the claim was about the
+    // proposed card, so this is that one subtraction read from the other end.
+    // Deliberately independent of `stood` -- see the field's note.
+    edge: -challenge.gap,
     margin: challenge.margin,
     separable: challenge.separable,
   };
@@ -140,57 +150,106 @@ export type ClaimOutcome = "held" | "broke" | "none";
 
 export function claimOutcome(confidence: Confidence, o: ChallengeOutcome): ClaimOutcome {
   if (confidence === "guess") return "none";
-  // "Clear" claims a gap the data can see, in your favour. "Close" claims one it
-  // cannot see at all -- so the same measurement settles both, from either side.
+  // "Clear" claims a gap the data can see, in favour of the card they named.
+  // "Close" claims one it cannot see at all -- so the same measurement settles
+  // both, from either side. Neither is affected by what they did next: changing
+  // your mind is a separate act with its own reading, and folding it in here
+  // would let a good recovery erase a bad call.
   if (confidence === "sure") return o.separable && o.edge > 0 ? "held" : "broke";
   return o.separable ? "broke" : "held";
 }
 
 /**
- * The reading of that outcome, in one sentence.
+ * The reading of that outcome, in two sentences at most: what the data says
+ * about the pair, and what the player's own two decisions were worth.
  *
- * Shared by the reveal and the prompt for the same reason `isOnColor` is shared
- * by the score and the sentence describing it: the panel and the coach saying
- * different things about the same pick is the bug this most easily hides.
+ * There ARE two decisions and they are graded apart. The confidence was a claim
+ * about the card first named; standing or switching is a second act on top of
+ * it, and the interesting cells are the ones where they disagree -- someone
+ * certain who then changed their mind and was right to, and someone who had the
+ * better card and talked themselves out of it.
  *
  * Never states a gap without its margin, and never states a margin it does not
  * have -- an unrated card leaves the size of the miss genuinely unknown, and
  * that is what it says.
  */
 export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): string {
-  const size =
+  // The amount and its error bars are assembled separately so the margin clause
+  // can sit at the END of whichever sentence it lands in. Baked into one phrase
+  // it stranded the verb: "worth 4.0pp against a ±1.0pp margin of error more".
+  const amount = pp(Math.abs(o.edge));
+  const bars =
     o.margin == null
-      ? `${pp(Math.abs(o.edge))}, with no margin available — one of these cards is unrated`
-      : `${pp(Math.abs(o.edge))} against a ±${pp(o.margin)} margin of error`;
+      ? ", with no margin available — one of these cards is unrated"
+      : `, against a ±${pp(o.margin)} margin of error`;
 
   if (!o.separable) {
-    const tie = `The two cards are ${size} apart: the data cannot tell them apart.`;
-    if (confidence === "close") return `${tie} You read that correctly.`;
+    const tie = `The two cards are ${amount} apart${bars}: the data cannot tell them apart.`;
+    const move = o.stood ? "" : " Switching neither gained nor lost anything the data can see.";
+    if (confidence === "close") return `${tie} You read that correctly.${move}`;
     if (confidence === "sure") {
-      return `${tie} Being certain was not available here — whichever you took, it was not the clear call you said it was.`;
+      return `${tie} Being certain was not available here — whichever you took, it was not the clear call you said it was.${move}`;
     }
-    return `${tie} There was nothing here to know, so guessing was the right answer.`;
+    return `${tie} There was nothing here to know, so guessing was the right answer.${move}`;
   }
 
-  const ahead = o.edge > 0;
-  const stated = ahead
-    ? `You took the better of the two by ${size}.`
-    : `The other card was worth ${size} more to this deck.`;
+  // Positive means the card they NAMED was the better one, which is what makes
+  // standing and switching read so differently below.
+  const named = o.edge > 0;
+  const stated = named
+    ? o.stood
+      ? `You took the better of the two by ${amount}${bars}.`
+      : `The card you named first was worth ${amount} more${bars} — and you moved off it.`
+    : o.stood
+      ? `The other card was worth ${amount} more to this deck${bars}.`
+      : `Switching was right: the card you moved to was worth ${amount} more${bars}.`;
 
   if (confidence === "sure") {
-    return ahead
-      ? `${stated} You said it was clear, and it was.`
-      : `${stated} You said it was clear, and it was clearly the other way.`;
+    if (named) {
+      return o.stood
+        ? `${stated} You said it was clear, and it was.`
+        : `${stated} You said it was clear and you were right; the challenge is what talked you out of it.`;
+    }
+    return o.stood
+      ? `${stated} You said it was clear, and it was clearly the other way.`
+      : `${stated} The certainty was misplaced, but you changed your mind and that is what saved the pick.`;
   }
   if (confidence === "close") {
-    return ahead
-      ? `${stated} You called it close; the data can actually separate these.`
-      : `${stated} You called it close, and the data separates them — this one was gettable.`;
+    if (named) {
+      return o.stood
+        ? `${stated} You called it close; the data can actually separate these.`
+        : `${stated} You called it close, and the data separates them — you had it and let it go.`;
+    }
+    return o.stood
+      ? `${stated} You called it close, and the data separates them — this one was gettable.`
+      : `${stated} You called it close, and the data separates them — the change of mind got there.`;
   }
-  return ahead
-    ? `${stated} You said you were guessing, and you were right anyway.`
-    : `${stated} You said you were guessing, and this one was there to be read.`;
+  if (named) {
+    return o.stood
+      ? `${stated} You said you were guessing, and you were right anyway.`
+      : `${stated} You said you were guessing, and the guess was the better card.`;
+  }
+  return o.stood
+    ? `${stated} You said you were guessing, and this one was there to be read.`
+    : `${stated} You said you were guessing, and switching found it.`;
 }
+
+/**
+ * How long a stated reason may be.
+ *
+ * Lives here rather than in the textarea because it is not a form constraint --
+ * it is a token budget. The reason is pasted verbatim into the coach prompt on
+ * every decision pick, so an unbounded one is unbounded spend, and a field the
+ * server does not clamp is a field the client's cap does not actually enforce.
+ * Both ends read this.
+ *
+ * Long enough for a real reason, short enough that it has to be the actual one.
+ */
+export const REASON_LIMIT = 140;
+
+/** Trims and caps a stated reason. The server's last word on prompt size. */
+export const clampReason = (reason: string): string =>
+  reason.trim().slice(0, REASON_LIMIT);
 
 /**
  * What the player committed to before they saw anything.

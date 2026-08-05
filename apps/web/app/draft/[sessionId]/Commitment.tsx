@@ -1,8 +1,8 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Card } from "@mtg-tutor/core";
-import { CONFIDENCE, type Confidence } from "@mtg-tutor/core";
+import { CONFIDENCE, type Confidence, REASON_LIMIT } from "@mtg-tutor/core";
 import { CardFace } from "../../components/CardTile";
 
 // The two screens between choosing a card and being told how it went.
@@ -14,24 +14,64 @@ import { CardFace } from "../../components/CardTile";
 // and showing them here would turn the challenge into a reading comprehension
 // exercise: the higher win rate would simply be the answer.
 
-// Long enough for a real reason, short enough that it has to be the actual one.
-// It also bounds what the flow adds to the coach prompt -- 140 characters is
-// about 35 tokens on a call that already sends thousands.
-const REASON_LIMIT = 140;
-
 // The board is still behind this, dimmed. It is not decoration: the pack you
 // were looking at is the thing you are being asked about, and replacing the
 // screen outright would make this feel like a different exercise instead of the
 // same one, one beat later.
-function Stage({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+//
+// A real dialog, not a div that looks like one: it takes the whole screen and
+// the board behind it is inert, so a screen reader that cannot see the dim has
+// to be told the same thing the dim says.
+function Stage({
+  title,
+  hint,
+  error,
+  onEscape,
+  children,
+}: {
+  title: string;
+  hint: string;
+  // A failed pick. Shown here rather than in an alert() so the way out is on the
+  // same surface as the thing that failed.
+  error?: string | null;
+  // Only ever passed once a commit has failed. The challenge is a real decision
+  // point and deliberately has no cancel -- but a mutation that will not go
+  // through must not leave the player sealed inside a modal with no exit.
+  onEscape?: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    if (!onEscape) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onEscape();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onEscape]);
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-base-100/85 p-4 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-base-100/85 p-4 backdrop-blur-sm"
+    >
       <div className="popup-surface w-full max-w-3xl p-6 motion-safe:animate-verdict">
         <div className="mb-4">
           <h2 className="font-display text-2xl leading-tight">{title}</h2>
           <p className="mt-1 text-sm text-base-content/60">{hint}</p>
         </div>
         {children}
+        {error != null && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-3">
+            <p className="text-sm text-error">{error}</p>
+            {onEscape && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onEscape}>
+                Back to the pack
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -62,16 +102,22 @@ function Held({ card, label }: { card: Card; label: string }) {
  */
 export function StateYourCase({
   card,
+  busy,
+  error,
   onBack,
   onCommit,
 }: {
   card: Card;
+  // A pick with no challenger commits straight from this screen, so this one
+  // spends the mutation too and has to say so.
+  busy: boolean;
+  error?: string | null;
   onBack: () => void;
   onCommit: (reason: string, confidence: Confidence) => void;
 }) {
   const [reason, setReason] = useState("");
   const [confidence, setConfidence] = useState<Confidence | null>(null);
-  const ready = reason.trim().length > 0 && confidence !== null;
+  const ready = reason.trim().length > 0 && confidence !== null && !busy;
 
   const commit = () => {
     if (ready) onCommit(reason.trim(), confidence);
@@ -81,6 +127,9 @@ export function StateYourCase({
     <Stage
       title={`Why ${card.name}?`}
       hint="Nothing is graded until you have said it. One line is enough."
+      error={error}
+      // This screen always has a way back, so the error only needs the message.
+      onEscape={busy ? undefined : onBack}
     >
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
         <Held card={card} label="Taking" />
@@ -137,7 +186,12 @@ export function StateYourCase({
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onBack}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={busy}
+              onClick={onBack}
+            >
               Back to the pack
             </button>
             <button
@@ -170,6 +224,8 @@ export function TheChallenge({
   challenger,
   reason,
   busy,
+  error,
+  onAbandon,
   onStand,
   onSwitch,
 }: {
@@ -177,6 +233,11 @@ export function TheChallenge({
   challenger: Card;
   reason: string;
   busy: boolean;
+  error?: string | null;
+  // Only reachable once a pick has actually failed to go through. There is no
+  // cancel in the happy path on purpose -- being argued with is the point, and
+  // an escape hatch would make it optional.
+  onAbandon: () => void;
   onStand: () => void;
   onSwitch: () => void;
 }) {
@@ -184,6 +245,8 @@ export function TheChallenge({
     <Stage
       title="One more card before you commit"
       hint="Either of these could be the better card for your deck, or the data may not be able to separate them. You find out after you choose."
+      error={error}
+      onEscape={error != null && !busy ? onAbandon : undefined}
     >
       <blockquote className="mb-5 border-l-2 border-base-content/20 pl-3 text-sm italic text-base-content/70">
         {reason}

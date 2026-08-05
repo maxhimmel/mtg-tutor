@@ -198,6 +198,20 @@ interface Defense {
   challengedName?: string;
   proposedName?: string;
   outcome?: ChallengeOutcome;
+  /**
+   * The card the BROWSER made the pack's context-best while building the
+   * challenge -- the better of the pair it put up. Kept so the reveal can check
+   * it against the card the server actually graded against.
+   *
+   * Both sides rank the same pack through `packScoringContext` and should always
+   * agree. This is what happens when they do not: rather than grade a player's
+   * stated certainty over a pair the server has since contradicted, the reveal
+   * drops the calibration reading entirely. Being told nothing is recoverable;
+   * being argued into defending one comparison and then scored on a different
+   * one is exactly the failure that makes a demanding flow worse than a passive
+   * one.
+   */
+  expectedBestName?: string;
 }
 
 interface LastPick {
@@ -250,10 +264,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
   // What scoring reads to rank THIS pack against the deck being built. Fetched
   // per pack rather than per set: fourteen rows, against the ~50KB the set's
-  // would cost. undefined while it is in flight, null when it could not be read
-  // -- and those are different, because a challenge computed without it would
-  // argue for a card the server then does not grade against.
-  const [packContext, setPackContext] = useState<Map<string, CardContext> | null | undefined>(
+  // would cost.
+  //
+  // Absent means no challenge, and in-flight and unreadable are deliberately the
+  // same absence -- there is nothing useful to say differently about them, and a
+  // challenge computed WITHOUT this would rank the pack on raw power and argue
+  // for a card the server then does not grade against. Better to skip the
+  // argument than to make one the reveal will contradict.
+  const [packContext, setPackContext] = useState<Map<string, CardContext> | undefined>(
     undefined,
   );
 
@@ -275,6 +293,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // The card in hand, drawn under the cursor for as long as it is being carried.
   const [carrying, setCarrying] = useState<Card | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  // A pick that would not go through. Shown on the stage the player is standing
+  // on rather than in an alert, because that stage is also where the way out is.
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -282,6 +303,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // Guards against an earlier pick's stream overwriting a later one when the
   // player picks faster than the coach can answer.
   const streamRun = useRef(0);
+  // The double-submit latch. State cannot do this job: two clicks in the same
+  // tick both read the pre-render value.
+  const committing = useRef(false);
+  // The last sideboard write, so a pick can wait for it. See `propose`.
+  const benchInFlight = useRef<Promise<unknown> | null>(null);
 
   // Ownership is checked server-side, so this has to wait for the token: the
   // subscription this replaced re-ran itself once auth arrived, and a one-shot
@@ -345,7 +371,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       // will not grade against. The flow drops the challenge instead of making
       // an argument it cannot stand behind.
       .catch(() => {
-        if (!cancelled) setPackContext(null);
+        if (!cancelled) setPackContext(undefined);
       });
 
     return () => {
@@ -511,7 +537,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // majority of picks go. Choosing the other pile is a deliberate act: a button
   // that names it, or carrying the card there.
   function onQuickPick(card: Card) {
-    propose({ card, bench: false, carried: false });
+    void propose({ card, bench: false, carried: false });
   }
 
   /**
@@ -523,14 +549,34 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
    * being asked to defend a forced pick is a chore that teaches nothing. So the
    * bottom of every pack still plays exactly as it did.
    */
-  function propose(proposal: Proposal) {
+  async function propose(proposal: Proposal) {
     if (picking || pending || !text) return;
+    setCommitError(null);
+    // The one way the browser's ranking and the server's grade can be built from
+    // different decks. `onBench` moves a card locally before the server has
+    // confirmed it, so a player who sideboards something and immediately picks
+    // would have the client scoring against the new maindeck and the server
+    // against the old one -- which moves committedColors, which can move the
+    // context-best. Waiting for the write to land costs nothing on every pick
+    // that did not just bench something, because there is nothing to wait for.
+    //
+    // Only reachable here: once a stage is open the board behind it is inert, so
+    // no bench can land between this and the pick.
+    await benchInFlight.current?.catch(() => {});
     if (!isDecisionPick(pack.length, settings.coachMinPackCards)) {
       void commit(proposal);
       return;
     }
     setSelected(proposal.card.name);
     setPending({ stage: "reason", proposal });
+  }
+
+  // Back to the pack with nothing spent. Reachable from the first screen at any
+  // time and from the challenge only after a pick has failed to go through --
+  // being argued with is the point, so it is not a thing you can simply decline.
+  function abandon() {
+    setPending(null);
+    setCommitError(null);
   }
 
   // The case is made; now it gets argued with. The challenger is the best
@@ -563,6 +609,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     if (!pending || pending.stage !== "challenge") return;
     const { proposal, reason, confidence, challenge } = pending;
     const stood = take.name === proposal.card.name;
+    const outcome = resolveChallenge(challenge, stood);
     void commit(
       {
         ...proposal,
@@ -571,13 +618,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         // A switch cannot inherit it, so the new card goes to the deck and the
         // picks column is there if they want it set aside after all.
         bench: stood ? proposal.bench : false,
+        // Nor can it inherit having been lifted out of the pack by hand. The
+        // card they carried is going back with the pack; naming no card as kept
+        // would sweep the whole thing while the card they actually took was
+        // never picked up at all.
+        carried: stood ? proposal.carried : false,
       },
       {
         reason,
         confidence,
         challengedName: challenge.challenger.name,
         proposedName: proposal.card.name,
-        outcome: resolveChallenge(challenge, stood),
+        outcome,
+        // The better of the pair by the browser's own ranking, which is what the
+        // whole pack's context-best must be: the challenger was the best card
+        // that was not the proposed one.
+        expectedBestName:
+          outcome.edge > 0 ? proposal.card.name : challenge.challenger.name,
       },
     );
   }
@@ -586,9 +643,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // picking rather than corrected afterwards, so the tallies the coach reads
   // never briefly count a card the player already knew they would not play.
   async function commit(proposal: Proposal, defense?: Defense) {
-    if (picking || !text) return;
+    // A ref, not the `picking` state: two clicks dispatched before React
+    // re-renders both read the same stale `false`, and the second one spends a
+    // pick the player did not make. The modal's buttons make that a good deal
+    // easier to do than the confirm bar did.
+    if (committing.current || !text) return;
+    committing.current = true;
+
     const { card, bench, carried } = proposal;
     setPicking(true);
+    setCommitError(null);
     setSelected(null);
     // Read before the mutation returns: `result` already holds the next pack.
     const packBefore = state?.pack ?? [];
@@ -652,19 +716,29 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         signal: result.signal,
         pickIndex: result.pickIndex,
         pack: packBefore,
-        ...(defense?.outcome
+        // Only when the server graded against the same card the browser argued
+        // over. They are built from the same inputs by the same function and
+        // should never differ; if they ever do, the honest move is to say
+        // nothing about the player's certainty rather than score it against a
+        // comparison they were never shown.
+        ...(defense?.outcome &&
+        defense.expectedBestName === (score.contextBest as { name: string }).name
           ? { call: { confidence: defense.confidence, outcome: defense.outcome } }
           : {}),
       });
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
     } catch (e) {
       // Nothing was passed after all, so put the pack back rather than let it
-      // finish leaving. The defense survives too -- retyping it because the
-      // network blinked would be the worst moment this flow could pick.
+      // finish leaving. `pending` is left standing so the defense survives --
+      // retyping it because the network blinked would be the worst moment this
+      // flow could pick -- and the message goes onto the stage itself, which is
+      // also where the way out of it is.
       window.clearTimeout(sweep);
       setOutgoing(null);
-      alert(e instanceof Error ? e.message : String(e));
+      setSelected(card.name);
+      setCommitError(e instanceof Error ? e.message : String(e));
     } finally {
+      committing.current = false;
       setPicking(false);
     }
   }
@@ -699,7 +773,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // Released anywhere but on a pile. Nothing was decided, so nothing happens
     // -- the card is still in the pack and still unpicked.
     if (!card || !zone) return;
-    propose({ card, bench: zone.bench, carried: true });
+    void propose({ card, bench: zone.bench, carried: true });
   }
 
   // Moved locally first and reconciled with what the server returns, because
@@ -718,11 +792,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     setState((prev) => prev && { ...prev, sideboard: after });
 
     try {
-      const stored = await benchCard({ sessionId: id, pickIndex, benched });
+      // Held so a pick made straight afterwards can wait for it -- see propose.
+      const write = benchCard({ sessionId: id, pickIndex, benched });
+      benchInFlight.current = write;
+      const stored = await write;
       setState((prev) => prev && { ...prev, sideboard: stored });
     } catch (e) {
       setState((prev) => prev && { ...prev, sideboard: before });
       alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      benchInFlight.current = null;
     }
   }
 
@@ -889,7 +968,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         className="btn btn-primary btn-sm"
                         disabled={picking}
                         onClick={() =>
-                          propose({ card: selectedCard, bench: false, carried: false })
+                          void propose({ card: selectedCard, bench: false, carried: false })
                         }
                       >
                         Pick to maindeck
@@ -899,7 +978,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         className="btn btn-outline btn-sm"
                         disabled={picking}
                         onClick={() =>
-                          propose({ card: selectedCard, bench: true, carried: false })
+                          void propose({ card: selectedCard, bench: true, carried: false })
                         }
                       >
                         Pick to sideboard
@@ -1021,7 +1100,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           {pending?.stage === "reason" && (
             <StateYourCase
               card={pending.proposal.card}
-              onBack={() => setPending(null)}
+              busy={picking}
+              error={commitError}
+              onBack={abandon}
               onCommit={onCommit}
             />
           )}
@@ -1031,6 +1112,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               challenger={pending.challenge.challenger}
               reason={pending.reason}
               busy={picking}
+              error={commitError}
+              onAbandon={abandon}
               onStand={() => resolve(pending.proposal.card)}
               onSwitch={() => resolve(pending.challenge.challenger)}
             />

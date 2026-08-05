@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import {
   type DraftEngine,
   buildPickContext,
+  clampReason,
   newSeed,
   normalizeBench,
   normalizeName,
@@ -229,7 +230,10 @@ export const pick = mutation({
     // mutation's own argument list, and the one place that can state it without
     // being able to be wrong.
     const defense = args.defense && {
-      reason: args.defense.reason,
+      // Clamped here, not trusted from the client: this string is pasted into
+      // the coach prompt on every decision pick, so its length is a token bill
+      // and the mutation is the only place that can actually cap it.
+      reason: clampReason(args.defense.reason),
       confidence: args.defense.confidence,
       ...(args.defense.challengedName === undefined
         ? {}

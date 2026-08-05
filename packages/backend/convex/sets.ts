@@ -10,6 +10,7 @@ import {
   mergeCards,
   normalizeName,
   observedRarityBaselines,
+  packSize,
   withPackSlots,
 } from "@mtg-tutor/core";
 import { cardContextFor, cardTextFor, engineHalf, hydrate, textHalf } from "./cardText.js";
@@ -941,6 +942,19 @@ export const packContext = query({
     names: v.array(v.string()),
   },
   handler: async (ctx, args) => {
+    // Enforced, not just documented. cardContextFor fans out one indexed read
+    // per name, and Convex bills bytes read -- so an unbounded list on a public
+    // query is an unbounded bill. A pack is the largest thing this ever answers
+    // for, and packSize() is this codebase's own answer to how big that is, so
+    // a set whose boosters somehow exceed it fails loudly here rather than
+    // quietly turning one query into a whole-set read.
+    if (args.names.length > packSize()) {
+      throw new Error(
+        `packContext takes one pack at a time; ${args.names.length} names is more than ` +
+          `the ${packSize()}-card cap. Read the set's context server-side if you need all of it.`,
+      );
+    }
+
     const found = await cardContextFor(
       ctx,
       args.setCode.toLowerCase(),

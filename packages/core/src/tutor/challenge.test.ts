@@ -100,12 +100,18 @@ describe("resolveChallenge", () => {
     separable: true,
   };
 
-  it("flips the sign when the player stands their ground", () => {
+  // The claim was about the card they NAMED, so the pair it is graded over
+  // cannot depend on what they did next. Reading it from the card they finished
+  // with told a player who said "clear", was shown the card that beats theirs,
+  // and switched, that they had read it correctly.
+  it("measures the pair from the proposed card whether or not they switched", () => {
     expect(resolveChallenge(challenge, true).edge).toBeCloseTo(-0.04, 5);
+    expect(resolveChallenge(challenge, false).edge).toBeCloseTo(-0.04, 5);
   });
 
-  it("keeps it when they switch to the challenger", () => {
-    expect(resolveChallenge(challenge, false).edge).toBeCloseTo(0.04, 5);
+  it("still records which way they went", () => {
+    expect(resolveChallenge(challenge, true).stood).toBe(true);
+    expect(resolveChallenge(challenge, false).stood).toBe(false);
   });
 });
 
@@ -144,6 +150,16 @@ describe("claimOutcome", () => {
     expect(claimOutcome("guess", outcome({}))).toBe("none");
     expect(claimOutcome("guess", outcome({ edge: -0.04, separable: false }))).toBe("none");
   });
+
+  // The bug this exists to stop: a player says "clear", is shown the card that
+  // beats theirs, switches, and is told they read it right. Changing your mind
+  // is a second act with its own reading -- it must not erase the first one.
+  it("grades the claim the same whether they stood or switched", () => {
+    expect(claimOutcome("sure", outcome({ edge: -0.04, stood: false }))).toBe("broke");
+    expect(claimOutcome("sure", outcome({ edge: -0.04, stood: true }))).toBe("broke");
+    expect(claimOutcome("sure", outcome({ edge: 0.04, stood: false }))).toBe("held");
+    expect(claimOutcome("sure", outcome({ edge: 0.04, stood: true }))).toBe("held");
+  });
 });
 
 describe("calibrationLine", () => {
@@ -179,6 +195,45 @@ describe("calibrationLine", () => {
     expect(calibrationLine("guess", { ...separable, edge: 0.04 })).toContain(
       "right anyway",
     );
+  });
+
+  // The two decisions are graded apart, and the interesting cells are the ones
+  // where they disagree. Reading the pair off the card the player finished with
+  // collapsed both of these into "you read it right".
+  describe("when standing and switching disagree with the claim", () => {
+    // Certain, wrong, and recovered. The certainty is still wrong -- but the
+    // change of mind is what saved the pick, and saying only the first half
+    // would teach someone not to change their mind.
+    it("credits a switch that rescued a misplaced certainty", () => {
+      const line = calibrationLine("sure", { ...separable, edge: -0.04, stood: false });
+      expect(line).toContain("Switching was right");
+      expect(line).toContain("saved the pick");
+      expect(line).toContain("margin of error");
+    });
+
+    // The flinch. They had the better card, said so, and were argued off it.
+    it("names the flinch when they were right and moved anyway", () => {
+      const line = calibrationLine("sure", { ...separable, edge: 0.04, stood: false });
+      expect(line).toContain("talked you out of it");
+      expect(line).not.toContain("and it was.");
+    });
+
+    it("does not congratulate a switch away from the better card", () => {
+      const flinched = calibrationLine("close", { ...separable, edge: 0.04, stood: false });
+      expect(flinched).toContain("let it go");
+    });
+
+    // Inside the margin neither act can be graded, so the honest thing to say
+    // about a switch is that it changed nothing the data can see.
+    it("says a switch inside the margin cost and gained nothing", () => {
+      const line = calibrationLine("close", { ...tied, stood: false });
+      expect(line).toContain("cannot tell them apart");
+      expect(line).toContain("neither gained nor lost");
+    });
+
+    it("says nothing about switching when they stood", () => {
+      expect(calibrationLine("close", tied)).not.toContain("neither gained nor lost");
+    });
   });
 });
 
