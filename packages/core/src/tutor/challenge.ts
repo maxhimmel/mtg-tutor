@@ -257,6 +257,64 @@ export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): st
 }
 
 /**
+ * Reasons to start from, so a defence is a click when the player has nothing to
+ * add to it.
+ *
+ * Forty-five sentences a draft is a tax on the one input here that carries
+ * anything a model can read, and a tax gets paid in worse sentences: "good
+ * card", every pick, is worth less to the reveal than a starter that at least
+ * states a ground. These fill the box rather than bypassing it, so the player
+ * can take one as it stands or make it theirs.
+ *
+ * WHICH reasons is not a taste question. The principles corpus is what the
+ * coach answers from, so its categories are the map of grounds a claim can be
+ * answered ON -- one starter each, in the corpus's own terms so a defence and
+ * the principle that judges it are talking about the same thing. The last two
+ * have no category and that is the point: denial and speculation are the
+ * grounds the data cannot see, which makes them the ones worth having a player
+ * say out loud.
+ *
+ * The list is FIXED. Filtering it by the pool -- offering "I have no removal"
+ * only to a player who has none -- would make the menu itself a hint, on the
+ * one screen in this app built to show the cards and nothing else. The same ten
+ * appear at P1P1 and P3P15, so the list says nothing about the pack.
+ */
+export interface ReasonStarter {
+  /**
+   * The word on the control. One or two, because ten whole sentences laid out
+   * as buttons is a wall the player has to read before they can answer -- which
+   * costs more attention than typing the sentence did.
+   */
+  label: string;
+  /** What it puts in the box. A whole sentence: the box is what gets read, and
+   *  a chip's worth of words is not a defence of anything. */
+  text: string;
+}
+
+export const REASON_STARTERS: readonly ReasonStarter[] = [
+  // card-evaluation. BREAD's top two tiers are different claims answered by
+  // different principles, so they are two starters rather than one.
+  { label: "Bomb", text: "The most powerful card in this pack." },
+  { label: "Removal", text: "Best removal here, and I don't have enough." },
+  // archetypes
+  { label: "Archetype", text: "Exactly what my archetype wants." },
+  // signals
+  { label: "Signal", text: "This colour keeps coming back to me — it's open." },
+  // common-mistakes: the honest form of the most common one, which is
+  // committing early and then refusing to pivot.
+  { label: "Staying open", text: "Staying open; I'm not committed to anything yet." },
+  // mana-curve
+  { label: "Curve", text: "My curve is top-heavy and this is a cheap play." },
+  // deck-construction
+  { label: "Bodies", text: "I'm light on creatures and this is a body." },
+  // mana-base
+  { label: "Castable", text: "I can cast this; the alternatives fight my mana." },
+  // No principle answers either of these, which is why they are here.
+  { label: "Gamble", text: "A gamble — my out if these colours dry up." },
+  { label: "Hate-draft", text: "Hate-draft: I don't want this passed to my left." },
+];
+
+/**
  * How long a stated reason may be.
  *
  * Lives here rather than in the textarea because it is not a form constraint --

@@ -4,9 +4,11 @@ import type { ScoringContext } from "../scoring/context.js";
 import { packScoringContext, scorePick } from "../scoring/score.js";
 import {
   type Challenge,
+  REASON_STARTERS,
   calibrationLine,
   challengeFor,
   claimOutcome,
+  clampReason,
   confidenceLevel,
   resolveChallenge,
 } from "./challenge.js";
@@ -317,6 +319,41 @@ describe("the challenger and the card the pick is graded against", () => {
     const scored = scorePick(pack, filler, maindeck, deckCtx);
     expect(scored.rawBest.name).toBe("Raw Power");
     expect(challengeFor(pack, filler, deckCtx)?.challenger.name).not.toBe(scored.rawBest.name);
+  });
+});
+
+describe("REASON_STARTERS", () => {
+  // The starter is written into the same field the player types in, and the
+  // server clamps that field. One over the limit is a defence that arrives
+  // truncated mid-word, which is worse than the blank it replaced.
+  it("fits the field it fills", () => {
+    for (const s of REASON_STARTERS) {
+      expect(clampReason(s.text)).toBe(s.text);
+    }
+  });
+
+  // The UI lights the starter matching what is in the box, and keys the buttons
+  // by label. Two of either collapses a pair into one control.
+  it("has no duplicate label or text", () => {
+    expect(new Set(REASON_STARTERS.map((s) => s.label)).size).toBe(REASON_STARTERS.length);
+    expect(new Set(REASON_STARTERS.map((s) => s.text)).size).toBe(REASON_STARTERS.length);
+  });
+
+  // What lands in the box is read by the coach as the player's own words, so a
+  // fragment reads as a sentence that got cut off rather than as a defence.
+  it("puts a whole sentence in the box", () => {
+    for (const s of REASON_STARTERS) {
+      expect(s.text).toMatch(/^[A-Z].*\.$/);
+    }
+  });
+
+  // The label rides on a btn-xs alongside nine others and a lead-in. Long
+  // enough to wrap to a third row is long enough to be a sentence, which is
+  // what the box below is for.
+  it("keeps the labels short enough to sit on one control", () => {
+    for (const s of REASON_STARTERS) {
+      expect(s.label.length).toBeLessThanOrEqual(12);
+    }
   });
 });
 

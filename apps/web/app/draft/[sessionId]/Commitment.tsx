@@ -1,8 +1,8 @@
 "use client";
 
-import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Card } from "@mtg-tutor/core";
-import { CONFIDENCE, type Confidence, REASON_LIMIT } from "@mtg-tutor/core";
+import { CONFIDENCE, type Confidence, REASON_LIMIT, REASON_STARTERS } from "@mtg-tutor/core";
 import { CardFace } from "../../components/CardTile";
 
 // The two screens between choosing a card and being told how it went.
@@ -159,10 +159,29 @@ export function StateYourCase({
 }) {
   const [reason, setReason] = useState("");
   const [confidence, setConfidence] = useState<Confidence | null>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
   const ready = reason.trim().length > 0 && confidence !== null && !busy;
 
   const commit = () => {
     if (ready) onCommit(reason.trim(), confidence);
+  };
+
+  // A starter fills the box; it never commits on its own. The whole sentence is
+  // then sitting in an editable field with the caret at the end of it, so taking
+  // one as it stands and making it yours are the same gesture with a different
+  // amount of typing after it. Clicking the one already in the box takes it back
+  // out, which is the only undo a single click needs.
+  const takeStarter = (text: string) => {
+    const el = field.current;
+    setReason((prev) => (prev === text ? "" : text));
+    // After the commit, so the caret lands past the text React is about to
+    // write rather than in the middle of the text it is replacing.
+    if (el) {
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    }
   };
 
   return (
@@ -180,6 +199,7 @@ export function StateYourCase({
           <label className="flex flex-col gap-1.5">
             <span className="eyebrow">Your reason</span>
             <textarea
+              ref={field}
               autoFocus
               rows={2}
               maxLength={REASON_LIMIT}
@@ -193,13 +213,43 @@ export function StateYourCase({
                   commit();
                 }
               }}
-              placeholder="Best removal in the pack, and I have none yet"
+              // Not one of the starters below. A placeholder that matched one
+              // would read as a chip that had gone missing, and the example is
+              // doing a different job: it is the specificity none of the ten
+              // general grounds can carry.
+              placeholder="Cheap flier, and I'm the aggro deck at this table"
               className="textarea w-full resize-none"
             />
             <span className="self-end text-xs tabular-nums text-base-content/45">
               {REASON_LIMIT - reason.length}
             </span>
           </label>
+
+          {/* Outside the label above, deliberately: a click inside one is
+              swallowed as "focus the field", and these have to fill it. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="eyebrow mr-0.5">Or start from</span>
+            {REASON_STARTERS.map((starter) => {
+              const taken = reason === starter.text;
+              return (
+                <button
+                  key={starter.label}
+                  type="button"
+                  // The sentence, not the word on the button. A player deciding
+                  // between "Curve" and "Bodies" is choosing between two claims
+                  // they cannot see, and the box only shows them one at a time.
+                  title={starter.text}
+                  aria-pressed={taken}
+                  onClick={() => takeStarter(starter.text)}
+                  className={`btn btn-xs font-normal ${
+                    taken ? "btn-primary" : "btn-outline border-base-300 text-base-content/70"
+                  }`}
+                >
+                  {starter.label}
+                </button>
+              );
+            })}
+          </div>
 
           <div className="flex flex-col gap-1.5">
             {/* Not "how clear is this call?", which is a question about the
