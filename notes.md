@@ -4,6 +4,8 @@ Numbering is stable and therefore gappy, for the same reason the ideas below
 are: `corpus.test.ts` cites issue #4. A fixed issue is deleted and its number
 left empty rather than renumbering everything under it.
 
+1. Room type cards and battle cards have text that is sideways and hard to read when they're enlarged. Can we rotate them or see if there's an alternate image to render in their enlarged state that has the text rotated so it's easier to read.
+
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
    data that would fix this.)
@@ -70,6 +72,29 @@ left empty rather than renumbering everything under it.
    one token — so it has to be filtered rather than taken whole. And the hover
    already draws three boxes on a double-faced card with a stats panel, so where
    a token goes is a layout question before it is a data one.
+
+6. **The coach still manufactures a fault when it cannot find one — prompt
+   changed, not yet observed.** Reported on draft-v2: a Room dealing 4 damage to
+   a creature, described by the player as "good removal", drew "calling it good
+   removal mischaracterizes what the card does". It does kill a creature; the
+   coach was wrong, and it was wrong on the easy case.
+
+   Not the failure decision #9 fixed — the coach read the rules text correctly
+   and described both halves of the card. It is `DEFENSE_RULE` in `prompt.ts`:
+   inside the margin the model is told not to grade the card and to grade the
+   reasoning instead, and it had no branch for reasoning that holds. It filled
+   the space. Two rules were added — fault the reasoning only where the error can
+   be named, and say so plainly when it is sound — and **a prompt change is only
+   real once a live generation shows it.** `pnpm bench-llm --area coach`, after
+   `--update-baseline` (roadmap #4: the stored baseline is stale).
+
+   The rest of that report shipped. The reading names the card the pick was
+   argued against instead of saying "the two cards" (`ChallengeOutcome`
+   carries it now); the confidence control says "Clear gap"/"Close call" and
+   asks "How big is the gap to the next-best card?", because "Clear" alone was
+   read as "how obvious is this to me" — the one question the data cannot grade;
+   and the panel's eyebrow says "Your call on the gap", so a `misread` badge
+   under an A+ is not read as a second opinion on the card.
 
 # Ideas:
 
@@ -460,7 +485,24 @@ The architecture, the data pipeline and the deploy story are all documented in
     **A basic land is worth 0**, which is not a knob: you are handed as many as
     you want when you build, so taking one adds nothing you did not already have.
 
-11. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
+11. **The commitment stage argues with you, and does not let you take the
+    argument back** (2026-08-05, draft-v2). Three rulings from one report:
+    - **No edit button on the reason once the challenger is on screen.** The
+      sentence is the one piece of evidence in this app only a model can read,
+      and it is worth that precisely because it was written before anything was
+      revealed. An edit field after the reveal collects a rationalisation and
+      stores it in the same slot, which is worse than collecting nothing.
+      `StateYourCase` has its back button; `TheChallenge` deliberately has none.
+    - **The deck stays visible.** The stage stops at `[data-preview-edge]` — the
+      board's side rail, the same wall the hover preview already respects —
+      because "is this better than what I have" cannot be answered by a player
+      who has to dismiss the question to see their pool.
+    - **And is inert while it is.** Benching a card from the rail mid-challenge
+      moves `committedColors` under a challenge computed against the old pool.
+      The reveal catches that as a browser/server disagreement and answers by
+      saying nothing at all, so the visible rail must not also be a live one.
+
+12. **The uncaught `AI_NoOutputGeneratedError` on a failed coach stream is
     cosmetic and stays.** Convex kills the request on an unhandled rejection and
     discards the response body with it, so a no-output stream returned
     200-with-nothing and both clients rendered a blank panel. Fixed 2026-07-30 by

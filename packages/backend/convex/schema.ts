@@ -268,9 +268,10 @@ export default defineSchema({
     poolBefore: v.array(v.object({ name: v.string(), colors: v.array(colorCode) })),
     score: storedPickScore,
     signal: v.optional(v.string()),
-    // Declared but never written here, so that one deployment can serve this
-    // branch and `draft-v2` at once. See the note on `pickDefense`; it is on a
-    // clock, not here to stay.
+    // What the player said for this pick before it was graded, and what they did
+    // when it was argued with. Optional because it is a property of HOW a pick
+    // was made rather than of the pick: a forced pick is never challenged, and a
+    // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
 

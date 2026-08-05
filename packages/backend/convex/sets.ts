@@ -10,9 +10,10 @@ import {
   mergeCards,
   normalizeName,
   observedRarityBaselines,
+  packSize,
   withPackSlots,
 } from "@mtg-tutor/core";
-import { cardTextFor, engineHalf, hydrate, textHalf } from "./cardText.js";
+import { cardContextFor, cardTextFor, engineHalf, hydrate, textHalf } from "./cardText.js";
 import {
   action,
   internalMutation,
@@ -917,6 +918,54 @@ export const cardText = query({
       )
       .collect();
     return rows.map((r) => r.text);
+  },
+});
+
+// What scoring reads to judge one pack's cards against the deck being built.
+//
+// Named cards only, and deliberately without a whole-set arm: `cardTextFor` has
+// one because a review walkthrough genuinely wants every card, and nothing wants
+// every card's CONTEXT except a replay, which happens server-side. A pack is
+// ~14 rows, and that is the only shape this query is for.
+//
+// This is what makes the challenge free. Ranking a pack by contextValue needs
+// these rows plus the archetype table `draft.state` already sends once, and the
+// pack itself is on the client -- so the browser can name the card that best
+// serves the deck without a second read of the 46KB pool, and without the server
+// having to score a pick that has not been made yet.
+//
+// Named for the pack rather than for the card, unlike `cardText` beside it,
+// because the whole-set read that name would imply is exactly what must not
+// happen here.
+export const packContext = query({
+  args: {
+    setCode: v.string(),
+    format: v.optional(v.string()),
+    names: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Enforced, not just documented. cardContextFor fans out one indexed read
+    // per name, and Convex bills bytes read -- so an unbounded list on a public
+    // query is an unbounded bill. A pack is the largest thing this ever answers
+    // for, and packSize() is this codebase's own answer to how big that is, so
+    // a set whose boosters somehow exceed it fails loudly here rather than
+    // quietly turning one query into a whole-set read.
+    if (args.names.length > packSize()) {
+      throw new Error(
+        `packContext takes one pack at a time; ${args.names.length} names is more than ` +
+          `the ${packSize()}-card cap. Read the set's context server-side if you need all of it.`,
+      );
+    }
+
+    const found = await cardContextFor(
+      ctx,
+      args.setCode.toLowerCase(),
+      args.format ?? "PremierDraft",
+      args.names,
+    );
+    // As entries rather than a Map: Convex serializes the return value, and a
+    // Map does not survive the wire. The client rebuilds it.
+    return [...found].map(([key, context]) => ({ key, context }));
   },
 });
 

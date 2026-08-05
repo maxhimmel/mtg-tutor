@@ -1,6 +1,7 @@
 import type { Card, PoolCard } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
 import { gapMargin } from "../scoring/score.js";
+import { type PickDefense, confidenceLevel } from "./challenge.js";
 import { colorLabel, describeCard, pct, pp, signedPp, statLine } from "./cardLine.js";
 import { type Pivot, commitmentLine, pivotLines, situationLine } from "./situation.js";
 
@@ -30,11 +31,36 @@ function summarizePool(pool: readonly PoolCard[]): string {
 // during a draft: a speculative red rare the player has since given up on
 // should stop counting as a red commitment, and should stop being the thing the
 // next pick is judged against.
+// What the player said before any of the above was shown to them.
+//
+// The one thing in the whole prompt the model can read that no deterministic
+// path can: a sentence in their own words. It goes in ABOVE the data verdict
+// because that is the order it happened in, and because a coach that reads the
+// answer first and the reasoning second grades the reasoning against the answer.
+function defenseBlock(defense: PickDefense, picked: Card): string {
+  const level = confidenceLevel(defense.confidence);
+  const outcome = defense.challengedName
+    ? defense.switched
+      ? `Shown ${defense.challengedName} with no verdict attached, they changed their pick to it.`
+      : `Shown ${defense.challengedName} with no verdict attached, they stood by ${picked.name}.`
+    : null;
+
+  return [
+    "Before seeing any of the verdict below, the player committed to this pick and defended it.",
+    `  In their words: "${defense.reason.trim()}"`,
+    `  How sure they said they were: ${level.label} — claiming ${level.claim}.`,
+    outcome ? `  ${outcome}` : null,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+}
+
 export function buildPickContext(
   rec: RecordedPick<Card>,
   poolBefore: readonly PoolCard[],
   benched: readonly PoolCard[] = [],
   pivots: readonly Pivot[] = [],
+  defense?: PickDefense,
 ): string {
   const { picked, score, pack } = rec;
   // The pool the player is looking at includes what they just took; the
@@ -120,6 +146,7 @@ export function buildPickContext(
     `You picked: ${describeCard(picked)}`,
     `  ${statLine(picked)}`,
     "",
+    defense ? `${defenseBlock(defense, picked)}\n` : null,
     `Data verdict: ${verdict}`,
     "",
     // Null rather than "" so dropping an empty pack list does not also drop the
@@ -127,7 +154,10 @@ export function buildPickContext(
     // read as one block instead of five labelled sections.
     passed ? `Other cards in the pack:\n${passed}` : null,
     "",
-    "Coach this pick.",
+    // Two different jobs, said out loud. Without the second sentence the model
+    // reads the player's words as colour and coaches the card anyway, which is
+    // the whole thing this flow exists to stop.
+    defense ? "Coach this pick AND the reasoning they gave for it." : "Coach this pick.",
   ]
     .filter((l) => l !== null)
     .join("\n");

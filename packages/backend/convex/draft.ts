@@ -4,13 +4,13 @@ import {
   applyBench,
   buildDeck,
   buildPickContext,
+  clampReason,
   compareDecks,
   isLandCount,
   newSeed,
-  commitment,
-  committedColors,
   normalizeBench,
   normalizeName,
+  packScoringContext,
   pivots,
   splitPool,
   suggestDeck,
@@ -21,6 +21,7 @@ import { loadBoard, ownedSession, requireUserId, setDocFor } from "./sessions.js
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
 import { recordPick, storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
+import { pickDefenseInput } from "./validators.js";
 
 // The board in the engine's half of a card: names, colours, rarity and the
 // numbers a score is made of.
@@ -75,7 +76,7 @@ export const start = mutation({
 export const state = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
     return {
       sessionId: session._id,
       setCode: session.setCode,
@@ -87,6 +88,15 @@ export const state = query({
       status: session.status,
       summary: session.summary,
       sideboard: normalizeBench(session.sideboard ?? []),
+      // The set's archetype table, sent once for the session. ~30 rows under a
+      // kilobyte, and the board has the document open already -- so this costs
+      // nothing here and saves the client a read of the 46KB pool on every pick.
+      //
+      // It is what lets the CHALLENGE be computed in the browser: ranking a pack
+      // by contextValue needs this plus the pack's context rows, and the pack is
+      // already there. Same principle as sending the set's card text once and
+      // joining by name.
+      colorWinRates: cardsDoc.colorWinRates,
       ...boardView(engine),
     };
   },
@@ -139,6 +149,17 @@ export const pick = mutation({
      * the field was designed to hold.
      */
     bench: v.optional(v.boolean()),
+    /**
+     * What the player committed to before this pick was graded. Optional, and
+     * the mutation behaves identically without it -- the challenge is a client
+     * flow, and the pick is the pick either way. Recorded rather than acted on:
+     * nothing on this path reads it, and the coach does.
+     *
+     * Carries the card first proposed; whether they SWITCHED is derived from it
+     * against the card actually taken, so the stored row cannot claim a change
+     * of mind that did not happen.
+     */
+    defense: v.optional(pickDefenseInput),
   },
   handler: async (ctx, args) => {
     const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
@@ -167,7 +188,6 @@ export const pick = mutation({
       bench,
       session.pickedNames.length,
     ).maindeck;
-    const colors = committedColors(maindeck);
 
     // The pack's context rows and no more -- fourteen of them, against the ~50KB
     // the set's would cost on a document already read once per pick.
@@ -178,26 +198,44 @@ export const pick = mutation({
       engine.currentPack.map((c) => c.name),
     );
 
-    const record = engine.humanPick(chosen, {
-      colors,
-      commitment: commitment(
+    // Built by the shared helper, not inline: the browser ranks this same pack
+    // to name the card it argues the pick against, and the two must agree about
+    // what "best for this deck" means or the challenge and the grade are about
+    // different questions.
+    const record = engine.humanPick(
+      chosen,
+      packScoringContext(
         maindeck,
-        colors,
         session.pickedNames.length,
         engine.totalPicks(),
+        cardsDoc.colorWinRates,
+        (c) => context.get(normalizeName(c.name)),
       ),
-      archetypes: cardsDoc.colorWinRates,
-      contextFor: (c) => context.get(normalizeName(c.name)),
-    });
+    );
     const complete = engine.isComplete();
     const pickIndex = session.pickedNames.length;
 
     const sideboard = args.bench ? applyBench(bench, pickIndex, true, pickIndex) : bench;
 
+    // Settled here rather than taken as given: `switched` is a fact about this
+    // mutation's own argument list, and the one place that can state it without
+    // being able to be wrong.
+    const defense = args.defense && {
+      // Clamped here, not trusted from the client: this string is pasted into
+      // the coach prompt on every decision pick, so its length is a token bill
+      // and the mutation is the only place that can actually cap it.
+      reason: clampReason(args.defense.reason),
+      confidence: args.defense.confidence,
+      ...(args.defense.challengedName === undefined
+        ? {}
+        : { challengedName: args.defense.challengedName }),
+      switched: args.defense.proposedName !== chosen.name,
+    };
+
     // What this pick saw, written as it happens. Nothing recomputes it: the
     // coach and the review verdict read this instead of replaying the draft to
     // rebuild one pick out of the set's whole card pool.
-    await recordPick(ctx, args.sessionId, pickIndex, record, poolBefore);
+    await recordPick(ctx, args.sessionId, pickIndex, record, poolBefore, defense);
 
     await ctx.db.patch(args.sessionId, {
       pickedNames: [...session.pickedNames, chosen.name],
@@ -369,11 +407,14 @@ export const coachContext = internalQuery({
     return {
       // The pool as it stood BEFORE this pick: the prompt shows it with the pick
       // added back, and judges the pick's colors against it without.
+      // The defense rides along on the same row, so putting the player's own
+      // words in front of the coach costs no read at all.
       userContent: buildPickContext(
         record,
         maindeck,
         sideboard,
         pivots(row.poolBefore, bench, args.pickIndex),
+        row.defense,
       ),
       setCode: session.setCode,
       packNo: row.packNo,
