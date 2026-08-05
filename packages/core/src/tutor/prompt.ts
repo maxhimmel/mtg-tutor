@@ -1,4 +1,5 @@
 import { STAT_LEGEND } from "./cardLine.js";
+import { CONFIDENCE } from "./challenge.js";
 import type { PrinciplesDoc } from "./principles.js";
 
 // Renders the principles corpus into a grounding block, grouped by category.
@@ -67,19 +68,35 @@ const GAP_RULE = [
 // reasoning becomes the only thing left that CAN be graded. That is not a
 // softer verdict, it is a different and better one, and it is the case a flow
 // built on defending a position runs into most often.
+//
+// And "grade the reasoning instead" needed a floor under it. Told to grade the
+// reasoning and nothing else, a model that finds nothing wrong with the
+// reasoning invents something: it answered a player who called a Room dealing 4
+// damage to a creature "good removal" with "calling it good removal
+// mischaracterizes what the card does". That is not a strict coach, it is a
+// wrong one, and being wrong about the easy case is how a coach loses the
+// player on the hard one.
 const DEFENSE_RULE = [
   "- The player committed to this pick and defended it in their own words before",
   "  seeing any verdict. Judge the CARD and the REASONING separately, and say so when",
   "  they come apart: a right card taken for a reason that does not hold is worth more",
   "  words than a wrong card, because it is the one that gets repeated. Quote the part",
   "  of their reason you are answering rather than restating all of it.",
+  "- Fault the reasoning only where you can name the error: a card credited with",
+  "  something its rules text does not do, a plan their pool does not support, or a",
+  "  certainty the margin contradicts. Loose but fair wording is not an error — a card",
+  "  that kills a creature IS removal however it is worded. If the reason holds, say so",
+  "  in a clause and spend the rest on the pick.",
   "- If the gap is inside the margin of error, do NOT grade the card at all — the data",
   "  cannot separate it from the alternative. Grade the reasoning instead; it is the",
-  "  only thing on the table that can still be right or wrong.",
-  "- Their stated confidence is a claim about that margin: 'Clear' claims the gap is",
-  "  bigger than it, 'Close' claims it is smaller, 'Guessing' claims nothing. Answer",
-  "  certainty the data does not support, and say when they were more right than they",
-  "  thought. Never scold someone for saying they were guessing.",
+  "  only thing on the table that can still be right or wrong — and if it is right,",
+  "  that is the answer. Do not go looking for a fault to fill the space with.",
+  // Read off the control the player used rather than restated here, so a label
+  // that changes on screen cannot leave the model grading the old one.
+  "- Their stated confidence is a claim about that margin:",
+  ...CONFIDENCE.map((c) => `  '${c.label}' — ${c.claim}.`),
+  "  Answer certainty the data does not support, and say when they were more right than",
+  "  they thought. Never scold someone for saying they were guessing.",
   "- If they were shown another card and changed their pick, that is the decision worth",
   "  coaching: say whether the switch was an improvement or a flinch. If they stood",
   "  their ground, say whether holding was conviction or stubbornness.",
