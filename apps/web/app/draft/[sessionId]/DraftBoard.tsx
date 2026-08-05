@@ -25,6 +25,7 @@ import {
   type Confidence,
   type TextIndex,
   type PickScore,
+  PACK,
   applyBench,
   calibrationLine,
   claimOutcome,
@@ -40,6 +41,8 @@ import {
   textIndex,
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
+import { PageHeading } from "../../components/PageHeading";
+import { PickTrack, type Tick } from "../../components/PickTrack";
 import { CardText } from "../../components/CardText";
 import { CardFace, CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
@@ -742,28 +745,64 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     return <PageNotice>Loading draft…</PageNotice>;
   }
 
+  // Every pack in this set is the same size, so the whole draft's shape follows
+  // from the two numbers the session already carries. Rounded and floored at 1
+  // because a track cannot be drawn out of a fraction of a pick.
+  const packSize = Math.max(1, Math.round(state.totalPicks / PACK.packsPerDraft));
+  // Where the next pick falls in the flat run of them. A finished draft is past
+  // the end of its own track, which is what fills the last tick.
+  const at = state.complete
+    ? state.totalPicks
+    : (state.packNo - 1) * packSize + (state.pickNo - 1);
+  const track: Tick[][] = Array.from({ length: PACK.packsPerDraft }, (_, p) =>
+    Array.from({ length: packSize }, (_, i) => {
+      const index = p * packSize + i;
+      return {
+        state: index < at ? "past" : index === at ? "current" : "ahead",
+        label: `Pack ${p + 1}, pick ${i + 1}`,
+      };
+    }),
+  );
+
   return (
-    <PageShell
-      headerAside={
-        <div className="flex items-center gap-2.5 text-sm tabular-nums text-base-content/60">
-          <span className="flex items-center gap-1.5 text-base-content/80" title={state.setName}>
-            <SetIcon uri={state.setIcon} name={state.setName} className="size-4" />
-            {state.setCode.toUpperCase()}
-          </span>
-          <span aria-hidden className="h-3.5 w-px bg-base-300" />
-          {state.complete ? (
-            <span className="font-semibold text-base-content">Draft complete</span>
-          ) : (
-            <span>
-              Pack <strong className="font-semibold text-base-content">{state.packNo}</strong> ·
-              Pick <strong className="font-semibold text-base-content">{state.pickNo}</strong> ·{" "}
-              {pack.length} in pack · pool{" "}
-              <strong className="font-semibold text-base-content">{pool.length}</strong>
+    <PageShell>
+      <PageHeading
+        icon={
+          <SetIcon
+            uri={state.setIcon}
+            name={state.setName}
+            className="size-6 text-base-content/50"
+          />
+        }
+        title={state.setName}
+        controls={
+          // Nothing once the draft is over: a full track says so, and Results
+          // below opens by saying it in words.
+          !state.complete && (
+            // The drafter's own shorthand, which the app already writes this way
+            // in the missed-picks list and in replay errors. It is short enough
+            // to read without parsing because the track underneath is what
+            // actually carries the position; this only names it.
+            <span className="text-sm font-semibold tracking-[0.08em] tabular-nums text-base-content/70">
+              P{state.packNo}P{state.pickNo}
+              <span className="sr-only">
+                {" "}
+                — pack {state.packNo}, pick {state.pickNo}
+              </span>
             </span>
-          )}
-        </div>
-      }
-    >
+          )
+        }
+      >
+        <PickTrack
+          groups={track}
+          label={
+            state.complete
+              ? `Draft complete: all ${state.totalPicks} picks made.`
+              : `Pack ${state.packNo} of ${PACK.packsPerDraft}, pick ${state.pickNo} of ${packSize}.`
+          }
+        />
+      </PageHeading>
+
       {state.complete ? (
         <Results sessionId={id} />
       ) : (
