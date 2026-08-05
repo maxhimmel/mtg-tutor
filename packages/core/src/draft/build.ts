@@ -17,11 +17,13 @@ export interface DeckPick<C> {
 // The order a deck list is read in, and the only one this app has. Lifted out of
 // `deckPiles` because the results screen lays the suggestion beside the pool the
 // builder sorted, and a comparison whose two sides are sorted differently is not
-// one.
+// one. Exported for the same reason one step further out: the terminal prints
+// the same deck list, and two clients sorting one deck two ways is the same bug
+// with a wider blast radius.
 //
 // By `castingValue` rather than `cmc`, so a split card sits on the half you
 // would actually cast -- the same rule the curve beside it is bucketed by.
-const byCurve = <C extends { name: string; cmc: number; manaCost?: string }>(a: C, b: C) =>
+export const byCurve = <C extends { name: string; cmc: number; manaCost?: string }>(a: C, b: C) =>
   castingValue(a) - castingValue(b) || a.name.localeCompare(b.name);
 
 /**
