@@ -7,10 +7,13 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isDecisionPick } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../../components/PageShell";
+import { PageHeading } from "../../../components/PageHeading";
+import { PickTrack, type Tick } from "../../../components/PickTrack";
 import { Panel } from "../../../components/Panel";
 import { SetIcon } from "../../../components/SetIcon";
 import { PickReveal } from "../../PickReveal";
 import { ReviewFrame } from "../../ReviewFrame";
+import { ReviewViews } from "../../ReviewViews";
 import type { ReviewPick } from "../../types";
 import { useVerdicts } from "../../useVerdicts";
 
@@ -81,24 +84,37 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
 
   const set = (sets ?? []).find((s) => s.code === draft.setCode && s.format === draft.format);
 
+  // The whole draft at a glance, which is what this page is for and what its
+  // filtered list cannot show: the misses in the order they happened, against
+  // every decision the draft asked for. It stays whole whichever scope is on --
+  // the list below is the filter, and a summary that filtered with it would
+  // stop being a summary.
+  const track: Tick[] = decisions.map((pick) => ({
+    state: pick.isBest ? "hit" : "miss",
+    label: `Pack ${pick.packNo}, pick ${pick.pickNo}`,
+  }));
+  const missed = decisions.filter((p) => !p.isBest).length;
+
   return (
-    <PageShell
-      headerAside={
-        <div className="flex flex-wrap items-center gap-3 text-sm text-base-content/60">
-          <span className="flex items-center gap-1.5 text-base-content/80" title={set?.name}>
-            <SetIcon uri={set?.iconUri} name={set?.name} className="size-4" />
-            {draft.setCode.toUpperCase()}
-          </span>
-          <span aria-hidden className="h-3.5 w-px bg-base-300" />
-          <span className="tabular-nums">
-            {shown.length} of {decisions.length} decision picks
-          </span>
-          <Link href={`/review/${sessionId}`} className="link link-hover">
-            ← Step through instead
-          </Link>
-        </div>
-      }
-    >
+    <PageShell>
+      <PageHeading
+        icon={<SetIcon uri={set?.iconUri} name={set?.name} className="size-6 text-base-content/50" />}
+        title={
+          <>
+            {set?.name ?? draft.setCode.toUpperCase()}
+            {draft.colorPair && (
+              <span className="ml-2 text-base-content/45">{draft.colorPair}</span>
+            )}
+          </>
+        }
+        controls={<ReviewViews sessionId={sessionId} current="breakdown" />}
+      >
+        <PickTrack
+          groups={[track]}
+          label={`${decisions.length} decision picks, ${missed} of them missed.`}
+        />
+      </PageHeading>
+
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
         <Panel bodyClassName="gap-3">
           <div
@@ -126,13 +142,14 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
             })}
           </div>
 
-          {scope === "missed" && (
-            <p className="text-xs text-base-content/50">
-              Picks where you took a card the data rates below another one. A pick you
-              got right can still hold a lesson, and this view will not show it — see
-              the walkthrough for those.
-            </p>
-          )}
+          {/* The count the masthead used to carry, next to the control that
+              sets it. */}
+          <p className="text-xs text-base-content/50">
+            Showing <span className="tabular-nums">{shown.length}</span> of{" "}
+            <span className="tabular-nums">{decisions.length}</span> decision picks.
+            {scope === "missed" &&
+              " These are the ones where you took a card the data rates below another. A pick you got right can still hold a lesson, and this view will not show it."}
+          </p>
 
           {unasked.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 border-t border-base-300 pt-3">
@@ -190,10 +207,9 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
 
         {showFrames && <ReviewFrame sessionId={id} phase="close" cards={pool} />}
 
+        {/* The two sibling views are in the switcher at the top of the page, so
+            the only way out this page still owes anyone is the way up a level. */}
         <div className="flex flex-wrap gap-2">
-          <Link href={`/review/${sessionId}`} className="btn btn-sm btn-primary">
-            Step through it
-          </Link>
           <Link href="/review" className="btn btn-sm btn-ghost">
             Another draft
           </Link>
