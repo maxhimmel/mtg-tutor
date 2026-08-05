@@ -40,6 +40,10 @@ export const list = query({
         overallScore: s.summary?.overallScore ?? 0,
         accuracy: s.summary?.accuracy ?? 0,
         pickCount: s.summary?.pickCount ?? s.pickedNames.length,
+        // Whether there is a forty to compare against yet. A draft can be
+        // finished and never built, and the row that links to the deck should
+        // say so rather than sending you to a comparison that does not exist.
+        built: s.build != null,
       }));
   },
 });

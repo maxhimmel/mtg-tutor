@@ -4,14 +4,22 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useConvex, useConvexAuth } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { type Card, CURVE_TOP, DECK, decksAgree } from "@mtg-tutor/core";
+import {
+  type Card,
+  type DeckRow,
+  CURVE_TOP,
+  DECK,
+  alignDecks,
+  buildDeck,
+  deckPiles,
+  decksAgree,
+} from "@mtg-tutor/core";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
-import { CardPlacardList } from "./CardPlacard";
+import { CardPlacard, CardPlacardList } from "./CardPlacard";
 import { CardName } from "./CardText";
 import { DeckBuilder } from "./DeckBuilder";
-import { PageNotice } from "./PageShell";
 import { Panel } from "./Panel";
 
 type ResultsData = FunctionReturnType<typeof api.draft.results>;
@@ -57,14 +65,30 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
     void load();
   }, [isAuthenticated, load]);
 
-  if (loadError) return <PageNotice tone="error">{loadError}</PageNotice>;
+  // Re-ingesting a set strands every draft taken against the old data, and this
+  // screen is now linked to from the drafts list -- which reads the stored
+  // summary and so cannot know until you click. Said in place rather than as a
+  // page of its own, because there is a masthead around this either way.
+  if (loadError) {
+    return (
+      <div className="flex max-w-prose flex-col gap-3">
+        <h2 className="font-display text-2xl font-semibold tracking-tight">
+          That deck could not be rebuilt.
+        </h2>
+        <p className="leading-relaxed text-base-content/70">{loadError}</p>
+        <Link href="/review" className="link link-hover text-sm text-base-content/60">
+          Back to your drafts →
+        </Link>
+      </div>
+    );
+  }
   if (results === undefined) return <p className="text-base-content/60">Tallying up…</p>;
 
   // The draft is over and the deck is not built, so this screen is the deck
   // builder and nothing else. The score, the suggestion and the missed picks all
   // wait: half of them would answer the exercise, and the other half would turn
   // it into a footnote under a grade.
-  if (!results.deck || !results.diff) {
+  if (!results.deck || !results.diff || !results.build) {
     return (
       <div className="flex flex-col gap-5">
         <header className="flex flex-col gap-1.5">
@@ -89,6 +113,16 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
 
   const { summary, deck, diff, mistakes } = results;
   const agreed = decksAgree(diff);
+
+  // The player's forty, read back out of the pool exactly the way the builder
+  // read it. Nothing stores a deck list -- see buildDeck -- and the pool is
+  // already on the wire, so both sides of the comparison come from the one
+  // answer the player gave.
+  const built = buildDeck(
+    deckPiles(results.pool, results.sideboard).maindeck.map((p) => p.card),
+    results.build.basicLands,
+  );
+  const rows = alignDecks(built, deck);
 
   return (
     <div className="flex flex-col gap-5">
@@ -146,20 +180,28 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
           </Panel>
 
           <Panel
-            title={`The suggested build — ${deck.colors.join("") || "splashy"}`}
-            aside={
-              <span className="text-xs tabular-nums text-base-content/50">
-                {deck.spells.length} spells
-                {deck.nonbasicLands.length > 0 && ` + ${deck.nonbasicLands.length} lands`} +{" "}
-                {deck.basicLands} basics
-              </span>
-            }
+            title={agreed ? "The forty you both play" : "The two forties"}
+            bodyClassName="gap-3"
             className={REVEAL[3]}
           >
-            <CardPlacardList
-              cards={[...deck.spells, ...deck.nonbasicLands]}
-              trailing={(c) => pct(c.gihWinRate)}
-            />
+            {agreed ? (
+              <CardPlacardList
+                cards={rows.flatMap((r) => (r.built ? [r.built] : []))}
+                trailing={(c) => pct(c.gihWinRate)}
+              />
+            ) : (
+              <DeckColumns rows={rows} />
+            )}
+            <div className="grid gap-x-4 gap-y-1 border-t border-base-300 pt-2 text-sm text-base-content/50 sm:grid-cols-2">
+              <span>
+                <span className="sm:hidden">Yours: </span>+ {built.basicLands} basic lands
+              </span>
+              {!agreed && (
+                <span>
+                  <span className="sm:hidden">Suggested: </span>+ {deck.basicLands} basic lands
+                </span>
+              )}
+            </div>
           </Panel>
 
           {mistakes.length > 0 && (
@@ -254,6 +296,87 @@ function DiffSide({ title, cards }: { title: string; cards: Card[] }) {
         <CardPlacardList cards={cards} trailing={(c) => pct(c.gihWinRate)} />
       )}
     </div>
+  );
+}
+
+/**
+ * Both forties, a card to a row.
+ *
+ * Aligned rather than stacked, which is the whole of how forty cards twice fits
+ * on a page that already has four panels: a card both decks play holds one row
+ * and shows on both sides of it, so the panel is as long as the union of the two
+ * decks -- a couple of rows more than the one deck this used to draw -- rather
+ * than the eighty rows two lists would cost.
+ *
+ * Where only one deck plays a card the other side is a dashed gap, the same
+ * outline CurveDiff draws the suggestion in. Quietly: the loud version of that
+ * list is the "cards apart" panel above, and this one is here to say where in
+ * the curve the disagreement falls.
+ */
+function DeckColumns({ rows }: { rows: DeckRow[] }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="hidden grid-cols-2 gap-x-4 sm:grid">
+        <span className="eyebrow">Yours</span>
+        <span className="eyebrow">Suggested</span>
+      </div>
+      <ul className="flex flex-col gap-0.5">
+        {rows.map((row, i) => {
+          const shared = row.built != null && row.suggested != null;
+          return (
+            // Keyed by position: two copies of a common share a name, and the
+            // rows are a stable list anyway -- nothing reorders them.
+            <li key={i} className="grid gap-x-4 sm:grid-cols-2">
+              <DeckCell card={row.built} side="Yours" only={!shared} />
+              <DeckCell card={row.suggested} side="Suggested" only={!shared} onPhone={!shared} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+// The win rate sits in a fixed gutter rather than taking the width it happens to
+// need, so a dashed gap ends where the placard opposite it ends. A column that
+// only lines up on the rows both decks filled is the one thing this panel cannot
+// afford.
+const CELL = "grid-cols-[minmax(0,1fr)_3.25rem] items-center gap-x-3";
+
+// One side of one row. A phone has no room for two columns of card names, so
+// there it shows the card once and says whose it is; the empty side of a row
+// disappears entirely rather than becoming a gap with nothing opposite it.
+function DeckCell({
+  card,
+  side,
+  only,
+  onPhone = true,
+}: {
+  card?: Card;
+  side: string;
+  only: boolean;
+  onPhone?: boolean;
+}) {
+  if (!card) {
+    return (
+      <span aria-hidden className={`hidden sm:grid ${CELL}`}>
+        <span className="self-stretch rounded-lg border border-dashed border-base-content/20" />
+      </span>
+    );
+  }
+
+  return (
+    <span className={`${onPhone ? "grid" : "hidden sm:grid"} ${CELL}`}>
+      <span className="flex min-w-0 items-center gap-2">
+        <CardPlacard card={card} className="min-w-0 flex-1" />
+        {/* Always said, so a row read aloud names the deck it belongs to; drawn
+            only where the phone has dropped the column that would have said it. */}
+        <span className={`shrink-0 ${only ? "eyebrow sm:hidden" : "sr-only"}`}>{side}</span>
+      </span>
+      <span className="text-right text-sm tabular-nums text-base-content/60">
+        {pct(card.gihWinRate)}
+      </span>
+    </span>
   );
 }
 
