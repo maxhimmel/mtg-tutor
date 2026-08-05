@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "pnpm run generate && tsc",
+    "dev": "pnpm run generate && tsc --watch --preserveWatchOutput",
     "check:purity": "tsx scripts/check-purity.ts",
     "generate": "tsx scripts/generate-principles.ts",
     "test": "pnpm run check:purity && vitest run",
