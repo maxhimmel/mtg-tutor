@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { type Bench, type Card, DECK, buildDeck, castingValue } from "@mtg-tutor/core";
+import {
+  type Bench,
+  type Card,
+  DECK,
+  applyBench,
+  buildDeck,
+  deckPiles,
+  deckSizeNote,
+  isLandCount,
+  isLegalDeck,
+  tally,
+} from "@mtg-tutor/core";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { ringFor } from "../lib/cardFrame";
@@ -10,9 +21,6 @@ import { COLOR_NAMES, pct } from "../lib/format";
 import { CardPlacardList } from "./CardPlacard";
 import { ManaCurve } from "./ManaCurve";
 import { Panel } from "./Panel";
-
-const byCurve = (a: { card: Card }, b: { card: Card }) =>
-  castingValue(a.card) - castingValue(b.card) || a.card.name.localeCompare(b.card.name);
 
 function MoveButton({ card, cut, onClick }: { card: Card; cut: boolean; onClick: () => void }) {
   // The button names the pile the card lands in, which is the rule the draft
@@ -113,13 +121,9 @@ export function DeckBuilder({
   // a card and not like asking a server whether it may be moved. Reconciled with
   // what the mutation returns, and dropped back to the query's copy on failure.
   const current = pending ?? sideboard;
-  const benched = new Set(current.map((b) => b.pos));
 
   const move = async (pickIndex: number, cut: boolean) => {
-    const next = cut
-      ? [...current.filter((b) => b.pos !== pickIndex), { pos: pickIndex, atPick: pool.length }]
-      : current.filter((b) => b.pos !== pickIndex);
-    setPending(next.sort((a, b) => a.pos - b.pos));
+    setPending(applyBench(current, pickIndex, cut, pool.length));
     try {
       setPending(await bench({ sessionId, pickIndex, benched: cut }));
     } catch {
@@ -127,26 +131,20 @@ export function DeckBuilder({
     }
   };
 
-  const picks = pool.map((card, pickIndex) => ({ card, pickIndex }));
-  const playing = picks.filter((p) => !benched.has(p.pickIndex)).sort(byCurve);
-  const cut = picks.filter((p) => benched.has(p.pickIndex)).sort(byCurve);
+  const { maindeck: playing, sideboard: cut } = deckPiles(pool, current);
 
   const deck = buildDeck(
     playing.map((p) => p.card),
     basicLands,
   );
   const lands = deck.nonbasicLands.length + deck.basicLands;
-  const over = deck.size - DECK.size;
+  const shortfall = deckSizeNote(deck);
+  const colors = tally(deck.spells, (c) => c.colors);
 
-  const colors = new Map<string, number>();
-  for (const c of deck.spells) {
-    for (const col of c.colors) colors.set(col, (colors.get(col) ?? 0) + 1);
-  }
-
-  const trailingFor = (list: { pickIndex: number }[], isCut: boolean) => (card: Card, i: number) => (
+  const trailingFor = (list: { pos: number }[], isCut: boolean) => (card: Card, i: number) => (
     <span className="flex items-center gap-2">
       <span className="tabular-nums text-base-content/45">{pct(card.gihWinRate)}</span>
-      <MoveButton card={card} cut={isCut} onClick={() => move(list[i].pickIndex, !isCut)} />
+      <MoveButton card={card} cut={isCut} onClick={() => move(list[i].pos, !isCut)} />
     </span>
   );
 
@@ -160,23 +158,21 @@ export function DeckBuilder({
             // here for the reason it is earned during the draft: which colours
             // the deck is in is the question this panel answers.
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              {[...colors]
-                .sort((a, b) => b[1] - a[1])
-                .map(([color, n]) => (
+              {colors.map(([color, n]) => (
+                <span
+                  key={color}
+                  className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
+                  title={COLOR_NAMES[color] ?? color}
+                >
                   <span
-                    key={color}
-                    className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
-                    title={COLOR_NAMES[color] ?? color}
-                  >
-                    <span
-                      aria-hidden
-                      className="size-2.5 rounded-full ring-1 ring-black/40"
-                      style={{ background: ringFor(color) }}
-                    />
-                    {n}
-                    <span className="sr-only">{COLOR_NAMES[color] ?? color}</span>
-                  </span>
-                ))}
+                    aria-hidden
+                    className="size-2.5 rounded-full ring-1 ring-black/40"
+                    style={{ background: ringFor(color) }}
+                  />
+                  {n}
+                  <span className="sr-only">{COLOR_NAMES[color] ?? color}</span>
+                </span>
+              ))}
             </div>
           }
         >
@@ -217,17 +213,13 @@ export function DeckBuilder({
           <span className="flex items-baseline gap-1.5">
             <span
               className={`font-display text-2xl font-semibold leading-none tabular-nums ${
-                over === 0 ? "text-primary" : ""
+                shortfall === null ? "text-primary" : ""
               }`}
             >
               {deck.size}
             </span>
             <span className="text-sm tabular-nums text-base-content/45">/{DECK.size}</span>
-            {over !== 0 && (
-              <span className="text-xs text-base-content/60">
-                {over > 0 ? `${over} too many` : `${-over} short`}
-              </span>
-            )}
+            {shortfall && <span className="text-xs text-base-content/60">{shortfall}</span>}
           </span>
 
           <LandStepper
@@ -239,7 +231,7 @@ export function DeckBuilder({
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            disabled={over !== 0 || locking}
+            disabled={!isLegalDeck(deck) || locking}
             onClick={async () => {
               setLocking(true);
               try {
@@ -281,7 +273,7 @@ function LandStepper({
         <button
           type="button"
           className="btn btn-xs join-item"
-          disabled={value === 0}
+          disabled={!isLandCount(value - 1)}
           onClick={() => onChange(value - 1)}
           aria-label="One fewer basic land"
         >
@@ -290,7 +282,7 @@ function LandStepper({
         <button
           type="button"
           className="btn btn-xs join-item"
-          disabled={value >= DECK.size}
+          disabled={!isLandCount(value + 1)}
           onClick={() => onChange(value + 1)}
           aria-label="One more basic land"
         >
