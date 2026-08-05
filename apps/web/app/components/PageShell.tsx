@@ -14,19 +14,15 @@ import { AppHeader } from "./AppHeader";
 //
 // 1500px is the app's outer bound, not a reading measure -- a page of prose
 // should still cap its own column well inside it (see /glossary, /principles).
-export function PageShell({
-  headerAside,
-  children,
-}: {
-  // The per-page middle of the masthead: the draft's pack and pick counters,
-  // the review's set and score. Omitted by the pages that have nothing to put
-  // there, which is most of them.
-  headerAside?: ReactNode;
-  children: ReactNode;
-}) {
+//
+// The masthead takes nothing from the page. It used to take a slot for the
+// per-page middle, and everything that went in there -- which set, which pick,
+// quiz on or off, the links between a review's views -- belongs to the page and
+// now sits in it, under PageHeading.
+export function PageShell({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
-      <AppHeader>{headerAside}</AppHeader>
+      <AppHeader />
       {children}
     </main>
   );

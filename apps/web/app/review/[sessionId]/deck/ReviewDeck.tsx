@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { PageShell } from "../../../components/PageShell";
+import { PageHeading } from "../../../components/PageHeading";
 import { Results } from "../../../components/Results";
+import { ReviewViews } from "../../ReviewViews";
 
 /**
  * What the picks became: the deck, the suggestion beside it, and the score.
@@ -20,19 +21,12 @@ import { Results } from "../../../components/Results";
  */
 export function ReviewDeck({ sessionId }: { sessionId: string }) {
   return (
-    <PageShell
-      headerAside={
-        <div className="flex flex-wrap items-center gap-3 text-sm text-base-content/60">
-          <Link href={`/review/${sessionId}`} className="link link-hover">
-            ← Step through the picks
-          </Link>
-          <span aria-hidden className="h-3.5 w-px bg-base-300" />
-          <Link href={`/review/${sessionId}/breakdown`} className="link link-hover">
-            Breakdown
-          </Link>
-        </div>
-      }
-    >
+    <PageShell>
+      {/* No title, on purpose: `draft.results` is the only query this screen is
+          willing to pay for and it does not carry the set, and Results opens
+          with a headline of its own that a second one above would fight. So the
+          heading here is the switcher and the rule under it. */}
+      <PageHeading controls={<ReviewViews sessionId={sessionId} current="deck" />} />
       <Results sessionId={sessionId as Id<"draftSessions">} />
     </PageShell>
   );
