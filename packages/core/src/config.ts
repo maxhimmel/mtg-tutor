@@ -20,9 +20,24 @@ export const DRAFT = {
   humanSeat: 0,
 };
 
-// The 40-card limited deck. 23/17 is the convention, not a measurement -- the
-// real per-set winning-deck curves are in the data we now own and are not read
-// yet. maxNonbasicLands caps how many drafted lands displace basics: a couple of
+// The 40-card limited deck. 23/17 is the convention, not a measurement, and it
+// stays that way because the measurement is not available -- which is worth
+// writing down, because the data looks like it should have it.
+//
+// The 17Lands game dataset has one `deck_<card>` column per card and would
+// answer this exactly. `build-set-stats.mjs` reads it and drops the answer
+// twice, both times for good reasons that happen to be fatal here: basic lands
+// are skipped entirely (their per-card win rate is just their deck's), and
+// every other column is collapsed to presence rather than copies. So the
+// artifact knows how many DISTINCT non-basic cards a winning deck ran -- 19.4
+// to 22.7 across the 17 sets -- and cannot say how many of them were the same
+// card twice, which is the whole of the gap between that number and 23.
+//
+// Recovering it means a new pass over the game CSVs and a re-ingest, not a
+// derivation from anything stored. Until then this is a convention honestly
+// labelled, rather than a measurement quietly invented.
+//
+// maxNonbasicLands caps how many drafted lands displace basics: a couple of
 // fixers help, a pile of taplands is how a deck stops casting its spells.
 export const DECK = {
   size: 40,

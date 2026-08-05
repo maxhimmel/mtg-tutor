@@ -1,7 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import {
+  DECK,
   type DraftEngine,
+  buildDeck,
   buildPickContext,
+  compareDecks,
   newSeed,
   commitment,
   committedColors,
@@ -237,11 +240,43 @@ export const pick = mutation({
   },
 });
 
-// The end-of-draft readout: suggested deck plus the picks that cost the most.
+// Lock in the 40. Only the land count: the cards are `sideboard`, which the
+// player has been editing since pick one and goes on editing here.
+//
+// The "does it add to 40" check is deliberately NOT here. Counting the deck
+// needs type lines to tell a drafted basic from a spell, which is a second
+// table this mutation has no other reason to read -- and `results` recomputes
+// the real total from hydrated cards anyway, so a check here would be a
+// duplicate free to disagree with the one the player actually sees.
+export const build = mutation({
+  args: { sessionId: v.id("draftSessions"), basicLands: v.number() },
+  handler: async (ctx, args) => {
+    const session = await ownedSession(ctx, args.sessionId);
+
+    if (session.status !== "complete") {
+      throw new ConvexError("Finish the draft before building the deck.");
+    }
+    if (
+      !Number.isInteger(args.basicLands) ||
+      args.basicLands < 0 ||
+      args.basicLands > DECK.size
+    ) {
+      throw new ConvexError(`${args.basicLands} is not a number of lands.`);
+    }
+
+    const build = { basicLands: args.basicLands, builtAt: new Date().toISOString() };
+    await ctx.db.patch(args.sessionId, { build });
+    return build;
+  },
+});
+
+// The end-of-draft readout: the pool as the player left it, and -- once they
+// have built their own 40 out of it -- the suggested deck, the diff and the
+// picks that cost the most.
 export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
     // Once per finished draft, for the pool the deck is built from and the few
     // cards the mistakes name -- not the whole set.
     const text = await cardTextFor(
@@ -273,19 +308,38 @@ export const results = query({
     // Building the 40 out of cards the player has said they are not playing is
     // the app overruling them with its own suggestion. `colorPair` reads the
     // maindeck for the same reason: it should name the deck, not the pile.
-    const { maindeck, sideboard } = splitPool(
-      engine.humanPool,
-      normalizeBench(session.sideboard ?? []),
-      session.pickedNames.length,
-    );
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck } = splitPool(engine.humanPool, bench, session.pickedNames.length);
+
+    // The deck builder reads type lines and colour identity to tell a land from
+    // a spell and a splash from a lane, so it wants whole cards.
+    const playing = hydrate(maindeck, text);
+
+    // Handing over the answer before the exercise is what the build step exists
+    // to stop, so the suggestion and the diff are not on the wire until the
+    // player has committed to a 40 of their own. The score and the missed picks
+    // are, because those are about the picks -- they were settled during the
+    // draft and nothing in the build can change them.
+    const built = session.build
+      ? buildDeck(playing, session.build.basicLands)
+      : undefined;
+    // The archetype table is what lets the suggestion consider three colours at
+    // all: it is the only thing that says what the third one costs here.
+    const suggested = built
+      ? suggestDeck(playing, { archetypes: cardsDoc.colorWinRates })
+      : undefined;
 
     return {
       summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
-      // The deck builder reads type lines and colour identity to tell a land
-      // from a spell and a splash from a lane, so it wants whole cards.
-      deck: suggestDeck(hydrate(maindeck, text)),
-      // So the screen can show what was set aside rather than silently drop it.
-      sideboard: hydrate(sideboard, text),
+      // The pool in pick order and the positions set aside, rather than two
+      // ready-made lists -- the same pair `draft.state` hands the draft screen,
+      // and for the same reason: benching is keyed on position, so a split that
+      // has thrown the positions away is a deck nobody can edit.
+      pool: hydrate(engine.humanPool, text),
+      sideboard: bench,
+      build: session.build ?? null,
+      deck: suggested ?? null,
+      diff: built && suggested ? compareDecks(built, suggested) : null,
       mistakes,
       status: session.status,
       // Without 17Lands data every card scores off its rarity baseline, so a
