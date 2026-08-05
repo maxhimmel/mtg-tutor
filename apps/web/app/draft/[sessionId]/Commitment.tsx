@@ -196,9 +196,53 @@ export function StateYourCase({
         <Held card={card} label="Taking" />
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="eyebrow">Your reason</span>
+          {/* The grounds come first and the box is what they produce.
+              Recognition, then recall: a blank field is the slowest thing you
+              can put in front of someone who has already decided, and the ten
+              grounds are the same decision as a list of words to point at.
+
+              One group, not two. They are not a shortcut BESIDE the reason --
+              they write the reason, and the field below is that sentence, still
+              editable. Two labelled sections would claim the player has two
+              things to fill in when they have one.
+
+              The label is `htmlFor` rather than wrapped: a click inside a label
+              is swallowed as "focus the field", and these have to fill it. */}
+          <div className="flex flex-col gap-1.5">
+            <label className="eyebrow" htmlFor="pick-reason">
+              Your reason
+            </label>
+
+            {/* Five across, so the ten read as one block of grounds rather than
+                a ragged wrap -- and two even rows are quicker to scan than four
+                lines of different lengths. Three across where the stage stacks
+                and the column is half as wide. */}
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+              {REASON_STARTERS.map((starter) => {
+                const taken = reason === starter.text;
+                return (
+                  <button
+                    key={starter.label}
+                    type="button"
+                    // The sentence, not the word on the button. A player
+                    // deciding between "Curve" and "Bodies" is choosing between
+                    // two claims they cannot see, and the box only shows them
+                    // one at a time.
+                    title={starter.text}
+                    aria-pressed={taken}
+                    onClick={() => takeStarter(starter.text)}
+                    className={`btn btn-xs w-full font-normal ${
+                      taken ? "btn-primary" : "btn-outline border-base-300 text-base-content/70"
+                    }`}
+                  >
+                    {starter.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <textarea
+              id="pick-reason"
               ref={field}
               autoFocus
               rows={2}
@@ -213,42 +257,16 @@ export function StateYourCase({
                   commit();
                 }
               }}
-              // Not one of the starters below. A placeholder that matched one
-              // would read as a chip that had gone missing, and the example is
-              // doing a different job: it is the specificity none of the ten
-              // general grounds can carry.
+              // Not one of the grounds above. A placeholder that matched one
+              // would read as a chip that had gone missing, and this is doing
+              // the other job: it is the specificity none of the ten general
+              // grounds can carry, which is what the box is still here for.
               placeholder="Cheap flier, and I'm the aggro deck at this table"
               className="textarea w-full resize-none"
             />
             <span className="self-end text-xs tabular-nums text-base-content/45">
               {REASON_LIMIT - reason.length}
             </span>
-          </label>
-
-          {/* Outside the label above, deliberately: a click inside one is
-              swallowed as "focus the field", and these have to fill it. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="eyebrow mr-0.5">Or start from</span>
-            {REASON_STARTERS.map((starter) => {
-              const taken = reason === starter.text;
-              return (
-                <button
-                  key={starter.label}
-                  type="button"
-                  // The sentence, not the word on the button. A player deciding
-                  // between "Curve" and "Bodies" is choosing between two claims
-                  // they cannot see, and the box only shows them one at a time.
-                  title={starter.text}
-                  aria-pressed={taken}
-                  onClick={() => takeStarter(starter.text)}
-                  className={`btn btn-xs font-normal ${
-                    taken ? "btn-primary" : "btn-outline border-base-300 text-base-content/70"
-                  }`}
-                >
-                  {starter.label}
-                </button>
-              );
-            })}
           </div>
 
           <div className="flex flex-col gap-1.5">
