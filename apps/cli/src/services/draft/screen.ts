@@ -140,18 +140,29 @@ async function showResults(convex: ConvexHttpClient, sessionId: Id<"draftSession
   const results = await convex.query(api.draft.results, { sessionId });
   const { summary, deck, mistakes, ratedCardCount } = results;
 
-  const deckLines = [...deck.spells, ...deck.nonbasicLands]
-    .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
-    .join("\n");
+  // The suggestion is withheld until the player has built a 40 of their own, and
+  // building one means cutting cards -- which needs the maindeck/sideboard split
+  // this client has never had. So the CLI reports the draft and points at the
+  // screen that can do the rest, rather than pretending the exercise happened.
+  const deckLines = deck
+    ? [...deck.spells, ...deck.nonbasicLands]
+        .map((c) => `  ${c.name} ${pc.dim(pct(c.gihWinRate))}`)
+        .join("\n")
+    : "";
 
-  const landLine = deck.nonbasicLands.length
-    ? `${deck.nonbasicLands.length} drafted lands, +${deck.basicLands} basics`
-    : `+${deck.basicLands} basics`;
+  const landLine = deck
+    ? deck.nonbasicLands.length
+      ? `${deck.nonbasicLands.length} drafted lands, +${deck.basicLands} basics`
+      : `+${deck.basicLands} basics`
+    : "";
 
   p.note(
     `Overall score: ${pc.bold(summary.overallScore.toFixed(1))}/100\n` +
       `Best-pick accuracy: ${pc.bold((summary.accuracy * 100).toFixed(0))}%\n` +
-      `Suggested deck (${deck.colors.join("") || "splashy"}, ${landLine}):\n${deckLines}`,
+      (deck
+        ? `Suggested deck (${deck.colors.join("") || "splashy"}, ${landLine}):\n${deckLines}`
+        : `Pool: ${results.pool.length} cards. Build the 40 in the web app to see ` +
+          `the suggested deck and how it differs from yours.`),
     "Draft complete",
   );
 

@@ -1,7 +1,14 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { type Bench, type Card, cardTypes, creatureTypes, tally } from "@mtg-tutor/core";
+import {
+  type Bench,
+  type Card,
+  cardTypes,
+  castingValue,
+  creatureTypes,
+  tally,
+} from "@mtg-tutor/core";
 import { ringFor } from "../lib/cardFrame";
 import { COLOR_NAMES } from "../lib/format";
 import { CardPlacardList } from "./CardPlacard";
@@ -21,7 +28,7 @@ interface Pick {
 }
 
 const byCurve = (a: Pick, b: Pick) =>
-  a.card.cmc - b.card.cmc || a.card.name.localeCompare(b.card.name);
+  castingValue(a.card) - castingValue(b.card) || a.card.name.localeCompare(b.card.name);
 
 // The two piles, as places to put a card rather than as lists of one. A section
 // wearing a card is where it will land; the wash and the ring are the same gold

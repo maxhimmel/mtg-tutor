@@ -91,6 +91,12 @@ export const cardText = v.object({
   toughness: v.optional(v.string()),
   loyalty: v.optional(v.string()),
   imageUrl: v.optional(v.string()),
+  // How the card is printed, and the other side's art when there is one. Both
+  // absent for an ordinary card, which is nine in ten, so the pair costs almost
+  // nothing across a set -- see Card.layout for why neither can be derived from
+  // the type line already on this row.
+  layout: v.optional(v.string()),
+  backImageUrl: v.optional(v.string()),
   collectorNumber: v.string(),
   setCode: v.optional(v.string()),
   avgPick: v.optional(v.number()),
@@ -251,16 +257,14 @@ export const storedPickScore = v.object({
 // at the bottom of a pack has nothing to defend -- and a half-filled defense
 // would mean a reader had to guess which half it got. Rows written by a client
 // that knows nothing about this simply have no `defense`, which is what keeps
-// the same deployment serving both.
+// the same deployment serving both -- and why `main` declares the field it never
+// writes. See notes.md, "Deferred trade-offs": that declaration expires when this
+// branch is judged, in whichever direction it goes.
 //
 // The confidence levels are literals rather than a number, because each one is a
 // specific claim about `gapMargin` (see core's CONFIDENCE) and a 1-5 slider would
 // be four claims the data cannot settle.
-export const confidence = v.union(
-  v.literal("sure"),
-  v.literal("close"),
-  v.literal("guess"),
-);
+export const confidence = v.union(v.literal("sure"), v.literal("close"), v.literal("guess"));
 
 export const pickDefense = v.object({
   reason: v.string(),
