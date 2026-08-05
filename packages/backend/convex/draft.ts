@@ -1,11 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import {
-  DECK,
   type DraftEngine,
+  applyBench,
   buildDeck,
   buildPickContext,
   clampReason,
   compareDecks,
+  isLandCount,
   newSeed,
   normalizeBench,
   normalizeName,
@@ -102,11 +103,8 @@ export const state = query({
 });
 
 // Set a pick aside, or take it back. Positions in the pool, not names -- see the
-// field's note in schema.ts.
-//
-// Idempotent in both directions rather than a toggle: the client already knows
-// which state it is asking for, and a toggle would flip twice on a double-click
-// and land back where it started.
+// field's note in schema.ts. What that does to the bench is `applyBench`, which
+// both clients also use to predict this answer before it arrives.
 export const bench = mutation({
   args: {
     sessionId: v.id("draftSessions"),
@@ -125,20 +123,12 @@ export const bench = mutation({
       );
     }
 
-    const current = normalizeBench(session.sideboard ?? []);
-    const already = current.find((b) => b.pos === args.pickIndex);
-
-    // Re-benching something already benched keeps its original clock. The
-    // mutation is idempotent, so a repeated call must not walk `atPick` forward
-    // and quietly turn a pick-5 decision into a pick-30 one.
-    if (args.benched && already) return current;
-
-    const without = current.filter((b) => b.pos !== args.pickIndex);
-    const sideboard = args.benched
-      ? [...without, { pos: args.pickIndex, atPick: session.pickedNames.length }].sort(
-          (a, b) => a.pos - b.pos,
-        )
-      : without;
+    const sideboard = applyBench(
+      normalizeBench(session.sideboard ?? []),
+      args.pickIndex,
+      args.benched,
+      session.pickedNames.length,
+    );
 
     await ctx.db.patch(args.sessionId, { sideboard });
     return sideboard;
@@ -225,9 +215,7 @@ export const pick = mutation({
     const complete = engine.isComplete();
     const pickIndex = session.pickedNames.length;
 
-    const sideboard = args.bench
-      ? [...bench, { pos: pickIndex, atPick: pickIndex }].sort((a, b) => a.pos - b.pos)
-      : bench;
+    const sideboard = args.bench ? applyBench(bench, pickIndex, true, pickIndex) : bench;
 
     // Settled here rather than taken as given: `switched` is a fact about this
     // mutation's own argument list, and the one place that can state it without
@@ -294,11 +282,7 @@ export const build = mutation({
     if (session.status !== "complete") {
       throw new ConvexError("Finish the draft before building the deck.");
     }
-    if (
-      !Number.isInteger(args.basicLands) ||
-      args.basicLands < 0 ||
-      args.basicLands > DECK.size
-    ) {
+    if (!isLandCount(args.basicLands)) {
       throw new ConvexError(`${args.basicLands} is not a number of lands.`);
     }
 

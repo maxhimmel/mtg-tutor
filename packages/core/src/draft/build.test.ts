@@ -1,7 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { mkCard } from "../testing/fakeSet.js";
-import { buildDeck, compareDecks } from "./build.js";
+import {
+  buildDeck,
+  compareDecks,
+  deckPiles,
+  deckSizeNote,
+  decksAgree,
+  isLandCount,
+  isLegalDeck,
+} from "./build.js";
 import { suggestDeck } from "./deck.js";
+import type { Bench } from "../model/bench.js";
 import type { Card } from "../model/card.js";
 
 const spell = (name: string, color: "W" | "U" | "B", gih = 0.55, cmc = 2): Card =>
@@ -59,6 +68,96 @@ describe("buildDeck", () => {
   });
 });
 
+describe("deckPiles", () => {
+  const at = (name: string, cmc: number) => spell(name, "W", 0.55, cmc);
+
+  it("splits the pool the way the bench says", () => {
+    const pool = [at("A", 1), at("B", 2), at("C", 3)];
+    const { maindeck, sideboard } = deckPiles(pool, [{ pos: 1, atPick: 1 }]);
+
+    expect(maindeck.map((p) => p.card.name)).toEqual(["A", "C"]);
+    expect(sideboard.map((p) => p.card.name)).toEqual(["B"]);
+  });
+
+  // Two copies of a common is a normal draft, and the position is the only
+  // thing that tells one from the other once they are sorted together.
+  it("keeps each pick's position through the sort", () => {
+    const pool = [at("Twin", 5), at("Cheap", 1), at("Twin", 5)];
+    const { maindeck } = deckPiles(pool, []);
+
+    expect(maindeck.map((p) => [p.card.name, p.pos])).toEqual([
+      ["Cheap", 1],
+      ["Twin", 0],
+      ["Twin", 2],
+    ]);
+  });
+
+  it("orders each pile by the turn it comes down on", () => {
+    const pool = [at("Five", 5), at("One", 1), at("Three", 3)];
+
+    expect(deckPiles(pool, []).maindeck.map((p) => p.card.name)).toEqual([
+      "One",
+      "Three",
+      "Five",
+    ]);
+  });
+
+  // The same rule the curve uses: nobody has ever paid a split card's combined
+  // mana value, so it must not sort as if they had.
+  it("sorts a split card on the half you would cast", () => {
+    const room = mkCard("Room", "common", ["W"], 0.55, {
+      cmc: 7,
+      manaCost: "{3}{W} // {2}{W}",
+      typeLine: "Enchantment — Room",
+    });
+    const pool = [at("Four", 4), room as Card];
+
+    expect(deckPiles(pool, []).maindeck.map((p) => p.card.name)).toEqual(["Room", "Four"]);
+  });
+
+  // The deck as it stands, not as it stood: a card benched at pick 40 is out of
+  // the deck you are building now, whenever it was drafted.
+  it("counts a late bench, unlike the per-pick split", () => {
+    const pool = [at("A", 1), at("B", 2)];
+    const bench: Bench[] = [{ pos: 0, atPick: 40 }];
+
+    expect(deckPiles(pool, bench).sideboard.map((p) => p.card.name)).toEqual(["A"]);
+  });
+});
+
+describe("what counts as built", () => {
+  const forty = (n: number) =>
+    buildDeck(
+      Array.from({ length: n }, (_, i) => spell(`W${i}`, "W")),
+      40 - n,
+    );
+
+  it("is forty cards exactly, in both directions", () => {
+    expect(isLegalDeck(forty(23))).toBe(true);
+    expect(isLegalDeck(buildDeck([spell("W0", "W")], 17))).toBe(false);
+    expect(isLegalDeck(buildDeck(Array.from({ length: 30 }, (_, i) => spell(`W${i}`, "W")), 17)))
+      .toBe(false);
+  });
+
+  it("says how far off, and says nothing when it is there", () => {
+    expect(deckSizeNote(forty(23))).toBeNull();
+    expect(deckSizeNote(buildDeck([spell("W0", "W")], 17))).toBe("22 short");
+    expect(
+      deckSizeNote(buildDeck(Array.from({ length: 25 }, (_, i) => spell(`W${i}`, "W")), 17)),
+    ).toBe("2 too many");
+  });
+
+  it("takes a whole number of basics, up to a deck of them", () => {
+    expect(isLandCount(17)).toBe(true);
+    expect(isLandCount(0)).toBe(true);
+    expect(isLandCount(40)).toBe(true);
+    expect(isLandCount(41)).toBe(false);
+    expect(isLandCount(-1)).toBe(false);
+    expect(isLandCount(16.5)).toBe(false);
+    expect(isLandCount(NaN)).toBe(false);
+  });
+});
+
 describe("compareDecks", () => {
   const suggestionOf = (cards: Card[]) => suggestDeck(cards);
 
@@ -85,6 +184,17 @@ describe("compareDecks", () => {
     expect(diff.onlySuggested).toHaveLength(0);
     expect(diff.onlyBuilt).toHaveLength(0);
     expect(diff.shared).toBe(23);
+    expect(decksAgree(diff)).toBe(true);
+  });
+
+  // One card each way is still a disagreement, and the headline that leads with
+  // it has to read the diff rather than the count they have in common.
+  it("does not call two decks the same over a card swapped both ways", () => {
+    const shared = Array.from({ length: 22 }, (_, i) => spell(`W${i}`, "W", 0.6));
+    const pool = [...shared, spell("Keeper", "U", 0.59), spell("Cut", "U", 0.58)];
+    const diff = compareDecks(buildDeck([...shared, pool[23]], 17), suggestionOf(pool));
+
+    expect(decksAgree(diff)).toBe(false);
   });
 
   // Drafting two of a common is normal, and a diff keyed on names rather than

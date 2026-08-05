@@ -1,7 +1,47 @@
+import { DECK } from "../config.js";
 import type { Card, ColorCode } from "../model/card.js";
 import { isBasicLand, isLand } from "../model/card.js";
+import type { Bench } from "../model/bench.js";
+import { castingValue } from "../model/mana.js";
 import { colorKey } from "../scoring/context.js";
 import { curveCounts, type DeckSuggestion } from "./deck.js";
+
+// A card and where it sits in the pool. The position is what benching is keyed
+// on -- drafting two copies of a common is normal and setting one aside must not
+// set aside both -- so it has to survive the sort into curve order.
+export interface DeckPick<C> {
+  card: C;
+  pos: number;
+}
+
+/**
+ * The pool as the two piles a build screen shows, in the order a deck list is
+ * read: what it can do on turn one, first.
+ *
+ * Sorted by `castingValue` rather than `cmc`, so a split card sits on the half
+ * you would actually cast -- the same rule the curve beside it is bucketed by.
+ * A pool with two conventions for when a card comes down is one more than the
+ * subject supports.
+ */
+export function deckPiles<C extends { name: string; cmc: number; manaCost?: string }>(
+  pool: readonly C[],
+  bench: readonly Bench[],
+): { maindeck: DeckPick<C>[]; sideboard: DeckPick<C>[] } {
+  // The clock is not read, which is what separates this from `splitPool`. That
+  // one rebuilds the deck as it stood at a given pick, because a decision made
+  // at pick 40 is not evidence about the deck being built at pick 5. This one
+  // answers what the player is playing NOW, and every bench they have made
+  // counts toward it however late it was made.
+  const benched = new Set(bench.map((b) => b.pos));
+  const byCurve = (a: DeckPick<C>, b: DeckPick<C>) =>
+    castingValue(a.card) - castingValue(b.card) || a.card.name.localeCompare(b.card.name);
+
+  const picks = pool.map((card, pos) => ({ card, pos }));
+  return {
+    maindeck: picks.filter((p) => !benched.has(p.pos)).sort(byCurve),
+    sideboard: picks.filter((p) => benched.has(p.pos)).sort(byCurve),
+  };
+}
 
 // The deck the player built, read out of the pile they drafted.
 //
@@ -44,6 +84,27 @@ export function buildDeck(maindeck: readonly Card[], basicLands: number): BuiltD
     size: kept.length + basicLands,
   };
 }
+
+// A Limited deck is exactly forty cards. Not at least forty, which is why this
+// is a comparison and not a floor, and why the build screens count down to it
+// rather than up.
+export const isLegalDeck = (deck: BuiltDeck): boolean => deck.size === DECK.size;
+
+// How far off forty, said the way a build screen says it. Null when there is
+// nothing to say, which is the one state that locks in.
+export function deckSizeNote(deck: BuiltDeck): string | null {
+  const over = deck.size - DECK.size;
+  if (over === 0) return null;
+  return over > 0 ? `${over} too many` : `${-over} short`;
+}
+
+// Basics are not picks, so nothing in the pool bounds them and this is the whole
+// of what makes a land count a number rather than a typo. Shared because the
+// mutation that stores it and every screen that offers it have to agree on what
+// will be accepted -- a stepper that goes somewhere the mutation refuses is a
+// button that throws.
+export const isLandCount = (n: number): boolean =>
+  Number.isInteger(n) && n >= 0 && n <= DECK.size;
 
 /**
  * Where the player's 40 and the suggestion part company.
@@ -108,3 +169,8 @@ export function compareDecks(built: BuiltDeck, suggested: DeckSuggestion): DeckD
     colors: { built: built.colors, suggested: suggested.colors },
   };
 }
+
+// The same forty, card for card -- which is what both of the diff's lists being
+// empty says, and the headline every results screen leads with.
+export const decksAgree = (diff: DeckDiff): boolean =>
+  diff.onlyBuilt.length === 0 && diff.onlySuggested.length === 0;

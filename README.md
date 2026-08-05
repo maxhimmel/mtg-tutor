@@ -51,7 +51,9 @@ mtg-tutor draft dsk
 mtg-tutor stats
 ```
 
-During a draft, arrow-key through the pack (cards are pre-sorted by win rate with hints), press Enter to pick, and read the grade + reasoning after each pick. At the end you get an overall score, best-pick accuracy, a suggested 40-card deck, and your biggest missed picks — then choose whether to save the draft.
+During a draft, arrow-key through the pack (cards are pre-sorted by win rate with hints) and read the grade + reasoning after each pick. Enter takes the card to your maindeck, `s` takes it straight to the sideboard, and `v` opens the two piles so you can move cards between them mid-draft.
+
+When the last pack runs out you build the forty — cut down to 40 cards and set the land count — and only then does the CLI show you the suggested build, how far your deck is from it, the curve and colours side by side, your overall score and your biggest missed picks. Walk away before locking in and `mtg-tutor draft --resume <id>` puts you back on the build screen.
 
 > **Note on set coverage:** scoring quality depends on how much data a set has in the 17Lands public datasets. Recent, heavily-played sets score best. A set we haven't built stats for is scored on rarity baselines alone — which makes grades close to meaningless — and both clients say so rather than implying a good draft. (The datasets go back years, so this is a matter of which sets we've ingested, not of sets "aging out.")
 

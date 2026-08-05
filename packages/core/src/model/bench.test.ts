@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type Bench, benchedAsOf, normalizeBench, splitPool } from "./bench.js";
+import {
+  applyBench,
+  benchChanges,
+  benchedAsOf,
+  normalizeBench,
+  splitPool,
+  type Bench,
+} from "./bench.js";
 
 const pool = (n: number) => Array.from({ length: n }, (_, i) => `card${i}`);
 
@@ -40,6 +47,71 @@ describe("benchedAsOf", () => {
 
   it("is empty before anything was set aside", () => {
     expect(benchedAsOf(bench, 0)).toEqual(new Set());
+  });
+});
+
+describe("applyBench", () => {
+  it("sets a position aside with the clock it was set aside at", () => {
+    expect(applyBench([], 4, true, 12)).toEqual([{ pos: 4, atPick: 12 }]);
+  });
+
+  it("takes a position back", () => {
+    const bench: Bench[] = [
+      { pos: 1, atPick: 1 },
+      { pos: 4, atPick: 12 },
+    ];
+    expect(applyBench(bench, 4, false, 30)).toEqual([{ pos: 1, atPick: 1 }]);
+  });
+
+  // The whole reason this is not a toggle: a client that predicts the answer
+  // must predict the stored one, and re-benching keeps the original clock.
+  it("keeps the original clock when the same card is benched twice", () => {
+    const bench: Bench[] = [{ pos: 4, atPick: 12 }];
+    expect(applyBench(bench, 4, true, 40)).toEqual(bench);
+  });
+
+  it("takes back a position that was never set aside without inventing one", () => {
+    expect(applyBench([{ pos: 1, atPick: 1 }], 4, false, 12)).toEqual([{ pos: 1, atPick: 1 }]);
+  });
+
+  it("keeps the bench in pool order", () => {
+    const bench = applyBench(applyBench([], 7, true, 7), 2, true, 9);
+    expect(bench.map((b) => b.pos)).toEqual([2, 7]);
+  });
+
+  it("does not touch the bench it was handed", () => {
+    const bench: Bench[] = [{ pos: 1, atPick: 1 }];
+    applyBench(bench, 4, true, 12);
+    expect(bench).toEqual([{ pos: 1, atPick: 1 }]);
+  });
+});
+
+describe("benchChanges", () => {
+  it("names only the positions that moved, and which way", () => {
+    const before: Bench[] = [
+      { pos: 1, atPick: 1 },
+      { pos: 4, atPick: 4 },
+    ];
+    const after: Bench[] = [
+      { pos: 4, atPick: 4 },
+      { pos: 9, atPick: 40 },
+    ];
+    expect(benchChanges(before, after)).toEqual([
+      { pos: 1, benched: false },
+      { pos: 9, benched: true },
+    ]);
+  });
+
+  it("finds nothing to write when nothing moved", () => {
+    const bench: Bench[] = [{ pos: 3, atPick: 3 }];
+    expect(benchChanges(bench, bench)).toEqual([]);
+  });
+
+  // A re-read of the same split can carry a different clock -- the server keeps
+  // the original where an optimistic client guessed at one. Which pile a card is
+  // in is the only thing that needs writing back.
+  it("ignores a clock that moved without the card", () => {
+    expect(benchChanges([{ pos: 3, atPick: 40 }], [{ pos: 3, atPick: 3 }])).toEqual([]);
   });
 });
 

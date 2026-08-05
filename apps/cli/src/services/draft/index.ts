@@ -4,7 +4,7 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { convexClient } from "../../core/auth/session.js";
 import { spinner } from "../../core/ui/spinner.js";
-import { runDraft } from "./screen.js";
+import { finishDraft, runDraft } from "./screen.js";
 
 // Draft service entrypoint. `argv` is [setCode?, format?], plus
 // `--resume <sessionId>` to pick an abandoned draft back up.
@@ -21,8 +21,12 @@ export async function run(argv: string[]): Promise<void> {
       return;
     }
     const state = await convex.query(api.draft.state, { sessionId });
+    // Every pick made is not the same as finished: the deck still has to be
+    // built, and walking away between the two is the state this picks back up.
+    // `finishDraft` shows the results outright if it was already built.
     if (state.complete) {
-      p.log.error("That draft is already finished. Review it with: mtg-tutor review");
+      p.intro(pc.bgCyan(pc.black(` Draft: ${state.setCode.toUpperCase()} — ${state.format} `)));
+      await finishDraft(convex, sessionId);
       return;
     }
     await runDraft(convex, sessionId, state.setCode, state.format);
