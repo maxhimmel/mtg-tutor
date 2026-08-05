@@ -126,16 +126,29 @@ function place(anchor: DOMRect, wantsPanel: boolean, wantsBack: boolean): Placem
   return { left, top, backLeft: showBack ? left + PREVIEW_W + GAP : null, panelLeft };
 }
 
+// A Magic card is 63mm across with a 3mm corner, and Scryfall's art is the whole
+// card -- so this is the card's own rounding at whatever width it is drawn.
+const CARD_CORNER = (PREVIEW_W * 3) / 63;
+
 // One card image. Unplaced until the effect below has measured the viewport,
 // which is what `left` being null means -- parked offscreen at opacity 0 so
 // there is no flash where the first render put it.
 //
-// Flush to the border, and the two rules that keep it there. Scryfall's art is
-// full-bleed with square corners, so any inset shows as a band of base-200 --
-// and the surface's own padding used to leave one that widened at the corners,
-// where the card's clip and the border's curve pull apart. The surface clips to
-// its own radius instead. `block` because an inline image sits on a text
-// baseline, which put a few more pixels of that band under the bottom edge only.
+// Flush to the border, and the three rules that keep it there. Scryfall's art is
+// full-bleed, so any inset shows as a band -- and the surface's own padding used
+// to leave one that widened at the corners, where the card's clip and the
+// border's curve pull apart. ONE curve does the clipping, never two: the
+// surface's. `block` because an inline image sits on a text baseline, which put a
+// few more pixels of that band under the bottom edge only.
+//
+// The third rule is which curve. `rounded-box` is close to a card's corner and
+// not equal to it, which went unnoticed for as long as every image had an alpha
+// channel: outside the card's rounding those pixels are transparent, so the gap
+// between the two curves showed base-200 against base-200. Scryfall does not
+// serve alpha for every card -- MOM's transform faces come back as plain VP8
+// where WOE's adventures are VP8X -- and an opaque image has to put a colour in
+// those corners, which is white. Clipping at the card's real radius means there
+// is no gap to fill either way.
 function Face({
   src,
   alt,
@@ -155,6 +168,7 @@ function Face({
         top: top ?? -9999,
         width: PREVIEW_W,
         opacity: left != null ? 1 : 0,
+        borderRadius: CARD_CORNER,
       }}
     >
       <img src={webpImage(src)} alt={alt} className="block w-full" draggable={false} />

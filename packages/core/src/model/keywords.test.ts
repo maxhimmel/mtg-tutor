@@ -63,10 +63,15 @@ describe("cardShapeOf", () => {
   });
 
   it("names the shapes no card names on itself", () => {
-    expect(shape("transform", "Legendary Creature — Kithkin Warrior // Legendary Creature — Kithkin Soldier")).toBe(
-      "Double-faced card",
-    );
     expect(shape("prepare", "Creature — Human Wizard // Sorcery")).toBe("Prepared spell");
+  });
+
+  // The preview draws the back face beside the front, which says everything the
+  // note would have said and does not need reading.
+  it("says nothing about a card whose back is already on screen", () => {
+    expect(
+      shape("transform", "Legendary Creature — Kithkin Warrior // Legendary Creature — Kithkin Soldier"),
+    ).toBeUndefined();
   });
 
   it("says nothing about a layout that is only a frame", () => {

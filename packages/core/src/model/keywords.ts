@@ -244,11 +244,11 @@ const SHAPE_BY_LAYOUT: Record<string, Keyword> = {
     reminder:
       "A creature with a spell attached. Cast the creature, and while it is prepared you may cast a copy of the spell half — once, unless something prepares it again.",
   },
-  transform: {
-    name: "Double-faced card",
-    reminder:
-      "One card with a back side. It is drafted and cast as the front face and transforms into the back later; hover to see what it becomes.",
-  },
+  // `transform` is deliberately absent. Every other shape here needs saying
+  // because the card does not show it: a split card and an Adventure look alike
+  // and are not. A double-faced card explains itself the moment its back is
+  // drawn beside its front, so a note saying it has a back is a caption on a
+  // picture of the back.
 };
 
 // Everything after the last "//" -- the half that names the shape. An Adventure
