@@ -160,7 +160,12 @@ export function StateYourCase({
           </label>
 
           <div className="flex flex-col gap-1.5">
-            <span className="eyebrow">How clear is this call?</span>
+            {/* Not "how clear is this call?", which is a question about the
+                player. This one names the thing being claimed, because the
+                answer is graded against the data's margin of error and nothing
+                on this screen used to say what the subject of the claim was
+                until after a button had been pressed. */}
+            <span className="eyebrow">How big is the gap to the next-best card?</span>
             <div className="join">
               {CONFIDENCE.map((level) => (
                 <button
@@ -181,7 +186,7 @@ export function StateYourCase({
             <p className="min-h-[2.5rem] text-xs leading-relaxed text-base-content/60">
               {confidence
                 ? `You are claiming ${CONFIDENCE.find((c) => c.id === confidence)?.claim}.`
-                : "Each answer is a claim about how far apart the top cards here really are."}
+                : "A claim about the cards, not about you — how sure you feel is not something the data can grade."}
             </p>
           </div>
 

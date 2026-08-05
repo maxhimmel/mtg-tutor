@@ -1010,7 +1010,12 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       // is about the claim they made before they saw it.
                       <div className="border-t border-base-300 pt-3">
                         <div className="eyebrow mb-1.5 flex items-center justify-between gap-2">
-                          <span>Your call</span>
+                          {/* Named for what it grades. Sitting under an A+ and
+                              "nothing scored higher", a bare "misread" reads as
+                              a second opinion on the card -- and it is not one:
+                              the grade is about the card and this is about the
+                              gap the player claimed to see. */}
+                          <span>Your call on the gap</span>
                           {claimOutcome(lastView.call.confidence, lastView.call.outcome) !==
                             "none" && (
                             <span

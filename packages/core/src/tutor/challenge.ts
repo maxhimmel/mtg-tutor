@@ -33,15 +33,20 @@ export interface ConfidenceLevel {
   claim: string;
 }
 
+// Each label names the GAP, because "Clear" on its own does not. A player read
+// it as "how obvious is this choice to me" -- which is the one reading the data
+// cannot grade, and the reveal then told them their certainty was misplaced over
+// a question they had not answered. The claim underneath was correct and was not
+// enough: the shortest word on the control is the one that gets read.
 export const CONFIDENCE: readonly ConfidenceLevel[] = [
   {
     id: "sure",
-    label: "Clear",
+    label: "Clear gap",
     claim: "the gap to the next-best card is bigger than the data's margin of error",
   },
   {
     id: "close",
-    label: "Close",
+    label: "Close call",
     claim: "the gap to the next-best card is inside the data's margin of error",
   },
   { id: "guess", label: "Guessing", claim: "no claim about the gap either way" },
