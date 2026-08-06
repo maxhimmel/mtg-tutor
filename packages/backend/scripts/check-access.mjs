@@ -27,11 +27,37 @@ import { deploymentUrl } from "./lib/deployment.mjs";
 process.loadEnvFile(new URL("../.env.local", import.meta.url));
 
 const prod = process.argv.includes("--prod");
+const url = deploymentUrl(prod);
 
-const token = await accessToken();
+// accessToken() refuses a session minted against a different deployment, but it
+// checks CONVEX_URL -- which .env.local above just set to the dev one. Pointing
+// it at the deployment actually being asked about is what makes that guard fire
+// here: dev and prod are separate WorkOS environments with separate user pools,
+// so a dev session carries a dev user id that means nothing on prod.
+process.env.CONVEX_URL = url;
+
+// Every way this fails is a configuration answer rather than a crash: signed in
+// to the wrong deployment, or not signed in at all. A stack trace buries the
+// sentence that says which.
+let token;
+try {
+  token = await accessToken();
+} catch (e) {
+  console.error(`\n${e instanceof Error ? e.message : String(e)}\n`);
+  if (prod) {
+    console.error(
+      "Note that dev and prod are separate WorkOS environments with separate\n" +
+        "user pools, so your prod user id is a different value -- read it from\n" +
+        "the WorkOS dashboard rather than from a dev session. And this query\n" +
+        "does not exist on prod until the branch is deployed.\n",
+    );
+  }
+  process.exit(1);
+}
+
 const claims = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString());
 
-const client = new ConvexHttpClient(deploymentUrl(prod));
+const client = new ConvexHttpClient(url);
 client.setAuth(token);
 
 const quota = await client.query(api.quota.mine, {});

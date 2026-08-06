@@ -25,10 +25,16 @@ function fromCli(name, prod) {
 // any more: --cmd is step 1 of a deploy and the function push is step 5, which
 // meant anything in there talked to the PREVIOUS deployment. It now runs after
 // the deploy returns. An explicit NEXT_PUBLIC_CONVEX_URL still wins if
-// something sets one.
+// something sets one -- but only when nobody asked for prod.
+//
+// `--prod` is a person naming a deployment out loud, and it has to beat an
+// ambient variable or it is not a flag, it is a suggestion. That is not
+// hypothetical: check-access loads .env.local for WORKOS_CLIENT_ID, which sets
+// CONVEX_URL as a side effect, so --prod silently reported on dev -- with a dev
+// user id, under a "prod" heading, which is worse than failing.
 export function deploymentUrl(prod) {
   const fromEnv = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL;
-  if (fromEnv) return fromEnv;
+  if (fromEnv && !prod) return fromEnv;
 
   const url = fromCli("CONVEX_CLOUD_URL", prod);
   if (!url.startsWith("http")) {
