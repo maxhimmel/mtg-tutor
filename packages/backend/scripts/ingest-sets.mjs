@@ -20,11 +20,11 @@
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
+import { deployKey, deploymentUrl } from "./lib/deployment.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = resolve(HERE, "..", "data");
@@ -48,26 +48,10 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-// This no longer runs inside `convex deploy --cmd`, so nothing injects the URL
-// any more: --cmd is step 1 of a deploy and the function push is step 5, which
-// meant anything in there talked to the PREVIOUS deployment. It now runs after
-// the deploy returns, and resolves the target the same way it always did
-// locally -- by asking the CLI. On Vercel, CONVEX_DEPLOY_KEY points the CLI at
-// production; locally it is dev by default and prod with --prod. An explicit
-// NEXT_PUBLIC_CONVEX_URL still wins if something sets one.
-function deploymentUrl() {
-  const fromEnv = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL;
-  if (fromEnv) return fromEnv;
-  const args = ["convex", "env", "get", "CONVEX_CLOUD_URL"];
-  if (prod) args.push("--prod");
-  const url = execFileSync("npx", args, { cwd: resolve(HERE, ".."), encoding: "utf8" }).trim();
-  if (!url.startsWith("http")) {
-    throw new Error(`Could not resolve the Convex deployment URL (got: ${url || "empty"}).`);
-  }
-  return url;
-}
-
-const client = new ConvexHttpClient(deploymentUrl());
+const client = new ConvexHttpClient(deploymentUrl(prod));
+// Resolved once, before the loop: a missing key should stop the run rather
+// than fail every set in turn.
+const key = deployKey(prod);
 
 let ingested = 0;
 let refreshed = 0;
@@ -85,6 +69,7 @@ for (const file of files) {
     format,
     sourceHash,
     force,
+    deployKey: key,
   });
 
   if (result.skipped) {

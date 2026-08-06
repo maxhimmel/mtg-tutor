@@ -13,6 +13,7 @@ import {
   packSize,
   withPackSlots,
 } from "@mtg-tutor/core";
+import { requireDeployerOrAdmin } from "./admin.js";
 import { cardContextFor, cardTextFor, engineHalf, hydrate, textHalf } from "./cardText.js";
 import {
   action,
@@ -332,8 +333,12 @@ export const ingest = action({
     // means the set is always rebuilt.
     sourceHash: v.optional(v.string()),
     force: v.optional(v.boolean()),
+    // Absent from the CLI's calls, which authenticate as a person instead.
+    deployKey: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<IngestResult> => {
+    await requireDeployerOrAdmin(ctx, args.deployKey);
+
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
 
@@ -785,8 +790,12 @@ export const storeSetStats = mutation({
     // deploy. Optional: an upload without one always writes.
     sourceHash: v.optional(v.string()),
     force: v.optional(v.boolean()),
+    // The deploy has no person to authenticate as. See admin.ts.
+    deployKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    await requireDeployerOrAdmin(ctx, args.deployKey);
+
     const bytes = JSON.stringify(args).length;
     if (bytes > MAX_SET_BYTES) {
       throw new Error(
@@ -818,7 +827,11 @@ export const storeSetStats = mutation({
       };
     }
 
-    const { sourceHash, force: _force, ...rest } = args;
+    // deployKey is destructured out with the rest of the control arguments, and
+    // that is not tidiness: `rest` is spread straight into the document below,
+    // so a secret left in here would be written into setStats and read back by
+    // everything that reads a set.
+    const { sourceHash, force: _force, deployKey: _deployKey, ...rest } = args;
     const doc = { ...rest, code, builtAt: new Date().toISOString() };
     const existing = await ctx.db
       .query("setStats")
