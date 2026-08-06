@@ -7,6 +7,12 @@ import { accessToken } from "../auth/session.js";
 // call, so it carries the bearer token itself.
 export class CoachUnavailable extends Error {}
 
+// 429: out of coaching for today, not out of drafting. A subclass so the draft
+// screen's existing fallback still catches it and the pick still gets its
+// deterministic explanation; the screen branches on it only to say so once
+// rather than on all 45 picks.
+export class CoachQuotaExceeded extends CoachUnavailable {}
+
 export async function* streamCoach(
   sessionId: string,
   pickIndex: number,
@@ -21,9 +27,11 @@ export async function* streamCoach(
   });
 
   // 503 when the deployment has no Anthropic key, 401 if the token lapsed
-  // mid-draft. Either way the caller falls back to deterministic feedback.
+  // mid-draft, 429 when today's coaching is spent. Either way the caller falls
+  // back to deterministic feedback; only the last one is worth a word about.
   if (!res.ok || !res.body) {
-    throw new CoachUnavailable((await res.text().catch(() => "")) || `coach returned ${res.status}`);
+    const said = (await res.text().catch(() => "")) || `coach returned ${res.status}`;
+    throw res.status === 429 ? new CoachQuotaExceeded(said) : new CoachUnavailable(said);
   }
 
   const reader = res.body.getReader();

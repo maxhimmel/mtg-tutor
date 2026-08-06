@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../config.js", () => ({ CONVEX_SITE_URL: "https://example.convex.site" }));
 vi.mock("../auth/session.js", () => ({ accessToken: async () => "test-token" }));
 
-const { CoachUnavailable, streamCoach } = await import("./coach.js");
+const { CoachQuotaExceeded, CoachUnavailable, streamCoach } = await import("./coach.js");
 
 const body = (chunks: string[]) =>
   new ReadableStream<Uint8Array>({
@@ -46,5 +46,14 @@ describe("streamCoach", () => {
   it("reports an error status as the coach being unavailable", async () => {
     respond({ status: 503, chunks: ["coaching unavailable: no key"] });
     await expect(collect()).rejects.toBeInstanceOf(CoachUnavailable);
+  });
+
+  // Told apart so the draft screen can say it once instead of on all 45 picks,
+  // but still unavailable, so the deterministic explanation still appears.
+  it("reports a 429 as the quota being spent, and still as unavailable", async () => {
+    respond({ status: 429, chunks: ["It is back in about 3 hours."] });
+    await expect(collect()).rejects.toBeInstanceOf(CoachQuotaExceeded);
+    await expect(collect()).rejects.toBeInstanceOf(CoachUnavailable);
+    await expect(collect()).rejects.toThrow("It is back in about 3 hours.");
   });
 });

@@ -1,9 +1,11 @@
 import { httpRouter } from "convex/server";
+import { ConvexError } from "convex/values";
 import { COACH, buildSystemPrompt, isDecisionPick, loadPrinciples } from "@mtg-tutor/core";
 import { httpAction } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import { CoachUnavailableError, stream } from "./llm.js";
+import { UNLIMITED, roleOf } from "./roles.js";
 
 const http = httpRouter();
 
@@ -38,7 +40,8 @@ http.route({
     // This endpoint spends the deployment's Anthropic key, so it is checked
     // before anything else. draft.coachContext re-checks ownership of the
     // specific session; identity propagates through ctx.runQuery.
-    if (!(await ctx.auth.getUserIdentity())) {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
       return new Response("not authenticated", { status: 401, headers: cors });
     }
 
@@ -85,6 +88,29 @@ http.route({
     // how to fall back to the deterministic explanation.
     if (!isDecisionPick(context.cardsInPack, minCards)) {
       return new Response(null, { status: 204, headers: cors });
+    }
+
+    // After the 204 and before the stream: charging for a pick the server has
+    // just refused to spend anything on would bill a refusal. The role comes
+    // off the identity already in hand, so an exempt caller pays no round trip
+    // at all -- which is the point of roles living on the token.
+    if (!UNLIMITED.has(roleOf(identity))) {
+      try {
+        await ctx.runMutation(internal.quota.consumeCoach, {});
+      } catch (e) {
+        // 429 rather than reusing 503: this endpoint's statuses are how both
+        // clients tell its outcomes apart -- 204 declined, 401 anonymous, 503
+        // no model key -- and "you, today" is not "the deployment, at all".
+        //
+        // No Retry-After header. It would have to carry a number the refusal
+        // contract does not: a ConvexError here holds a human string and
+        // nothing else (sessions.ts), and the string already says when the
+        // coach is back. A header nothing reads is not worth widening that for.
+        return new Response(e instanceof ConvexError ? String(e.data) : "coaching is used up", {
+          status: 429,
+          headers: cors,
+        });
+      }
     }
 
     let coaching: ReadableStream<Uint8Array>;

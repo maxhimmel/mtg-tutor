@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CoachDeclined, CoachUnavailable, streamCoach } from "./coach";
+import { CoachDeclined, CoachQuotaExceeded, CoachUnavailable, streamCoach } from "./coach";
 
 const body = (chunks: string[]) =>
   new ReadableStream<Uint8Array>({
@@ -61,5 +61,21 @@ describe("streamCoach", () => {
   it("reports a 204 as the server declining to coach a forced pick", async () => {
     respond({ status: 204 });
     await expect(collect()).rejects.toBeInstanceOf(CoachDeclined);
+  });
+
+  // The board tells this apart to say so once, but everything downstream of it
+  // -- the fallback to the deterministic explanation -- must keep working
+  // without knowing the difference. Hence a subclass, asserted as one.
+  it("reports a 429 as the quota being spent, and still as unavailable", async () => {
+    respond({ status: 429, chunks: ["You have asked the coach a lot today."] });
+    await expect(collect()).rejects.toBeInstanceOf(CoachQuotaExceeded);
+    await expect(collect()).rejects.toBeInstanceOf(CoachUnavailable);
+  });
+
+  // The sentence lives on the server so the CLI and the browser cannot word it
+  // differently; a client that invented its own would hide that.
+  it("carries the server's own wording for a 429", async () => {
+    respond({ status: 429, chunks: ["It is back in about 3 hours."] });
+    await expect(collect()).rejects.toThrow("It is back in about 3 hours.");
   });
 });
