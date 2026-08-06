@@ -84,3 +84,19 @@ export async function requireCaller(ctx: QueryCtx): Promise<Caller> {
     role: roleOf(identity),
   };
 }
+
+/**
+ * requireCaller plus the top role. The read side of the owner's own tools.
+ *
+ * admin.ts is the other door and is not this one. It exists for a caller with no
+ * identity at all -- a deploy running with nobody present -- so it fails closed
+ * on a missing MTG_TUTOR_DEPLOY_KEY and refuses with a sentence about rebuilding
+ * set data. Neither is true of somebody reading their friends' notes at a
+ * terminal, and widening that shared key from "may re-crawl Scryfall" to "may
+ * read everything anyone has written" is not a trade worth the reuse.
+ */
+export async function requireOwner(ctx: QueryCtx): Promise<Caller> {
+  const caller = await requireCaller(ctx);
+  if (caller.role !== "owner") throw new ConvexError("That is not yours to read.");
+  return caller;
+}

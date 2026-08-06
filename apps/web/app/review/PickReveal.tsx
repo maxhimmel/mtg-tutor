@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import type { Id } from "@mtg-tutor/backend/dataModel";
 import type { Card } from "@mtg-tutor/core";
 import { loadPrinciples, splitCitations } from "@mtg-tutor/core";
+import { AiResponse } from "../components/AiResponse";
 import { CardPlacardList } from "../components/CardPlacard";
 import { CardText } from "../components/CardText";
 import { PrincipleBadges } from "../components/PrincipleBadge";
@@ -77,9 +79,15 @@ export function PickReveal({
   pending,
   guess,
   correct,
+  draft,
 }: {
   pick: ReviewPick;
   verdict: VerdictState;
+  // Where this pick sits, so a complaint about the verdict arrives knowing which
+  // draft and which set produced it. Passed rather than declared on the page,
+  // because the breakdown renders forty of these at once and the anchor has to
+  // name one.
+  draft: { sessionId: Id<"draftSessions">; setCode: string; format: string };
   // Whether a verdict is actually on its way. Without this, "no verdict" and
   // "verdict coming" look identical, and the breakdown -- which deliberately does
   // not ask until told to -- would spin forever on picks nobody asked about.
@@ -134,21 +142,35 @@ export function PickReveal({
       )}
 
       {verdict && (
-        <div className="flex flex-col gap-2 border-t border-base-300 pt-3">
-          <div>
-            <div className="eyebrow mb-1">Divergence</div>
-            <p className="leading-relaxed">
-              <CardText text={verdict.divergenceLesson} cards={pick.pack} />
-            </p>
-          </div>
-          <div>
-            <div className="eyebrow mb-1">Coach</div>
+        // Both halves inside one wrapper, because they are one generation: the
+        // divergence lesson and the narrative come out of a single verdict, and
+        // two thumbs would be asking twice about the same answer. No `quote` --
+        // reviewVerdicts stores this and freezes it on first review, so the
+        // owner's script joins the stored row rather than keeping a copy that
+        // could disagree with it.
+        <AiResponse
+          surface="verdict"
+          title="Coach"
+          anchor={{
+            sessionId: draft.sessionId,
+            pickIndex: pick.pickIndex,
+            setCode: draft.setCode,
+            format: draft.format,
+          }}
+        >
+          <div className="flex flex-col gap-2">
+            <div>
+              <div className="eyebrow mb-1">Divergence</div>
+              <p className="leading-relaxed">
+                <CardText text={verdict.divergenceLesson} cards={pick.pack} />
+              </p>
+            </div>
             <p className="leading-relaxed">
               <CardText text={advice.prose} cards={pick.pack} />
             </p>
             <PrincipleBadges principles={advice.principles} />
           </div>
-        </div>
+        </AiResponse>
       )}
     </div>
   );

@@ -9,6 +9,9 @@ import {
   colorWinRate,
   draftSummary,
   engineCard,
+  feedbackAnchor,
+  feedbackSentiment,
+  feedbackSurface,
   packSnapshot,
   llmCall,
   packCard,
@@ -321,6 +324,77 @@ export default defineSchema({
     name: v.string(),
     email: v.string(),
     note: v.optional(v.string()),
+    createdAt: v.string(),
+  }),
+
+  // What a friend in the beta said, at the moment they said it.
+  //
+  // A log of an experience, not a projection of state. Everything on the row is
+  // what the person was looking at when they typed it, and nothing here may ever
+  // be "corrected" from live data -- the complaint is about what they saw.
+  //
+  // WHAT IS STORED AND WHAT IS JOINED
+  //
+  // `quote` is the load-bearing field and the reason this is not just a note and
+  // a URL. The draft coach is an httpAction returning a stream (see http.ts): the
+  // prose exists for the length of one ReadableStream and one React state
+  // variable, and nothing writes it down -- metrics.record stores token counts
+  // and explicitly no text. It is also not reproducible, since the model is
+  // nondeterministic and the prompt moves with the principles corpus. So a note
+  // about the coach without a snapshot taken in the browser is unactionable, and
+  // no amount of reading at query time recovers it.
+  //
+  // A verdict is the opposite and is deliberately NOT copied here. reviewVerdicts
+  // is frozen on first review so a reread is stable, which is exactly the
+  // property that makes joining it safe -- and a copy on this row would be a
+  // second answer free to disagree with the first, which is why accessRequests
+  // above has no status field either. Store the prose with no other home; join
+  // the prose that has one.
+  //
+  // The rest of the anchoring is denormalised rather than joined, for the reason
+  // this whole schema is split the way it is: Convex bills the bytes a query
+  // READS. Joining draftSessions for a set code costs ~2KB a row and joining
+  // draftPicks for what the pack held costs ~3KB, so a hundred notes would read
+  // half a megabyte to print their headers. On the row it is ~60 bytes, and the
+  // pick itself stays a pointer the owner can follow for the one note they act
+  // on.
+  //
+  // NO INDEX, which is the choice rather than an omission. The only reader is
+  // scripts/feedback.mjs asking for the newest N, and by_creation_time -- free,
+  // already there -- answers exactly that. An index on userId or surface would
+  // let a query read FEWER bytes only once the table is large enough for that to
+  // matter; over a few hundred rows the script filters in JS over bytes it was
+  // going to read anyway, and every index is a write cost on every submit
+  // forever. Revisit when this passes ~1MB.
+  feedback: defineTable({
+    // Both identity keys, on purpose. userId is the tokenIdentifier every
+    // user-owned table here keys on, so a note joins to its author's drafts.
+    // subject is the WorkOS user id -- the distinctId convex/analytics.ts sends
+    // and the one the browser identifies on -- so a note joins to its author's
+    // session replay. They are `${issuer}|${subject}` and `${subject}`, and
+    // carrying only one means choosing which half of the app you can reach.
+    userId: v.string(),
+    subject: v.string(),
+    // Frozen at write time because it is not derivable later. Roles live on the
+    // WorkOS token and there is no users table (see roles.ts), so nothing can
+    // answer "what tier was this person when they said this" after the fact. It
+    // is also the filter that matters most on read: the owner's own notes are
+    // not evidence.
+    role: v.string(),
+
+    note: v.string(),
+    sentiment: v.optional(feedbackSentiment),
+    // The route PATTERN -- "/review/[sessionId]", not the resolved path. The id
+    // is in the anchor where it can be followed; in here it would only fork one
+    // screen into forty labels.
+    route: v.string(),
+    surface: feedbackSurface,
+    anchor: v.optional(feedbackAnchor),
+    // What was on screen, when nothing else holds it. Only ever written for
+    // prose with no server-side copy -- today that is the coach and only the
+    // coach.
+    quote: v.optional(v.string()),
+
     createdAt: v.string(),
   }),
 

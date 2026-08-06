@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import posthog from "posthog-js";
 
-import { identify, pickMade, settingChanged, signedOut } from "./analytics";
+import {
+  feedbackOpened,
+  feedbackRefused,
+  identify,
+  pickMade,
+  settingChanged,
+  signedOut,
+} from "./analytics";
 
 // The seam's whole contract is "call the SDK, or do nothing at all", so the SDK
 // is the thing to spy on.
@@ -45,6 +52,8 @@ describe("without a project token", () => {
       identify("user_01", "friend@example.com");
       signedOut();
       settingChanged("pickCeremony", "passive");
+      feedbackOpened({ surface: "coach", source: "ai", route: "/draft/[sessionId]" });
+      feedbackRefused({ surface: "coach", reason: "rate", message: "no" });
     }).not.toThrow();
 
     expect(capture).not.toHaveBeenCalled();
@@ -81,6 +90,19 @@ describe("with a project token", () => {
   it("omits the properties entirely when there is no email", () => {
     identify("user_01H");
     expect(identified).toHaveBeenCalledWith("user_01H", undefined);
+  });
+
+  // Same reason as the settings event above: the two feedback events the browser
+  // owns are what "did anybody use this, and did the form stop them" is read off,
+  // and a rename would split each chart in two with no way to rejoin them.
+  it("names the two feedback events the browser owns", () => {
+    const opened = { surface: "coach" as const, source: "ai" as const, route: "/draft/[sessionId]" };
+    feedbackOpened(opened);
+    expect(capture).toHaveBeenCalledWith("feedback_opened", opened);
+
+    const refused = { surface: "general" as const, reason: "rate" as const, message: "tomorrow" };
+    feedbackRefused(refused);
+    expect(capture).toHaveBeenCalledWith("feedback_refused", refused);
   });
 
   it("resets on sign-out, so the next person is not the last one", () => {

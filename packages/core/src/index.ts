@@ -15,6 +15,7 @@ export * from "./data/mapping.js";
 export * from "./model/pick.js";
 export * from "./model/review.js";
 export * from "./model/bench.js";
+export * from "./model/feedback.js";
 
 export * from "./scoring/score.js";
 export * from "./scoring/value.js";

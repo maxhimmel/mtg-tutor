@@ -264,6 +264,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
                     pending
                     guess={guess}
                     correct={correct}
+                    draft={{ sessionId: id, setCode: draft.setCode, format: draft.format }}
                   />
                 ) : (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5">

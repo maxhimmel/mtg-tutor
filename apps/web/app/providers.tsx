@@ -6,6 +6,7 @@ import { AuthKitProvider, useAccessToken, useAuth } from "@workos-inc/authkit-ne
 import { env } from "./env";
 import { SettingsProvider } from "./components/SettingsProvider";
 import { HoverPreviewProvider } from "./components/CardPreview";
+import { FeedbackProvider } from "./components/Feedback";
 import { AnalyticsIdentity } from "./components/AnalyticsIdentity";
 
 // No null-guard here any more. The URL is validated in ./env, so a missing one
@@ -45,7 +46,16 @@ export function ConvexClientProvider({ children }: { children: React.ReactNode }
       <AnalyticsIdentity />
       <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
         <SettingsProvider>
-          <HoverPreviewProvider>{children}</HoverPreviewProvider>
+          {/*
+            Inside ConvexProviderWithAuth because it writes through useMutation
+            and gates its button on being signed in, and outside
+            HoverPreviewProvider because the card preview has nothing to say to
+            it -- the two only meet at z-index, which the <dialog> settles by
+            rendering in the browser's top layer.
+          */}
+          <FeedbackProvider>
+            <HoverPreviewProvider>{children}</HoverPreviewProvider>
+          </FeedbackProvider>
         </SettingsProvider>
       </ConvexProviderWithAuth>
     </AuthKitProvider>

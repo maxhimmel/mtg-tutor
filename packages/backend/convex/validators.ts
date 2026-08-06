@@ -340,3 +340,48 @@ export const llmCall = v.object({
   finishReason: v.string(),
   ms: v.number(),
 });
+
+export const feedbackSentiment = v.union(v.literal("up"), v.literal("down"));
+
+// Where somebody was standing when they said something.
+//
+// A literal union rather than a string, for the same reason event names live in
+// one file (see apps/web/app/lib/analytics.ts): this is the field every reading
+// of the feedback groups BY. "coach" and "Coach" arriving from two components is
+// two piles that each look half as loud as the problem actually is, and nothing
+// later can tell them apart. A route can be wrong and still be a label; this
+// cannot.
+//
+// The first three are exactly llmCall's `area` above, and deliberately so: they
+// are the app's three AI answers, so a complaint joins to the model call that
+// produced it. The rest are the screens with no model behind them, which still
+// need somewhere to point.
+export const feedbackSurface = v.union(
+  v.literal("coach"),
+  v.literal("verdict"),
+  v.literal("frame"),
+  v.literal("pick"),
+  v.literal("deck"),
+  v.literal("results"),
+  v.literal("sets"),
+  v.literal("general"),
+);
+
+// What the note points at. Every field optional and the object itself optional,
+// which is the opposite call from pickDefense above and made on purpose.
+//
+// A half-filled defense makes a reader guess which half it got, so that one is
+// all-or-nothing. An anchor is best effort: knowing only the set is worth more
+// than knowing nothing, and losing a paragraph somebody typed because its
+// metadata was incomplete is the worst trade available in this feature.
+//
+// setCode and format are denormalised off draftSessions rather than joined.
+// They are the dimension every reading groups by -- "all the SNC complaints" --
+// and the alternative is a ~2KB session read per row to recover twelve bytes.
+export const feedbackAnchor = v.object({
+  sessionId: v.optional(v.id("draftSessions")),
+  pickIndex: v.optional(v.number()),
+  phase: v.optional(v.union(v.literal("open"), v.literal("close"))),
+  setCode: v.optional(v.string()),
+  format: v.optional(v.string()),
+});

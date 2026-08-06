@@ -400,6 +400,10 @@ export const results = query({
       diff: built && suggested ? compareDecks(built, suggested) : null,
       mistakes,
       status: session.status,
+      // Free -- the session is already read -- and what lets the results screen
+      // anchor a note to the draft it is showing without a second query.
+      setCode: session.setCode,
+      format: session.format,
       // Without 17Lands data every card scores off its rarity baseline, so a
       // pick can rarely be "wrong" and the score is close to meaningless.
       // Surfaced so the UI can say that rather than imply a perfect draft.

@@ -1,7 +1,14 @@
 import posthog from "posthog-js";
 import type { Confidence } from "@mtg-tutor/core";
+import type { Doc } from "@mtg-tutor/backend/dataModel";
 
 import type { PickCeremony } from "./useSettings";
+
+// Taken off the schema rather than restated here. The union exists once, in
+// convex/validators.ts, for the same reason the event names below exist once --
+// and a second copy in the client would be free to drift from the one the rows
+// are actually written with.
+type FeedbackSurface = Doc<"feedback">["surface"];
 
 /**
  * The one place the app talks to PostHog.
@@ -183,6 +190,55 @@ export function accessBlocked(p: { source: string }): void {
 export function inviteRequested(): void {
   if (!on()) return;
   posthog.capture("invite_requested");
+}
+
+/**
+ * The feedback panel was opened.
+ *
+ * Interaction, and only a browser knows it -- which is also why the other half
+ * of this pair, feedback_left, is on the backend instead (see
+ * convex/analytics.ts for the identify argument that puts it there).
+ *
+ * It exists to be divided into feedback_left. `source` says which way in
+ * actually earns notes: the button that follows you around, a thumb on an AI
+ * answer, or the ask after a draft finishes -- and if the prompt earns none, the
+ * prompt goes. Opened-minus-left is the form's abandonment rate, and a high one
+ * says the form asks for something people will not give, which is a change to
+ * the form rather than to the button.
+ *
+ * No feedback_abandoned to go with it: that is exactly this minus feedback_left,
+ * and an event you can subtract is an event you should not send.
+ */
+export function feedbackOpened(p: {
+  surface: FeedbackSurface;
+  source: "fab" | "ai" | "prompt";
+  route: string;
+}): void {
+  if (!on()) return;
+  posthog.capture("feedback_opened", p);
+}
+
+/**
+ * Somebody tried to say something and was told no.
+ *
+ * The canonical case for this file's refusal rule rather than an application of
+ * it: every refusal in feedback.submit throws, so a capture there would be
+ * scheduled inside the transaction and rolled back with it, silently.
+ *
+ * `reason` separates three failures that look identical from outside. "rate" is
+ * a daily cap that was only ever a guess, and the person it will strangle first
+ * is the one friend who writes things down -- which is exactly backwards.
+ * "empty" is the form letting somebody press send with nothing in it. "error" is
+ * the app eating a paragraph they typed, which is the worst thing this feature
+ * can do to anybody.
+ */
+export function feedbackRefused(p: {
+  surface: FeedbackSurface;
+  reason: "rate" | "empty" | "error";
+  message: string;
+}): void {
+  if (!on()) return;
+  posthog.capture("feedback_refused", p);
 }
 
 /**

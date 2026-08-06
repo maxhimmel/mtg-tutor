@@ -103,3 +103,63 @@ export async function deckBuilt(
   if (!on()) return;
   await posthog.capture(ctx, { event: "deck_built", properties: p });
 }
+
+/**
+ * Somebody said something.
+ *
+ * Here rather than in the browser, under this file's own rule: a feedback row
+ * existing is lifecycle, it is authoritative at the moment of the insert, and it
+ * comes free the day the CLI grows a feedback command. It is also the one
+ * capture in this module whose mutation is genuinely allowed to commit -- every
+ * refusal in feedback.ts throws, and those are in the browser where they survive.
+ *
+ * It identifies as well as captures, which draftCompleted and deckBuilt do not,
+ * and that is the real argument for it being here. Leaving feedback is the only
+ * act in this app a `role: "none"` account can perform, so this is the only event
+ * that will ever be the first thing a locked-out friend does. draftStarted can
+ * never identify them, because they can never start a draft -- so without this,
+ * the person the beta most needs to hear from is the one person in PostHog with
+ * no role on their profile.
+ *
+ * The note itself is not a property. It is the payload, it already lives in
+ * Convex where scripts/feedback.mjs reads it, and a truncated second copy here
+ * would be a retention decision nobody made.
+ */
+export async function feedbackLeft(
+  ctx: MutationCtx,
+  caller: Caller,
+  p: {
+    surface: string;
+    // "none" rather than an absent property: a missing one charts as its own
+    // bucket and reads like a bug in the event rather than an absent thumb.
+    sentiment: "up" | "down" | "none";
+    route: string;
+    chars: number;
+    // Whether the coach snapshot arrived. The one silent failure in this
+    // feature: a DraftBoard refactor that stops passing the prose turns every
+    // coach note unactionable, and nothing else would report it -- you would
+    // find out weeks later reading empty quotes in the script output. Same
+    // shape as access_blocked, invisible until it is expensive.
+    hasQuote: boolean;
+  },
+): Promise<void> {
+  if (!on()) return;
+  await posthog.identify(ctx, { properties: { role: caller.role } });
+  await posthog.capture(ctx, { event: "feedback_left", properties: p });
+}
+
+/**
+ * A thumb grew a reason.
+ *
+ * The question the whole per-response design rests on: do people who rate an
+ * answer ever say why? A thumb writes its row immediately and the overlay asks
+ * afterwards, so if this never fires the overlay is the barrier and the thumb
+ * should be left to stand alone.
+ */
+export async function feedbackExplained(
+  ctx: MutationCtx,
+  p: { surface: string; chars: number },
+): Promise<void> {
+  if (!on()) return;
+  await posthog.capture(ctx, { event: "feedback_explained", properties: p });
+}
