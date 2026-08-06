@@ -44,6 +44,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^4",
     "@ai-sdk/openai-compatible": "^3",
+    "@convex-dev/rate-limiter": "^0.3.2",
     "@mtg-tutor/core": "workspace:*",
     "ai": "^7",
     "convex": "^1.17.0",
