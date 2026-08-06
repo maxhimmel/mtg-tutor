@@ -24,6 +24,16 @@ export default function ReviewIndex() {
           <a className="btn btn-primary mt-7" href="/sign-in">
             Sign in
           </a>
+          {/* Said on both signed-out screens rather than only the home page:
+              this one is reachable directly, and a sign-in button with no
+              account behind it is a dead end without the next sentence. */}
+          <p className="mt-4 text-sm text-base-content/60">
+            Accounts are{" "}
+            <Link href="/sign-up" className="link link-primary">
+              invite only
+            </Link>{" "}
+            while this is in beta.
+          </p>
         </section>
       </Unauthenticated>
 

@@ -26,7 +26,11 @@ export default function Home() {
             Sign in
           </a>
           <p className="mt-4 text-sm text-base-content/60">
-            Drafts save to your account. Or read the{" "}
+            Drafts save to your account, and accounts are{" "}
+            <Link href="/sign-up" className="link link-primary">
+              invite only
+            </Link>{" "}
+            while this is in beta. Or read the{" "}
             <Link href="/principles" className="link link-primary">
               draft principles
             </Link>{" "}

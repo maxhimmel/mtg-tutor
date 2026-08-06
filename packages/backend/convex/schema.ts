@@ -309,6 +309,21 @@ export default defineSchema({
     text: v.string(),
   }).index("by_session_and_phase", ["sessionId", "phase"]),
 
+  // Someone asking to be let in, from the signed-out page. Written by a public
+  // mutation -- it has to be, the caller has no account and cannot get one
+  // while sign-up is off.
+  //
+  // No status field, deliberately. Whether someone was let in is answered by
+  // whether an invitation exists in WorkOS, and a flag here would be a second
+  // answer to that question, free to disagree with the first the moment anyone
+  // invites a friend without going through the form.
+  accessRequests: defineTable({
+    name: v.string(),
+    email: v.string(),
+    note: v.optional(v.string()),
+    createdAt: v.string(),
+  }),
+
   // One row per model call, appended by every path that spends the deployment's
   // key.
   //
