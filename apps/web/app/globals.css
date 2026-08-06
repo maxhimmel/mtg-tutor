@@ -228,14 +228,11 @@ html {
   @apply text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-base-content/60;
 }
 
-/* Animation is rationed to moments worth marking, of which there are four: a
-   pack changing hands, a graded pick landing, the win-rate gap opening in the
-   glossary's opening figure -- which is that page's whole argument -- and the
-   feedback button announcing itself on arrival. All go through motion-safe:, so
-   a reduced-motion reader gets the result with no movement at all.
-
-   The fourth is the only one not tied to something the player just did, which is
-   why it is bounded to three hops rather than left to idle: see animate-hail. */
+/* Animation is rationed to moments worth marking, of which there are three: a
+   pack changing hands, a graded pick landing, and the win-rate gap opening in
+   the glossary's opening figure -- which is that page's whole argument. All go
+   through motion-safe:, so a reduced-motion reader gets the result with no
+   movement at all. */
 /* A booster draft passes packs one way around the table, and it reverses each
    pack: 1 left, 2 right, 3 left (engine.ts rotate). So the board moves the way
    the table does. In packs 1 and 3 the pack in front of you came from the player
@@ -361,36 +358,4 @@ html {
 @utility animate-gap {
   animation: gap-draw 620ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   transform-origin: left center;
-}
-
-/* The feedback button saying it is there, and then stopping.
-
-   Three hops and done, deliberately, rather than the idle loop this obviously
-   wants to be. A button that never stops moving in the corner of every screen
-   would be the one piece of motion in this app a player cannot get away from --
-   and the screen it would be hardest to ignore on is the draft board, where
-   somebody is trying to concentrate on a pack. The rule above is that motion
-   marks a moment; the moment here is arriving, so it happens on arrival and then
-   the thing sits still like everything else.
-
-   translateY only. daisyUI drives the fab's own open state with `rotate`, which
-   is a separate property from `transform`, so the two do not fight -- and the
-   hop is over long before anybody has it open. The delay lets the page settle
-   first, since motion during a load reads as loading rather than as an
-   invitation. */
-@keyframes fab-hail {
-  0%,
-  100% {
-    transform: none;
-  }
-  40% {
-    transform: translateY(-25%);
-  }
-  70% {
-    transform: translateY(-8%);
-  }
-}
-
-@utility animate-hail {
-  animation: fab-hail 780ms cubic-bezier(0.3, 0.7, 0.4, 1) 900ms 3 both;
 }

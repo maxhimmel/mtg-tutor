@@ -218,11 +218,7 @@ function FeedbackFab({
         tabIndex={0}
         role="button"
         aria-label="Say something"
-        // A labelled pill rather than a circle, which is the half of "hard to
-        // notice" that motion does not fix: an unexplained dot in the corner
-        // gets read as chrome and ignored, and no amount of hopping makes it say
-        // what it is. The hop marks where it is; the word says what it does.
-        className="btn btn-lg btn-primary gap-2 motion-safe:animate-hail"
+        className="btn btn-circle btn-lg btn-primary"
         // Pressing it again shuts it, which is what anybody tries before they
         // look for an X. On mousedown rather than click, because by the time a
         // click fires the focus that opens it has already been taken.
@@ -234,7 +230,6 @@ function FeedbackFab({
         }}
       >
         <SpeechIcon />
-        Feedback
       </div>
 
       <button
