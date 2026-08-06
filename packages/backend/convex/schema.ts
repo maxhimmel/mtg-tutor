@@ -235,6 +235,16 @@ export default defineSchema({
     // gates the suggestion on. Every draft finished before this existed is in
     // that state and can be built whenever the player goes back to it.
     build: v.optional(v.object({ basicLands: v.number(), builtAt: v.string() })),
+    // That a review token was spent on this draft -- not when it was reviewed.
+    // Re-reading a draft is free, and this flag is what makes that true: it is
+    // set once, ever, and every later verdict and frame sees it and charges
+    // nothing. Set idempotently by quota.claimReview, whose docblock explains
+    // why five concurrent verdicts still spend exactly one.
+    //
+    // On this document rather than its own row because the claim is a fact
+    // about the session, and because the alternative -- a lookup per verdict --
+    // is a read this document was going to do anyway.
+    reviewClaimedAt: v.optional(v.string()),
   }).index("by_user", ["userId"]),
 
   // What one pick actually saw and scored, written as it happens.
@@ -282,6 +292,22 @@ export default defineSchema({
     pickIndex: v.number(),
     verdict: reviewVerdict,
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
+  // The archetype bookends, frozen the same way and for a second reason on top
+  // of stability: a frame is a model call that nothing cached, so a review page
+  // reloaded fifty times was a hundred calls behind one review's worth of
+  // quota. Caching it is also cheaper than not -- framePrompt replays the draft
+  // and reads the ~46KB pool, twice per mount, to build a prompt whose answer
+  // never changes.
+  //
+  // Its own table rather than a field on draftSessions, because that document
+  // is read by ownedSession 45 times a draft on the coach path and the prose
+  // has no business riding along.
+  reviewFrames: defineTable({
+    sessionId: v.id("draftSessions"),
+    phase: v.union(v.literal("open"), v.literal("close")),
+    text: v.string(),
+  }).index("by_session_and_phase", ["sessionId", "phase"]),
 
   // One row per model call, appended by every path that spends the deployment's
   // key.

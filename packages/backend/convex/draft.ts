@@ -17,7 +17,9 @@ import {
   summarizeDraft,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
-import { loadBoard, ownedSession, requireUserId, setDocFor } from "./sessions.js";
+import { enforce } from "./quota.js";
+import { requireCaller } from "./roles.js";
+import { loadBoard, ownedSession, setDocFor } from "./sessions.js";
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
 import { recordPick, storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
@@ -53,14 +55,20 @@ export const start = mutation({
     seed: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await requireUserId(ctx);
+    const caller = await requireCaller(ctx);
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
 
+    // Before the quota, so a set code that does not exist reports itself as a
+    // bad set code rather than as a day's allowance spent on nothing.
     await setDocFor(ctx, setCode, format);
 
+    // And after it, so anything that throws below rolls the token back with the
+    // transaction -- which is the reason this is a component and not a counter.
+    await enforce(ctx, "drafts", caller);
+
     return await ctx.db.insert("draftSessions", {
-      userId,
+      userId: caller.userId,
       setCode,
       format,
       // Coerced the same way mulberry32 reads it, so a caller cannot pin a seed
