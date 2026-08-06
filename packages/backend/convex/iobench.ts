@@ -143,6 +143,20 @@ export const framePromptCost = query({
   },
 });
 
+// The review quota's whole cost, and the reason it is measured rather than
+// argued about: this runs once per verdict and frame that misses its cache, so
+// if it were reading anything more than the session document it would be
+// paying that ~19 times on a first review. Probe it before saveVerdictCost --
+// like that one it writes, and a second call is the cheap already-claimed path
+// rather than the one under test.
+export const claimReviewCost = mutation({
+  args: { sessionId: v.id("draftSessions") },
+  handler: async (ctx, args) => {
+    await ctx.runMutation(internal.quota.claimReview, args);
+    return await cost(ctx);
+  },
+});
+
 export const statsOverviewCost = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {

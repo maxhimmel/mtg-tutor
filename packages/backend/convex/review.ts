@@ -12,7 +12,9 @@ import {
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
 import { z } from "zod";
-import { action, internalQuery, mutation, query } from "./_generated/server.js";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server.js";
+import type { QueryCtx } from "./_generated/server.js";
+import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
@@ -235,6 +237,12 @@ export const verdict = action({
     const context = await ctx.runQuery(internal.review.verdictContext, args);
     if (context.cached) return context.cached;
 
+    // After the cache check, so a re-review pays nothing and asks nothing;
+    // before the model call, so a refusal costs no tokens. Inside the action
+    // rather than in the client, because the CLI and a direct call to this
+    // action have to be gated by the same thing the browser is.
+    await ctx.runMutation(internal.quota.claimReview, { sessionId: args.sessionId });
+
     let input: z.infer<typeof VERDICT_SCHEMA>;
     try {
       input = await object({
@@ -303,26 +311,71 @@ export const verdict = action({
   },
 });
 
+const phaseArg = v.union(v.literal("open"), v.literal("close"));
+
+async function storedFrame(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+  phase: "open" | "close",
+) {
+  return await ctx.db
+    .query("reviewFrames")
+    .withIndex("by_session_and_phase", (q) => q.eq("sessionId", sessionId).eq("phase", phase))
+    .unique();
+}
+
+// Same shape verdictContext returns, for the same reason: the cache is checked
+// where the ownership check already is, so the action can bail before it costs
+// anything. The loadBoard below is the expensive half -- it replays the draft
+// and reads the set's whole card pool -- and skipping it on a hit is why
+// caching frames makes a re-review cheaper rather than merely quieter.
 export const framePrompt = internalQuery({
-  args: { sessionId: v.id("draftSessions"), phase: v.union(v.literal("open"), v.literal("close")) },
+  args: { sessionId: v.id("draftSessions"), phase: phaseArg },
   handler: async (ctx, args) => {
+    const cached = await storedFrame(ctx, args.sessionId, args.phase);
+    if (cached) return { cached: cached.text, userContent: null };
+
     const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
     const winRates = cardsDoc.colorWinRates;
     // No card text read at all: a frame lists the pool as names grouped by
     // colour and ranks the set's archetypes, and neither needs rules text.
-    return buildDraftFrame(args.phase, engine.humanPool, winRates);
+    return {
+      cached: null,
+      userContent: buildDraftFrame(args.phase, engine.humanPool, winRates),
+    };
+  },
+});
+
+// Frozen on first success, like a verdict. Not only to stop a reload re-rolling
+// the prose: without this, a review page mounted fifty times was a hundred model
+// calls behind a single review's worth of quota.
+export const saveFrame = internalMutation({
+  args: { sessionId: v.id("draftSessions"), phase: phaseArg, text: v.string() },
+  handler: async (ctx, args) => {
+    await ownedSession(ctx, args.sessionId);
+    if (await storedFrame(ctx, args.sessionId, args.phase)) return;
+
+    await ctx.db.insert("reviewFrames", {
+      sessionId: args.sessionId,
+      phase: args.phase,
+      text: args.text,
+    });
   },
 });
 
 // The archetype bookends -- plain prose, no structure to enforce.
 export const frame = action({
-  args: { sessionId: v.id("draftSessions"), phase: v.union(v.literal("open"), v.literal("close")) },
+  args: { sessionId: v.id("draftSessions"), phase: phaseArg },
   handler: async (ctx, args): Promise<string | null> => {
-    const userContent = await ctx.runQuery(internal.review.framePrompt, args);
+    const context = await ctx.runQuery(internal.review.framePrompt, args);
+    if (context.cached !== null) return context.cached;
+
+    await ctx.runMutation(internal.quota.claimReview, { sessionId: args.sessionId });
+
     try {
-      return await text({
+      const prose = await text({
         system: system(),
-        userContent,
+        userContent: context.userContent,
         // 500 truncated the closing frame against claude-sonnet-5 while the
         // opening frame fit in 320. Same story as the verdict above.
         maxTokens: 900,
@@ -334,6 +387,9 @@ export const frame = action({
             phase: args.phase,
           }),
       });
+
+      await ctx.runMutation(internal.review.saveFrame, { ...args, text: prose });
+      return prose;
     } catch (e) {
       if (e instanceof CoachUnavailableError) {
         console.error(`Draft frame (${args.phase}) unavailable: ${e.message}`);
