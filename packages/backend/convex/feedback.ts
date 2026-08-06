@@ -4,6 +4,7 @@ import { components } from "./_generated/api.js";
 import { mutation, query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
 import type { QueryCtx } from "./_generated/server.js";
+import { FEEDBACK_SAY_SOMETHING, FEEDBACK_TOO_MUCH } from "@mtg-tutor/core";
 import { feedbackAnchor, feedbackSentiment, feedbackSurface } from "./validators.js";
 import { requireCaller, requireOwner } from "./roles.js";
 import { feedbackExplained, feedbackLeft } from "./analytics.js";
@@ -34,8 +35,12 @@ const rateLimiter = new RateLimiter(components.rateLimiter, {
 // has an unauthenticated stranger.
 const MAX = { note: 2000, quote: 2000, route: 120 };
 
-const TOO_MUCH = "That is a lot of feedback for one day -- thank you. Send the rest tomorrow.";
-const SAY_SOMETHING = "Say something, or pick a thumb.";
+// The two refusal sentences come from core rather than living here, which is
+// where quota.ts keeps its own. Those are only ever rendered; these two are also
+// branched on -- the browser reports which refusal it hit, and "is my daily cap
+// stopping a friend mid-sentence" is a different answer from "the app broke".
+// See core for why matching the prose instead would be the access_blocked
+// mistake a second time.
 
 export const submit = mutation({
   args: {
@@ -61,11 +66,11 @@ export const submit = mutation({
     const route = args.route.trim().slice(0, MAX.route);
 
     // A thumb with no words is a real signal. Nothing at all is a misfire.
-    if (!note && !args.sentiment) throw new ConvexError(SAY_SOMETHING);
+    if (!note && !args.sentiment) throw new ConvexError(FEEDBACK_SAY_SOMETHING);
 
     const mine = await rateLimiter.limit(ctx, "feedback", { key: caller.userId });
     const overall = await rateLimiter.limit(ctx, "feedbackTotal");
-    if (!mine.ok || !overall.ok) throw new ConvexError(TOO_MUCH);
+    if (!mine.ok || !overall.ok) throw new ConvexError(FEEDBACK_TOO_MUCH);
 
     // The anchor is NOT verified against draftSessions. ownedSession would cost
     // a ~2KB read on every submit to defend against a note pointed at a draft
@@ -127,7 +132,7 @@ export const explain = mutation({
     if (row.userId !== caller.userId) throw new ConvexError("That note is not yours.");
 
     const note = args.note.trim().slice(0, MAX.note);
-    if (!note) throw new ConvexError(SAY_SOMETHING);
+    if (!note) throw new ConvexError(FEEDBACK_SAY_SOMETHING);
 
     await ctx.db.patch(args.id, { note });
     await feedbackExplained(ctx, { surface: row.surface, chars: note.length });

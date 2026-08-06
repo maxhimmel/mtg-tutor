@@ -21,6 +21,7 @@ import { CardPlacard, CardPlacardList } from "./CardPlacard";
 import { CardName } from "./CardText";
 import { DeckBuilder } from "./DeckBuilder";
 import { Panel } from "./Panel";
+import { AfterDraft } from "./AfterDraft";
 import { humanError } from "../lib/humanError";
 
 type ResultsData = FunctionReturnType<typeof api.draft.results>;
@@ -40,7 +41,16 @@ const REVEAL = [
   "motion-safe:animate-verdict [animation-delay:280ms]",
 ];
 
-export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
+export function Results({
+  sessionId,
+  asking = false,
+}: {
+  sessionId: Id<"draftSessions">;
+  // Whether this is the moment a draft just ended, rather than a deck being
+  // reread later. Only the draft board knows the difference, and only that
+  // moment has earned the right to ask somebody a question.
+  asking?: boolean;
+}) {
   const convex = useConvex();
   const { isAuthenticated } = useConvexAuth();
 
@@ -127,6 +137,10 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
 
   return (
     <div className="flex flex-col gap-5">
+      {asking && (
+        <AfterDraft sessionId={sessionId} setCode={results.setCode} format={results.format} />
+      )}
+
       <header className={`flex flex-col gap-1.5 ${REVEAL[0]}`}>
         <p className="eyebrow">Deck locked in</p>
         <h2 className="font-display text-3xl font-semibold leading-tight sm:text-4xl">

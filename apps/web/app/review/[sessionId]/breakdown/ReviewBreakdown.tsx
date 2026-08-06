@@ -210,6 +210,7 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
                 pick={pick}
                 verdict={get(pick.pickIndex)}
                 pending={analyzing}
+                draft={{ sessionId: id, setCode: draft.setCode, format: draft.format }}
               />
             </Panel>
           ))

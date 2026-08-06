@@ -7,6 +7,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import type { Card } from "@mtg-tutor/core";
 import { loadPrinciples, splitCitations } from "@mtg-tutor/core";
 import { CardText } from "../components/CardText";
+import { AiRating } from "../components/AiResponse";
 import { Panel } from "../components/Panel";
 import { PrincipleBadges } from "../components/PrincipleBadge";
 import { humanError } from "../lib/humanError";
@@ -70,7 +71,15 @@ export function ReviewFrame({
   if (text === null) return null;
 
   return (
-    <Panel title={TITLES[phase]}>
+    // `group` so the rating in the aside reveals on hovering the panel rather
+    // than only on hovering itself, which is a two-pixel target nobody finds.
+    <Panel
+      title={TITLES[phase]}
+      className="group"
+      // No `quote`: reviewFrames stores this text and freezes it, so the owner's
+      // script reads the stored row rather than a copy taken here.
+      aside={text ? <AiRating surface="frame" anchor={{ sessionId, phase }} /> : undefined}
+    >
       {text === undefined ? (
         <p className="flex items-center gap-2 text-sm text-base-content/60">
           <span className="loading loading-spinner loading-xs" />

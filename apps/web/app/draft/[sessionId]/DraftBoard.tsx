@@ -52,6 +52,8 @@ import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSuspendPreview } from "../../components/CardPreview";
+import { AiResponse } from "../../components/AiResponse";
+import { useFeedbackAnchor, useSuspendFeedback } from "../../components/Feedback";
 import { coachShown, coachUnavailable, pickMade } from "../../lib/analytics";
 import { type PickCeremony, useSettings } from "../../lib/useSettings";
 import {
@@ -202,6 +204,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const benchCard = useMutation(api.draft.bench);
   const { getAccessToken } = useAccessToken();
   const suspendPreview = useSuspendPreview();
+  const suspendFeedback = useSuspendFeedback();
 
   // A mouse sensor, not a pointer one. Pointer events also fire for touch, where
   // a vertical flick past the threshold arms a drag and then cancels the scroll
@@ -507,6 +510,26 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
    * board.
    */
   const standing = Object.values(ceremonies).find((ceremony) => ceremony.open);
+
+  // daisyUI's fab is fixed at z-999, well above the ceremony's stage at z-40, so
+  // without this it floats over a modal the player is being asked to answer --
+  // and is clickable through the dim, which the stage otherwise prevents by
+  // making everything behind it inert.
+  useEffect(() => suspendFeedback(standing !== undefined), [standing, suspendFeedback]);
+
+  // What the board is showing, so anything said from here arrives knowing it
+  // without the player having to type "I was drafting Duskmourn". The coach
+  // prose rides along because nothing on the server holds it.
+  useFeedbackAnchor({
+    surface: "pick",
+    quote: coach || undefined,
+    anchor: {
+      sessionId: id,
+      setCode: state?.setCode,
+      format: state?.format,
+      pickIndex: last?.pickIndex,
+    },
+  });
 
   const selectedCard = useMemo(
     () => pack.find((card) => card.name === selected),
@@ -877,7 +900,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       </PageHeading>
 
       {state.complete ? (
-        <Results sessionId={id} />
+        <Results sessionId={id} asking />
       ) : (
         <DndContext
           id="draft-board"
@@ -1103,10 +1126,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
                     {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
 
-                    <div className="border-t border-base-300 pt-3">
-                      <div className="eyebrow mb-1.5">
-                        {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
-                      </div>
+                    {/* `quote` is the contract that makes a complaint about the
+                        coach actionable at all: this prose streams out of an
+                        httpAction and is written down nowhere, so the copy in
+                        `coach` is the only one that exists. Stop passing it and
+                        every coach note becomes a shrug -- which is what
+                        feedback_left's hasQuote is watching for. */}
+                    <AiResponse
+                      surface="coach"
+                      title={skipped ? "Coach — skipped, this pick was forced" : "Coach"}
+                      quote={coach || undefined}
+                      anchor={{
+                        sessionId: id,
+                        pickIndex: lastView.pickIndex,
+                        setCode: state.setCode,
+                        format: state.format,
+                      }}
+                    >
                       {coachSpent && (
                         <p className="mb-1.5 text-sm text-warning">{coachSpent}</p>
                       )}
@@ -1128,7 +1164,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                           Coach this pick anyway
                         </button>
                       )}
-                    </div>
+                    </AiResponse>
                   </>
                 ) : (
                   // The ceremony's own line, because it is the one that knows
