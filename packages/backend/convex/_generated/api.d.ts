@@ -15,6 +15,7 @@ import type * as auth from "../auth.js";
 import type * as cardText from "../cardText.js";
 import type * as draft from "../draft.js";
 import type * as draftPicks from "../draftPicks.js";
+import type * as feedback from "../feedback.js";
 import type * as http from "../http.js";
 import type * as iobench from "../iobench.js";
 import type * as llm from "../llm.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   cardText: typeof cardText;
   draft: typeof draft;
   draftPicks: typeof draftPicks;
+  feedback: typeof feedback;
   http: typeof http;
   iobench: typeof iobench;
   llm: typeof llm;
