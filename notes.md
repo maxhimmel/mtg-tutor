@@ -125,7 +125,8 @@ Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
 below cite these by number, so a shipped idea is deleted and its number left
 empty rather than renumbering everything under it. 4, 5 and 10 shipped on
 2026-07-30; the sideboard and mana-curve ideas that took 10 and 11 after that
-shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05.
+shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
+7 (invite-only access) and 8 (per-user daily limits) shipped on 2026-08-06.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -189,12 +190,6 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05.
 6. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
-
-7. Let's constrain who can actually use our deployed app. This isn't ready for public exposure yet. I don't want randoms online wasting my AI tokens. I wanna only allow certain friends to use the app. Maybe it'd be cool to allow people to attempt to sign-up, but instead notify me for their approval?
-   - Secondarily, is there an easy way for me to invite people to use the app?! Could I send them a link rather than need to ask for their email or something?
-
-8. I'd like to limit the usage per user.
-   - I'm the admin/developer so I should be exempt. In fact, maybe I should be able to manage roles or something that dictate usage limits. For instance a tester friend could have unlimited? But normal friends in the "beta release" (or w/e we're supposed to call this workflow) should be limited to 3 drafts and reviews a day or something.
 
 9. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
@@ -593,3 +588,31 @@ The architecture, the data pipeline and the deploy story are all documented in
     no inset, because two curves a pixel apart open a band that widens at the
     corners. Do not restore `rounded-box` here; it is the design system's number
     and this is the card's.
+
+15. **A role is a JWT claim, not a row — the sequel to #2** (2026-08-06). Ideas
+    #7 and #8 needed an answer to "who is this, and how much may they spend",
+    which is exactly the thing #2 says there is no table for. There still is
+    not. WorkOS AuthKit emits `role` as a first-class claim once a user belongs
+    to an organization, Convex's `UserIdentity` carries arbitrary claims through
+    on an index signature, and `roleOf` in `convex/roles.ts` is the only place
+    that knows any of that. So the answer is already in hand when a function
+    starts, and costs no read on a path that runs 45 times a draft.
+
+    **Organizations rather than user metadata plus a JWT template**, which was
+    the first design and is the road not taken. Metadata is private and does not
+    reach the token without a template — and Convex's own AuthKit provisioning
+    manages template configuration, so a future `convex deploy` could silently
+    remove the claim and drop everyone, including the owner, to no access. An
+    organization role needs no template because AuthKit already issues it.
+
+    `MTG_TUTOR_ROLES` survives that change as a lockout escape hatch rather than
+    a source of truth: a membership set wrong in the dashboard locks you out of
+    the surface that would fix it. Read after the claim, so a working membership
+    always wins.
+
+    **The WorkOS Users Management widget was considered and rejected.** It peer-
+    depends on `@radix-ui/themes`, `@tanstack/react-query` and `swr` — a second
+    design system and two data layers, against one hand-built daisyUI theme and
+    Convex's own reactive client — plus a server-minted token and a CORS origin,
+    for a screen used about six times. The organization and the roles exist
+    either way, so adding it later is small if the dashboard ever gets tedious.
