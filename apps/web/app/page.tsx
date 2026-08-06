@@ -23,15 +23,21 @@ export default function Home() {
             Draft a real pack from any recent set. Every pick is scored against 17Lands
             win-rate data, and the coach tells you what you passed up.
           </p>
-          <a className="btn btn-primary mt-7" href="/sign-in">
-            Sign in
-          </a>
+          {/* Two actions, because there are two kinds of visitor and only one
+              of them can act on "Sign in". Asking for an invite was a link
+              inside the paragraph below and nobody could find it -- which made
+              the app look closed rather than closed-but-asking. */}
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <a className="btn btn-primary" href="/sign-in">
+              Sign in
+            </a>
+            <Link href="/sign-up" className="btn btn-outline">
+              Ask for an invite
+            </Link>
+          </div>
           <p className="mt-4 text-sm text-base-content/60">
-            Drafts save to your account, and accounts are{" "}
-            <Link href="/sign-up" className="link link-primary">
-              invite only
-            </Link>{" "}
-            while this is in beta. Or read the{" "}
+            Drafts save to your account, and accounts are invite only while this
+            is in beta. Or read the{" "}
             <Link href="/principles" className="link link-primary">
               draft principles
             </Link>{" "}

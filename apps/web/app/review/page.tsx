@@ -21,18 +21,18 @@ export default function ReviewIndex() {
             Step back through a finished draft pick by pick, guess which card was the
             better take, and let the coach explain the ones you missed.
           </p>
-          <a className="btn btn-primary mt-7" href="/sign-in">
-            Sign in
-          </a>
-          {/* Said on both signed-out screens rather than only the home page:
-              this one is reachable directly, and a sign-in button with no
-              account behind it is a dead end without the next sentence. */}
+          {/* Both actions here too: this page is reachable directly, and a lone
+              sign-in button is a dead end for anyone who has no account yet. */}
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <a className="btn btn-primary" href="/sign-in">
+              Sign in
+            </a>
+            <Link href="/sign-up" className="btn btn-outline">
+              Ask for an invite
+            </Link>
+          </div>
           <p className="mt-4 text-sm text-base-content/60">
-            Accounts are{" "}
-            <Link href="/sign-up" className="link link-primary">
-              invite only
-            </Link>{" "}
-            while this is in beta.
+            Accounts are invite only while this is in beta.
           </p>
         </section>
       </Unauthenticated>
