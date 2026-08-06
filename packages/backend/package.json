@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
-    "whoami": "node scripts/whoami.mjs"
+    "check-access": "node scripts/check-access.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

@@ -1,6 +1,9 @@
 // Who the deployment thinks you are, and how much you may spend today.
 //
-//   pnpm --filter @mtg-tutor/backend whoami [--prod]
+//   pnpm --filter @mtg-tutor/backend check-access [--prod]
+//
+// Not called `whoami`: pnpm has its own whoami and would run npm's instead of
+// this, which fails asking you to log in to a registry.
 //
 // Two answers in one place, because they fail together and are diagnosed apart.
 // The top half is the raw access token, which says whether WorkOS is putting an
@@ -15,6 +18,13 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
 import { accessToken } from "./lib/auth.mjs";
 import { deploymentUrl } from "./lib/deployment.mjs";
+
+// Same line every script that signs in as a person carries. A WorkOS access
+// token lives about five minutes, so the stored session is almost always due a
+// renewal, and renewing needs WORKOS_CLIENT_ID from here. Without it this works
+// for the few minutes after a login and then reports "not authenticated" at a
+// person who just authenticated.
+process.loadEnvFile(new URL("../.env.local", import.meta.url));
 
 const prod = process.argv.includes("--prod");
 

@@ -239,7 +239,7 @@ them, and the invitation also carries an `acceptInvitationUrl` you can copy and
 send however you like. Give a friend who should be uncapped the `tester` role;
 leave everyone else on the default.
 
-`quota.mine` is how you check any of this worked. It returns the role, what is
+`pnpm check-access` is how you check any of this worked. It returns the role, what is
 left today, and `source` — `claim` means the organization membership is
 reaching Convex, `default` means it is not.
 
