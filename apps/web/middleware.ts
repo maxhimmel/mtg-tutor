@@ -22,8 +22,13 @@ export default authkitMiddleware({
   },
 });
 
+// `mv3` is the analytics proxy declared in next.config.ts, and it has to be
+// exempt here or AuthKit 307s every captured event to sign-in. That failure is
+// silent in the worst way: the SDK's own assets under /mv3/static are matched by
+// the file-extension clause below and keep loading, so PostHog reports itself
+// connected while not one event arrives.
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|webmanifest)).*)",
+    "/((?!_next|mv3|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|webmanifest)).*)",
   ],
 };

@@ -6,6 +6,7 @@ import { AuthKitProvider, useAccessToken, useAuth } from "@workos-inc/authkit-ne
 import { env } from "./env";
 import { SettingsProvider } from "./components/SettingsProvider";
 import { HoverPreviewProvider } from "./components/CardPreview";
+import { AnalyticsIdentity } from "./components/AnalyticsIdentity";
 
 // No null-guard here any more. The URL is validated in ./env, so a missing one
 // fails the build naming the variable rather than rendering a warning box that
@@ -37,6 +38,11 @@ function useAuthFromAuthKit() {
 export function ConvexClientProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthKitProvider>
+      {/*
+        Inside AuthKitProvider because it reads useAuth, and above everything
+        else because it renders nothing and only has to run once per session.
+      */}
+      <AnalyticsIdentity />
       <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
         <SettingsProvider>
           <HoverPreviewProvider>{children}</HoverPreviewProvider>

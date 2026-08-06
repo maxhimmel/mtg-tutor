@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@mtg-tutor/backend";
+import { inviteRequested } from "../lib/analytics";
 import { humanError } from "../lib/humanError";
 
 // The only thing on this app a signed-out stranger can do, so it says what it
@@ -32,6 +33,10 @@ export function RequestAccess() {
         note: String(form.get("note") ?? "") || undefined,
       });
       setSent(true);
+      // On the mutation resolving, which is what makes this worth having over
+      // an autocaptured click on the button: the click happens whether or not
+      // the request landed, and the two are different numbers.
+      inviteRequested();
     } catch (e) {
       setError(humanError(e));
     } finally {

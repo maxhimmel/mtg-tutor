@@ -25,6 +25,11 @@ export const env = createEnv({
     NEXT_PUBLIC_WORKOS_REDIRECT_URI: z.string().url(),
     // Optional: derived from NEXT_PUBLIC_CONVEX_URL when absent. See lib/convexSite.ts.
     NEXT_PUBLIC_CONVEX_SITE_URL: z.string().url().optional(),
+    // Optional so that a local dev run and a fresh clone send nothing at all,
+    // rather than needing a key to boot. Everything analytics does is behind one
+    // check of this in lib/analytics.ts. The host is not a variable to match --
+    // traffic goes through the rewrite in next.config.ts, which is a constant.
+    NEXT_PUBLIC_POSTHOG_KEY: z.string().startsWith("phc_").optional(),
   },
   // Each value must be a literal process.env.X member access. Next inlines
   // client variables by matching that exact syntax, so spreading process.env or
@@ -36,6 +41,7 @@ export const env = createEnv({
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
     NEXT_PUBLIC_WORKOS_REDIRECT_URI: process.env.NEXT_PUBLIC_WORKOS_REDIRECT_URI,
     NEXT_PUBLIC_CONVEX_SITE_URL: process.env.NEXT_PUBLIC_CONVEX_SITE_URL,
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
   },
   emptyStringAsUndefined: true,
   // Escape hatch for builds that legitimately have no backend -- a fresh clone

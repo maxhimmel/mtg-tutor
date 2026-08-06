@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageShell } from "./components/PageShell";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
+import { accessBlocked, draftRefused } from "./lib/analytics";
 import { useSettings, type SetView } from "./lib/useSettings";
 import { humanError } from "./lib/humanError";
 
@@ -107,6 +108,17 @@ function SetPicker() {
   const [refused, setRefused] = useState<string | null>(null);
   const { settings, update } = useSettings();
 
+  // A signed-in account that may do nothing at all -- almost always a WorkOS
+  // organization membership that was never set. Until now this was invisible
+  // from here: the friend sees a wall, and nothing anywhere records that they
+  // hit it. Once per mount, because a role does not change while a page is open.
+  const blocked = useRef(false);
+  useEffect(() => {
+    if (quota?.role !== "none" || blocked.current) return;
+    blocked.current = true;
+    accessBlocked({ source: quota.source });
+  }, [quota?.role, quota?.source]);
+
   async function start(setCode: string, format: string) {
     setRefused(null);
     setStarting(setCode);
@@ -117,8 +129,14 @@ function SetPicker() {
       // Shown on this surface rather than in an alert(), so the way out is
       // beside the thing that refused -- the same reasoning as Stage's error
       // in the commitment flow.
-      setRefused(humanError(e));
+      const message = humanError(e);
+      setRefused(message);
       setStarting(null);
+      // Captured here rather than in quota.enforce, and not by choice: a Convex
+      // capture schedules its send inside the transaction, so a mutation that
+      // refuses rolls the send back with itself and nothing is ever sent. The
+      // browser is the only side of this that survives a refusal.
+      draftRefused({ setCode, format, message });
     }
   }
 
