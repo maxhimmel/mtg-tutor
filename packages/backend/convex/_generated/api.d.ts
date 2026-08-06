@@ -18,6 +18,7 @@ import type * as llm from "../llm.js";
 import type * as metrics from "../metrics.js";
 import type * as migrations from "../migrations.js";
 import type * as review from "../review.js";
+import type * as roles from "../roles.js";
 import type * as sessions from "../sessions.js";
 import type * as setData from "../setData.js";
 import type * as sets from "../sets.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   metrics: typeof metrics;
   migrations: typeof migrations;
   review: typeof review;
+  roles: typeof roles;
   sessions: typeof sessions;
   setData: typeof setData;
   sets: typeof sets;
