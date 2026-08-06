@@ -185,27 +185,75 @@ function FeedbackFab({
   open: (seed: FeedbackSeed) => void;
   standing: Standing | null;
 }) {
+  const trigger = useRef<HTMLDivElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+
+  // daisyUI's fab expands on :focus-within and has no open class to drive -- so
+  // the ONLY thing that closes it is focus leaving the container, and every
+  // control that could ask it to close lives inside that container. The X could
+  // never work on its own: clicking it either focuses it (still within) or, on a
+  // browser that does not focus buttons on click, leaves focus on the trigger
+  // (also still within). Either way :focus-within holds and the fab stays open.
+  //
+  // So closing has to be done rather than asked for. Both are blurred because
+  // which of them holds focus is exactly the thing that varies by browser.
+  const collapse = () => {
+    root.current?.querySelector<HTMLElement>(":focus")?.blur();
+    trigger.current?.blur();
+  };
+
   return (
     // max-lg:bottom-24 clears the sticky confirm bar, which spans the full width
     // once the draft columns stack. At lg and up that bar centres inside the pack
     // column and there is nothing here to collide with.
-    <div className="fab max-lg:bottom-24">
-      <div tabIndex={0} role="button" aria-label="Say something" className="btn btn-circle btn-lg btn-primary">
+    <div
+      ref={root}
+      className="fab max-lg:bottom-24"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") collapse();
+      }}
+    >
+      <div
+        ref={trigger}
+        tabIndex={0}
+        role="button"
+        aria-label="Say something"
+        className="btn btn-circle btn-lg btn-primary"
+        // Pressing it again shuts it, which is what anybody tries before they
+        // look for an X. On mousedown rather than click, because by the time a
+        // click fires the focus that opens it has already been taken.
+        onMouseDown={(e) => {
+          if (document.activeElement === e.currentTarget) {
+            e.preventDefault();
+            collapse();
+          }
+        }}
+      >
         <SpeechIcon />
       </div>
 
-      <button type="button" className="fab-close btn btn-circle btn-lg" aria-label="Close">
+      <button
+        type="button"
+        className="fab-close btn btn-circle btn-lg"
+        aria-label="Close"
+        onClick={collapse}
+      >
         ✕
       </button>
 
       {KINDS.map((kind) => (
         <div key={kind.label}>
-          <span className="hidden sm:inline">{kind.label}</span>
+          {/* popup-surface, like every other thing in this app that floats over
+              the page. These labels sit above whatever the page is showing --
+              card art, a pack, a wall of prose -- and as bare text they were
+              unreadable against half of it. */}
+          <span className="popup-surface px-2 py-1 text-xs">{kind.label}</span>
           <button
             type="button"
             className="btn btn-circle"
             aria-label={kind.label}
-            onClick={() =>
+            onClick={() => {
+              collapse();
               open({
                 // A kind that names a surface wins; otherwise the screen's own
                 // declaration does, and "general" is the floor.
@@ -214,8 +262,8 @@ function FeedbackFab({
                 anchor: standing?.anchor,
                 quote: standing?.quote,
                 prompt: kind.prompt,
-              })
-            }
+              });
+            }}
           >
             {kind.glyph}
           </button>
