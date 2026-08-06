@@ -45,7 +45,12 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
   const [started, setStarted] = useState(false);
 
   const picks = draft?.picks;
-  const { get, requestMany } = useVerdicts(id, picks);
+  const { get, requestMany, refused } = useVerdicts(id, picks);
+
+  // One line for the whole page: this fires seventeen verdicts and two frames,
+  // and a refusal repeated per row would bury the breakdown it is explaining.
+  const [frameRefused, setFrameRefused] = useState<string | null>(null);
+  const notice = refused ?? frameRefused;
 
   const decisions = useMemo(() => (picks ?? []).filter(decisionPick), [picks]);
   const shown = useMemo(
@@ -60,11 +65,11 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
   const unasked = shown.filter((p) => get(p.pickIndex) === undefined);
   const resolved = shown.length - unasked.length;
 
-  // The frames are the one part of a review that is never cached: review.frame
-  // calls the model every time, where verdicts are frozen on first ask. So they
-  // wait for the same gate rather than firing two calls at anyone who lands
-  // here -- unless this breakdown was already generated, in which case showing it
-  // whole is the point.
+  // The frames wait for the same gate as the verdicts rather than firing at
+  // anyone who lands here -- unless this breakdown was already generated, in
+  // which case showing it whole is the point. They are frozen on first success
+  // now, like verdicts, so a second visit costs nothing either way; the gate
+  // remains because two model calls is still not what a glance should buy.
   const complete = shown.length > 0 && unasked.length === 0;
   const showFrames = started || complete;
 
@@ -116,6 +121,11 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
       </PageHeading>
 
       <div className="mx-auto flex max-w-4xl flex-col gap-4">
+        {notice && (
+          <div role="alert" className="alert alert-warning">
+            <span>{notice}</span>
+          </div>
+        )}
         <Panel bodyClassName="gap-3">
           <div
             className="flex rounded-lg bg-base-300 p-0.5"
@@ -177,7 +187,7 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
           )}
         </Panel>
 
-        {showFrames && <ReviewFrame sessionId={id} phase="open" cards={pool} />}
+        {showFrames && <ReviewFrame sessionId={id} phase="open" cards={pool} onError={setFrameRefused} />}
 
         {shown.length === 0 ? (
           <Panel>
@@ -205,7 +215,7 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
           ))
         )}
 
-        {showFrames && <ReviewFrame sessionId={id} phase="close" cards={pool} />}
+        {showFrames && <ReviewFrame sessionId={id} phase="close" cards={pool} onError={setFrameRefused} />}
 
         {/* The two sibling views are in the switcher at the top of the page, so
             the only way out this page still owes anyone is the way up a level. */}

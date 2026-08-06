@@ -29,11 +29,17 @@ export function ReviewFrame({
   sessionId,
   phase,
   cards,
+  onError,
 }: {
   sessionId: Id<"draftSessions">;
   phase: "open" | "close";
   // The final pool, so card names in the prose link to the cards themselves.
   cards: Card[];
+  // Reported rather than rendered. A frame mounts twice on a page that also
+  // asks for verdicts, so a refusal shown here would be the same sentence
+  // three times; the page shows it once and this keeps its promise to render
+  // nothing when there is no prose.
+  onError?: (message: string) => void;
 }) {
   const askFrame = useAction(api.review.frame);
   const [text, setText] = useState<string | null | undefined>(undefined);
@@ -44,7 +50,16 @@ export function ReviewFrame({
     asked.current = true;
     askFrame({ sessionId, phase })
       .then(setText)
-      .catch(() => setText(null));
+      .catch((e: unknown) => {
+        // The action returns null when the coach simply had nothing; a throw is
+        // a refusal, and only that is worth telling anyone about.
+        onError?.(e instanceof Error ? e.message : String(e));
+        setText(null);
+      });
+    // onError is left out of the deps on purpose: `asked` means this body runs
+    // once ever, so the callback it closes over is the one that was there when
+    // the frame was asked for, and an inline handler from the parent cannot
+    // re-arm the request by changing identity.
   }, [askFrame, sessionId, phase]);
 
   // The frame runs on the review system prompt, which asks for principle

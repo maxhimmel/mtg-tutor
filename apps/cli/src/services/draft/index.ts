@@ -105,6 +105,17 @@ export async function run(argv: string[]): Promise<void> {
     );
   }
 
-  const sessionId = await convex.mutation(api.draft.start, { setCode, format });
+  // Starting a draft can be refused -- not signed in, not invited, or out of
+  // drafts for today -- and every one of those is a sentence the server wrote
+  // for a person to read. Unwrapped it reaches the top-level catch and prints
+  // as a stack trace, which is the same information dressed as a crash.
+  let sessionId;
+  try {
+    sessionId = await convex.mutation(api.draft.start, { setCode, format });
+  } catch (e) {
+    p.log.error(e instanceof Error ? e.message : String(e));
+    return;
+  }
+
   await runDraft(convex, sessionId, setCode, format);
 }

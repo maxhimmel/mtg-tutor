@@ -89,18 +89,24 @@ function SetViewToggle({
 
 function SetPicker() {
   const sets = useQuery(api.sets.list);
+  const quota = useQuery(api.quota.mine, {});
   const startDraft = useMutation(api.draft.start);
   const router = useRouter();
   const [starting, setStarting] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
   const { settings, update } = useSettings();
 
   async function start(setCode: string, format: string) {
+    setRefused(null);
     setStarting(setCode);
     try {
       const sessionId = await startDraft({ setCode, format });
       router.push(`/draft/${sessionId}`);
     } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
+      // Shown on this surface rather than in an alert(), so the way out is
+      // beside the thing that refused -- the same reasoning as Stage's error
+      // in the commitment flow.
+      setRefused(e instanceof Error ? e.message : String(e));
       setStarting(null);
     }
   }
@@ -111,15 +117,31 @@ function SetPicker() {
         <h1 className="font-display text-2xl font-semibold tracking-tight">
           Pick a set to draft
         </h1>
-        {/* Only once there is something to view. A toggle over an empty page
-            offers a choice between two ways of seeing nothing. */}
-        {sets != null && sets.length > 0 && (
-          <SetViewToggle
-            value={settings.setView}
-            onChange={(setView) => update({ setView })}
-          />
-        )}
+        <div className="flex items-center gap-3">
+          {/* A wall you can see coming is an expectation rather than a wall,
+              so this says what is left before it is spent -- and says nothing
+              at all to anyone who is never charged. */}
+          {quota?.limited && quota.remaining != null && (
+            <span className="text-xs text-base-content/55">
+              {quota.remaining.drafts} of {quota.of.drafts} drafts left today
+            </span>
+          )}
+          {/* Only once there is something to view. A toggle over an empty page
+              offers a choice between two ways of seeing nothing. */}
+          {sets != null && sets.length > 0 && (
+            <SetViewToggle
+              value={settings.setView}
+              onChange={(setView) => update({ setView })}
+            />
+          )}
+        </div>
       </div>
+
+      {refused && (
+        <div role="alert" className="alert alert-warning my-4">
+          <span>{refused}</span>
+        </div>
+      )}
 
       {sets === undefined && <p className="text-base-content/60">Loading sets…</p>}
 

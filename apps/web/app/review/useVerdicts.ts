@@ -39,12 +39,27 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
   // depended on by an effect without re-firing as answers land.
   const asked = useRef(new Set<number>());
 
+  // Why the asking stopped, when it stopped for a reason worth reading.
+  //
+  // The action returns null for "the coach could not answer" -- no model key,
+  // a call that failed, an answer naming a card that was not in the pack -- so
+  // anything it THROWS is a refusal: not signed in, not your draft, or out of
+  // reviews for today. That is what makes one catch enough here.
+  const [refused, setRefused] = useState<string | null>(null);
+
+  // And having been refused once, stop asking. Without this the breakdown's
+  // five workers each collect the same sentence and seventeen further round
+  // trips run only to be told no.
+  const halted = useRef(false);
+
   // The router reuses one component across two ids of the same dynamic route,
   // so without this a second draft would inherit the first draft's answers and
   // -- worse -- its record of what had already been asked, and would never ask
   // for anything.
   useEffect(() => {
     asked.current = new Set();
+    halted.current = false;
+    setRefused(null);
     setVerdicts(new Map());
   }, [sessionId]);
 
@@ -63,15 +78,17 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
 
   const request = useCallback(
     async (pickIndex: number): Promise<void> => {
-      if (asked.current.has(pickIndex)) return;
+      if (halted.current || asked.current.has(pickIndex)) return;
       asked.current.add(pickIndex);
 
       let verdict: ReviewVerdict | null = null;
       try {
         verdict = await askVerdict({ sessionId, pickIndex });
-      } catch {
+      } catch (e) {
         // Stays in `asked`, so a deployment with no key answers "unavailable"
         // once instead of being re-asked on every render.
+        halted.current = true;
+        setRefused(e instanceof Error ? e.message : String(e));
       }
       setVerdicts((prev) => new Map(prev).set(pickIndex, verdict));
     },
@@ -87,7 +104,7 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
       let cursor = 0;
       await Promise.all(
         Array.from({ length: Math.min(limit, pending.length) }, async () => {
-          while (cursor < pending.length) await request(pending[cursor++]);
+          while (cursor < pending.length && !halted.current) await request(pending[cursor++]);
         }),
       );
     },
@@ -98,5 +115,5 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
     verdicts,
   ]);
 
-  return { get, request, requestMany, resolved: verdicts.size };
+  return { get, request, requestMany, resolved: verdicts.size, refused };
 }

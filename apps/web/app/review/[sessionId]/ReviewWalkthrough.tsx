@@ -34,7 +34,13 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
   const [guesses, setGuesses] = useState<ReadonlyMap<number, string>>(new Map());
 
   const picks = draft?.picks;
-  const { get, request } = useVerdicts(id, picks);
+  const { get, request, refused } = useVerdicts(id, picks);
+
+  // The verdicts and the two frames can all be refused by the same thing, and
+  // the first of them to hear about it is whichever mounted first -- so they
+  // feed one line here instead of each rendering their own copy of it.
+  const [frameRefused, setFrameRefused] = useState<string | null>(null);
+  const notice = refused ?? frameRefused;
 
   // Same reuse the verdict cache guards against: one component serves both ids
   // when the router moves between two drafts, and a position kept from a longer
@@ -174,6 +180,15 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
         />
       </PageHeading>
 
+      {/* The review still renders under this: every pick keeps its data-only
+          reveal, which is the same degradation a deployment with no model key
+          already gets. Only the prose is missing. */}
+      {notice && (
+        <div role="alert" className="alert alert-warning my-4">
+          <span>{notice}</span>
+        </div>
+      )}
+
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-4">
           {skipped.length > 0 && (
@@ -188,7 +203,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
 
           {finished ? (
             <>
-              <ReviewFrame sessionId={id} phase="close" cards={pool} />
+              <ReviewFrame sessionId={id} phase="close" cards={pool} onError={setFrameRefused} />
               <Panel title="Session score" bodyClassName="gap-3">
                 {score.graded === 0 ? (
                   <p className="text-base-content/60">
@@ -298,7 +313,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
         </div>
 
         <aside className="flex flex-col gap-4">
-          <ReviewFrame sessionId={id} phase="open" cards={pool} />
+          <ReviewFrame sessionId={id} phase="open" cards={pool} onError={setFrameRefused} />
 
           <Panel title="This draft" bodyClassName="gap-2">
             <dl className="flex flex-col text-sm">

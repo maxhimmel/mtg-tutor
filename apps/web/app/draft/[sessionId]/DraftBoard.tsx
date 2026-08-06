@@ -53,7 +53,11 @@ import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSuspendPreview } from "../../components/CardPreview";
 import { type PickCeremony, useSettings } from "../../lib/useSettings";
-import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
+import {
+  CoachDeclined,
+  CoachQuotaExceeded,
+  streamCoach as streamCoachFrom,
+} from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
 import { webpImage } from "../../lib/cardImage";
 import { preloadImages } from "../../lib/preloadImages";
@@ -259,6 +263,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const [commitError, setCommitError] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
+  // Said once for the draft rather than on every pick: the coach being spent
+  // is a fact about the day, and repeating it 45 times would be the loudest
+  // thing on a board whose picks still work perfectly well.
+  const [coachSpent, setCoachSpent] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
 
   // Guards against an earlier pick's stream overwriting a later one when the
@@ -381,6 +389,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         // since it owns the clamp and we do not. Everything else -- no key, a
         // lapsed token, an answer that never came -- falls back to the
         // deterministic explanation rather than leaving the panel empty.
+        // Out of coaching, not out of drafting. Held for the rest of the draft
+        // rather than re-raised per pick: it is one fact about today, and the
+        // answer to it does not change between picks. The fallback still runs,
+        // so the pick keeps its deterministic explanation.
+        if (e instanceof CoachQuotaExceeded) setCoachSpent(e.message);
         if (e instanceof CoachDeclined) return skip();
         fallback();
       }
@@ -1034,6 +1047,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       <div className="eyebrow mb-1.5">
                         {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
                       </div>
+                      {coachSpent && (
+                        <p className="mb-1.5 text-sm text-warning">{coachSpent}</p>
+                      )}
                       <div className="min-h-[3.2rem] whitespace-pre-wrap leading-relaxed">
                         {coach ? (
                           <CardText text={advice.prose} cards={boardCards} />
