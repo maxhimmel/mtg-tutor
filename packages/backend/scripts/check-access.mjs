@@ -50,10 +50,15 @@ console.log("\nConvex sees");
 console.log(`  subject  ${quota.subject}`);
 console.log(`  role     ${quota.role}`);
 console.log(`  source   ${quota.source}`);
+// Spelled out rather than shown as "3/3", which reads as three SPENT at least
+// as readily as three left -- and the two are opposite answers to "is the limit
+// working". A remaining count is the only one worth printing, because it is the
+// one that predicts what happens next.
 console.log(
   `  today    ${
     quota.remaining
-      ? `${quota.remaining.drafts}/${quota.of.drafts} drafts, ${quota.remaining.reviews}/${quota.of.reviews} reviews`
+      ? `${quota.remaining.drafts} of ${quota.of.drafts} drafts left, ` +
+        `${quota.remaining.reviews} of ${quota.of.reviews} reviews left`
       : "unlimited"
   }`,
 );
