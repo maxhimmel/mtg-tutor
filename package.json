@@ -20,6 +20,7 @@
     "dev": "pnpm --filter @mtg-tutor/cli dev",
     "dev:web": "turbo run dev --filter=@mtg-tutor/backend... --filter=@mtg-tutor/web...",
     "draft": "pnpm --filter @mtg-tutor/cli draft",
+    "feedback": "pnpm --filter @mtg-tutor/backend feedback",
     "ingest-sets": "pnpm --filter @mtg-tutor/backend ingest-sets",
     "llm": "pnpm --filter @mtg-tutor/backend llm",
     "login": "pnpm --filter @mtg-tutor/cli login",
