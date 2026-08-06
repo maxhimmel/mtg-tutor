@@ -10,6 +10,7 @@
 
 import type * as access from "../access.js";
 import type * as admin from "../admin.js";
+import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as cardText from "../cardText.js";
 import type * as draft from "../draft.js";
@@ -37,6 +38,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   admin: typeof admin;
+  analytics: typeof analytics;
   auth: typeof auth;
   cardText: typeof cardText;
   draft: typeof draft;
@@ -84,4 +86,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+  posthog: import("@posthog/convex/_generated/component.js").ComponentApi<"posthog">;
 };

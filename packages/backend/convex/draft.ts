@@ -17,6 +17,7 @@ import {
   summarizeDraft,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
+import { deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
 import { enforce } from "./quota.js";
 import { requireCaller } from "./roles.js";
 import { loadBoard, ownedSession, setDocFor } from "./sessions.js";
@@ -67,7 +68,7 @@ export const start = mutation({
     // transaction -- which is the reason this is a component and not a counter.
     await enforce(ctx, "drafts", caller);
 
-    return await ctx.db.insert("draftSessions", {
+    const sessionId = await ctx.db.insert("draftSessions", {
       userId: caller.userId,
       setCode,
       format,
@@ -78,6 +79,13 @@ export const start = mutation({
       status: "active" as const,
       createdAt: new Date().toISOString(),
     });
+
+    // After the insert and after the quota, so nothing is reported that did not
+    // happen -- a capture above `enforce` would be rolled back with the refusal
+    // anyway, which is the trap analytics.ts is written around.
+    await draftStarted(ctx, caller, { sessionId, setCode, format });
+
+    return sessionId;
   },
 });
 
@@ -261,6 +269,18 @@ export const pick = mutation({
         : {}),
     });
 
+    if (complete) {
+      await draftCompleted(ctx, {
+        sessionId: args.sessionId,
+        setCode: session.setCode,
+        format: session.format,
+        picks: session.pickedNames.length + 1,
+        // From the stored createdAt rather than anything a tab remembers, so a
+        // draft resumed the next morning is not reported as a long sitting.
+        ms: Date.now() - Date.parse(session.createdAt),
+      });
+    }
+
     return {
       score: record.score,
       signal: record.signal,
@@ -296,6 +316,14 @@ export const build = mutation({
 
     const build = { basicLands: args.basicLands, builtAt: new Date().toISOString() };
     await ctx.db.patch(args.sessionId, { build });
+
+    await deckBuilt(ctx, {
+      sessionId: args.sessionId,
+      setCode: session.setCode,
+      format: session.format,
+      basicLands: args.basicLands,
+    });
+
     return build;
   },
 });

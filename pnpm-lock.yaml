@@ -133,6 +133,9 @@ importers:
       '@mtg-tutor/core':
         specifier: workspace:*
         version: link:../core
+      '@posthog/convex':
+        specifier: 2.1.0
+        version: 2.1.0(convex@1.42.3(react@19.2.8))
       ai:
         specifier: ^7
         version: 7.0.37(zod@4.4.3)
@@ -902,6 +905,11 @@ packages:
   '@posthog/browser-common@0.4.0':
     resolution: {integrity: sha512-W9DCGVks15docUMPvJ2nd8NS16Gn74bsGWuaeg31beEKFSjdW8wvnQ1ETY6WSql5pYxZb3GdJmEUZVVstKSrBQ==}
 
+  '@posthog/convex@2.1.0':
+    resolution: {integrity: sha512-Bl9CiFebTc5hNrUYVzD2gLfQGVZvZx7+RBVeMny839Ayq8+nk6FIktO7gFfgGNc8qHoCKJ/I2RJY0hhgFKE0dg==}
+    peerDependencies:
+      convex: ^1.39.0
+
   '@posthog/core@1.46.9':
     resolution: {integrity: sha512-EXO6y5ih+jBkTCpUCuYgQmajuDZuvy6vMvflkub6pLQyi0GPlCPWVSvZZkOeQw9e2MxoD5GteeGCt9R8+UJ/yQ==}
 
@@ -1547,6 +1555,15 @@ packages:
 
   posthog-js@1.413.3:
     resolution: {integrity: sha512-UoAymtZYVr84Ldp0ITXmlK4Q3GE8vU7GW8wC+aCput5RrKVJ8wkAPc12n3ElmKRlvLL+oD+Fotjc7n3wYG0RGQ==}
+
+  posthog-node@5.48.1:
+    resolution: {integrity: sha512-BxLX2SqGEQhPqCPTalpyo0RRv1NMbf7UaN7q9d/ED77ksD6XOmE7ko2vIKO8F0zPL1NtKxIi+DYXap9lvR0RaA==}
+    engines: {node: ^20.20.0 || >=22.22.0}
+    peerDependencies:
+      rxjs: ^7.0.0
+    peerDependenciesMeta:
+      rxjs:
+        optional: true
 
   preact@10.29.8:
     resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
@@ -2228,6 +2245,14 @@ snapshots:
       '@posthog/core': 1.46.9
       '@posthog/types': 1.402.2
 
+  '@posthog/convex@2.1.0(convex@1.42.3(react@19.2.8))':
+    dependencies:
+      '@posthog/core': 1.46.9
+      convex: 1.42.3(react@19.2.8)
+      posthog-node: 5.48.1
+    transitivePeerDependencies:
+      - rxjs
+
   '@posthog/core@1.46.9':
     dependencies:
       '@posthog/types': 1.402.2
@@ -2802,6 +2827,10 @@ snapshots:
       web-vitals-soft-navs: web-vitals@6.0.0
     transitivePeerDependencies:
       - preact-render-to-string
+
+  posthog-node@5.48.1:
+    dependencies:
+      '@posthog/core': 1.46.9
 
   preact@10.29.8: {}
 
