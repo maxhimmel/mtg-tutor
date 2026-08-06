@@ -202,6 +202,47 @@ automatically from the `prod` block in `packages/backend/convex.json`, which
 reads Vercel's `VERCEL_PROJECT_PRODUCTION_URL` at build time. The four variables
 above still have to be set by hand: Convex only auto-provisions AuthKit for dev.
 
+## Who can use it, and how much
+
+The deployment is invite-only, and a friend gets three drafts and three reviews
+a day. Both of those are WorkOS configuration plus two deployment variables —
+there is no users table and no admin screen, and the app reads a role straight
+off the access token (`convex/roles.ts`).
+
+**Deployment variables.** Set these on dev and again with `--prod`, *before*
+merging anything that expects them — `seed-set-stats` fails closed without the
+first one, and it runs on every deploy.
+
+| Variable | What it does |
+|---|---|
+| `MTG_TUTOR_DEPLOY_KEY` | Lets the deploy scripts rebuild set data with nobody signed in. `openssl rand -hex 32`. Read back by the scripts through the Convex CLI, so Vercel needs no copy of it. |
+| `MTG_TUTOR_ROLES` | `subject=role` pairs, comma-separated. The lockout escape hatch, not the source of truth — a membership set wrong in the dashboard locks you out of the surface that would fix it. |
+| `RESEND_API_KEY`, `OWNER_EMAIL` | Optional. Emails you when someone asks for access. Unset just means the request is recorded and not mailed. |
+
+**WorkOS, once.** All of it in the environment Convex provisioned — Convex
+dashboard → Settings → Integrations → WorkOS Authentication. Not
+`dashboard.workos.com`, which is a different team (see the AuthKit note above).
+
+1. **Authorization** → define three roles. Keep the slugs short, they travel in
+   the session cookie: `owner`, `tester`, `beta`. Make `beta` the environment
+   default, so anyone invited without an explicit role is capped.
+2. **Organizations** → create one. Every friend joins it; a user in no
+   organization has no `role` claim at all and is refused everything, which is
+   the closed beta working rather than failing.
+3. Add yourself to it as `owner`. Your account predates the organization, so
+   this is a membership rather than an invitation.
+4. **Authentication** → turn **Sign up** OFF. Registration is then closed
+   except when an invitation code is present, which is the whole gate.
+
+**Inviting a friend.** Users → Invites, into that organization. WorkOS emails
+them, and the invitation also carries an `acceptInvitationUrl` you can copy and
+send however you like. Give a friend who should be uncapped the `tester` role;
+leave everyone else on the default.
+
+`pnpm check-access` is how you check any of this worked. It returns the role, what is
+left today, and `source` — `claim` means the organization membership is
+reaching Convex, `default` means it is not.
+
 ## Architecture
 
 A pnpm + Turborepo monorepo. Domain logic lives in a **pure** package that any client can import; each app owns only its own transport and UI.

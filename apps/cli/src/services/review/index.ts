@@ -6,6 +6,7 @@ import { convexClient } from "../../core/auth/session.js";
 import { pct } from "../../core/ui/format.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { runReview } from "./screen.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // Review service entrypoint. `argv` is [sessionId?] with optional `--passive`
 // or `--breakdown`. With no id we show a picker of completed drafts.
@@ -48,7 +49,7 @@ export async function run(argv: string[]): Promise<void> {
     loaded = await convex.query(api.review.load, { sessionId });
   } catch (e) {
     s.stop("");
-    p.log.error(e instanceof Error ? e.message : String(e));
+    p.log.error(humanError(e));
     return;
   }
   s.stop(`Rebuilt ${loaded.setCode.toUpperCase()} — ${loaded.picks.length} picks`);

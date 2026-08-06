@@ -53,7 +53,11 @@ import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSuspendPreview } from "../../components/CardPreview";
 import { type PickCeremony, useSettings } from "../../lib/useSettings";
-import { CoachDeclined, streamCoach as streamCoachFrom } from "../../lib/coach";
+import {
+  CoachDeclined,
+  CoachQuotaExceeded,
+  streamCoach as streamCoachFrom,
+} from "../../lib/coach";
 import { convexSiteUrl } from "../../lib/convexSite";
 import { webpImage } from "../../lib/cardImage";
 import { preloadImages } from "../../lib/preloadImages";
@@ -65,6 +69,7 @@ import {
   usePassivePick,
 } from "./ceremony";
 import { useChallenge } from "./Commitment";
+import { humanError } from "../../lib/humanError";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
@@ -259,6 +264,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const [commitError, setCommitError] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
   const [skipped, setSkipped] = useState(false);
+  // Said once for the draft rather than on every pick: the coach being spent
+  // is a fact about the day, and repeating it 45 times would be the loudest
+  // thing on a board whose picks still work perfectly well.
+  const [coachSpent, setCoachSpent] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
 
   // Guards against an earlier pick's stream overwriting a later one when the
@@ -283,7 +292,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         if (!cancelled) setState(loaded);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setLoadError(humanError(e));
       });
 
     return () => {
@@ -305,7 +314,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         if (!cancelled) setText(textIndex(rows));
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setLoadError(humanError(e));
       });
 
     return () => {
@@ -381,6 +390,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         // since it owns the clamp and we do not. Everything else -- no key, a
         // lapsed token, an answer that never came -- falls back to the
         // deterministic explanation rather than leaving the panel empty.
+        // Out of coaching, not out of drafting. Held for the rest of the draft
+        // rather than re-raised per pick: it is one fact about today, and the
+        // answer to it does not change between picks. The fallback still runs,
+        // so the pick keeps its deterministic explanation.
+        if (e instanceof CoachQuotaExceeded) setCoachSpent(e.message);
         if (e instanceof CoachDeclined) return skip();
         fallback();
       }
@@ -672,7 +686,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       window.clearTimeout(sweep);
       setOutgoing(null);
       setSelected(card.name);
-      setCommitError(e instanceof Error ? e.message : String(e));
+      setCommitError(humanError(e));
       return false;
     } finally {
       committing.current = false;
@@ -731,7 +745,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       setState((prev) => prev && { ...prev, sideboard: stored });
     } catch (e) {
       setState((prev) => prev && { ...prev, sideboard: before });
-      alert(e instanceof Error ? e.message : String(e));
+      alert(humanError(e));
     } finally {
       benchInFlight.current = null;
     }
@@ -1034,6 +1048,9 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       <div className="eyebrow mb-1.5">
                         {skipped ? "Coach — skipped, this pick was forced" : "Coach"}
                       </div>
+                      {coachSpent && (
+                        <p className="mb-1.5 text-sm text-warning">{coachSpent}</p>
+                      )}
                       <div className="min-h-[3.2rem] whitespace-pre-wrap leading-relaxed">
                         {coach ? (
                           <CardText text={advice.prose} cards={boardCards} />

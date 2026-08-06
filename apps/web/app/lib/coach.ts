@@ -15,6 +15,14 @@ export class CoachUnavailable extends Error {}
 // the clamp, so it is allowed to disagree with the caller's reading of it.
 export class CoachDeclined extends Error {}
 
+// 429: you are inside your allowance for drafting and out of it for coaching.
+// A subclass rather than a sibling, so every existing `instanceof
+// CoachUnavailable` keeps falling back to the deterministic explanation without
+// knowing this exists -- being out of coaching must not end a draft. Callers
+// that want to say so branch on it first; the message is the server's own
+// sentence, which is why nothing here writes one.
+export class CoachQuotaExceeded extends CoachUnavailable {}
+
 interface CoachRequest {
   site: string;
   token?: string | null;
@@ -38,6 +46,13 @@ export async function* streamCoach({
   });
 
   if (res.status === 204) throw new CoachDeclined("pick was forced");
+
+  // The server wrote a sentence for this one, so it is carried rather than
+  // restated -- both clients show whatever it said, which is what keeps them
+  // from drifting apart on wording that lives on the server.
+  if (res.status === 429) {
+    throw new CoachQuotaExceeded((await res.text().catch(() => "")) || "coaching is used up");
+  }
 
   // 401 unauthenticated, 503 when the deployment has no model key.
   if (!res.ok || !res.body) throw new CoachUnavailable(`coach returned ${res.status}`);

@@ -143,6 +143,12 @@ for (const phase of ["open", "close"]) {
 }
 record("stats.overview", await client.query(api.iobench.statsOverviewCost, {}));
 
+// Before saveVerdict but after everything that reads: it writes the claim flag
+// onto the session, and a second call measures the already-claimed early return
+// rather than the path a first review actually takes.
+await freshToken();
+record("quota.claimReview", await client.mutation(api.iobench.claimReviewCost, { sessionId }));
+
 // Last: it writes, and a verdict written here would make every verdictContext
 // after it return the cached row instead of replaying.
 console.log("probing saveVerdict...");
@@ -176,6 +182,9 @@ const CALLS_PER_DRAFT = {
   "review.load": 1,
   "draft.results": 1,
   "review.framePrompt": 2,
+  // Once per verdict and frame that misses its cache, which on a first review
+  // is every one of them. A re-review reaches it zero times.
+  "quota.claimReview": decisionPicks.length + 2,
 };
 
 const paths = {};

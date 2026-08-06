@@ -21,8 +21,9 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { gradeColor, pct } from "../../core/ui/format.js";
 import { pickFromPack } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
-import { streamCoach } from "../../core/tutor/coach.js";
+import { CoachQuotaExceeded, streamCoach } from "../../core/tutor/coach.js";
 import { buildTheForty, managePiles } from "./deck.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // The draft loop drives the deployment: the engine, the bots and the scoring all
 // live in Convex, and this only renders. That is the point -- a feature added
@@ -126,6 +127,11 @@ async function showPickFeedback(
   p.note(lines.join("\n"), head);
 }
 
+// Module-level, so it survives across the picks of one `mtg-tutor draft` run and
+// resets when the process does -- which is the granularity that matters, since
+// the quota it describes is per day.
+let quotaWarned = false;
+
 // Streams the coach's reply to stdout under the numeric grade. Returns true if
 // it printed something (so the caller skips the deterministic fallback), false
 // if it produced nothing or failed before any output.
@@ -153,7 +159,17 @@ async function streamCoaching(
       return true; // partial coaching already shown — don't double up
     }
     spin.stop(head);
-    p.log.warn(`AI coaching unavailable (${e instanceof Error ? e.message : String(e)}).`);
+    // Said once per draft when it is the quota, because it will be true for
+    // every remaining pick and forty-five copies of the same sentence is worse
+    // than none. Everything else can vary pick to pick, so it still reports.
+    if (e instanceof CoachQuotaExceeded) {
+      if (!quotaWarned) {
+        quotaWarned = true;
+        p.log.warn(e.message);
+      }
+      return false;
+    }
+    p.log.warn(`AI coaching unavailable (${humanError(e)}).`);
     return false;
   }
 

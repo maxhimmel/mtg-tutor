@@ -19,6 +19,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../../core/ui/format.js";
 import { editPiles, type PileRow } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // The two piles, opened from the draft loop or from the build screen. Which
 // cards are in the deck is the same question in both places and the same
@@ -68,7 +69,7 @@ export async function managePiles(
   } catch (e) {
     // Whatever landed before the failure is still stored, so the server's last
     // answer is the honest one to keep rather than the split just edited.
-    spin.stop(pc.red(`Could not move every card (${e instanceof Error ? e.message : String(e)})`));
+    spin.stop(pc.red(`Could not move every card (${humanError(e)})`));
     return stored;
   }
 

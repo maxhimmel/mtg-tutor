@@ -8,6 +8,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // quiz: guess each decision pick, then reveal. passive: reveal each pick in
 // sequence, no guessing. breakdown: resolve everything up front and print the
@@ -136,6 +137,10 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
   await Promise.all(workers);
 }
 
+// Why the coach stopped answering, once it stops for a reason worth reading.
+// Per process, which is per `mtg-tutor review` run.
+let refused: string | null = null;
+
 // The verdict already frozen on the session wins; otherwise the backend action
 // asks the model once and stores it. Returns undefined when the deployment has
 // no model key, when the call fails, or when the answer named a card that was
@@ -147,9 +152,16 @@ async function fetchVerdict(
   pick: StoredPick,
 ): Promise<ReviewVerdict | undefined> {
   if (pick.verdict) return pick.verdict;
+  if (refused) return undefined;
   try {
     return (await convex.action(api.review.verdict, { sessionId, pickIndex: pick.pickIndex })) ?? undefined;
-  } catch {
+  } catch (e) {
+    // The action returns null when the coach simply had nothing to say, so a
+    // throw is a refusal -- not signed in, not your draft, or out of reviews.
+    // Recorded once and then honoured: asking the remaining sixteen picks only
+    // buys sixteen more copies of the same answer.
+    refused = humanError(e);
+    p.log.warn(refused);
     return undefined;
   }
 }
@@ -164,7 +176,9 @@ async function resolveVerdictInteractive(
   const spin = spinner();
   spin.start("Coach is reviewing the pick");
   const verdict = await fetchVerdict(convex, sessionId, pick);
-  spin.stop(verdict ? "" : pc.yellow("AI verdict unavailable — showing data only"));
+  // Silent once a refusal has been printed: the reason is already on screen and
+  // "unavailable" under it just restates it, once per remaining pick.
+  spin.stop(verdict || refused ? "" : pc.yellow("AI verdict unavailable — showing data only"));
   return verdict;
 }
 
@@ -231,6 +245,6 @@ async function showFrame(
     spin.stop("");
     if (text) p.note(text, phase === "open" ? "Draft overview" : "Signal-reading recap");
   } catch (e) {
-    spin.stop(pc.yellow(`Frame unavailable (${e instanceof Error ? e.message : String(e)})`));
+    spin.stop(pc.yellow(`Frame unavailable (${humanError(e)})`));
   }
 }

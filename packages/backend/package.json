@@ -39,11 +39,13 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
-    "validate-set-stats": "node scripts/validate-set-stats.mjs"
+    "validate-set-stats": "node scripts/validate-set-stats.mjs",
+    "check-access": "node scripts/check-access.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",
     "@ai-sdk/openai-compatible": "^3",
+    "@convex-dev/rate-limiter": "^0.3.2",
     "@mtg-tutor/core": "workspace:*",
     "ai": "^7",
     "convex": "^1.17.0",
