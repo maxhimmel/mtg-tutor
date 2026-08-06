@@ -12,6 +12,7 @@ import {
   resolveChallenge,
 } from "@mtg-tutor/core";
 import { CardFace } from "../../components/CardTile";
+import { ceremonyAbandoned } from "../../lib/analytics";
 import { useSettings } from "../../lib/useSettings";
 import type { Ceremony, CeremonyBoard, Defense, Proposal } from "./ceremony";
 
@@ -74,6 +75,12 @@ export function useChallenge({
   // time and from the challenge only after a pick has failed to go through --
   // being argued with is the point, so it is not a thing you can simply decline.
   const abandon = () => {
+    if (pending) {
+      ceremonyAbandoned({
+        stage: pending.stage,
+        ...(pending.stage === "challenge" ? { confidence: pending.confidence } : {}),
+      });
+    }
     setPending(null);
     clearError();
   };

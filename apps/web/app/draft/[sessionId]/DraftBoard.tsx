@@ -52,6 +52,7 @@ import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
 import { useSuspendPreview } from "../../components/CardPreview";
+import { coachShown, coachUnavailable, pickMade } from "../../lib/analytics";
 import { type PickCeremony, useSettings } from "../../lib/useSettings";
 import {
   CoachDeclined,
@@ -278,6 +279,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const committing = useRef(false);
   // The last sideboard write, so a pick can wait for it. See `propose`.
   const benchInFlight = useRef<Promise<unknown> | null>(null);
+  // When the pack in front of the player arrived. The gap to the next pick is
+  // the only read available on how hard a pick was -- there is nothing on the
+  // server that could know it. Seeded on mount so pick 1 is measured from the
+  // board appearing rather than reported as instant.
+  const packArrivedAt = useRef(Date.now());
 
   // Ownership is checked server-side, so this has to wait for the token: the
   // subscription this replaced re-ran itself once auth arrived, and a one-shot
@@ -359,6 +365,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         if (run === streamRun.current) setSkipped(true);
         fallback();
       };
+      const unavailable = (reason: "declined" | "quota" | "unconfigured" | "error") =>
+        coachUnavailable({ sessionId, pickIndex, reason });
 
       // Forcing means "coach this one regardless": a floor of 1 passes any pack
       // that still has a card in it, which is every pack you can pick from.
@@ -369,8 +377,20 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
       // Checked here as well as server-side so a forced pick costs no round
       // trip, not just no tokens.
-      if (!isDecisionPick(cardsInPack, minPackCards)) return skip();
-      if (!SITE) return fallback();
+      // Declined before the round trip and declined by the server are the same
+      // fact about the pick, and both are counted -- a coach that is silent
+      // because the pack is forced looks identical, from the outside, to one
+      // that is broken.
+      if (!isDecisionPick(cardsInPack, minPackCards)) {
+        unavailable("declined");
+        return skip();
+      }
+      if (!SITE) {
+        unavailable("unconfigured");
+        return fallback();
+      }
+
+      const startedAt = Date.now();
 
       try {
         // The token the ConvexReactClient already holds has to be attached by
@@ -385,6 +405,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           prose += chunk;
           setCoach(prose);
         }
+
+        // `ms` is what the player waited, not what the model took -- the whole
+        // stream, from the click to the last token. If it routinely outlasts the
+        // gap to the next pick, the coach is being written to nobody.
+        coachShown({ sessionId, pickIndex, ms: Date.now() - startedAt, chars: prose.length });
       } catch (e) {
         // The server can disagree with us about whether this pick was forced,
         // since it owns the clamp and we do not. Everything else -- no key, a
@@ -395,7 +420,11 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         // answer to it does not change between picks. The fallback still runs,
         // so the pick keeps its deterministic explanation.
         if (e instanceof CoachQuotaExceeded) setCoachSpent(e.message);
-        if (e instanceof CoachDeclined) return skip();
+        if (e instanceof CoachDeclined) {
+          unavailable("declined");
+          return skip();
+        }
+        unavailable(e instanceof CoachQuotaExceeded ? "quota" : "error");
         fallback();
       }
     },
@@ -676,6 +705,36 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           ? { call: { confidence: defense.confidence, outcome: defense.outcome } }
           : {}),
       });
+      // After the pick has landed, so nothing here can be blamed for one that
+      // did not. The grade is the server's own, which is what makes "are they
+      // getting better" answerable without reading draftPicks back.
+      pickMade({
+        sessionId: id,
+        pickIndex: result.pickIndex,
+        packNo: result.packNo,
+        pickNo: result.pickNo,
+        ceremony: settings.pickCeremony,
+        score: score.score,
+        grade: score.grade,
+        isBest: score.isBest,
+        onColor: score.onColor,
+        rankInPack: score.rankInPack,
+        packSize: packBefore.length,
+        benched: bench ?? false,
+        carried,
+        msDeliberating: Date.now() - packArrivedAt.current,
+        ...(defense
+          ? {
+              confidence: defense.confidence,
+              challenged: defense.challengedName !== undefined,
+              ...(defense.outcome
+                ? { stood: defense.outcome.stood, separable: defense.outcome.separable }
+                : {}),
+            }
+          : {}),
+      });
+      packArrivedAt.current = Date.now();
+
       void streamCoach(result.pickIndex, hydrateScore(score, text), packBefore.length);
       return true;
     } catch (e) {

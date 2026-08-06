@@ -1,4 +1,5 @@
 import posthog from "posthog-js";
+import type { Confidence } from "@mtg-tutor/core";
 
 import type { PickCeremony } from "./useSettings";
 
@@ -87,19 +88,43 @@ export function pickMade(p: {
   // is for "was this pick hard", and it pairs with the replay: the number says
   // slow, the replay shows what they were staring at.
   msDeliberating: number;
-  // Only under the challenge ceremony.
-  confidence?: number;
+
+  // The rest only exist under the challenge ceremony, and together they are the
+  // measurement the whole flow is for: whether stating a confidence out loud and
+  // then being shown the other card actually teaches anybody anything.
+  //
+  // `stood` false is someone who argued for a card, saw the comparison, and
+  // changed their mind -- the flow working. `separable` false is the data being
+  // unable to tell the pair apart, which is the case where a switch taught
+  // nothing and being graded on it would be noise.
+  confidence?: Confidence;
   challenged?: boolean;
-  outcome?: string;
+  stood?: boolean;
+  separable?: boolean;
 }): void {
   if (!on()) return;
   posthog.capture("pick_made", p);
 }
 
-/** The challenge was started and walked away from -- friction, stated plainly. */
-export function challengeAbandoned(p: { sessionId: string; pickIndex: number }): void {
+/**
+ * The ceremony was started and walked away from.
+ *
+ * `stage` is the whole point and is why this takes no pickIndex: which screen
+ * they bailed on says more than where in the draft it happened. "reason" is
+ * being asked to type a sentence and declining; "challenge" is having been
+ * argued with and backing out. Those are two different complaints about the
+ * flow, and only the second one is about the argument.
+ *
+ * Read it as a floor, not a rate. The way out of the challenge screen only
+ * appears once a pick has already failed to go through, so some of those are a
+ * network blink rather than a decision.
+ */
+export function ceremonyAbandoned(p: {
+  stage: "reason" | "challenge";
+  confidence?: Confidence;
+}): void {
   if (!on()) return;
-  posthog.capture("challenge_abandoned", p);
+  posthog.capture("ceremony_abandoned", p);
 }
 
 /** The coach said something. `ms` is how long the player waited to see it. */
