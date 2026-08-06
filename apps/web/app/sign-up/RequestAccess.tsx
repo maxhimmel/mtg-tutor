@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@mtg-tutor/backend";
+import { humanError } from "../lib/humanError";
 
 // The only thing on this app a signed-out stranger can do, so it says what it
 // is for rather than looking like a sign-up form that happens not to work.
@@ -32,7 +33,7 @@ export function RequestAccess() {
       });
       setSent(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(humanError(e));
     } finally {
       setSending(false);
     }

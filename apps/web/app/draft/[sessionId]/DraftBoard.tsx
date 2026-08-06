@@ -69,6 +69,7 @@ import {
   usePassivePick,
 } from "./ceremony";
 import { useChallenge } from "./Commitment";
+import { humanError } from "../../lib/humanError";
 
 const SITE = convexSiteUrl;
 const PRINCIPLES = loadPrinciples();
@@ -291,7 +292,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         if (!cancelled) setState(loaded);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setLoadError(humanError(e));
       });
 
     return () => {
@@ -313,7 +314,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         if (!cancelled) setText(textIndex(rows));
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setLoadError(humanError(e));
       });
 
     return () => {
@@ -685,7 +686,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       window.clearTimeout(sweep);
       setOutgoing(null);
       setSelected(card.name);
-      setCommitError(e instanceof Error ? e.message : String(e));
+      setCommitError(humanError(e));
       return false;
     } finally {
       committing.current = false;
@@ -744,7 +745,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       setState((prev) => prev && { ...prev, sideboard: stored });
     } catch (e) {
       setState((prev) => prev && { ...prev, sideboard: before });
-      alert(e instanceof Error ? e.message : String(e));
+      alert(humanError(e));
     } finally {
       benchInFlight.current = null;
     }

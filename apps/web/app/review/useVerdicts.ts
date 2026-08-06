@@ -5,6 +5,7 @@ import { useAction } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import type { ReviewVerdict } from "@mtg-tutor/core";
+import { humanError } from "../lib/humanError";
 
 // undefined: never asked. null: asked, and there was no answer -- the deployment
 // has no model key, the call failed, or the answer named a card that was not in
@@ -88,7 +89,7 @@ export function useVerdicts(sessionId: Id<"draftSessions">, seed: Seeded[] | und
         // Stays in `asked`, so a deployment with no key answers "unavailable"
         // once instead of being re-asked on every render.
         halted.current = true;
-        setRefused(e instanceof Error ? e.message : String(e));
+        setRefused(humanError(e));
       }
       setVerdicts((prev) => new Map(prev).set(pickIndex, verdict));
     },

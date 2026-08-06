@@ -21,6 +21,7 @@ import { CardPlacard, CardPlacardList } from "./CardPlacard";
 import { CardName } from "./CardText";
 import { DeckBuilder } from "./DeckBuilder";
 import { Panel } from "./Panel";
+import { humanError } from "../lib/humanError";
 
 type ResultsData = FunctionReturnType<typeof api.draft.results>;
 
@@ -55,7 +56,7 @@ export function Results({ sessionId }: { sessionId: Id<"draftSessions"> }) {
     try {
       setResults(await convex.query(api.draft.results, { sessionId }));
     } catch (e: unknown) {
-      setLoadError(e instanceof Error ? e.message : String(e));
+      setLoadError(humanError(e));
     }
   }, [convex, sessionId]);
 

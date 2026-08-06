@@ -9,6 +9,7 @@ import { PageShell } from "./components/PageShell";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
 import { useSettings, type SetView } from "./lib/useSettings";
+import { humanError } from "./lib/humanError";
 
 export default function Home() {
   return (
@@ -110,7 +111,7 @@ function SetPicker() {
       // Shown on this surface rather than in an alert(), so the way out is
       // beside the thing that refused -- the same reasoning as Stage's error
       // in the commitment flow.
-      setRefused(e instanceof Error ? e.message : String(e));
+      setRefused(humanError(e));
       setStarting(null);
     }
   }

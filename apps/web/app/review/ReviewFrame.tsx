@@ -9,6 +9,7 @@ import { loadPrinciples, splitCitations } from "@mtg-tutor/core";
 import { CardText } from "../components/CardText";
 import { Panel } from "../components/Panel";
 import { PrincipleBadges } from "../components/PrincipleBadge";
+import { humanError } from "../lib/humanError";
 
 const PRINCIPLES = loadPrinciples();
 
@@ -53,7 +54,7 @@ export function ReviewFrame({
       .catch((e: unknown) => {
         // The action returns null when the coach simply had nothing; a throw is
         // a refusal, and only that is worth telling anyone about.
-        onError?.(e instanceof Error ? e.message : String(e));
+        onError?.(humanError(e));
         setText(null);
       });
     // onError is left out of the deps on purpose: `asked` means this body runs

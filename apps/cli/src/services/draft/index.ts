@@ -5,6 +5,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { convexClient } from "../../core/auth/session.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { finishDraft, runDraft } from "./screen.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // Draft service entrypoint. `argv` is [setCode?, format?], plus
 // `--resume <sessionId>` to pick an abandoned draft back up.
@@ -95,7 +96,7 @@ export async function run(argv: string[]): Promise<void> {
       }
     } catch (e) {
       ing.stop(pc.red(`Failed to ingest "${setCode}"`));
-      p.log.error(e instanceof Error ? e.message : String(e));
+      p.log.error(humanError(e));
       return;
     }
   } else if (known.ratedCardCount === 0) {
@@ -113,7 +114,7 @@ export async function run(argv: string[]): Promise<void> {
   try {
     sessionId = await convex.mutation(api.draft.start, { setCode, format });
   } catch (e) {
-    p.log.error(e instanceof Error ? e.message : String(e));
+    p.log.error(humanError(e));
     return;
   }
 

@@ -23,6 +23,7 @@ import { pickFromPack } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { CoachQuotaExceeded, streamCoach } from "../../core/tutor/coach.js";
 import { buildTheForty, managePiles } from "./deck.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // The draft loop drives the deployment: the engine, the bots and the scoring all
 // live in Convex, and this only renders. That is the point -- a feature added
@@ -168,7 +169,7 @@ async function streamCoaching(
       }
       return false;
     }
-    p.log.warn(`AI coaching unavailable (${e instanceof Error ? e.message : String(e)}).`);
+    p.log.warn(`AI coaching unavailable (${humanError(e)}).`);
     return false;
   }
 

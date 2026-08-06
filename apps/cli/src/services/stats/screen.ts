@@ -3,6 +3,7 @@ import pc from "picocolors";
 import Table from "cli-table3";
 import { fetchOverview, type Overview } from "./report.js";
 import { pct } from "../../core/ui/format.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 function bar(v: number, max = 100, width = 20): string {
   const n = Math.round((v / max) * width);
@@ -16,7 +17,7 @@ export async function showStats() {
   try {
     data = await fetchOverview();
   } catch (e) {
-    p.log.error(e instanceof Error ? e.message : String(e));
+    p.log.error(humanError(e));
     return;
   }
 

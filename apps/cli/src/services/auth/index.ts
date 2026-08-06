@@ -3,6 +3,7 @@ import pc from "picocolors";
 import { env } from "../../core/env.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { beginLogin, currentSession, logout } from "../../core/auth/session.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 export async function runLogin(): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" Sign in ")));
@@ -44,7 +45,7 @@ export async function runLogin(): Promise<void> {
 
     p.outro(`Signed in to ${env.CONVEX_URL}`);
   } catch (e) {
-    p.log.error(e instanceof Error ? e.message : String(e));
+    p.log.error(humanError(e));
     process.exitCode = 1;
   } finally {
     process.removeListener("SIGINT", onSigint);

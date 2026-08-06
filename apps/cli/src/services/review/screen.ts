@@ -8,6 +8,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../../core/ui/format.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
+import { humanError } from "../../core/ui/humanError.js";
 
 // quiz: guess each decision pick, then reveal. passive: reveal each pick in
 // sequence, no guessing. breakdown: resolve everything up front and print the
@@ -159,7 +160,7 @@ async function fetchVerdict(
     // throw is a refusal -- not signed in, not your draft, or out of reviews.
     // Recorded once and then honoured: asking the remaining sixteen picks only
     // buys sixteen more copies of the same answer.
-    refused = e instanceof Error ? e.message : String(e);
+    refused = humanError(e);
     p.log.warn(refused);
     return undefined;
   }
@@ -244,6 +245,6 @@ async function showFrame(
     spin.stop("");
     if (text) p.note(text, phase === "open" ? "Draft overview" : "Signal-reading recap");
   } catch (e) {
-    spin.stop(pc.yellow(`Frame unavailable (${e instanceof Error ? e.message : String(e)})`));
+    spin.stop(pc.yellow(`Frame unavailable (${humanError(e)})`));
   }
 }
