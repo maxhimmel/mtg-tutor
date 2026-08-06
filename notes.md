@@ -111,6 +111,14 @@ left empty rather than renumbering everything under it.
    and the panel's eyebrow says "Your call on the gap", so a `misread` badge
    under an A+ is not read as a second opinion on the card.
 
+7. I noticed the "your call on the gap" doesn't have name highlighting as seen here (Embermouth Sentinel wasn't highlighted) and it should - just like the coach does:
+
+```
+Your call on the gap
+misread
+The gap to Embermouth Sentinel is 0.5pp, against a ±0.9pp margin of error: the data cannot tell the two apart. Being certain was not available here — whichever you took, it was not the clear call you said it was.
+```
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -152,7 +160,7 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05.
      worse than its raw GIH WR implies, and right now nothing in scoring knows
      how fast a format is.
    - **Curve and land-count truth.** End-of-turn lands in play vs winning,
-     measured rather than assumed. This is now the *second* route to a number
+     measured rather than assumed. This is now the _second_ route to a number
      the deck builder wanted and could not get — see the `DECK` note in
      `core/config.ts` for why the game dataset cannot supply it either.
    - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
@@ -178,17 +186,17 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05.
    order).
    - Not too interested in this format. Low priority.
 
-7. **Re-serve your own misses.** `stats.overview` already computes
+6. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
 
-8. Let's constrain who can actually use our deployed app. This isn't ready for public exposure yet. I don't want randoms online wasting my AI tokens. I wanna only allow certain friends to use the app. Maybe it'd be cool to allow people to attempt to sign-up, but instead notify me for their approval?
+7. Let's constrain who can actually use our deployed app. This isn't ready for public exposure yet. I don't want randoms online wasting my AI tokens. I wanna only allow certain friends to use the app. Maybe it'd be cool to allow people to attempt to sign-up, but instead notify me for their approval?
    - Secondarily, is there an easy way for me to invite people to use the app?! Could I send them a link rather than need to ask for their email or something?
 
-9. I'd like to limit the usage per user.
+8. I'd like to limit the usage per user.
    - I'm the admin/developer so I should be exempt. In fact, maybe I should be able to manage roles or something that dictate usage limits. For instance a tester friend could have unlimited? But normal friends in the "beta release" (or w/e we're supposed to call this workflow) should be limited to 3 drafts and reviews a day or something.
 
-10. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
+9. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -544,7 +552,7 @@ The architecture, the data pipeline and the deploy story are all documented in
       `useSettings` beside `guiderails`.** No Convex read, no write, no migration.
     - **Which experience produced a pick is already recorded, per pick.** A row
       carrying a `defense` went through the challenge; one without it did not.
-      Nothing ever asks what mode a *draft* was in, which is exactly why
+      Nothing ever asks what mode a _draft_ was in, which is exactly why
       switching mid-draft costs nothing — there is no session-level claim to keep
       consistent.
 
