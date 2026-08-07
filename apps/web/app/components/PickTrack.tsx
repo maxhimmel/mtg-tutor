@@ -40,6 +40,20 @@ const TONE: Record<TickState, string> = {
   miss: "bg-warning/70",
 };
 
+// Height carries the same boundary the tone does, and it is the half that works
+// on the first pick of a draft. Tone alone says nothing until there is something
+// past to be brighter than: at P1P1 every tick is `ahead` and the fill has
+// nothing to fill, so the track looked identical to the one before it. A made
+// pick standing twice as tall as an unmade one is a silhouette, and a silhouette
+// is legible at a glance in a way that a tone step on a 2px line is not.
+const HEIGHT: Record<TickState, string> = {
+  ahead: "h-0.5",
+  past: "h-1",
+  current: "h-2",
+  hit: "h-1",
+  miss: "h-1",
+};
+
 // `ahead` is the one tone that depends on what the track IS, and the same
 // `onSelect` that decides picture-or-navigation decides this. On the board a
 // pick not yet made can recede to almost nothing, because that is what opens the
@@ -54,7 +68,7 @@ const AHEAD_NAVIGABLE = "bg-base-content/30";
 const bar = (state: TickState, navigable: boolean) =>
   `relative w-full rounded-full ${
     state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]
-  } ${state === "current" ? "h-1.5" : "h-0.5"}`;
+  } ${HEIGHT[state]}`;
 
 /**
  * @param groups One array per pack. The gaps between them are the pack breaks,
@@ -126,13 +140,19 @@ export function PickTrack({
 
         return (
           <div key={group} className="relative flex flex-1 items-end gap-[3px]">
-            {/* Which pack, stamped behind its own run of ticks -- the same thing
-                the set's mark does behind the pack on the board, at the same few
-                percent, for the same reason: it belongs to the page rather than
-                sitting on it. Absolutely positioned and centred on the rule, so
-                the numeral bleeds into the whitespace the heading already has
-                above and below and the track costs no more height than the
-                border it replaces.
+            {/* Which pack, stamped behind its own run of ticks. Absolutely
+                positioned and centred on the rule, so the numeral bleeds into
+                the whitespace the heading already has above and below and the
+                track costs no more height than the border it replaces.
+
+                It began at the same few percent the set's mark is drawn at
+                behind the pack, and was invisible. That opacity works there
+                because the mark is some seventeen hundred pixels tall -- area is
+                what lets a low-contrast thing read, and a 24px glyph has none of
+                it. At 9% this sat about six points of lightness above the page,
+                which is nothing you can see. 22% is roughly fifteen, which is a
+                ghost you can actually read, and the made ticks at 65% still draw
+                cleanly over the top of it.
 
                 Only where there is more than one group. A lone "1" names
                 nothing; it is the three of them together that turn the gaps
@@ -140,7 +160,12 @@ export function PickTrack({
             {groups.length > 1 && (
               <span
                 aria-hidden
-                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 select-none font-display text-2xl font-semibold leading-none tracking-tight text-base-content/[0.09]"
+                // Hung off the bottom edge rather than the middle, because the
+                // middle moves: a group's height is whatever its tallest tick
+                // is, so the pack holding the current pick is taller than the
+                // others and its numeral would sit a few pixels low. `items-end`
+                // means the bottom edge is the one line all three groups share.
+                className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 select-none font-display text-2xl font-semibold leading-none tracking-tight text-base-content/[0.22]"
               >
                 {group + 1}
               </span>
@@ -163,7 +188,7 @@ export function PickTrack({
                       something here, and hover only means "this is where you
                       would land". */}
                   <span
-                    className={`${bar(tick.state, true)} motion-safe:transition-[height] group-hover:h-1.5`}
+                    className={`${bar(tick.state, true)} motion-safe:transition-[height] group-hover:h-2`}
                   />
                 </button>
               ) : (
