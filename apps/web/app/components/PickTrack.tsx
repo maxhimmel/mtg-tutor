@@ -86,14 +86,18 @@ const SHUT_H = "1.25rem"; // 20px
 // at once -- width, height, fill, border -- because they are one object doing one
 // thing, not four properties being animated in sympathy.
 //
-// OPEN QUESTION, worth revisiting once this has been drafted with for real: a
-// pack break is also when the board sends fifteen cards across the screen (see
-// animate-pass / animate-keep in DraftBoard). Both fire on the same beat, and
-// the fold has only ever been judged on its own, in the lab, with no pack
-// travelling. If the two read as too much together, the fix is to shorten this
-// to around 300ms so the fold finishes underneath the fly-out rather than
-// competing with it -- not to remove it. Change the duration here and nowhere
-// else; the tick fade below is deliberately faster and should stay proportional.
+// 500ms was checked against the real thing rather than reasoned about, and it
+// stays. A pack break is also when the board sends fifteen cards across the
+// screen (see animate-pass / animate-keep in DraftBoard), so both fire on the
+// same beat -- which looked like one animation too many right up until it was
+// drafted with, and is not. The two do not compete: the fold is a small object
+// closing under the heading and the pack travels through the whole middle of the
+// page, so they are separate events that happen to rhyme rather than two things
+// asking for the same attention.
+//
+// If it is ever changed, change it here and nowhere else -- the tick fade below
+// derives from it, and the ticks have to be gone before the box is narrow enough
+// to smear them.
 const FOLD_MS = 500;
 const FOLD = `motion-safe:transition-[flex-grow,flex-basis,height,background-color,border-color] motion-safe:ease-[cubic-bezier(.22,1,.36,1)]`;
 
