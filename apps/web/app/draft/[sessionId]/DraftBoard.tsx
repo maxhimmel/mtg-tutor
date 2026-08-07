@@ -1136,6 +1136,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                       surface="coach"
                       title={skipped ? "Coach — skipped, this pick was forced" : "Coach"}
                       quote={coach || undefined}
+                      // Nothing to rate until the stream has said something.
+                      ready={Boolean(coach)}
                       anchor={{
                         sessionId: id,
                         pickIndex: lastView.pickIndex,

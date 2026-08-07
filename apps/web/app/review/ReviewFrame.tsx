@@ -71,15 +71,7 @@ export function ReviewFrame({
   if (text === null) return null;
 
   return (
-    // `group` so the rating in the aside reveals on hovering the panel rather
-    // than only on hovering itself, which is a two-pixel target nobody finds.
-    <Panel
-      title={TITLES[phase]}
-      className="group"
-      // No `quote`: reviewFrames stores this text and freezes it, so the owner's
-      // script reads the stored row rather than a copy taken here.
-      aside={text ? <AiRating surface="frame" anchor={{ sessionId, phase }} /> : undefined}
-    >
+    <Panel title={TITLES[phase]}>
       {text === undefined ? (
         <p className="flex items-center gap-2 text-sm text-base-content/60">
           <span className="loading loading-spinner loading-xs" />
@@ -91,6 +83,9 @@ export function ReviewFrame({
             <CardText text={advice.prose} cards={cards} />
           </p>
           <PrincipleBadges principles={advice.principles} />
+          {/* No `quote`: reviewFrames stores this text and freezes it, so the
+              owner's script reads the stored row rather than a copy taken here. */}
+          <AiRating surface="frame" anchor={{ sessionId, phase }} />
         </>
       )}
     </Panel>
