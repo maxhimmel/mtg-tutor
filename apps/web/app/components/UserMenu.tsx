@@ -1,12 +1,7 @@
 "use client";
 
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
-import { PICK_CEREMONIES, useSettings } from "../lib/useSettings";
 import { useDismissable } from "../lib/useDismissable";
-
-// 2 is "coach everything except the literally forced last card"; 9 stops at the
-// halfway point of a Play Booster pack.
-const COACH_THRESHOLDS = [2, 3, 5, 7, 9];
 
 // One hue per player, all cut at the same lightness and chroma as the theme's
 // accents (oklch 74% 0.105) so a signet always belongs to the chrome around it.
@@ -45,9 +40,18 @@ function Signet({ seed, className }: { seed: string; className?: string }) {
   return <img src={src} alt="" referrerPolicy="no-referrer" className={`block ${className ?? ""}`} />;
 }
 
+/**
+ * Who you are, and the way out. Nothing else.
+ *
+ * This used to also carry every setting the app has, which put the guiderails,
+ * the coach threshold and the pick ceremony two clicks away from the one screen
+ * any of them affects, with their state unreadable until you opened it. They now
+ * sit on the draft board as the terms of the table (see TableTerms), and the set
+ * picker keeps its own view toggle -- so every setting in the app is on the
+ * surface it changes, and this is an account menu again.
+ */
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
-  const { settings, update } = useSettings();
   const { open, setOpen, ref: menuRef } = useDismissable<HTMLDivElement>();
 
   if (loading) return <span className="text-base-content/60">…</span>;
@@ -76,7 +80,7 @@ export function UserMenu() {
         }`}
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={`Account and settings for ${label}`}
+        aria-label={`Account for ${label}`}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
       >
         <Signet seed={user.id} className="size-8" />
@@ -85,109 +89,16 @@ export function UserMenu() {
       {/* Mounted only while open, and deliberately not daisyUI's `dropdown`:
           that hides its content with `:not(:focus-within) { display: none }`,
           so a trigger that still holds focus keeps the panel in the layout
-          after it is "closed" -- an invisible 18rem box over the column below,
+          after it is "closed" -- an invisible 16rem box over the column below,
           swallowing hovers. Not daisyUI's `menu` either, whose child styling
           fights any row that is not a single link. */}
       {open && (
-        <div className="popup-surface absolute right-0 top-full z-50 mt-2 flex w-72 flex-col gap-1 p-2">
+        <div className="popup-surface absolute right-0 top-full z-50 mt-2 flex w-64 flex-col gap-1 p-2">
           {/* The trigger no longer says who you are, so this is the one place
               the account is named. */}
           <div className="flex items-center gap-3 px-2 py-1.5">
             <Signet seed={user.id} className="size-9 shrink-0" />
             <span className="truncate text-sm">{label}</span>
-          </div>
-
-          <div className="mb-1 border-t border-base-300" />
-
-          {/* First in the menu because it is the largest thing the app does
-              differently, and because this menu is in the masthead of the draft
-              board itself -- a player halfway through a pack who wants the other
-              flow reaches it here, without leaving the draft. */}
-          <div className="flex flex-col gap-1.5 px-2 py-1.5 text-sm">
-            <span>Making a pick</span>
-            <div
-              className="flex rounded-lg bg-base-300 p-0.5"
-              role="group"
-              aria-label="What happens between choosing a card and the pick landing"
-            >
-              {PICK_CEREMONIES.map(({ id, label }) => {
-                const selected = settings.pickCeremony === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className={`flex-1 cursor-pointer rounded-md py-1 text-xs transition-colors ${
-                      selected
-                        ? "bg-primary font-semibold text-primary-content"
-                        : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
-                    }`}
-                    aria-pressed={selected}
-                    onClick={() => update({ pickCeremony: id })}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            {/* The blurb describes the one that is on, not all of them. Two
-                descriptions side by side would be a comparison to read; this is
-                a statement about what the next pick will ask of you. */}
-            <span className="text-xs text-base-content/60">
-              {PICK_CEREMONIES.find((c) => c.id === settings.pickCeremony)?.blurb}
-            </span>
-            <span className="text-xs text-base-content/45">
-              Safe to change mid-draft — it applies to your next pick.
-            </span>
-          </div>
-
-          <label className="flex cursor-pointer items-start justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-base-300">
-            <span className="flex flex-col">
-              <span>Guiderails</span>
-              <span className="text-xs text-base-content/60">
-                Show a card&apos;s draft data when you hover it, while drafting
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              className="toggle toggle-primary toggle-sm"
-              checked={settings.guiderails}
-              onChange={(e) => update({ guiderails: e.target.checked })}
-              aria-label="Toggle guiderails (per-card draft data on hover)"
-            />
-          </label>
-
-          {/* Not a <select>: a segmented control keeps every option visible and
-            never leaves the page, so the menu cannot be dismissed by its own
-            control. */}
-          <div className="flex flex-col gap-1.5 px-2 py-1.5 text-sm">
-            <span>AI coach</span>
-            <span className="text-xs text-base-content/60">
-              Skips picks with fewer than {settings.coachMinPackCards} cards left
-            </span>
-            <div
-              className="flex rounded-lg bg-base-300 p-0.5"
-              role="group"
-              aria-label="Smallest pack the AI coach comments on"
-            >
-              {COACH_THRESHOLDS.map((n) => {
-                const selected = settings.coachMinPackCards === n;
-                return (
-                  <button
-                    key={n}
-                    type="button"
-                    className={`flex-1 cursor-pointer rounded-md py-1 text-xs tabular-nums transition-colors ${
-                      selected
-                        ? "bg-primary font-semibold text-primary-content"
-                        : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
-                    }`}
-                    aria-pressed={selected}
-                    onClick={() => update({ coachMinPackCards: n })}
-                  >
-                    {n}
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
           <div className="my-1 border-t border-base-300" />

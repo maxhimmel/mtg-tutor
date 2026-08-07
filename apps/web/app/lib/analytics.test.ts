@@ -51,7 +51,7 @@ describe("without a project token", () => {
       pickMade(pick);
       identify("user_01", "friend@example.com");
       signedOut();
-      settingChanged("pickCeremony", "passive");
+      settingChanged("pickCeremony", "passive", "board");
       feedbackOpened({ surface: "coach", source: "ai", route: "/draft/[sessionId]" });
       feedbackRefused({ surface: "coach", reason: "rate", message: "no" });
     }).not.toThrow();
@@ -72,11 +72,12 @@ describe("with a project token", () => {
 
   // Renaming one of these breaks a chart in PostHog that cannot be repaired
   // retroactively, so the names are asserted rather than left to a refactor.
-  it("names the settings event and flattens the pair into properties", () => {
-    settingChanged("pickCeremony", "passive");
+  it("names the settings event and flattens the triple into properties", () => {
+    settingChanged("pickCeremony", "passive", "board");
     expect(capture).toHaveBeenCalledWith("setting_changed", {
       key: "pickCeremony",
       value: "passive",
+      where: "board",
     });
   });
 

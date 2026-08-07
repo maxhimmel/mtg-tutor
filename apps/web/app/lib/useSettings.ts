@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import { COACH } from "@mtg-tutor/core";
+import type { SettingSurface } from "./analytics";
 
 export type SetView = "grid" | "list";
 
@@ -62,7 +63,10 @@ export const SETTINGS_KEY = "mtg-tutor:settings";
 
 export interface SettingsContextValue {
   settings: Settings;
-  update: (patch: Partial<Settings>) => void;
+  // `where` is required rather than defaulted so that a surface added later
+  // cannot report itself as whichever one happened to be the default -- see
+  // settingChanged for what the breakdown is for.
+  update: (patch: Partial<Settings>, where: SettingSurface) => void;
 }
 
 export const SettingsContext = createContext<SettingsContextValue | null>(null);

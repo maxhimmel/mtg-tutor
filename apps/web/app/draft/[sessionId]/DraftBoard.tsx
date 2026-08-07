@@ -42,6 +42,7 @@ import {
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
 import { PageHeading } from "../../components/PageHeading";
+import { TableTerms } from "./TableTerms";
 import { PickTrack, type Tick } from "../../components/PickTrack";
 import { CardText } from "../../components/CardText";
 import { CardFace, CardTile } from "../../components/CardTile";
@@ -872,20 +873,24 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         }
         title={state.setName}
         controls={
-          // Nothing once the draft is over: a full track says so, and Results
-          // below opens by saying it in words.
+          // Nothing once the draft is over: a full track says so, Results below
+          // opens by saying it in words, and terms that can no longer change
+          // anything are just three claims about a draft that is finished.
           !state.complete && (
-            // The drafter's own shorthand, which the app already writes this way
-            // in the missed-picks list and in replay errors. It is short enough
-            // to read without parsing because the track underneath is what
-            // actually carries the position; this only names it.
-            <span className="text-sm font-semibold tracking-[0.08em] tabular-nums text-base-content/70">
-              P{state.packNo}P{state.pickNo}
-              <span className="sr-only">
-                {" "}
-                — pack {state.packNo}, pick {state.pickNo}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <TableTerms />
+              {/* The drafter's own shorthand, which the app already writes this
+                  way in the missed-picks list and in replay errors. It is short
+                  enough to read without parsing because the track underneath is
+                  what actually carries the position; this only names it. */}
+              <span className="text-sm font-semibold tracking-[0.08em] tabular-nums text-base-content/70">
+                P{state.packNo}P{state.pickNo}
+                <span className="sr-only">
+                  {" "}
+                  — pack {state.packNo}, pick {state.pickNo}
+                </span>
               </span>
-            </span>
+            </div>
           )
         }
       >
