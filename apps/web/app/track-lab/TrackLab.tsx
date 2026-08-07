@@ -88,43 +88,97 @@ function WeightedLanes({ at, animate }: { at: number; animate: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. The accordion, closest to what you described. Packs you are not in draw as
-//    a card mark -- filled when spent, outline when untouched -- and the open
-//    one sits in a container that gives it an edge. This is the only variant
-//    that spends height the track does not currently have.
+// 4. The accordion. An open pack IS the card mark, unfolded -- one element, not
+//    a swap between two -- so the last pick of a pack folds it shut rather than
+//    replacing it with something else. That is what makes the collapse readable
+//    as the pack closing: the border, the fill and the width all travel, and the
+//    ticks fade out ahead of the fold so they never have to squash.
+//
+//    Ticks are borrowed from variant 6: 4px at 25% with 6px gaps, which reads as
+//    a row of objects where 2px at 10% reads as a hairline. Inside a bordered
+//    card that is the right register. Only the resizing is left behind.
 // ---------------------------------------------------------------------------
-function PackMark({ spent }: { spent: boolean }) {
+const CARD_W = "0.875rem"; // 14px, a card mark seen closed
+const OPEN_H = "1.75rem"; // 28px, tall enough to hold a tick row with air
+const SHUT_H = "1.25rem"; // 20px, a card's own proportion at that width
+
+const FOLD =
+  "motion-safe:transition-[flex-grow,flex-basis,height,background-color,border-color] motion-safe:duration-500 motion-safe:ease-[cubic-bezier(.22,1,.36,1)]";
+
+function AccordionPack({
+  index,
+  at,
+  open,
+  spent,
+}: {
+  index: number;
+  at: number;
+  open: boolean;
+  spent: boolean;
+}) {
   return (
-    <span
+    <div
       aria-hidden
-      className={`h-5 w-3.5 shrink-0 rounded-[3px] border ${
-        spent ? "border-base-content/45 bg-base-content/45" : "border-base-content/25"
+      style={{
+        flexGrow: open ? 1 : 0,
+        flexBasis: open ? 0 : CARD_W,
+        height: open ? OPEN_H : SHUT_H,
+      }}
+      className={`${FOLD} overflow-hidden rounded-[4px] border ${
+        open
+          ? "border-base-300 bg-base-200/60"
+          : spent
+            ? "border-base-content/45 bg-base-content/45"
+            : "border-base-content/25 bg-transparent"
       }`}
-    />
+    >
+      {/* Faster than the fold, so the row is gone before the box is narrow
+          enough to crush it. */}
+      <div
+        className={`flex h-full items-center gap-1.5 px-2.5 motion-safe:transition-opacity motion-safe:duration-150 ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        {Array.from({ length: PACK_SIZE }, (_, i) => {
+          const s = stateAt(index * PACK_SIZE + i, at);
+          return (
+            <span
+              key={i}
+              className={`flex-1 rounded-full ${
+                s === "current"
+                  ? "tick-lit h-2 bg-primary"
+                  : s === "past"
+                    ? "h-1 bg-base-content/65"
+                    : "h-1 bg-base-content/25"
+              }`}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
 function Accordion({ at }: { at: number }) {
+  // Past the last pick the draft is over, and there is no pack to be in: all
+  // three fold shut and fill, which is the finished draft saying so.
+  const done = at >= TOTAL;
   const here = packOf(at);
   return (
-    <div className="flex items-center gap-2.5" role="img" aria-label="Accordion">
-      {Array.from({ length: PACKS }, (_, p) =>
-        p === here ? (
-          <div
-            key={p}
-            className="flex flex-1 items-end gap-[3px] rounded-md border border-base-300 bg-base-200/60 px-2.5 py-2"
-          >
-            {Array.from({ length: PACK_SIZE }, (_, i) => {
-              const s = stateAt(p * PACK_SIZE + i, at);
-              return (
-                <span key={i} className={`flex-1 rounded-full ${TONE[s]} ${HEIGHT[s]}`} />
-              );
-            })}
-          </div>
-        ) : (
-          <PackMark key={p} spent={p < here} />
-        ),
-      )}
+    <div
+      className="flex items-center gap-2.5"
+      role="img"
+      aria-label={done ? "Draft complete" : `Pack ${here + 1} of ${PACKS}`}
+    >
+      {Array.from({ length: PACKS }, (_, p) => (
+        <AccordionPack
+          key={p}
+          index={p}
+          at={at}
+          open={!done && p === here}
+          spent={done || p < here}
+        />
+      ))}
     </div>
   );
 }
@@ -148,6 +202,20 @@ function CurrentPackOnly({ at }: { at: number }) {
         Pack {here + 1} of {PACKS}
       </span>
     </div>
+  );
+}
+
+// A pack seen closed, for variant 6's row of three. The accordion draws its own
+// (an open pack folds into one rather than being replaced by one), so this is
+// only the standalone case.
+function PackMark({ spent }: { spent: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`h-5 w-3.5 shrink-0 rounded-[4px] border ${
+        spent ? "border-base-content/45 bg-base-content/45" : "border-base-content/25"
+      }`}
+    />
   );
 }
 
@@ -191,7 +259,7 @@ const VARIANTS = [
   { name: "As shipped", note: "Uniform hairline, tone fill, halo on the current pick.", render: (at: number) => <AsShipped at={at} /> },
   { name: "Weighted lanes — animated", note: "Open lane takes 7/10 of the width. Lanes travel at the pack break.", render: (at: number) => <WeightedLanes at={at} animate /> },
   { name: "Weighted lanes — no animation", note: "Same at rest. Lanes snap instead of travelling.", render: (at: number) => <WeightedLanes at={at} animate={false} /> },
-  { name: "Accordion with card marks", note: "Your idea. Costs height the track does not currently spend.", render: (at: number) => <Accordion at={at} /> },
+  { name: "Accordion with card marks", note: "The open pack IS the card, unfolded — the last pick of a pack folds it shut. Press → from P1P14 or P3P14 to see it.", render: (at: number) => <Accordion at={at} /> },
   { name: "Only the pack you're in", note: "Fourteen ticks, no whole-draft shape except the counter.", render: (at: number) => <CurrentPackOnly at={at} /> },
   { name: "The pack empties", note: "Taken cards collapse out; the rest spread into the gap.", render: (at: number) => <PackEmpties at={at} /> },
 ];
@@ -203,7 +271,7 @@ export function TrackLab() {
   const [all, setAll] = useState(false);
 
   const step = useCallback((by: number) => {
-    setAt((prev) => (prev + by + TOTAL) % TOTAL);
+    setAt((prev) => (prev + by + TOTAL + 1) % (TOTAL + 1));
   }, []);
 
   useEffect(() => {
@@ -244,7 +312,7 @@ export function TrackLab() {
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 {!all && <TableTerms />}
                 <span className="text-sm font-semibold tracking-[0.08em] tabular-nums text-base-content/70">
-                  P{here + 1}P{pickNo}
+                  {at >= TOTAL ? "done" : `P${here + 1}P${pickNo}`}
                 </span>
               </div>
             }
@@ -284,14 +352,14 @@ export function TrackLab() {
           <input
             type="range"
             min={0}
-            max={TOTAL - 1}
+            max={TOTAL}
             value={at}
             onChange={(e) => setAt(Number(e.target.value))}
             className="range range-xs range-primary min-w-40 flex-1"
             aria-label="Pick"
           />
-          <span className="w-16 shrink-0 text-xs tabular-nums text-base-content/60">
-            {at + 1} / {TOTAL}
+          <span className="w-20 shrink-0 text-xs tabular-nums text-base-content/60">
+            {at >= TOTAL ? "complete" : `${at + 1} / ${TOTAL}`}
           </span>
         </span>
 
@@ -305,6 +373,9 @@ export function TrackLab() {
             onClick={() => setAt(PACK_SIZE - 1)}
           >
             to P1P14
+          </button>
+          <button type="button" className="btn btn-sm btn-outline" onClick={() => setAt(TOTAL - 1)}>
+            to P3P14
           </button>
           <label className="flex cursor-pointer items-center gap-2 text-xs">
             <input
