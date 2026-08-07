@@ -159,6 +159,90 @@ html {
   }
 }
 
+/* Where you are in the draft, lit. The third and smallest of the app's lit
+   things, and the one that had to stop being solved by size.
+
+   A tick is about 20px by 6px. That is far too little area for a colour to be
+   found at a glance among forty-four siblings, which is why a taller bar and a
+   brighter tone both failed to register: they made the mark bigger without
+   making it easier to find. A halo is area. It spreads the gold over ten pixels
+   in every direction without drawing anything new, so the rule stays the
+   hairline it was and the eye still lands on the right tick immediately.
+
+   No turning ring and no animation, unlike the other two. Those turn because
+   they mark a choice being held open -- a card lifted out of the pack, waiting
+   on you. This marks a position, which is not the same claim, and a rotating
+   gradient in the rule under a page heading would be the loudest thing on a
+   screen whose loudest thing should be the card art. */
+@utility tick-lit {
+  box-shadow: 0 0 0.7rem -0.05rem color-mix(in oklab, var(--color-primary) 85%, transparent);
+}
+
+/* The pick you have just arrived on, arriving.
+
+   A pick lands and the marker moves one tick along, going from a dim 4px bar to
+   a gold 8px one. It used to do that between two frames. Now the gold pours into
+   it end to end behind a warmer front, the bar swells past the size it is going
+   to end up at, and it settles.
+
+   THE SWELL COSTS NO LAYOUT. It is `scaleY`, not height -- a transform is
+   painted, never measured, so the tick can overshoot to nearly half again its
+   size without the card it sits in growing by a pixel or the heading under it
+   moving. That is the only reason an overshoot is affordable here at all.
+
+   The delay is the point of the delay: the pick lands, and a beat later the
+   marker catches up. Firing them together reads as one thing changing size;
+   separating them by 90ms reads as a consequence, which is what it is. Held at
+   the starting frame through the wait by `backwards`, or the tick would sit
+   finished for 90ms and then jump back to start.
+
+   The front is warning rather than more primary, the same pairing card-lit runs
+   through --lit-stops: gold's own warm end, so the leading edge reads as light
+   moving through the colour instead of a second colour arriving.
+
+   The geometry: the gradient is 250% of the tick's width so the window sees 40%
+   of it at a time, with gold solid to 42% and the dim tone from 58%. Both
+   ends of the travel stay pure, and the resting position is the gold end -- so a
+   tick that has arrived needs nothing held with `forwards`, and a reader with
+   reduced motion gets a solid gold tick with no animation at all. */
+@keyframes tick-arrive {
+  0% {
+    transform: scaleY(0.5);
+    background-position: 100% 0;
+    box-shadow: 0 0 0 -0.05rem color-mix(in oklab, var(--color-primary) 0%, transparent);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  58% {
+    transform: scaleY(1.45);
+    box-shadow: 0 0 1.15rem -0.05rem color-mix(in oklab, var(--color-primary) 95%, transparent);
+    animation-timing-function: cubic-bezier(0.32, 0, 0.24, 1);
+  }
+  100% {
+    transform: scaleY(1);
+    background-position: 0 0;
+    /* Lands exactly on tick-lit's resting halo, so nothing snaps at the end. */
+    box-shadow: 0 0 0.7rem -0.05rem color-mix(in oklab, var(--color-primary) 85%, transparent);
+  }
+}
+
+@utility tick-arrive {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-primary) 0 42%,
+    var(--color-warning) 48% 52%,
+    color-mix(in oklab, var(--color-base-content) 25%, transparent) 58% 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  animation: tick-arrive 460ms 90ms backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick-arrive {
+    animation: none;
+  }
+}
+
 /* Waiting for a pack's art, drawn as the set's own symbol rather than as a row
    of grey rectangles. It is huge, cropped by the edge of the drafting area, and
    held at a few percent of the text colour so it sits in the page rather than on

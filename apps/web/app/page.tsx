@@ -160,7 +160,7 @@ function SetPicker() {
           {sets != null && sets.length > 0 && (
             <SetViewToggle
               value={settings.setView}
-              onChange={(setView) => update({ setView })}
+              onChange={(setView) => update({ setView }, "sets")}
             />
           )}
         </div>

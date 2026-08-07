@@ -242,12 +242,34 @@ export function feedbackRefused(p: {
 }
 
 /**
+ * Where a setting was reached from.
+ *
+ * "menu" is the account dropdown, which no longer carries any setting at all --
+ * it stays in the union because events sent from it are already in PostHog and a
+ * breakdown that cannot name the old surface reads as though nothing was ever
+ * changed there.
+ */
+export type SettingSurface = "menu" | "board" | "sets";
+
+/**
  * A setting moved.
  *
  * Mostly here for one of them: everybody switching pickCeremony to "passive" is
  * the loudest signal this app could receive about its own central idea.
+ *
+ * `where` is what decides whether a setting should have been on the surface it
+ * changes rather than behind the avatar. The card stats, the coach threshold and
+ * the ceremony sat in the account menu and were changed by almost nobody, which is
+ * not the same fact as nobody wanting them changed -- a control nobody finds and
+ * a control nobody wants produce the same silence. Splitting the event by
+ * surface is the only way to tell those two apart, and it is what says whether
+ * the terms strip on the draft board earned its place.
  */
-export function settingChanged(key: string, value: string | number | boolean): void {
+export function settingChanged(
+  key: string,
+  value: string | number | boolean,
+  where: SettingSurface,
+): void {
   if (!on()) return;
-  posthog.capture("setting_changed", { key, value });
+  posthog.capture("setting_changed", { key, value, where });
 }

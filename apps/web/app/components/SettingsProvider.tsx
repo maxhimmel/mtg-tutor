@@ -5,9 +5,10 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
   SettingsContext,
+  storedSettings,
   type Settings,
 } from "../lib/useSettings";
-import { settingChanged } from "../lib/analytics";
+import { settingChanged, type SettingSurface } from "../lib/analytics";
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -18,23 +19,22 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
+      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...storedSettings(raw) });
     } catch {
       // Corrupt or unavailable storage: keep defaults.
     }
   }, []);
 
-  const update = useCallback((patch: Partial<Settings>) => {
-    // Captured here rather than at the three call sites in UserMenu, because
-    // this is the only door: every setting change in the app comes through it,
-    // including ones added later. Outside the updater below, not inside it --
-    // React may invoke a state updater twice, and an event fired from one would
-    // double-count.
+  const update = useCallback((patch: Partial<Settings>, where: SettingSurface) => {
+    // Captured here rather than at each control, because this is the only door:
+    // every setting change in the app comes through it, including ones added
+    // later. Outside the updater below, not inside it -- React may invoke a
+    // state updater twice, and an event fired from one would double-count.
     //
     // The mount effect above restores from localStorage with setSettings
     // directly, so a remembered preference is not reported as a fresh choice.
     for (const [key, value] of Object.entries(patch)) {
-      if (value !== undefined) settingChanged(key, value);
+      if (value !== undefined) settingChanged(key, value, where);
     }
 
     setSettings((prev) => {

@@ -4,14 +4,24 @@ import { useRef, type KeyboardEvent } from "react";
 
 // A draft, drawn as the thing it is: a run of picks in order.
 //
-// This is the app's one structural mark, and it is the same on the board and in
-// the review because it says the same thing in both -- here is the sequence,
-// here is where you are in it. On the board the ticks are only position; in the
-// review they also carry how each pick went, which is the review's whole
-// subject.
+// It has two forms, and which one you get follows from what the caller passes
+// rather than from a flag.
 //
-// It is drawn AS the page heading's rule rather than under one, so it costs no
-// height beyond the border it replaces.
+// A track of PACKS -- more than one group, and no onSelect -- draws as the packs
+// themselves. The one you are in is open, showing its picks; the other two are
+// folded shut into card marks, filled where the pack is spent. That is the draft
+// board, and it is the only caller shaped that way. Folding is what makes the
+// current pick findable: fourteen ticks across most of the width instead of
+// forty-two across all of it, so the pick you are on is one of fourteen.
+//
+// A single run -- one group -- draws as a rule that fills up to a point. Both
+// review surfaces are that: a flat sequence of decision picks with no pack
+// structure to fold, where the ticks also carry how each pick went, which is the
+// review's whole subject. Only there is the track ever navigation.
+//
+// The two conditions on folding are one idea, not two. A folded pack has no
+// reachable ticks in it, so a track that folds cannot also be a set of places to
+// go; a caller that wants both gets the flat form, which can be.
 export type TickState = "ahead" | "past" | "current" | "hit" | "miss";
 
 export interface Tick {
@@ -26,24 +36,150 @@ export interface Tick {
 // (see gradeColor in lib/format), and gold is where you are -- the same thing it
 // means on a card you are holding.
 const TONE: Record<TickState, string> = {
-  ahead: "bg-base-content/15",
-  past: "bg-base-content/40",
+  ahead: "bg-base-content/10",
+  past: "bg-base-content/65",
   current: "bg-primary",
   hit: "bg-success/60",
   miss: "bg-warning/70",
 };
 
-const bar = (state: TickState) =>
-  `w-full rounded-full ${TONE[state]} ${state === "current" ? "h-1.5" : "h-0.5"}`;
+// `ahead` is the one tone that depends on what the track IS, and the same
+// `onSelect` that decides picture-or-navigation decides this. A pick not yet
+// made can recede to almost nothing where the track is a picture. In the review
+// every tick is a place to go, and a target you cannot see is not one -- so
+// there, ahead stays aimable.
+const AHEAD_NAVIGABLE = "bg-base-content/30";
+
+const bar = (state: TickState, navigable: boolean) =>
+  `w-full rounded-full ${state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]} ${
+    state === "current" ? "tick-lit h-1.5" : "h-0.5"
+  }`;
 
 /**
  * @param groups One array per pack. The gaps between them are the pack breaks,
- * which is the only thing that says where one pack ended and the next began.
+ * which is the only thing that says where one pack ended and the next began --
+ * and with more than one group they are what folds.
  * @param label The whole track in one sentence, for anyone who cannot see it.
  * @param onSelect Makes every tick a place to go. Omitted, the track is a
  * picture: forty-two focus stops that lead nowhere is not navigation.
  */
 export function PickTrack({
+  groups,
+  label,
+  onSelect,
+}: {
+  groups: Tick[][];
+  label: string;
+  onSelect?: (index: number) => void;
+}) {
+  if (groups.length > 1 && !onSelect) {
+    return <PackAccordion groups={groups} label={label} />;
+  }
+  return <FlatTrack groups={groups} label={label} onSelect={onSelect} />;
+}
+
+const CARD_W = "0.875rem"; // 14px: a pack seen closed, at a card's proportion
+const OPEN_H = "1.75rem"; // 28px: a tick row with air around it
+const SHUT_H = "1.25rem"; // 20px
+
+// The fold. Everything that distinguishes an open pack from a closed one travels
+// at once -- width, height, fill, border -- because they are one object doing one
+// thing, not four properties being animated in sympathy.
+//
+// Change it here and nowhere else: the tick fade below derives from it, and the
+// ticks have to be gone before the box is narrow enough to smear them.
+const FOLD_MS = 500;
+const FOLD = `motion-safe:transition-[flex-grow,flex-basis,height,background-color,border-color] motion-safe:ease-[cubic-bezier(.22,1,.36,1)]`;
+
+function PackFold({
+  ticks,
+  open,
+  spent,
+}: {
+  ticks: Tick[];
+  open: boolean;
+  spent: boolean;
+}) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        flexGrow: open ? 1 : 0,
+        flexBasis: open ? 0 : CARD_W,
+        height: open ? OPEN_H : SHUT_H,
+        transitionDuration: `${FOLD_MS}ms`,
+      }}
+      className={`${FOLD} overflow-hidden rounded-[4px] border ${
+        open
+          ? "border-base-300 bg-base-200/60"
+          : spent
+            ? "border-base-content/45 bg-base-content/45"
+            : "border-base-content/25"
+      }`}
+    >
+      {/* Gone well before the box is narrow enough to crush it, which is the
+          only reason the fold can be this quick without the ticks smearing. */}
+      <div
+        className={`flex h-full items-center gap-1.5 px-2.5 motion-safe:transition-opacity ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+        style={{ transitionDuration: `${Math.round(FOLD_MS * 0.3)}ms` }}
+      >
+        {ticks.map((tick, i) => (
+          <span
+            key={i}
+            // No bg-primary alongside tick-arrive: it paints a background-IMAGE
+            // whose trailing end is translucent, and a gold fill underneath
+            // would show through the part that has not been poured into yet.
+            // Its resting position is the gold end of that gradient, so the
+            // colour is right with or without the animation having run.
+            //
+            // The class living on `current` rather than on "the one that just
+            // changed" is what makes it survive this screen. The coach streams
+            // its answer token by token straight after a pick, re-rendering this
+            // many times a second for seconds -- and across all of them the
+            // current tick's className is byte-identical, so React leaves the
+            // element alone and the animation plays out. A transient flag would
+            // be cleared by the second render and cut it dead.
+            className={`flex-1 rounded-full ${
+              tick.state === "current"
+                ? "tick-lit tick-arrive h-2"
+                : tick.state === "past"
+                  ? "h-1 bg-base-content/65"
+                  : "h-1 bg-base-content/25"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Chunkier than the flat track's ticks and further apart -- 4px at 25% with 6px
+// gaps, against 2px at 10%. Inside a bordered card that is the right register: a
+// row of objects rather than a hairline. The open pack has the width to afford
+// it, which is the whole reason for folding the other two.
+function PackAccordion({ groups, label }: { groups: Tick[][]; label: string }) {
+  // The pack holding the current pick is the open one. Nothing current means the
+  // draft is over and there is no pack to be in, so all of them fold and fill --
+  // which is a finished draft saying so.
+  const open = groups.findIndex((ticks) => ticks.some((t) => t.state === "current"));
+
+  return (
+    <div className="flex items-center gap-2.5" role="img" aria-label={label}>
+      {groups.map((ticks, i) => (
+        <PackFold
+          key={i}
+          ticks={ticks}
+          open={i === open}
+          spent={open === -1 || i < open}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FlatTrack({
   groups,
   label,
   onSelect,
@@ -124,11 +260,11 @@ export function PickTrack({
                       something here, and hover only means "this is where you
                       would land". */}
                   <span
-                    className={`${bar(tick.state)} motion-safe:transition-[height] group-hover:h-1.5`}
+                    className={`${bar(tick.state, true)} motion-safe:transition-[height] group-hover:h-1.5`}
                   />
                 </button>
               ) : (
-                <span key={i} className={bar(tick.state)} />
+                <span key={i} className={bar(tick.state, false)} />
               ),
             )}
           </div>

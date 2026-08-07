@@ -152,13 +152,13 @@ export const SCORING_GLOSSARY: GlossaryEntry[] = [
     ],
   },
   {
-    id: "guiderails",
-    label: "Guiderails",
-    name: "Guiderails",
-    short: "Whether a card's draft data is shown while you are still drafting.",
+    id: "drafting-blind",
+    label: "Drafting blind",
+    name: "Drafting with a card's stats hidden until the review",
+    short: "Whether a card's stats are shown while you are still drafting.",
     detail: [
-      "With guiderails on, hovering a card during a draft shows its data. With them off, you draft blind and see the numbers only in the review afterwards.",
-      "Off is the harder and more useful practice once you know the format; on is how you learn what the numbers mean in the first place.",
+      "With stats showing, hovering a card mid-draft gives you everything 17Lands knows about it. Drafting blind hides that: the card is just a card, and the numbers wait for the review.",
+      "Blind is the harder and more useful practice once you know the format; stats showing is how you learn what the numbers mean in the first place.",
     ],
   },
 ];

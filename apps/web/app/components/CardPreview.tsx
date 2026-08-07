@@ -33,8 +33,8 @@ const HoverPreviewContext = createContext<HoverPreviewValue | null>(null);
 // focus so the preview is reachable without a pointer.
 //
 // `showStats` is the caller's call because the answer differs by surface: during
-// a live draft it follows the guiderails setting, which is the whole of what
-// guiderails now controls. After the draft the numbers ARE the lesson, so review
+// a live draft it follows the showStats setting, which is the whole of what that
+// setting now controls. After the draft the numbers ARE the lesson, so review
 // and results pass true.
 export function useCardHover(card: Card | undefined, showStats = false) {
   const ctx = useContext(HoverPreviewContext);
