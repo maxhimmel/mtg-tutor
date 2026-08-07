@@ -26,19 +26,23 @@ import { routeOf, useFeedback, type FeedbackSurface } from "./Feedback";
  * most of them. The reason then patches that same row (see feedback.explain)
  * rather than making a second, so one reaction stays one note.
  *
- * WHERE THE CONTROL SITS
+ * WHERE THE CONTROL SITS, AND WHY IT MOVED
  *
- * In whatever header row the block already has, revealed on hover or focus,
- * rather than floating over the prose. The prose carries hoverable card names
- * (CardText) and principle badges with their own portal popups, so an overlay
- * across it would cover exactly the parts worth reading -- and would be arguing
- * with the card preview's z-50 layer while it did. Appearing when you engage
- * with the block is the part that matters; covering it never was.
+ * A strip under the answer, always drawn. It was a pair of thumbs up in the
+ * block's header, revealed on hover, and that was wrong twice.
  *
- * Two exports because the blocks are shaped differently. AiResponse brings its
- * own header row, for the coach and verdict blocks that already had an eyebrow
- * of their own. AiRating is the bare control, for a frame that is already a
- * titled Panel and has an `aside` slot waiting for it.
+ * Hover-revealed is invisible. A control nobody can see is a control nobody
+ * uses, and pointing at a paragraph to find out whether it can be rated is not
+ * something anybody does. The same mistake the feedback button made, one screen
+ * further in.
+ *
+ * And it asked before the answer had been read. The question only makes sense
+ * once somebody has the answer in hand, so it belongs where the reading ends
+ * rather than up in the chrome above it. That is also where the eye already is.
+ *
+ * Two exports, because the blocks are shaped differently. AiResponse brings its
+ * own eyebrow, for the coach and verdict blocks that already had one. AiRating
+ * is the strip alone, for a frame that is already a titled Panel.
  */
 
 type Anchor = NonNullable<Doc<"feedback">["anchor"]>;
@@ -56,9 +60,15 @@ interface Rated {
    * owner's script joins those rather than keeping a copy that could disagree.
    */
   quote?: string;
+  /**
+   * Whether there is an answer yet. False while the coach is still streaming --
+   * "was this useful?" under a spinner is asking about nothing, and a thumb
+   * pressed then would file a rating of the empty string.
+   */
+  ready?: boolean;
 }
 
-export function AiRating({ surface, anchor, quote }: Rated) {
+export function AiRating({ surface, anchor, quote, ready = true }: Rated) {
   const submit = useMutation(api.feedback.submit);
   const open = useFeedback();
   const pathname = usePathname() ?? "/";
@@ -67,10 +77,10 @@ export function AiRating({ surface, anchor, quote }: Rated) {
 
   const rate = async (sentiment: Sentiment) => {
     if (rated) return;
-    // Optimistic, because the control changing under the cursor IS the
-    // acknowledgement on this path -- a toast on top of a per-response button
-    // would be noise. Rolled back below if the write does not land, so it never
-    // claims something was recorded that was not.
+    // Optimistic, because the strip answering instantly IS the acknowledgement
+    // on this path -- a toast for a thumb would be noise. Rolled back below if
+    // the write does not land, so it never claims something was recorded that
+    // was not.
     setRated(sentiment);
     setFailed(false);
 
@@ -94,17 +104,28 @@ export function AiRating({ surface, anchor, quote }: Rated) {
     });
   };
 
-  if (rated) return <span className="text-xs text-base-content/60">Noted — thank you</span>;
-  if (failed) return <span className="text-xs text-warning">Did not send</span>;
+  if (!ready) return null;
 
   return (
-    // Quiet for a mouse until the block is engaged with, and always there for
-    // touch. Opacity rather than `hidden`, which would take it out of the tab
-    // order and off screen readers along with it.
-    <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">
-      <Thumb label="This helped" onClick={() => void rate("up")} />
-      <Thumb label="This missed" down onClick={() => void rate("down")} />
-    </span>
+    // Dashed, where the rule that opens the block is solid: one is a division
+    // between two things worth reading and this is a footer under one of them,
+    // and drawing them alike would give a short block two equal-weight lines.
+    <div className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-base-300 pt-2">
+      <span className={`text-xs ${failed ? "text-warning" : "text-base-content/50"}`}>
+        {rated
+          ? "Noted — thank you"
+          : failed
+            ? "That did not send. Try again?"
+            : "Was this useful?"}
+      </span>
+
+      {!rated && (
+        <span className="flex items-center gap-1">
+          <Thumb label="This helped" onClick={() => void rate("up")} />
+          <Thumb label="This missed" down onClick={() => void rate("down")} />
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -112,20 +133,19 @@ export function AiResponse({
   surface,
   anchor,
   quote,
+  ready,
   title,
   children,
 }: Rated & {
-  /** The block's existing eyebrow, moved in here so the control has a row to sit in. */
+  /** The block's existing eyebrow, kept here so the block owns its whole anatomy. */
   title: string;
   children: ReactNode;
 }) {
   return (
-    <div className="group border-t border-base-300 pt-3">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div className="eyebrow">{title}</div>
-        <AiRating surface={surface} anchor={anchor} quote={quote} />
-      </div>
+    <div className="border-t border-base-300 pt-3">
+      <div className="eyebrow mb-1.5">{title}</div>
       {children}
+      <AiRating surface={surface} anchor={anchor} quote={quote} ready={ready} />
     </div>
   );
 }
@@ -147,7 +167,7 @@ function Thumb({ label, down, onClick }: { label: string; down?: boolean; onClic
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        className={`h-3.5 w-3.5 ${down ? "rotate-180" : ""}`}
+        className={`size-4 ${down ? "rotate-180" : ""}`}
       >
         <path d="M7 10v12" />
         <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />

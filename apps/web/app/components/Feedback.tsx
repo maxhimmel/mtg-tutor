@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type ReactNode,
 } from "react";
 import { Authenticated, useMutation } from "convex/react";
@@ -103,13 +104,31 @@ export function useSuspendFeedback() {
   return ctx?.suspend ?? (() => {});
 }
 
-/** What each way in opens with. Specific questions, because "any thoughts?" gets none. */
-const KINDS: { label: string; glyph: string; prompt: string; surface: FeedbackSurface }[] = [
-  { label: "Something's off", glyph: "!", prompt: "What went wrong?", surface: "general" },
-  { label: "An idea", glyph: "+", prompt: "What should this do instead?", surface: "general" },
+/**
+ * What each way in opens with. Specific questions, because "any thoughts?" gets none.
+ *
+ * An icon AND the label, which is daisyUI's own combination of its two speed-dial
+ * examples. The icons replaced "!", "+" and "AI" -- three letters in three
+ * circles, which said nothing on their own and were doing no work the label was
+ * not already doing better. An icon is skimmable at a glance where the label is
+ * the thing that actually disambiguates, so they earn their place together.
+ */
+const KINDS: { label: string; Icon: ComponentType; prompt: string; surface: FeedbackSurface }[] = [
+  {
+    label: "Something's off",
+    Icon: AlertIcon,
+    prompt: "What went wrong?",
+    surface: "general",
+  },
+  {
+    label: "An idea",
+    Icon: BulbIcon,
+    prompt: "What should this do instead?",
+    surface: "general",
+  },
   {
     label: "The coaching",
-    glyph: "AI",
+    Icon: SparkIcon,
     prompt: "What is the coach getting wrong — or right?",
     surface: "coach",
   },
@@ -232,25 +251,30 @@ function FeedbackFab({
         <SpeechIcon />
       </div>
 
-      <button
-        type="button"
-        className="fab-close btn btn-circle btn-lg"
-        aria-label="Close"
-        onClick={collapse}
-      >
-        ✕
-      </button>
+      {/* fab-close on the wrapper rather than the button, which is daisyUI's own
+          labelled shape -- it gives the close the same label-then-circle anatomy
+          as the three actions instead of a bare X that has to be guessed at.
+          A real <button> inside it, though, where daisyUI uses a <span>: a span
+          is neither focusable nor keyboard-operable, and this one has to carry
+          the collapse handler. */}
+      <div className="fab-close">
+        <Label>Close</Label>
+        <button type="button" className="btn btn-lg btn-circle" aria-label="Close" onClick={collapse}>
+          <Glyph>
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </Glyph>
+        </button>
+      </div>
 
       {KINDS.map((kind) => (
         <div key={kind.label}>
-          {/* popup-surface, like every other thing in this app that floats over
-              the page. These labels sit above whatever the page is showing --
-              card art, a pack, a wall of prose -- and as bare text they were
-              unreadable against half of it. */}
-          <span className="popup-surface px-2 py-1 text-xs">{kind.label}</span>
+          <Label>{kind.label}</Label>
           <button
             type="button"
-            className="btn btn-circle"
+            className="btn btn-lg btn-circle"
+            // The label beside it is a sibling rather than an accessible name,
+            // so the button still states its own.
             aria-label={kind.label}
             onClick={() => {
               collapse();
@@ -265,7 +289,7 @@ function FeedbackFab({
               });
             }}
           >
-            {kind.glyph}
+            <kind.Icon />
           </button>
         </div>
       ))}
@@ -451,7 +475,27 @@ function Thanks({ message, onDone }: { message: string; onDone: () => void }) {
   );
 }
 
-function SpeechIcon() {
+/**
+ * One label beside one circle.
+ *
+ * popup-surface, like every other thing in this app that floats over the page.
+ * These sit above whatever is behind them -- card art, a pack, a wall of coach
+ * prose -- and as bare text, which is what daisyUI's example uses, they were
+ * unreadable against half of it.
+ */
+function Label({ children }: { children: ReactNode }) {
+  return <span className="popup-surface px-2 py-1 text-xs">{children}</span>;
+}
+
+/**
+ * The frame every icon in here is drawn in.
+ *
+ * Shared so the five of them cannot drift apart in weight or size, and matched
+ * to the stroke family the rest of the app's icons already use. aria-hidden
+ * throughout: each one sits inside a button that names itself, and a second
+ * accessible name on the art would only be read out twice.
+ */
+function Glyph({ children }: { children: ReactNode }) {
   return (
     <svg
       aria-hidden
@@ -461,9 +505,54 @@ function SpeechIcon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="h-6 w-6"
+      className="size-6"
     >
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      {children}
     </svg>
+  );
+}
+
+function SpeechIcon() {
+  return (
+    <Glyph>
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </Glyph>
+  );
+}
+
+/** Something's off. */
+function AlertIcon() {
+  return (
+    <Glyph>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </Glyph>
+  );
+}
+
+/** An idea. */
+function BulbIcon() {
+  return (
+    <Glyph>
+      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+    </Glyph>
+  );
+}
+
+/** The coaching. Sparkles rather than a second speech bubble, which is the
+    trigger's own icon -- and the one glyph everything else means by "the model
+    wrote this". */
+function SparkIcon() {
+  return (
+    <Glyph>
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+      <path d="M20 3v4" />
+      <path d="M22 5h-4" />
+      <path d="M4 17v2" />
+      <path d="M5 18H3" />
+    </Glyph>
   );
 }
