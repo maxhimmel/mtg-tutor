@@ -86,18 +86,8 @@ const SHUT_H = "1.25rem"; // 20px
 // at once -- width, height, fill, border -- because they are one object doing one
 // thing, not four properties being animated in sympathy.
 //
-// 500ms was checked against the real thing rather than reasoned about, and it
-// stays. A pack break is also when the board sends fifteen cards across the
-// screen (see animate-pass / animate-keep in DraftBoard), so both fire on the
-// same beat -- which looked like one animation too many right up until it was
-// drafted with, and is not. The two do not compete: the fold is a small object
-// closing under the heading and the pack travels through the whole middle of the
-// page, so they are separate events that happen to rhyme rather than two things
-// asking for the same attention.
-//
-// If it is ever changed, change it here and nowhere else -- the tick fade below
-// derives from it, and the ticks have to be gone before the box is narrow enough
-// to smear them.
+// Change it here and nowhere else: the tick fade below derives from it, and the
+// ticks have to be gone before the box is narrow enough to smear them.
 const FOLD_MS = 500;
 const FOLD = `motion-safe:transition-[flex-grow,flex-basis,height,background-color,border-color] motion-safe:ease-[cubic-bezier(.22,1,.36,1)]`;
 
@@ -110,6 +100,22 @@ function PackFold({
   open: boolean;
   spent: boolean;
 }) {
+  // The pick just made is the one before the pick you are on, and it is derived
+  // from position rather than signalled by the board on purpose.
+  //
+  // The obvious version -- a "this one just changed" flag, set when the pick
+  // lands and cleared after -- does not survive this screen. The coach streams
+  // its answer token by token immediately after a pick, so the board re-renders
+  // many times a second for several seconds, and any flag cleared on a later
+  // render takes the class off mid-pour and cuts the animation dead. Derived
+  // this way the className is byte-identical across every one of those renders,
+  // React leaves the element alone, and the pour finishes.
+  //
+  // -1 when the current pick is the first of the pack, which is correct: the
+  // pick before it belongs to the pack that just folded shut. -2 when nothing is
+  // current. Neither matches a tick, so neither pours.
+  const poured = ticks.findIndex((t) => t.state === "current") - 1;
+
   return (
     <div
       aria-hidden
@@ -138,12 +144,17 @@ function PackFold({
         {ticks.map((tick, i) => (
           <span
             key={i}
+            // tick-pour carries no bg-* of its own on purpose: it paints a
+            // background-IMAGE, and a translucent colour underneath would show
+            // through it and double the alpha at both ends of the travel.
             className={`flex-1 rounded-full ${
               tick.state === "current"
                 ? "tick-lit h-2 bg-primary"
-                : tick.state === "past"
-                  ? "h-1 bg-base-content/65"
-                  : "h-1 bg-base-content/25"
+                : i === poured
+                  ? "h-1 tick-pour"
+                  : tick.state === "past"
+                    ? "h-1 bg-base-content/65"
+                    : "h-1 bg-base-content/25"
             }`}
           />
         ))}
