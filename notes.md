@@ -218,6 +218,8 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 
 7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
+8. Holy FUCK awesome idea: be able to share drafts with friends! And/or send them a challenge to see what they would've drafted! And then ping the original member when their friend completed their draft. And show a diff between the 2 users!
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
