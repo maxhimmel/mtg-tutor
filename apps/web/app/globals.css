@@ -159,6 +159,25 @@ html {
   }
 }
 
+/* Where you are in the draft, lit. The third and smallest of the app's lit
+   things, and the one that had to stop being solved by size.
+
+   A tick is about 20px by 6px. That is far too little area for a colour to be
+   found at a glance among forty-four siblings, which is why a taller bar and a
+   brighter tone both failed to register: they made the mark bigger without
+   making it easier to find. A halo is area. It spreads the gold over ten pixels
+   in every direction without drawing anything new, so the rule stays the
+   hairline it was and the eye still lands on the right tick immediately.
+
+   No turning ring and no animation, unlike the other two. Those turn because
+   they mark a choice being held open -- a card lifted out of the pack, waiting
+   on you. This marks a position, which is not the same claim, and a rotating
+   gradient in the rule under a page heading would be the loudest thing on a
+   screen whose loudest thing should be the card art. */
+@utility tick-lit {
+  box-shadow: 0 0 0.7rem -0.05rem color-mix(in oklab, var(--color-primary) 85%, transparent);
+}
+
 /* Waiting for a pack's art, drawn as the set's own symbol rather than as a row
    of grey rectangles. It is huge, cropped by the edge of the drafting area, and
    held at a few percent of the text colour so it sits in the page rather than on
