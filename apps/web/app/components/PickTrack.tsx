@@ -25,16 +25,36 @@ export interface Tick {
 // been filled up to a point. The graded pair are the app's own grade colours
 // (see gradeColor in lib/format), and gold is where you are -- the same thing it
 // means on a card you are holding.
+//
+// The two plain states are pushed as far apart as they go, and the reason is
+// that finding yourself on this track used to mean hunting a 6px gold sliver
+// among forty-five hairlines. It is not the gold that should be doing that work:
+// with picks made bright and picks ahead almost invisible, the boundary between
+// them IS the position, readable across the whole width at a glance. The gold
+// then only has to say exactly which pick, over a distance of one tick.
 const TONE: Record<TickState, string> = {
-  ahead: "bg-base-content/15",
-  past: "bg-base-content/40",
+  ahead: "bg-base-content/10",
+  past: "bg-base-content/65",
   current: "bg-primary",
   hit: "bg-success/60",
   miss: "bg-warning/70",
 };
 
-const bar = (state: TickState) =>
-  `w-full rounded-full ${TONE[state]} ${state === "current" ? "h-1.5" : "h-0.5"}`;
+// `ahead` is the one tone that depends on what the track IS, and the same
+// `onSelect` that decides picture-or-navigation decides this. On the board a
+// pick not yet made can recede to almost nothing, because that is what opens the
+// boundary the position is read from. In the review every tick is a place to go,
+// and a target you cannot see is not one -- so there, ahead stays aimable.
+const AHEAD_NAVIGABLE = "bg-base-content/30";
+
+// `relative` only so the ticks paint over the pack numeral behind them. An
+// absolutely positioned element paints after every static sibling regardless of
+// DOM order, so without this the numeral would sit on top of the rule it is
+// meant to be stamped behind.
+const bar = (state: TickState, navigable: boolean) =>
+  `relative w-full rounded-full ${
+    state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]
+  } ${state === "current" ? "h-1.5" : "h-0.5"}`;
 
 /**
  * @param groups One array per pack. The gaps between them are the pack breaks,
@@ -105,7 +125,26 @@ export function PickTrack({
         offset += ticks.length;
 
         return (
-          <div key={group} className="flex flex-1 items-end gap-[3px]">
+          <div key={group} className="relative flex flex-1 items-end gap-[3px]">
+            {/* Which pack, stamped behind its own run of ticks -- the same thing
+                the set's mark does behind the pack on the board, at the same few
+                percent, for the same reason: it belongs to the page rather than
+                sitting on it. Absolutely positioned and centred on the rule, so
+                the numeral bleeds into the whitespace the heading already has
+                above and below and the track costs no more height than the
+                border it replaces.
+
+                Only where there is more than one group. A lone "1" names
+                nothing; it is the three of them together that turn the gaps
+                into pack breaks rather than an unexplained rhythm. */}
+            {groups.length > 1 && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 select-none font-display text-2xl font-semibold leading-none tracking-tight text-base-content/[0.09]"
+              >
+                {group + 1}
+              </span>
+            )}
             {ticks.map((tick, i) =>
               onSelect ? (
                 <button
@@ -124,11 +163,11 @@ export function PickTrack({
                       something here, and hover only means "this is where you
                       would land". */}
                   <span
-                    className={`${bar(tick.state)} motion-safe:transition-[height] group-hover:h-1.5`}
+                    className={`${bar(tick.state, true)} motion-safe:transition-[height] group-hover:h-1.5`}
                   />
                 </button>
               ) : (
-                <span key={i} className={bar(tick.state)} />
+                <span key={i} className={bar(tick.state, false)} />
               ),
             )}
           </div>
