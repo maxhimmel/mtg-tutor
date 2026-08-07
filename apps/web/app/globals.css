@@ -178,51 +178,67 @@ html {
   box-shadow: 0 0 0.7rem -0.05rem color-mix(in oklab, var(--color-primary) 85%, transparent);
 }
 
-/* A pick landing, poured into its tick.
+/* The pick you have just arrived on, arriving.
 
-   The tick that has just stopped being the one you are on does not simply change
-   colour. The made tone runs into it from the left behind a gold front that
-   arrives, passes through, and is gone -- and that front is the pick itself.
-   Gold means the card you are holding everywhere else in this app, so what is
-   being drawn is precisely the transition happening: the thing you were holding
-   becomes a thing you have taken, and what it leaves behind is the neutral tone
-   of a pick already made.
+   A pick lands and the marker moves one tick along, going from a dim 4px bar to
+   a gold 8px one. It used to do that between two frames. Now the gold pours into
+   it end to end behind a warmer front, the bar swells past the size it is going
+   to end up at, and it settles.
 
-   A wave edge was the ask and is not available here. A tick is four pixels tall,
-   which is no room for an edge to undulate in -- at that size the undulation is
-   smaller than the line. The two cues that DO read as liquid at four pixels are
-   a soft feathered front rather than a hard wipe, and an ease-out steep enough
-   that the fill arrives fast and settles instead of travelling at a constant
-   speed. Both are here; the wave is not, because it would be invisible.
+   THE SWELL COSTS NO LAYOUT. It is `scaleY`, not height -- a transform is
+   painted, never measured, so the tick can overshoot to nearly half again its
+   size without the card it sits in growing by a pixel or the heading under it
+   moving. That is the only reason an overshoot is affordable here at all.
 
-   The geometry: the gradient is 250% of the tick's width, so the window sees 40%
-   of it at a time. Made runs solid to 42% and unmade from 58%, which is what
-   keeps both ends of the travel pure -- at rest the window shows only made
-   colour, and at the start only unmade, with the gold living entirely in the
-   middle where it belongs.
+   The delay is the point of the delay: the pick lands, and a beat later the
+   marker catches up. Firing them together reads as one thing changing size;
+   separating them by 90ms reads as a consequence, which is what it is. Held at
+   the starting frame through the wait by `backwards`, or the tick would sit
+   finished for 90ms and then jump back to start.
 
-   It ends where background-position already rests, so nothing is held with
-   `forwards` and a tick that has finished pouring is just a full tick. */
-@keyframes tick-pour {
-  from {
+   The front is warning rather than more primary, the same pairing card-lit runs
+   through --lit-stops: gold's own warm end, so the leading edge reads as light
+   moving through the colour instead of a second colour arriving.
+
+   The geometry: the gradient is 250% of the tick's width so the window sees 40%
+   of it at a time, with gold solid to 42% and the dim tone from 58%. Both
+   ends of the travel stay pure, and the resting position is the gold end -- so a
+   tick that has arrived needs nothing held with `forwards`, and a reader with
+   reduced motion gets a solid gold tick with no animation at all. */
+@keyframes tick-arrive {
+  0% {
+    transform: scaleY(0.5);
     background-position: 100% 0;
+    box-shadow: 0 0 0 -0.05rem color-mix(in oklab, var(--color-primary) 0%, transparent);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  58% {
+    transform: scaleY(1.45);
+    box-shadow: 0 0 1.15rem -0.05rem color-mix(in oklab, var(--color-primary) 95%, transparent);
+    animation-timing-function: cubic-bezier(0.32, 0, 0.24, 1);
+  }
+  100% {
+    transform: scaleY(1);
+    background-position: 0 0;
+    /* Lands exactly on tick-lit's resting halo, so nothing snaps at the end. */
+    box-shadow: 0 0 0.7rem -0.05rem color-mix(in oklab, var(--color-primary) 85%, transparent);
   }
 }
 
-@utility tick-pour {
+@utility tick-arrive {
   background-image: linear-gradient(
     90deg,
-    color-mix(in oklab, var(--color-base-content) 65%, transparent) 0 42%,
-    color-mix(in oklab, var(--color-primary) 90%, transparent) 48% 52%,
+    var(--color-primary) 0 42%,
+    var(--color-warning) 48% 52%,
     color-mix(in oklab, var(--color-base-content) 25%, transparent) 58% 100%
   );
   background-size: 250% 100%;
   background-repeat: no-repeat;
-  animation: tick-pour 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: tick-arrive 460ms 90ms backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tick-pour {
+  .tick-arrive {
     animation: none;
   }
 }

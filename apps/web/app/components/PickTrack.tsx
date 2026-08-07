@@ -100,22 +100,6 @@ function PackFold({
   open: boolean;
   spent: boolean;
 }) {
-  // The pick just made is the one before the pick you are on, and it is derived
-  // from position rather than signalled by the board on purpose.
-  //
-  // The obvious version -- a "this one just changed" flag, set when the pick
-  // lands and cleared after -- does not survive this screen. The coach streams
-  // its answer token by token immediately after a pick, so the board re-renders
-  // many times a second for several seconds, and any flag cleared on a later
-  // render takes the class off mid-pour and cuts the animation dead. Derived
-  // this way the className is byte-identical across every one of those renders,
-  // React leaves the element alone, and the pour finishes.
-  //
-  // -1 when the current pick is the first of the pack, which is correct: the
-  // pick before it belongs to the pack that just folded shut. -2 when nothing is
-  // current. Neither matches a tick, so neither pours.
-  const poured = ticks.findIndex((t) => t.state === "current") - 1;
-
   return (
     <div
       aria-hidden
@@ -144,17 +128,25 @@ function PackFold({
         {ticks.map((tick, i) => (
           <span
             key={i}
-            // tick-pour carries no bg-* of its own on purpose: it paints a
-            // background-IMAGE, and a translucent colour underneath would show
-            // through it and double the alpha at both ends of the travel.
+            // No bg-primary alongside tick-arrive: it paints a background-IMAGE
+            // whose trailing end is translucent, and a gold fill underneath
+            // would show through the part that has not been poured into yet.
+            // Its resting position is the gold end of that gradient, so the
+            // colour is right with or without the animation having run.
+            //
+            // The class living on `current` rather than on "the one that just
+            // changed" is what makes it survive this screen. The coach streams
+            // its answer token by token straight after a pick, re-rendering this
+            // many times a second for seconds -- and across all of them the
+            // current tick's className is byte-identical, so React leaves the
+            // element alone and the animation plays out. A transient flag would
+            // be cleared by the second render and cut it dead.
             className={`flex-1 rounded-full ${
               tick.state === "current"
-                ? "tick-lit h-2 bg-primary"
-                : i === poured
-                  ? "h-1 tick-pour"
-                  : tick.state === "past"
-                    ? "h-1 bg-base-content/65"
-                    : "h-1 bg-base-content/25"
+                ? "tick-lit tick-arrive h-2"
+                : tick.state === "past"
+                  ? "h-1 bg-base-content/65"
+                  : "h-1 bg-base-content/25"
             }`}
           />
         ))}
