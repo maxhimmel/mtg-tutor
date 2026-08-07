@@ -119,6 +119,31 @@ misread
 The gap to Embermouth Sentinel is 0.5pp, against a ±0.9pp margin of error: the data cannot tell the two apart. Being certain was not available here — whichever you took, it was not the clear call you said it was.
 ```
 
+8. This coaching feels so offbase to me:
+
+```
+Last pick
+A
+90/100
+You took
+Stickytongue Sentinel
+Graded against
+−1.4pp ± 0.7pp
+Mudflat Village
+That gap is larger than the margin of error on the two win rates.
+
+Your call on the gap
+misread
+Mudflat Village was worth 1.4pp more to this deck, against a ±0.7pp margin of error. You called it close, and the data separates them — this one was gettable.
+
+Coach
+Stickytongue Sentinel is a solid 3‑mana 3/3 with reach and a bounce effect, but Mudflat Village’s mana acceleration, creature‑only mana restriction, and graveyard recursion give it a higher deck impact (+1.4 pp versus the +0.3 pp from Sentinel’s synergy) and the margin of error shows the advantage is statistically meaningful, so the “close call” claim is inaccurate and you should have taken Mudflat Village instead. Your reasoning that “exactly what my archetype wants” is off‑base: the archetype you’re building (a creature‑heavy green/blue midrange) benefits more from the extra early mana and the ability to replay cheap creatures than from Sentinel’s bounce effect, which rarely creates a decisive advantage.
+```
+
+I could understand the misread based purely off stats - sure. But This happened at P2P1. I had 9 cards in my main deck that were all blue and green.
+
+Please, take my complaint with a grain of salt because I'm not an MTG expert and I want the coaching, but still - this smells funky to me.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -191,7 +216,7 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
 
-9. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
+7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 

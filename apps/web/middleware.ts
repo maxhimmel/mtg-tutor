@@ -18,6 +18,11 @@ export default authkitMiddleware({
       "/sign-in",
       "/sign-up",
       "/callback",
+      // Scratch surface, dev only -- the route itself 404s in production. Listed
+      // here because the alternative failure is the silent one this comment
+      // warns about: it would 307 to WorkOS and look like the page was broken.
+      // Goes when the pick track is settled.
+      "/track-lab",
     ],
   },
 });
