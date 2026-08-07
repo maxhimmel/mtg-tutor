@@ -882,8 +882,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               {/* The drafter's own shorthand, which the app already writes this
                   way in the missed-picks list and in replay errors. It is short
                   enough to read without parsing because the track underneath is
-                  what actually carries the position; this only names it. */}
-              <span className="text-sm font-semibold tracking-[0.08em] tabular-nums text-base-content/70">
+                  what actually carries the position; this only names it.
+
+                  Width is reserved for the longest form it can ever take, and
+                  the text is pulled to the right inside it, because this label
+                  is the last thing in a row anchored to the heading's right
+                  edge -- so when pick 9 becomes pick 10 the extra character
+                  makes the whole group wider and the growth comes out of the
+                  left, shoving the terms bar along. tabular-nums already holds
+                  each digit to one width; it has nothing to say about there
+                  being one more of them.
+
+                  6ch, in digit widths rather than pixels, so it survives a
+                  change of type size. Packs run to 14 or 15 cards, so "P3P15"
+                  is the widest this gets -- five characters, two of them a P,
+                  which with the tracking lands a little under six. The slack
+                  sits on the left, against a gap that is already there. */}
+              <span className="min-w-[6ch] text-right text-sm font-semibold tracking-[0.08em] tabular-nums text-base-content/70">
                 P{state.packNo}P{state.pickNo}
                 <span className="sr-only">
                   {" "}
