@@ -70,7 +70,7 @@ export function CardTile({
   // about before you take it. What a click then means is the caller's business:
   // the tile only reports that it was clicked.
   selected?: boolean;
-  // Overrides the guiderails setting when given. The review quiz passes false:
+  // Overrides the showStats setting when given. The review quiz passes false:
   // the hover panel leads with the card's win rate, which is the answer to the
   // question the quiz is asking.
   showStats?: boolean;
@@ -93,11 +93,11 @@ export function CardTile({
   dragging?: boolean;
 }) {
   const { settings } = useSettings();
-  // Guiderails now show up only on hover. The tile used to also carry a win-rate
-  // badge in its corner, which the stats panel makes redundant -- and the badge
-  // was the worse of the two, being a bare number sitting on the card art with
-  // nothing to say what it measured.
-  const hover = useCardHover(card, showStats ?? settings.guiderails);
+  // Stats show up only on hover. The tile used to also carry a win-rate badge in
+  // its corner, which the stats panel makes redundant -- and the badge was the
+  // worse of the two, being a bare number sitting on the card art with nothing
+  // to say what it measured.
+  const hover = useCardHover(card, showStats ?? settings.showStats);
   const hidePreview = useHidePreview();
 
   // A card being carried is selected -- it is the one under consideration -- but

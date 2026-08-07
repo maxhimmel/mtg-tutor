@@ -258,8 +258,8 @@ export type SettingSurface = "menu" | "board" | "sets";
  * the loudest signal this app could receive about its own central idea.
  *
  * `where` is what decides whether a setting should have been on the surface it
- * changes rather than behind the avatar. Guiderails, the coach threshold and the
- * ceremony sat in the account menu and were changed by almost nobody, which is
+ * changes rather than behind the avatar. The card stats, the coach threshold and
+ * the ceremony sat in the account menu and were changed by almost nobody, which is
  * not the same fact as nobody wanting them changed -- a control nobody finds and
  * a control nobody wants produce the same silence. Splitting the event by
  * surface is the only way to tell those two apart, and it is what says whether

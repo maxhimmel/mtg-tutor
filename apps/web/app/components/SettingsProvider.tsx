@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   SETTINGS_KEY,
   SettingsContext,
+  storedSettings,
   type Settings,
 } from "../lib/useSettings";
 import { settingChanged, type SettingSurface } from "../lib/analytics";
@@ -18,7 +19,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) });
+      if (raw) setSettings({ ...DEFAULT_SETTINGS, ...storedSettings(raw) });
     } catch {
       // Corrupt or unavailable storage: keep defaults.
     }

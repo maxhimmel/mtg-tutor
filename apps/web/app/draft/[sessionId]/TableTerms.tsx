@@ -14,8 +14,8 @@ const COACH_THRESHOLDS = [2, 3, 5, 7, 9];
  * They are not app settings -- none of them does anything anywhere except on
  * this screen, and two of them only matter in the second between choosing a card
  * and the pick landing. And behind a menu their state is unreadable: whether the
- * numbers are face-up and whether the coach is going to speak are things a
- * player needs to know while looking at a pack, not things to go and check.
+ * stats are showing and whether the coach is going to speak are things a player
+ * needs to know while looking at a pack, not things to go and check.
  *
  * So they are stated the way a table agrees its rules before it sits down: one
  * quiet line of what is true, where each term is the control that changes it.
@@ -46,20 +46,26 @@ export function TableTerms() {
 
       <Dot />
 
+      {/* The two states are named asymmetrically on purpose. They are not one
+          switch's on and off -- one is the app showing you something, the other
+          is you choosing to work without it, which is the harder practice and
+          deserves to be called by its own name rather than by the absence of the
+          first. What a click does is in the accessible name, where a flip
+          control's action belongs anyway. */}
       <Term
         title={
-          settings.guiderails
-            ? "A card's draft data shows when you hover it — click to draft blind"
-            : "Cards show nothing but their own text — click to show draft data on hover"
+          settings.showStats
+            ? "Hovering a card shows what 17Lands knows about it — click to draft blind"
+            : "A card is just a card; the numbers wait for the review — click to show stats"
         }
         label={
-          settings.guiderails
-            ? "Guiderails on. Hide draft data on hover and draft blind."
-            : "Guiderails off. Show a card's draft data when you hover it."
+          settings.showStats
+            ? "Stats showing. Hide them and draft blind."
+            : "Drafting blind. Show a card's stats when you hover it."
         }
-        onClick={() => update({ guiderails: !settings.guiderails }, "board")}
+        onClick={() => update({ showStats: !settings.showStats }, "board")}
       >
-        Guiderails {settings.guiderails ? "on" : "off"}
+        {settings.showStats ? "Stats showing" : "Drafting blind"}
       </Term>
 
       <Dot />

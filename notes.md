@@ -172,8 +172,8 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
    files, so adding replay is a new derivation pass, not new infrastructure.
 
 3. What about a button on the side panel or something for the user to click to
-   get a hint/make a suggestion/pick for them? (Guiderails is the always-on
-   version — a passive win-rate badge. This is the on-demand, ask-for-it one.)
+   get a hint/make a suggestion/pick for them? (Stats-on-hover is the always-on
+   version — a passive win-rate readout. This is the on-demand, ask-for-it one.)
 
 4. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
@@ -544,7 +544,7 @@ The architecture, the data pipeline and the deploy story are all documented in
     for the database's sake — was right about what it was aimed at and does not
     apply, for two reasons worth not rediscovering:
     - **The preference is `settings.pickCeremony`, in the localStorage-backed
-      `useSettings` beside `guiderails`.** No Convex read, no write, no migration.
+      `useSettings` beside `showStats`.** No Convex read, no write, no migration.
     - **Which experience produced a pick is already recorded, per pick.** A row
       carrying a `defense` went through the challenge; one without it did not.
       Nothing ever asks what mode a _draft_ was in, which is exactly why

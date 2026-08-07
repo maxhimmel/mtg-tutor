@@ -32,10 +32,12 @@ export const PICK_CEREMONIES: readonly { id: PickCeremony; label: string; blurb:
 ];
 
 export interface Settings {
-  // When on, coaching hints are shown -- the per-card win-rate badge. Off is
-  // "instinct mode": the badge is hidden so the card's printed power/toughness
-  // is readable and you draft on your own read.
-  guiderails: boolean;
+  // Whether hovering a card mid-draft shows what 17Lands knows about it. Off is
+  // drafting blind: the card is just a card, and the numbers wait for the
+  // review. Named for the prop it feeds -- CardTile and useCardHover both take
+  // `showStats`, and a setting whose name is the name of the thing it sets is
+  // one indirection fewer to hold.
+  showStats: boolean;
   // Smallest pack the AI coach will comment on. Below it the pick is forced and
   // the deterministic explanation is shown instead, spending no tokens.
   coachMinPackCards: number;
@@ -50,7 +52,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  guiderails: true,
+  showStats: true,
   coachMinPackCards: COACH.minPackCards,
   // The challenge, because it is the one with no evidence behind it yet. A mode
   // nobody is put in teaches nobody anything, and which of the two teaches
@@ -60,6 +62,28 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const SETTINGS_KEY = "mtg-tutor:settings";
+
+/**
+ * What localStorage is holding, brought up to the current shape.
+ *
+ * `showStats` was called `guiderails` until August 2026 -- a word from an early
+ * session that the app then had to teach, in its own glossary entry, to explain
+ * what amounted to a checkbox. Renaming the field alone would read the old key
+ * as absent and quietly hand the numbers back to everyone who had turned them
+ * off, which is precisely the group who chose deliberately.
+ *
+ * The old key wins only where the new one is missing, so this cannot undo a
+ * choice made since the rename. Safe to delete once nobody is carrying a
+ * settings blob written before then; until it goes, it costs one read on mount.
+ */
+export function storedSettings(raw: string): Partial<Settings> {
+  const { guiderails, ...rest } = JSON.parse(raw) as Partial<Settings> & {
+    guiderails?: boolean;
+  };
+  return typeof guiderails === "boolean" && rest.showStats === undefined
+    ? { ...rest, showStats: guiderails }
+    : rest;
+}
 
 export interface SettingsContextValue {
   settings: Settings;

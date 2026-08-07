@@ -43,7 +43,7 @@ function Signet({ seed, className }: { seed: string; className?: string }) {
 /**
  * Who you are, and the way out. Nothing else.
  *
- * This used to also carry every setting the app has, which put the guiderails,
+ * This used to also carry every setting the app has, which put the card stats,
  * the coach threshold and the pick ceremony two clicks away from the one screen
  * any of them affects, with their state unreadable until you opened it. They now
  * sit on the draft board as the terms of the table (see TableTerms), and the set
