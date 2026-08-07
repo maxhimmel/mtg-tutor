@@ -4,14 +4,24 @@ import { useRef, type KeyboardEvent } from "react";
 
 // A draft, drawn as the thing it is: a run of picks in order.
 //
-// This is the app's one structural mark, and it is the same on the board and in
-// the review because it says the same thing in both -- here is the sequence,
-// here is where you are in it. On the board the ticks are only position; in the
-// review they also carry how each pick went, which is the review's whole
-// subject.
+// It has two forms, and which one you get follows from what the caller passes
+// rather than from a flag.
 //
-// It is drawn AS the page heading's rule rather than under one, so it costs no
-// height beyond the border it replaces.
+// A track of PACKS -- more than one group, and no onSelect -- draws as the packs
+// themselves. The one you are in is open, showing its picks; the other two are
+// folded shut into card marks, filled where the pack is spent. That is the draft
+// board, and it is the only caller shaped that way. Folding is what makes the
+// current pick findable: fourteen ticks across most of the width instead of
+// forty-two across all of it, so the pick you are on is one of fourteen.
+//
+// A single run -- one group -- draws as a rule that fills up to a point. Both
+// review surfaces are that: a flat sequence of decision picks with no pack
+// structure to fold, where the ticks also carry how each pick went, which is the
+// review's whole subject. Only there is the track ever navigation.
+//
+// The two conditions on folding are one idea, not two. A folded pack has no
+// reachable ticks in it, so a track that folds cannot also be a set of places to
+// go; a caller that wants both gets the flat form, which can be.
 export type TickState = "ahead" | "past" | "current" | "hit" | "miss";
 
 export interface Tick {
@@ -25,13 +35,6 @@ export interface Tick {
 // been filled up to a point. The graded pair are the app's own grade colours
 // (see gradeColor in lib/format), and gold is where you are -- the same thing it
 // means on a card you are holding.
-//
-// The two plain states are pushed as far apart as they go, and the reason is
-// that finding yourself on this track used to mean hunting a 6px gold sliver
-// among forty-five hairlines. It is not the gold that should be doing that work:
-// with picks made bright and picks ahead almost invisible, the boundary between
-// them IS the position, readable across the whole width at a glance. The gold
-// then only has to say exactly which pick, over a distance of one tick.
 const TONE: Record<TickState, string> = {
   ahead: "bg-base-content/10",
   past: "bg-base-content/65",
@@ -41,10 +44,10 @@ const TONE: Record<TickState, string> = {
 };
 
 // `ahead` is the one tone that depends on what the track IS, and the same
-// `onSelect` that decides picture-or-navigation decides this. On the board a
-// pick not yet made can recede to almost nothing, because that is what opens the
-// boundary the position is read from. In the review every tick is a place to go,
-// and a target you cannot see is not one -- so there, ahead stays aimable.
+// `onSelect` that decides picture-or-navigation decides this. A pick not yet
+// made can recede to almost nothing where the track is a picture. In the review
+// every tick is a place to go, and a target you cannot see is not one -- so
+// there, ahead stays aimable.
 const AHEAD_NAVIGABLE = "bg-base-content/30";
 
 const bar = (state: TickState, navigable: boolean) =>
@@ -54,12 +57,122 @@ const bar = (state: TickState, navigable: boolean) =>
 
 /**
  * @param groups One array per pack. The gaps between them are the pack breaks,
- * which is the only thing that says where one pack ended and the next began.
+ * which is the only thing that says where one pack ended and the next began --
+ * and with more than one group they are what folds.
  * @param label The whole track in one sentence, for anyone who cannot see it.
  * @param onSelect Makes every tick a place to go. Omitted, the track is a
  * picture: forty-two focus stops that lead nowhere is not navigation.
  */
 export function PickTrack({
+  groups,
+  label,
+  onSelect,
+}: {
+  groups: Tick[][];
+  label: string;
+  onSelect?: (index: number) => void;
+}) {
+  if (groups.length > 1 && !onSelect) {
+    return <PackAccordion groups={groups} label={label} />;
+  }
+  return <FlatTrack groups={groups} label={label} onSelect={onSelect} />;
+}
+
+const CARD_W = "0.875rem"; // 14px: a pack seen closed, at a card's proportion
+const OPEN_H = "1.75rem"; // 28px: a tick row with air around it
+const SHUT_H = "1.25rem"; // 20px
+
+// The fold. Everything that distinguishes an open pack from a closed one travels
+// at once -- width, height, fill, border -- because they are one object doing one
+// thing, not four properties being animated in sympathy.
+//
+// OPEN QUESTION, worth revisiting once this has been drafted with for real: a
+// pack break is also when the board sends fifteen cards across the screen (see
+// animate-pass / animate-keep in DraftBoard). Both fire on the same beat, and
+// the fold has only ever been judged on its own, in the lab, with no pack
+// travelling. If the two read as too much together, the fix is to shorten this
+// to around 300ms so the fold finishes underneath the fly-out rather than
+// competing with it -- not to remove it. Change the duration here and nowhere
+// else; the tick fade below is deliberately faster and should stay proportional.
+const FOLD_MS = 500;
+const FOLD = `motion-safe:transition-[flex-grow,flex-basis,height,background-color,border-color] motion-safe:ease-[cubic-bezier(.22,1,.36,1)]`;
+
+function PackFold({
+  ticks,
+  open,
+  spent,
+}: {
+  ticks: Tick[];
+  open: boolean;
+  spent: boolean;
+}) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        flexGrow: open ? 1 : 0,
+        flexBasis: open ? 0 : CARD_W,
+        height: open ? OPEN_H : SHUT_H,
+        transitionDuration: `${FOLD_MS}ms`,
+      }}
+      className={`${FOLD} overflow-hidden rounded-[4px] border ${
+        open
+          ? "border-base-300 bg-base-200/60"
+          : spent
+            ? "border-base-content/45 bg-base-content/45"
+            : "border-base-content/25"
+      }`}
+    >
+      {/* Gone well before the box is narrow enough to crush it, which is the
+          only reason the fold can be this quick without the ticks smearing. */}
+      <div
+        className={`flex h-full items-center gap-1.5 px-2.5 motion-safe:transition-opacity ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+        style={{ transitionDuration: `${Math.round(FOLD_MS * 0.3)}ms` }}
+      >
+        {ticks.map((tick, i) => (
+          <span
+            key={i}
+            className={`flex-1 rounded-full ${
+              tick.state === "current"
+                ? "tick-lit h-2 bg-primary"
+                : tick.state === "past"
+                  ? "h-1 bg-base-content/65"
+                  : "h-1 bg-base-content/25"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Chunkier than the flat track's ticks and further apart -- 4px at 25% with 6px
+// gaps, against 2px at 10%. Inside a bordered card that is the right register: a
+// row of objects rather than a hairline. The open pack has the width to afford
+// it, which is the whole reason for folding the other two.
+function PackAccordion({ groups, label }: { groups: Tick[][]; label: string }) {
+  // The pack holding the current pick is the open one. Nothing current means the
+  // draft is over and there is no pack to be in, so all of them fold and fill --
+  // which is a finished draft saying so.
+  const open = groups.findIndex((ticks) => ticks.some((t) => t.state === "current"));
+
+  return (
+    <div className="flex items-center gap-2.5" role="img" aria-label={label}>
+      {groups.map((ticks, i) => (
+        <PackFold
+          key={i}
+          ticks={ticks}
+          open={i === open}
+          spent={open === -1 || i < open}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FlatTrack({
   groups,
   label,
   onSelect,
