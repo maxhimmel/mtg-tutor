@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { PICK_CEREMONIES, useSettings } from "../lib/useSettings";
+import { useDismissable } from "../lib/useDismissable";
 
 // 2 is "coach everything except the literally forced last card"; 9 stops at the
 // halfway point of a Play Booster pack.
@@ -48,30 +48,7 @@ function Signet({ seed, className }: { seed: string; className?: string }) {
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
   const { settings, update } = useSettings();
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Open state is ours, not CSS's. daisyUI drives its dropdown off
-  // :focus-within, which both closes the menu when a control takes focus out of
-  // the document (a native <select> opens an OS-level popup) and keeps it open
-  // while the trigger still holds focus after a "close".
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const { open, setOpen, ref: menuRef } = useDismissable<HTMLDivElement>();
 
   if (loading) return <span className="text-base-content/60">…</span>;
 
