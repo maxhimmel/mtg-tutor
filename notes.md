@@ -144,6 +144,10 @@ I could understand the misread based purely off stats - sure. But This happened 
 
 Please, take my complaint with a grain of salt because I'm not an MTG expert and I want the coaching, but still - this smells funky to me.
 
+9. I'm concerned the deck builder algorithm isn't also looking at the cards in the sideboard? I've built a deck twice now and both times gotten an essentially perfect score. I didn't think I was THAT good so I just wanted to double check the algorithm for deck building also checks sideboard pieces.
+
+10. I notice the abbreviations for deck colors doesn't include splashed colors - which I kinda think it should. Weird to see a deck w/7 white cards being splashed and not acknowledged whenever we're labeling a deck by its color abbreviations.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -643,3 +647,39 @@ The architecture, the data pipeline and the deploy story are all documented in
     Convex's own reactive client — plus a server-minted token and a CORS origin,
     for a screen used about six times. The organization and the roles exist
     either way, so adding it later is small if the dashboard ever gets tedious.
+
+16. **A deck's colours are `committedColors`, and the stored copy is settled at
+    `build`** (2026-08-07). Two rulings, and one cost fact that was wrong in this
+    file for a fortnight.
+
+    **The rule.** A deck is in a colour once it plays two or more of it. That is
+    already what the scorer treats as on-colour and what the coach says out loud,
+    so a label disagreeing with it was going to be the confusing one whichever way
+    it was wrong — a deck splashing seven white cards was named as though the
+    white were not there, and its own deck list said otherwise. One card is a card
+    you are stuck with rather than a colour you are in, which is why the floor is
+    two. `deckColors` in `packages/core/src/draft/summary.ts`. The stored field
+    kept the name `colorPair` because renaming it is a schema migration for a
+    label.
+
+    **The moment.** `draft.pick` writes the summary in its completion branch, and
+    the player then spends the deck builder cutting cards — `draft.bench` has no
+    status guard because that mutation IS the deck builder. So the stored colours
+    could name a colour you cut. `draft.build` now recomputes them
+    (`refreshedColors`), because that is where the deck actually freezes: neither
+    client offers a way back into the builder once the forty is locked in.
+    Deliberately NOT on every `bench` call — that would put a read on a path that
+    is one patch, to keep a label fresh on a deck nobody has finished. A draft
+    abandoned mid-build keeps the colours it finished with, which is honest.
+    History was not backfilled; rows written before this keep their old label.
+
+    **"Roughly 120KB of rows either way" was wrong, and it is why this sat open.**
+    Refreshing needs the maindeck's colours, and the last pick's row already holds
+    the whole pool: `poolBefore` carries 44 of the 45 as `{name, colors}`, and the
+    45th is in that row's own `pack`. At P3P15 the pack is one card, so it is
+    **one document of ~1.5KB** — `storedPool` in `draftPicks.ts`. No replay, which
+    also means it cannot throw on a draft whose set has been re-ingested, and
+    losing your deck to that would be a far worse bug than a wrong pip.
+
+    Only the colours are refreshed. `overallScore`, `accuracy` and `pickCount` are
+    about picks, and setting a card aside does not change a pick.
