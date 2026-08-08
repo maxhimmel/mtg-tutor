@@ -163,6 +163,28 @@ export function coachUnavailable(p: {
 }
 
 /**
+ * Somebody bought verdicts on the breakdown, and which way.
+ *
+ * The breakdown offers two: the whole thing at once, or one pick at a time. The
+ * bulk button is ~17 model calls against a daily limit that is still a guess, so
+ * which one people actually reach for decides whether it should stay the primary
+ * action on the page -- and there is no other way to find out, because a verdict
+ * is frozen on first request and a second visit spends nothing.
+ *
+ * On the click rather than the answer: the choice is the subject, and a click
+ * that ends in a refusal is exactly as interesting as one that does not.
+ */
+export function breakdownAsked(p: {
+  sessionId: string;
+  how: "all" | "one";
+  /** How many verdicts this click buys. Always 1 for "one". */
+  picks: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("breakdown_asked", p);
+}
+
+/**
  * Someone tried to start a draft and was told no.
  *
  * The most likely thing throttling a private beta, and until now invisible --

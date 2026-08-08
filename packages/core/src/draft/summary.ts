@@ -1,27 +1,38 @@
 import type { EngineCard } from "../model/card.js";
-import type { PickScore } from "../scoring/score.js";
+import { colorKey } from "../scoring/context.js";
+import { committedColors, type PickScore } from "../scoring/score.js";
 
 export interface DraftSummary {
   overallScore: number; // mean pick score, 0-100
   accuracy: number; // share of picks that took the best card, 0-1
-  colorPair: string; // e.g. "WU"; "" when the pool has no colored cards
+  /**
+   * The deck's colours, e.g. "WU" or "WUB"; "" when it has no coloured cards.
+   *
+   * Named `colorPair` because it once was one, and it is a stored field on every
+   * finished session -- renaming it is a schema migration for a label, which is
+   * not a trade worth making. The value is no longer a pair.
+   */
+  colorPair: string;
   pickCount: number;
 }
 
-// The two colours the pool leans on hardest, in WUBRG order.
-export function deckColorPair(pool: EngineCard[]): string {
-  const counts = new Map<string, number>();
-  for (const c of pool) {
-    for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
-  }
-
-  const order = "WUBRG";
-  return [...counts]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 2)
-    .map(([c]) => c)
-    .sort((a, b) => order.indexOf(a) - order.indexOf(b))
-    .join("");
+/**
+ * The colours a deck is in, in WUBRG order.
+ *
+ * This used to be the two colours the deck leaned on hardest, full stop, which
+ * meant a deck splashing seven white cards was labelled as though the white were
+ * not there -- the same deck named two colours in the review's masthead and three
+ * on its own deck list, because the deck list counts what it plays.
+ *
+ * So it is `committedColors` now, which is the app's existing answer to "what is
+ * this deck in": a colour is in once the deck plays two or more of it. That rule
+ * already decides what the scorer treats as on-colour and what the coach says out
+ * loud, and a label that disagreed with the coach was going to be the confusing
+ * one whichever way it was wrong. One card is a card you are stuck with rather
+ * than a colour you are in, which is why the floor is two rather than one.
+ */
+export function deckColors(pool: EngineCard[]): string {
+  return colorKey(committedColors(pool));
 }
 
 /**
@@ -42,7 +53,7 @@ export function summarizeDraft(
   return {
     overallScore: scores.reduce((sum, s) => sum + s.score, 0) / scores.length,
     accuracy: scores.filter((s) => s.isBest).length / scores.length,
-    colorPair: deckColorPair(pool),
+    colorPair: deckColors(pool),
     pickCount: scores.length,
   };
 }

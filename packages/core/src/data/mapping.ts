@@ -121,18 +121,10 @@ export function overallWinRate(ratings: ColorRating[]): number | undefined {
   return games > 0 ? wins / games : undefined;
 }
 
-// Archetype win rates keyed like "WU", skipping the summary rows and anything
-// that isn't a real two-colour pair.
-export function colorPairWinRates(ratings: ColorRating[]): Map<string, number> {
-  const out = new Map<string, number>();
-
-  for (const cr of ratings) {
-    if (cr.is_summary) continue;
-    const key = String(cr.short_name);
-    if (key.length === 2 && cr.games > 0 && /^[WUBRG]{2}$/.test(key)) {
-      out.set(key, cr.wins / cr.games);
-    }
-  }
-
-  return out;
-}
+// `colorPairWinRates` was here: archetype win rates, keeping only keys matching
+// /^[WUBRG]{2}$/. It had no callers left. The live path is the filter in
+// sets.ts, which was deliberately widened to every colour count because the
+// two-colour version threw away the majority archetype of ktk and snc -- and
+// with it the only measure of what a third colour costs, which is what
+// `splashCost` prices. Deleted rather than left dead: it is the wrong rule
+// written down, sitting in the same file as the right one.

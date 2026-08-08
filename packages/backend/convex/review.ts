@@ -4,6 +4,7 @@ import {
   buildReviewContext,
   buildReviewSystemPrompt,
   canonicalName,
+  deckColors,
   loadPrinciples,
   normalizeBench,
   pivots,
@@ -64,6 +65,18 @@ export const load = query({
   handler: async (ctx, args) => {
     const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
 
+    // Computed, not read off `session.summary`, which is what this used to do.
+    //
+    // The stored summary is a denormalisation for `list` above, which must not
+    // replay 45 picks per row. This query has already replayed -- the maindeck is
+    // sitting in `engine` -- so reading the stored copy bought nothing and cost
+    // the one thing a copy always costs: it was written when the draft finished,
+    // by whatever rule was in force that day. That is why the walkthrough and the
+    // breakdown said "WU" about a deck the deck screen, which recomputes, called
+    // "WUB". Same reason there is no stored deck list (see buildDeck).
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck } = splitPool(engine.humanPool, bench, session.pickedNames.length);
+
     const verdicts = await ctx.db
       .query("reviewVerdicts")
       .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", args.sessionId))
@@ -80,7 +93,7 @@ export const load = query({
       format: session.format,
       seed: String(session.seed),
       createdAt: session.createdAt,
-      colorPair: session.summary?.colorPair ?? "",
+      colorPair: deckColors(maindeck),
       colorWinRates: cardsDoc.colorWinRates,
       picks: engine.history.map((h, pickIndex) => ({
         pickIndex,
@@ -408,7 +421,15 @@ export const backfillSummary = mutation({
     const { session, engine } = await loadBoard(ctx, args.sessionId);
     if (session.summary) return session.summary;
 
-    const summary = summarizeDraft(await storedScores(ctx, args.sessionId), engine.humanPool);
+    // Maindeck, not the whole pool, for the same reason `draft.pick` uses it:
+    // the summary's colours should name the deck rather than the pile. The two
+    // agreed while the label was capped at the two heaviest colours, so this read
+    // as harmless; now that it names every colour the deck is in, a 45-card pool
+    // would report a five-colour deck for anyone who benched nothing.
+    const bench = normalizeBench(session.sideboard ?? []);
+    const { maindeck } = splitPool(engine.humanPool, bench, session.pickedNames.length);
+
+    const summary = summarizeDraft(await storedScores(ctx, args.sessionId), maindeck);
     await ctx.db.patch(args.sessionId, { summary });
     return summary;
   },

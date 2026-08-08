@@ -540,8 +540,9 @@ for (const [key, e] of game.archetypes) {
 
 // Each archetype's own win rate (independent of any card). Replaces the
 // /color_ratings API call the app used to make at ingest -- the last runtime
-// 17Lands dependency. Two-color pairs feed colorPairWinRates; the rest are
-// context for coaching.
+// 17Lands dependency. Every colour count is kept, pairs and wider alike: the
+// three-colour rows are the majority archetype in some sets, and the gap
+// between the widths is the only thing that measures what a splash costs.
 const colorWinRates = [];
 for (const [colors, e] of game.colorRecord) {
   if (e.n < MIN_ARCHETYPE) continue;

@@ -17,6 +17,24 @@ import { ConvexError } from "convex/values";
 // Anything that is not a ConvexError never had a payload, and its message is
 // the best there is.
 export function humanError(error: unknown): string {
+  return explainedError(error) ?? (error instanceof Error ? error.message : String(error));
+}
+
+/**
+ * The same sentence, or null where the app was never given one.
+ *
+ * `humanError` always returns something, because its callers are catches sitting
+ * beside the control that just failed: the person pressed a button, the button
+ * did not work, and even a rough message is better than silence there because
+ * the surrounding page supplies the context.
+ *
+ * An error boundary has no such context -- it has replaced the whole page, and
+ * the only thing it can say is whatever the error carried. So it needs to know
+ * the difference. A chunk that failed to load or a TypeError from a bad render
+ * has no sentence in it, only "Failed to fetch dynamically imported module: …",
+ * which is a note to a developer printed where a reader is standing.
+ */
+export function explainedError(error: unknown): string | null {
   if (error instanceof ConvexError && typeof error.data === "string") return error.data;
-  return error instanceof Error ? error.message : String(error);
+  return null;
 }

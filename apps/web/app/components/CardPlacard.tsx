@@ -24,7 +24,36 @@ import { ManaCost } from "./ManaCost";
 // shown outside a list too -- the verdict stacks two of them -- and a row that
 // previews next to one that does not is the kind of gap nobody notices until
 // they reach for it.
-export function CardPlacard({ card, className }: { card: Card; className?: string }) {
+
+// The width this is drawn for, and a guardrail rather than a preference.
+//
+// The plate is supposed to hug the name -- that is the whole of why the row
+// reads as a card. Stretched past about this, it becomes a long empty bar with a
+// name marooned at one end and a mana cost at the other, and it stops reading as
+// a card at all. The results and review pages each handed it `flex-1` in a
+// container two to four times this wide, which is how a component designed for a
+// side panel ended up looking like a progress bar. Every layout that shows
+// placards is now a column of roughly this width, so nothing meets the cap; it
+// is here to catch the next one that would.
+const NATURAL_W = "max-w-[17rem]";
+
+export function CardPlacard({
+  card,
+  ghost = false,
+  className,
+}: {
+  card: Card;
+  // The same frame with nothing printed in it: a card someone else's deck list
+  // plays and yours does not. It keeps the colour, because which colours the
+  // suggestion is reaching for is exactly what an absence has to say, and empties
+  // the plate -- so a pile reads as cards you hold and slots you did not fill.
+  //
+  // The empty plate is painted base-100, the app's recessed surface, so it reads
+  // as a hole punched through the frame. That means a ghost belongs on base-100:
+  // today the deck board's piles, which are wells in exactly that colour.
+  ghost?: boolean;
+  className?: string;
+}) {
   const frame = frameFor(card);
   // Always with stats: a placard is a review, results or verdict row, and by then
   // the draft is over and the numbers are the thing being taught.
@@ -32,7 +61,7 @@ export function CardPlacard({ card, className }: { card: Card; className?: strin
 
   return (
     <div
-      className={`cursor-default rounded-[11px] outline-offset-2 focus-visible:outline focus-visible:outline-primary motion-safe:transition-transform motion-safe:hover:-translate-y-px ${className ?? ""}`}
+      className={`cursor-default rounded-[11px] outline-offset-2 focus-visible:outline focus-visible:outline-primary motion-safe:transition-transform motion-safe:hover:-translate-y-px ${NATURAL_W} ${className ?? ""}`}
       tabIndex={0}
       {...hover}
     >
@@ -44,26 +73,34 @@ export function CardPlacard({ card, className }: { card: Card; className?: strin
         }}
       >
         <div
-          className="flex items-center justify-between gap-2 rounded-md border border-black/55 px-1.5"
-          style={{
-            background: `linear-gradient(to bottom, color-mix(in srgb, ${frame.plate} 88%, #fff), ${frame.plate})`,
-            // The bright hairline the plate is drawn with, just inside its dark edge.
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)",
-          }}
+          className={`flex items-center justify-between gap-2 rounded-md px-1.5 ${
+            ghost ? "border border-dashed border-black/50 bg-base-100" : "border border-black/55"
+          }`}
+          style={
+            ghost
+              ? undefined
+              : {
+                  background: `linear-gradient(to bottom, color-mix(in srgb, ${frame.plate} 88%, #fff), ${frame.plate})`,
+                  // The bright hairline the plate is drawn with, just inside its dark edge.
+                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)",
+                }
+          }
         >
           {/* The app's display face, which is here for the same reason it is on
               headings: it is the closest licensable stand-in for Beleren, the
               face Magic prints card names in. */}
           <span
-            className="truncate font-display text-[15px] font-bold leading-4.5 tracking-tight text-[#0d0b06]"
+            className={`truncate font-display text-[15px] font-bold leading-4.5 tracking-tight ${
+              ghost ? "text-base-content/60" : "text-[#0d0b06]"
+            }`}
             title={card.name}
           >
             {card.name}
           </span>
           <ManaCost
             cost={card.manaCost}
-            shadow
-            className="shrink-0 whitespace-nowrap text-[11px]"
+            shadow={!ghost}
+            className={`shrink-0 whitespace-nowrap text-[11px] ${ghost ? "opacity-60" : ""}`}
           />
         </div>
       </div>
@@ -88,14 +125,27 @@ function PlacardRow({ card, trailing }: { card: Card; trailing?: ReactNode }) {
 export function CardPlacardList({
   cards,
   trailing,
+  columns = false,
   className,
 }: {
   cards: Card[];
   trailing?: (card: Card, index: number) => ReactNode;
+  // Wrap into as many natural-width columns as the container fits, instead of
+  // one. A placard cannot be widened to fill a wide panel -- see NATURAL_W -- so
+  // the only honest way for a list to use one is more columns. Read across then
+  // down, which is what a grid does anyway and costs nothing here: the list is
+  // already sorted, so what you scan for is a name, not the next row.
+  columns?: boolean;
   className?: string;
 }) {
   return (
-    <ul className={`flex flex-col gap-0.5 ${className ?? ""}`}>
+    <ul
+      className={`${
+        columns
+          ? "grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-x-5 gap-y-0.5"
+          : "flex flex-col gap-0.5"
+      } ${className ?? ""}`}
+    >
       {/* Keyed by position, not name: drafting two copies of the same card is
           normal, so names are not unique in a pool. */}
       {cards.map((card, i) => (

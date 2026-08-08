@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { gradeFor } from "@mtg-tutor/core";
+import { ColorPips } from "../components/ColorPips";
 import { PageShell } from "../components/PageShell";
 import { SetIcon } from "../components/SetIcon";
 import { gradeColor, pct, releaseDate } from "../lib/format";
@@ -114,8 +115,9 @@ function DraftList() {
                     <span className="flex items-center gap-3">
                       <SetIcon uri={set?.iconUri} className="size-6 text-base-content/50" />
                       <span className="flex flex-col">
-                        <span className="font-display font-semibold leading-tight">
-                          {name} · {draft.colorPair || "—"}
+                        <span className="flex items-center gap-2 font-display font-semibold leading-tight">
+                          {name}
+                          <ColorPips colors={draft.colorPair} />
                         </span>
                         <span className="eyebrow">
                           {draft.setCode.toUpperCase()} · {draft.pickCount} picks
