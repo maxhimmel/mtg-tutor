@@ -35,12 +35,22 @@ export interface Tick {
 // been filled up to a point. The graded pair are the app's own grade colours
 // (see gradeColor in lib/format), and gold is where you are -- the same thing it
 // means on a card you are holding.
+//
+// A miss is `error`, not `warning`, and the reason is the page it sits on rather
+// than the tick itself. The review marks a pack's cards with the same four
+// colours every time: blue for the card you took, ORANGE FOR THE RAW-BEST, green
+// for the card that was right for your deck. A track drawing its misses in
+// orange therefore said "raw-best" a dozen times over about picks where the
+// raw-best was the card you did not take -- the exact opposite claim, in the
+// colour that makes it. Red is the one grade colour the marks do not use, and it
+// is already what this app means by a pick that went wrong: gradeFor sends D and
+// F here, and the walkthrough writes "✗ not this time" in it two inches away.
 const TONE: Record<TickState, string> = {
   ahead: "bg-base-content/10",
   past: "bg-base-content/65",
   current: "bg-primary",
   hit: "bg-success/60",
-  miss: "bg-warning/70",
+  miss: "bg-error/70",
 };
 
 // `ahead` is the one tone that depends on what the track IS, and the same
@@ -50,10 +60,38 @@ const TONE: Record<TickState, string> = {
 // there, ahead stays aimable.
 const AHEAD_NAVIGABLE = "bg-base-content/30";
 
+// A tick that carries a result is an object; a tick that only carries a position
+// is a rule. So `hit`, `miss` and `current` all stand at the same height and the
+// ungraded pair stay a hairline -- which is also what stops the review's two
+// surfaces drawing the same draft at two different weights, the breakdown's
+// graded track being a 2px line where the walkthrough's is 6px.
+//
+// Where you ARE is still not said with size. It is said with the halo (see
+// tick-lit in globals.css), for the reason recorded there: a tick is too small
+// for size or colour alone to be findable among forty-four siblings.
+const TALL: TickState[] = ["current", "hit", "miss"];
+
 const bar = (state: TickState, navigable: boolean) =>
   `w-full rounded-full ${state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]} ${
-    state === "current" ? "tick-lit h-1.5" : "h-0.5"
+    state === "current" ? "tick-lit h-1.5" : TALL.includes(state) ? "h-1.5" : "h-0.5"
   }`;
+
+// The tick the page is scrolled to, which is not the same claim as `current`.
+// `current` is where you are in the DRAFT -- the pick being stepped through, the
+// one not yet made. This is where you are in the PAGE, and on the breakdown it
+// is the only one of the two that exists: the draft is over, every tick is a
+// result, and what moves is the reader.
+//
+// So it is drawn on top of whatever the tick already says rather than replacing
+// it. A tick keeps its grade colour and gains the halo -- which is what the halo
+// was for (see tick-lit in globals.css: a mark this small cannot be found by
+// colour or height, and area is what the eye lands on).
+//
+// The swell is scaleY, not height, for the reason tick-arrive gives: a transform
+// is painted and never measured, so the track does not change height as you
+// scroll and the page under it does not move. Growing from the bottom, because
+// the ticks sit on a common baseline.
+const HERE = "tick-lit origin-bottom motion-safe:scale-y-[1.7] motion-safe:duration-200";
 
 /**
  * @param groups One array per pack. The gaps between them are the pack breaks,
@@ -62,20 +100,24 @@ const bar = (state: TickState, navigable: boolean) =>
  * @param label The whole track in one sentence, for anyone who cannot see it.
  * @param onSelect Makes every tick a place to go. Omitted, the track is a
  * picture: forty-two focus stops that lead nowhere is not navigation.
+ * @param here The tick the page is scrolled to, lit on top of whatever it
+ * already says. Only meaningful on a flat track long enough to scroll past.
  */
 export function PickTrack({
   groups,
   label,
   onSelect,
+  here,
 }: {
   groups: Tick[][];
   label: string;
   onSelect?: (index: number) => void;
+  here?: number;
 }) {
   if (groups.length > 1 && !onSelect) {
     return <PackAccordion groups={groups} label={label} />;
   }
-  return <FlatTrack groups={groups} label={label} onSelect={onSelect} />;
+  return <FlatTrack groups={groups} label={label} onSelect={onSelect} here={here} />;
 }
 
 const CARD_W = "0.875rem"; // 14px: a pack seen closed, at a card's proportion
@@ -183,10 +225,12 @@ function FlatTrack({
   groups,
   label,
   onSelect,
+  here,
 }: {
   groups: Tick[][];
   label: string;
   onSelect?: (index: number) => void;
+  here?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const flat = groups.flat();
@@ -194,12 +238,14 @@ function FlatTrack({
   // One tab stop for the whole track, arrows to move within it -- the same
   // bargain a radio group makes, and for the same reason: a review has twenty-odd
   // decisions in it, and tabbing past twenty-odd ticks to reach the page is worse
-  // than not being able to reach them at all. The stop is wherever you are; with
-  // nothing current (a finished review) it is the start.
-  const stop = Math.max(
-    0,
-    flat.findIndex((tick) => tick.state === "current"),
-  );
+  // than not being able to reach them at all.
+  //
+  // The stop is wherever you are, by whichever of the two senses the caller has:
+  // the pick being stepped through, or failing that the record being read. Only
+  // when neither exists does it fall back to the start -- which on the breakdown
+  // would have meant tabbing in at pick one from halfway down the page.
+  const current = flat.findIndex((tick) => tick.state === "current");
+  const stop = current >= 0 ? current : (here ?? 0);
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (!onSelect) return;
@@ -242,8 +288,10 @@ function FlatTrack({
 
         return (
           <div key={group} className="flex flex-1 items-end gap-[3px]">
-            {ticks.map((tick, i) =>
-              onSelect ? (
+            {ticks.map((tick, i) => {
+              const lit = start + i === here ? HERE : "";
+
+              return onSelect ? (
                 <button
                   key={i}
                   type="button"
@@ -260,13 +308,20 @@ function FlatTrack({
                       something here, and hover only means "this is where you
                       would land". */}
                   <span
-                    className={`${bar(tick.state, true)} motion-safe:transition-[height] group-hover:h-1.5`}
+                    className={`${bar(tick.state, true)} ${lit} motion-safe:transition-[height,transform] group-hover:h-1.5`}
                   />
                 </button>
               ) : (
-                <span key={i} className={bar(tick.state, false)} />
-              ),
-            )}
+                // Same box the navigable form's button is, padding included, so
+                // the track occupies one height on every page that draws one --
+                // whether or not its ticks are places to go.
+                <span key={i} className="flex flex-1 items-end py-1.5">
+                  <span
+                    className={`${bar(tick.state, false)} ${lit} motion-safe:transition-transform`}
+                  />
+                </span>
+              );
+            })}
           </div>
         );
       })}

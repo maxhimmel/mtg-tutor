@@ -10,10 +10,11 @@ import { PageNotice, PageShell } from "../../components/PageShell";
 import { PageHeading } from "../../components/PageHeading";
 import { PickTrack, type Tick } from "../../components/PickTrack";
 import { CardTile } from "../../components/CardTile";
+import { ColorPips } from "../../components/ColorPips";
 import { Panel } from "../../components/Panel";
 import { SetIcon } from "../../components/SetIcon";
 import { pct } from "../../lib/format";
-import { PickReveal } from "../PickReveal";
+import { PickMarksKey, PickReveal } from "../PickReveal";
 import { ReviewFrame } from "../ReviewFrame";
 import { ReviewViews } from "../ReviewViews";
 import type { ReviewPick } from "../types";
@@ -147,9 +148,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
         title={
           <>
             {set?.name ?? draft.setCode.toUpperCase()}
-            {draft.colorPair && (
-              <span className="ml-2 text-base-content/45">{draft.colorPair}</span>
-            )}
+            {draft.colorPair && <ColorPips colors={draft.colorPair} className="ml-2.5" />}
           </>
         }
         controls={
@@ -256,16 +255,24 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
                 bodyClassName="gap-4"
               >
                 {answered ? (
-                  <PickReveal
-                    pick={current}
-                    verdict={verdict}
-                    // Revealing always asks, so an absent verdict here is
-                    // always one in flight.
-                    pending
-                    guess={guess}
-                    correct={correct}
-                    draft={{ sessionId: id, setCode: draft.setCode, format: draft.format }}
-                  />
+                  <>
+                    {/* Inside the pick, above the cards it explains. This screen
+                        shows one shortlist at a time, so the key can sit with it
+                        instead of in the stats panel across the page. */}
+                    <div className="border-b border-base-300 pb-3">
+                      <PickMarksKey quiz={quiz} />
+                    </div>
+                    <PickReveal
+                      pick={current}
+                      verdict={verdict}
+                      // Revealing always asks, so an absent verdict here is
+                      // always one in flight.
+                      pending
+                      guess={guess}
+                      correct={correct}
+                      draft={{ sessionId: id, setCode: draft.setCode, format: draft.format }}
+                    />
+                  </>
                 ) : (
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3.5">
                     {current.pack.map((card) => (
@@ -318,8 +325,13 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
 
           <Panel title="This draft" bodyClassName="gap-2">
             <dl className="flex flex-col text-sm">
+              <div className="flex items-center justify-between gap-4 py-1">
+                <dt className="text-base-content/60">Colors</dt>
+                <dd>
+                  <ColorPips colors={draft.colorPair} className="text-base" />
+                </dd>
+              </div>
               {[
-                ["Colors", draft.colorPair || "—"],
                 ["Decision picks", String(decisions.length)],
                 ["Picks", String(draft.picks.length)],
               ].map(([term, value]) => (
