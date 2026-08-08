@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 
-import { identify, signedOut } from "../lib/analytics";
+import { identify, signInRestarted, signedOut } from "../lib/analytics";
+import { SIGN_IN_RESTARTED_COOKIE } from "../lib/signInRestart";
 
 /**
  * Puts a name to the events. Renders nothing.
@@ -24,6 +25,21 @@ export function AnalyticsIdentity() {
   useEffect(() => {
     if (user) identify(user.id, user.email ?? undefined);
     else signedOut();
+  }, [user]);
+
+  // Second, and it has to stay second: the effect above runs first, so the
+  // event is filed against the friend it happened to rather than against an
+  // anonymous browser id that never merges with them. Gated on `user` for the
+  // same reason -- a restart that landed signed in is the only one worth
+  // reporting, and anything else surfaces as a callback error already.
+  useEffect(() => {
+    if (!user) return;
+    const present = document.cookie
+      .split("; ")
+      .some((c) => c.startsWith(`${SIGN_IN_RESTARTED_COOKIE}=`));
+    if (!present) return;
+    document.cookie = `${SIGN_IN_RESTARTED_COOKIE}=; path=/; max-age=0`;
+    signInRestarted();
   }, [user]);
 
   return null;

@@ -60,6 +60,26 @@ export function identify(id: string, email?: string): void {
   posthog.identify(id, email ? { email } : undefined);
 }
 
+/**
+ * A sign-in that reached /callback with no `state` and had to be started over.
+ *
+ * Every invitation link produces one, because that flow begins at AuthKit
+ * rather than at our /sign-in and so carries no PKCE state -- see
+ * app/callback/route.ts, which recovers it. The recovery is silent and it
+ * works, which is exactly why it has to be counted: nothing else in the app
+ * would ever mention that a friend's first sign-in failed and was recovered.
+ *
+ * The number decides one thing. With the WorkOS dashboard's Initiate login URL
+ * pointed at /sign-in this should sit at zero, so a rate that stays flat says
+ * that setting is not doing what it claims and every new friend is being
+ * carried by the fallback -- which is a fallback, and will not be there if the
+ * callback route is ever simplified back to a bare handleAuth().
+ */
+export function signInRestarted(): void {
+  if (!on()) return;
+  posthog.capture("sign_in_restarted");
+}
+
 /** Drops the identity so the next person on this browser is not the last one. */
 export function signedOut(): void {
   if (!on()) return;
