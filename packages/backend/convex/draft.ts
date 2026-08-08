@@ -6,6 +6,7 @@ import {
   buildPickContext,
   clampReason,
   compareDecks,
+  deckColors,
   isLandCount,
   newSeed,
   normalizeBench,
@@ -17,13 +18,21 @@ import {
   summarizeDraft,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
+import type { QueryCtx } from "./_generated/server.js";
+import type { Doc } from "./_generated/dataModel.js";
 import { deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
 import { enforce } from "./quota.js";
 import { requireCaller } from "./roles.js";
 import { loadBoard, ownedSession, setDocFor } from "./sessions.js";
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
-import { recordPick, storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
+import {
+  recordPick,
+  storedPick,
+  storedPool,
+  storedScores,
+  toRecordedPick,
+} from "./draftPicks.js";
 import { pickDefenseInput } from "./validators.js";
 
 // The board in the engine's half of a card: names, colours, rarity and the
@@ -264,6 +273,10 @@ export const pick = mutation({
             // every one before it was scored against its pack's context, and a
             // replay has none. Maindeck for the colour pair, so it names the
             // deck rather than the pile.
+            //
+            // The colours here are provisional -- the deck builder is still to
+            // come, and cutting a card changes them. `build` recomputes them
+            // when the forty is locked in; see `refreshedColors`.
             summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
           }
         : {}),
@@ -294,6 +307,40 @@ export const pick = mutation({
   },
 });
 
+/**
+ * The summary's colours, recomputed against the deck as it now stands.
+ *
+ * `draft.pick` writes the summary from the maindeck as it stood when the last
+ * pick landed, and the player then spends the deck builder cutting cards --
+ * `draft.bench` has no status guard because that IS the deck builder. So the
+ * stored colours could name a colour you cut: splash white, cut the splash, and
+ * the drafts picker still showed a white pip.
+ *
+ * Only the colours. `overallScore`, `accuracy` and `pickCount` are about picks,
+ * and setting a card aside does not change a pick.
+ *
+ * Here rather than in `bench` because this is where the deck actually freezes --
+ * neither client offers a way back into the builder once the forty is locked in
+ * -- and doing it per card moved would put a read on a path that is currently one
+ * patch. A draft abandoned mid-build keeps the colours it finished with, which is
+ * an honest label for a deck nobody finished.
+ *
+ * Returns nothing to patch when the pool cannot be rebuilt (a session from before
+ * `draftPicks`) or when there is no summary to correct (one from before the
+ * summary was denormalised -- `review.backfillSummary` is what fills those in).
+ */
+async function refreshedColors(
+  ctx: QueryCtx,
+  session: Doc<"draftSessions">,
+): Promise<{ summary?: Doc<"draftSessions">["summary"] }> {
+  const pool = await storedPool(ctx, session._id, session.pickedNames.length);
+  if (!pool || !session.summary) return {};
+
+  const bench = normalizeBench(session.sideboard ?? []);
+  const { maindeck } = splitPool(pool, bench, session.pickedNames.length);
+  return { summary: { ...session.summary, colorPair: deckColors(maindeck) } };
+}
+
 // Lock in the 40. Only the land count: the cards are `sideboard`, which the
 // player has been editing since pick one and goes on editing here.
 //
@@ -315,7 +362,10 @@ export const build = mutation({
     }
 
     const build = { basicLands: args.basicLands, builtAt: new Date().toISOString() };
-    await ctx.db.patch(args.sessionId, { build });
+    await ctx.db.patch(args.sessionId, {
+      build,
+      ...(await refreshedColors(ctx, session)),
+    });
 
     await deckBuilt(ctx, {
       sessionId: args.sessionId,
