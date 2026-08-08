@@ -182,9 +182,13 @@ export function DeckBuilder({
               Everything is cut. Move a card back to start a deck.
             </p>
           ) : (
+            // Both piles are far wider than a placard, so they wrap into as many
+            // columns as they fit rather than stretching one. A forty read down a
+            // single column is also just longer than it needs to be.
             <CardPlacardList
               cards={playing.map((p) => p.card)}
               trailing={trailingFor(playing, false)}
+              columns
             />
           )}
         </Panel>
@@ -198,6 +202,7 @@ export function DeckBuilder({
             <CardPlacardList
               cards={cut.map((p) => p.card)}
               trailing={trailingFor(cut, true)}
+              columns
               className="opacity-70"
             />
           )}
