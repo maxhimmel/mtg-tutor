@@ -66,7 +66,7 @@ const boardView = (engine: DraftEngine) => ({
 export async function startSession(
   ctx: MutationCtx,
   caller: Caller,
-  args: { setCode: string; format?: string; seed?: number },
+  args: { setCode: string; format?: string; seed?: number; challengeId?: Id<"challenges"> },
 ): Promise<Id<"draftSessions">> {
   const setCode = args.setCode.toLowerCase();
   const format = args.format ?? "PremierDraft";
@@ -91,6 +91,9 @@ export async function startSession(
     createdAt: new Date().toISOString(),
     // Free -- setDocFor already read this row above to prove the set exists.
     sourceHash: setDoc.sourceHash,
+    // Set only when this draft answers a challenge. What `pick` reads on the
+    // last pick of the draft to know whether anyone is waiting to be told.
+    challengeId: args.challengeId,
   });
 
   // After the insert and after the quota, so nothing is reported that did not

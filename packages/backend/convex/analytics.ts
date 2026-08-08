@@ -90,6 +90,50 @@ export async function draftCompleted(
 }
 
 /**
+ * Somebody dared a friend to their packs.
+ *
+ * The root of a funnel whose every later step is a different person, which is
+ * what makes the three challenge events worth having separately: issued against
+ * accepted is whether links get sent and taken at all, and accepted against
+ * finished is the friend who said yes and wandered off -- a state the schema
+ * cannot express, because `draftSessions.status` has no terminal-but-unfinished
+ * value and deliberately is not getting one.
+ */
+export async function challengeIssued(
+  ctx: MutationCtx,
+  p: { challengeId: string; setCode: string; format: string },
+): Promise<void> {
+  if (!on()) return;
+  await posthog.capture(ctx, { event: "challenge_issued", properties: p });
+}
+
+/**
+ * A friend took one up, and how old the link was when they did.
+ *
+ * `hoursSinceIssued` is the whole reason this carries a property. A challenge is
+ * a seed that outlives the moment it was made, so it meets a re-ingest far more
+ * often than a same-day draft does -- and whether that is a real problem or a
+ * theoretical one is a question about how long these links actually sit before
+ * anyone clicks them. Nothing else in the app can answer it.
+ */
+export async function challengeAccepted(
+  ctx: MutationCtx,
+  p: { challengeId: string; setCode: string; format: string; hoursSinceIssued: number },
+): Promise<void> {
+  if (!on()) return;
+  await posthog.capture(ctx, { event: "challenge_accepted", properties: p });
+}
+
+/** The second draft is done and there is finally something to compare. */
+export async function challengeFinished(
+  ctx: MutationCtx,
+  p: { challengeId: string; setCode: string; format: string; ms: number },
+): Promise<void> {
+  if (!on()) return;
+  await posthog.capture(ctx, { event: "challenge_finished", properties: p });
+}
+
+/**
  * The forty locked in.
  *
  * The last step of the funnel, and the one that says whether the second half of
