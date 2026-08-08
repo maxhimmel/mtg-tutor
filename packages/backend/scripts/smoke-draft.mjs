@@ -5,7 +5,7 @@
 //   pnpm --filter @mtg-tutor/backend smoke-draft [setCode] [format]
 
 import { ConvexHttpClient } from "convex/browser";
-import { PACK, cardValue } from "@mtg-tutor/core";
+import { DECK, PACK, cardValue } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { accessToken } from "./lib/auth.mjs";
 
@@ -65,6 +65,14 @@ while (!state.complete) {
   state = { complete: result.complete, pack: result.pack, pool: result.pool };
 }
 const elapsed = Date.now() - started;
+
+// Locking in the forty is part of the flow now, not an optional extra: since
+// `draft.results` began withholding the deck until `session.build` exists, a
+// smoke test that never built one read `deck: null` and fell over on it -- so
+// this script has been dying before its determinism check for as long as the
+// deck builder has existed. Building here restores that check and exercises
+// `refreshedColors` on the way past.
+await client.mutation(api.draft.build, { sessionId, basicLands: DECK.size - DECK.spellCount });
 
 const results = await client.query(api.draft.results, { sessionId });
 
