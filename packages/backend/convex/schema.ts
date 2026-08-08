@@ -150,11 +150,13 @@ export default defineSchema({
         wr: v.number(),
       }),
     ),
-    // Each archetype's own win rate (no card dimension). `ingest` reads the
-    // two-color entries into the set's colorPairWinRates, replacing the
-    // /color_ratings API call -- the last runtime 17Lands dependency. Optional
-    // so the schema deploys over docs seeded before it existed; storeSetStats
-    // always writes it, so a re-seed fills it in.
+    // Each archetype's own win rate (no card dimension), at every colour count
+    // -- NOT just pairs. `ingest` copies these onto the set, replacing the
+    // /color_ratings API call, the last runtime 17Lands dependency. Three-colour
+    // archetypes are the majority in some sets and are the only thing that
+    // measures what a third colour costs, which is what `splashCost` prices.
+    // Optional so the schema deploys over docs seeded before it existed;
+    // storeSetStats always writes it, so a re-seed fills it in.
     colorWinRates: v.optional(
       v.array(v.object({ colors: v.string(), n: v.number(), wr: v.number() })),
     ),
