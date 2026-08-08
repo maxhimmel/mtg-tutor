@@ -1,10 +1,14 @@
 import { ConvexError, v } from "convex/values";
+import { diffDrafts, forkImpact, summarizeDiff } from "@mtg-tutor/core";
+import type { DiffSide } from "@mtg-tutor/core";
 import { mutation, query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
 import { challengeAccepted, challengeIssued } from "./analytics.js";
 import { startSession } from "./draft.js";
+import { storedPicks } from "./draftPicks.js";
 import { requireCaller } from "./roles.js";
-import { challengeInvite, ownedSession, replayFor } from "./sessions.js";
+import { challengeInvite, challengeParty, ownedSession, replayFor } from "./sessions.js";
+import { toSetData } from "./setData.js";
 
 // Daring a friend to draft the packs you just drafted.
 //
@@ -232,6 +236,153 @@ export const mine = query({
       // the friend was present when their own draft ended.
       unread: c.challengerUserId === caller.userId && c.finishedAt != null && c.challengerSeenAt == null,
     }));
+  },
+});
+
+/**
+ * Both drafts, row by row.
+ *
+ * Reads `draftPicks` and NEVER replays, which buys two things. Their score is
+ * the one they were actually shown -- scored against THEIR pool, which is the
+ * entire point of comparing two people rather than two attempts -- and a replay
+ * could only offer raw power. And the comparison survives a re-ingest, unlike
+ * `review.load`, which matters far more here because a challenge is a seed that
+ * outlives its moment.
+ *
+ * It costs ~180KB of rows for the two of them, against `review.load`'s measured
+ * 218KB, once per view. Convex bills whole documents so `poolBefore` is paid for
+ * either way -- but it is not RETURNED, because the braid's colours are a fold
+ * over each picked card's own `colors`, which are already in its row's pack.
+ *
+ * Names only. The art and rules text join in the browser against the
+ * `sets.cardText` it reads once per visit, the same way the draft board does --
+ * which also means a card dropped by a re-ingest renders as a name instead of
+ * throwing.
+ */
+export const diff = query({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    const { challenge, side } = await challengeParty(ctx, args.challengeId);
+
+    // Without this the challenger could read their friend's picks while the
+    // friend was still making them.
+    if (!challenge.finishedAt || !challenge.friendSessionId) {
+      throw new ConvexError("That draft is not finished yet.");
+    }
+
+    const mineFirst = side === "challenger";
+    const [challengerRows, friendRows] = await Promise.all([
+      storedPicks(ctx, challenge.challengerSessionId),
+      storedPicks(ctx, challenge.friendSessionId),
+    ]);
+
+    const toSide = (r: Doc<"draftPicks">): DiffSide => ({
+      pickIndex: r.pickIndex,
+      packNo: r.packNo,
+      pickNo: r.pickNo,
+      pack: r.pack.map((c) => ({ name: c.name, colors: c.colors })),
+      pickedName: r.pickedName,
+      score: r.score.score,
+      grade: r.score.grade,
+    });
+
+    // "Yours" is whoever is reading. The same challenge read from both sides is
+    // the same comparison with the columns swapped, and neither person should
+    // have to work out which one they are.
+    const rows = diffDrafts(
+      (mineFirst ? challengerRows : friendRows).map(toSide),
+      (mineFirst ? friendRows : challengerRows).map(toSide),
+    );
+    const tally = summarizeDiff(rows);
+
+    return {
+      id: challenge._id,
+      side,
+      setCode: challenge.setCode,
+      format: challenge.format,
+      fromName: challenge.fromName,
+      finishedAt: challenge.finishedAt,
+      rows,
+      tally,
+    };
+  },
+});
+
+/**
+ * What each fork actually cost, by running the pod again without it.
+ *
+ * Split from `diff` rather than folded into it because it is the one part that
+ * reads the set (~46KB) and the one part that can fail: the counterfactual
+ * replays, so a re-ingested set throws where the diff itself would not. Asked
+ * for separately, the braid draws without weights instead of taking the screen
+ * down with it.
+ */
+export const forkImpacts = query({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    const { challenge, side } = await challengeParty(ctx, args.challengeId);
+    if (!challenge.finishedAt || !challenge.friendSessionId) return null;
+
+    const mine =
+      side === "challenger" ? challenge.challengerSessionId : challenge.friendSessionId;
+    const theirs =
+      side === "challenger" ? challenge.friendSessionId : challenge.challengerSessionId;
+
+    const [mineRows, theirRows] = await Promise.all([
+      storedPicks(ctx, mine),
+      storedPicks(ctx, theirs),
+    ]);
+
+    const rows = diffDrafts(
+      mineRows.map((r) => ({
+        pickIndex: r.pickIndex,
+        packNo: r.packNo,
+        pickNo: r.pickNo,
+        pack: r.pack.map((c) => ({ name: c.name, colors: c.colors })),
+        pickedName: r.pickedName,
+        score: r.score.score,
+        grade: r.score.grade,
+      })),
+      theirRows.map((r) => ({
+        pickIndex: r.pickIndex,
+        packNo: r.packNo,
+        pickNo: r.pickNo,
+        pack: r.pack.map((c) => ({ name: c.name, colors: c.colors })),
+        pickedName: r.pickedName,
+        score: r.score.score,
+        grade: r.score.grade,
+      })),
+    );
+    const forks = summarizeDiff(rows).forks;
+    if (forks.length === 0) return [];
+
+    const setDoc = await ctx.db
+      .query("sets")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", challenge.setCode).eq("format", challenge.format),
+      )
+      .unique();
+    if (!setDoc) return null;
+
+    const cardsDoc = await ctx.db
+      .query("setCards")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", setDoc.code).eq("format", setDoc.format),
+      )
+      .unique();
+    if (!cardsDoc) return null;
+
+    const names = mineRows.map((r) => r.pickedName);
+
+    try {
+      const set = toSetData(cardsDoc);
+      return forks.map((f) => forkImpact(set, challenge.seed, names, f.pickIndex, f.theirs));
+    } catch {
+      // The set has moved since this was drafted, so the counterfactual cannot
+      // be run. Not an error the reader can act on -- the diff beside it is
+      // still entirely valid, because it never replayed.
+      return null;
+    }
   },
 });
 

@@ -88,6 +88,26 @@ export async function storedScores(
 }
 
 /**
+ * Every row of a session, in pick order.
+ *
+ * Unchecked, like `storedPick` and `storedScores` beside it: the caller proves
+ * it may read them. That is a contract this file already had rather than a new
+ * exception -- the ownership check for these lives at each entry point, in
+ * `draft.coachContext` and `review.verdictContext`. The cross-user caller is
+ * `challenges.diff`, and its right to be here is `challengeParty`.
+ */
+export async function storedPicks(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+): Promise<Doc<"draftPicks">[]> {
+  const rows = await ctx.db
+    .query("draftPicks")
+    .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", sessionId))
+    .collect();
+  return rows.sort((a, b) => a.pickIndex - b.pickIndex);
+}
+
+/**
  * The pool as the draft left it, out of the LAST pick's row alone.
  *
  * A row's `poolBefore` holds every card taken before it, so the final row holds

@@ -258,3 +258,114 @@ describe("challenges.mine", () => {
     expect(his[0].unread).toBe(false);
   });
 });
+
+describe("challenges.diff", () => {
+  /** Two rows per side, sharing pack A at index 0 and differing at index 1. */
+  async function finished(t: ReturnType<typeof harness>) {
+    const { sessionId } = await seedWorld(t);
+    const challengeId = await as(t, "alice").mutation(api.challenges.create, { sessionId });
+    const friendSession = await as(t, "bob").mutation(api.challenges.accept, { challengeId });
+
+    const score = (name: string) => ({
+      score: 90,
+      grade: "A",
+      pickedName: name,
+      pickedValue: 50,
+      rawBestName: name,
+      rawBestValue: 50,
+      contextBestName: name,
+      contextBestValue: 50,
+      isBest: true,
+      onColor: true,
+      rankInPack: 1,
+    });
+    const card = (name: string) => ({ name, colors: ["U" as const], value: 50 });
+
+    await t.run(async (ctx) => {
+      for (const [sid, picks] of [
+        [sessionId, ["C0", "C2"]],
+        [friendSession, ["C0", "C3"]],
+      ] as const) {
+        for (const [i, name] of picks.entries()) {
+          await ctx.db.insert("draftPicks", {
+            sessionId: sid,
+            pickIndex: i,
+            packNo: 1,
+            pickNo: i + 1,
+            pack: [card("C0"), card("C2"), card("C3")],
+            pickedName: name,
+            poolBefore: [],
+            score: score(name),
+          });
+        }
+      }
+    });
+
+    return { challengeId, sessionId, friendSession };
+  }
+
+  it("refuses until the friend has finished", async () => {
+    const t = harness();
+    const { challengeId } = await finished(t);
+
+    await expect(
+      as(t, "alice").query(api.challenges.diff, { challengeId }),
+    ).rejects.toThrow(/not finished yet/);
+  });
+
+  it("refuses a third party outright", async () => {
+    const t = harness();
+    const { challengeId } = await finished(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch(challengeId, { finishedAt: new Date(0).toISOString() }),
+    );
+
+    await expect(
+      as(t, "mallory").query(api.challenges.diff, { challengeId }),
+    ).rejects.toThrow(/not yours to read/);
+  });
+
+  it("calls whoever is reading 'yours', from either side", async () => {
+    const t = harness();
+    const { challengeId } = await finished(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch(challengeId, { finishedAt: new Date(0).toISOString() }),
+    );
+
+    const hers = await as(t, "alice").query(api.challenges.diff, { challengeId });
+    const his = await as(t, "bob").query(api.challenges.diff, { challengeId });
+
+    expect(hers.rows[1].yours.pickedName).toBe("C2");
+    expect(hers.rows[1].theirs.pickedName).toBe("C3");
+    // Same comparison, columns swapped. Neither of them should have to work out
+    // which side of the row they are.
+    expect(his.rows[1].yours.pickedName).toBe("C3");
+    expect(his.rows[1].theirs.pickedName).toBe("C2");
+  });
+
+  it("calls a same-pack disagreement a fork, and agrees where they agreed", async () => {
+    const t = harness();
+    const { challengeId } = await finished(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch(challengeId, { finishedAt: new Date(0).toISOString() }),
+    );
+
+    const d = await as(t, "alice").query(api.challenges.diff, { challengeId });
+    expect(d.rows[0].agree).toBe(true);
+    expect(d.tally.forks.map((f) => f.pickIndex)).toEqual([1]);
+    expect(d.tally.comparable).toBe(2);
+  });
+
+  it("does not return poolBefore", async () => {
+    // ~60KB of wire for something the braid derives from each picked card's own
+    // colours. Convex bills the read either way; sending it is the avoidable half.
+    const t = harness();
+    const { challengeId } = await finished(t);
+    await t.run(async (ctx) =>
+      ctx.db.patch(challengeId, { finishedAt: new Date(0).toISOString() }),
+    );
+
+    const d = await as(t, "alice").query(api.challenges.diff, { challengeId });
+    expect(JSON.stringify(d)).not.toContain("poolBefore");
+  });
+});
