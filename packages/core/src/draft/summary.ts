@@ -1,4 +1,4 @@
-import type { EngineCard } from "../model/card.js";
+import type { EngineCard, PoolCard } from "../model/card.js";
 import { colorKey } from "../scoring/context.js";
 import { committedColors, type PickScore } from "../scoring/score.js";
 
@@ -30,8 +30,12 @@ export interface DraftSummary {
  * loud, and a label that disagreed with the coach was going to be the confusing
  * one whichever way it was wrong. One card is a card you are stuck with rather
  * than a colour you are in, which is why the floor is two rather than one.
+ *
+ * `PoolCard` rather than a whole card, because names and colours is the entire
+ * dependency -- which is what lets `draft.build` answer this from the pool a
+ * stored pick carries instead of replaying the draft to rebuild one.
  */
-export function deckColors(pool: EngineCard[]): string {
+export function deckColors(pool: readonly PoolCard[]): string {
   return colorKey(committedColors(pool));
 }
 
