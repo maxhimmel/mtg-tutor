@@ -265,6 +265,29 @@ so anything outside this file that cares should cite by name rather than number.
    because packs re-converge by coincidence, so a contiguous window is
    conservative and per-row "was this the same pack" is the truth.
 
+   **Swept 2026-08-08 while building it: 1000 seed/divergence combinations on
+   `fakeSet`, and two of the three results were not what the single measurement
+   above suggested.** `src/draft/diff.test.ts` is the harness.
+
+   - **The delay is never less than 8, and 8 exactly is reachable.** That is
+     `DRAFT.seats`: your own pick cannot reach your own packs until the pod
+     passes yours back round. So the wheel is a floor that holds for a
+     divergence at ANY index, not a fact about P1P1 — which is what makes
+     `delay` in `forkImpact` policy-free and safe to state without a caveat.
+     "Identical through index 7" is one seed's instance of it.
+   - **339 of the 1000 never drift at all.** Two people take different cards
+     and still see all 45 packs identical, because eight greedy bots consuming
+     the same top cards in a different order leave the same cards behind. So
+     "they diverged" does not imply "the pods came apart", and a diff can be
+     fully comparable end to end.
+   - **657 drift and then re-converge**, confirming the non-monotonicity above
+     at scale rather than anecdotally.
+
+   Found the hard way: the first seed picked for the tests was one of the 339,
+   so the drift assertions passed by never being exercised. Worth remembering
+   that a fixture can be too uniform to reproduce the phenomenon under test —
+   trap #4 wearing a different hat.
+
    **Dealing the friend a recording of your 45 packs was prototyped and
    rejected.** It makes all 45 rows compare perfectly and makes their picks
    inert — nothing they take changes what wheels back — so signal-reading and
