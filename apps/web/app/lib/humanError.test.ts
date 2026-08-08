@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ConvexError } from "convex/values";
-import { humanError } from "./humanError";
+import { explainedError, humanError } from "./humanError";
 
 describe("humanError", () => {
   // The bug this exists for: a quota refusal rendered as the whole server
@@ -32,5 +32,34 @@ describe("humanError", () => {
 
   it("stringifies anything else", () => {
     expect(humanError("just a string")).toBe("just a string");
+  });
+});
+
+describe("explainedError", () => {
+  // The bug this exists for: the review boundary printed a whole server report
+  // -- "[CONVEX Q(review:load)] [Request ID: 56f4…] Server Error Uncaught
+  // ConvexError: You need to be signed in to do that. at requireUserId … Called
+  // by client" -- as the page's only sentence.
+  it("takes the payload off a ConvexError", () => {
+    const thrown = new ConvexError("You need to be signed in to do that.");
+    thrown.message =
+      "[CONVEX Q(review:load)] [Request ID: 56f4] Server Error Uncaught ConvexError: " +
+      "You need to be signed in to do that. at requireUserId " +
+      "(../../convex/sessions.ts:22:18) Called by client";
+
+    expect(explainedError(thrown)).toBe("You need to be signed in to do that.");
+  });
+
+  // The whole point of the split: where humanError would hand back the raw
+  // message, a boundary needs to know there was nothing to say and write its
+  // own line. A chunk that failed to load is the common case.
+  it("is null when nothing human was thrown", () => {
+    const chunk = new Error("Failed to fetch dynamically imported module: /_next/static/x.js");
+    expect(explainedError(chunk)).toBeNull();
+    expect(humanError(chunk)).toBe(chunk.message);
+  });
+
+  it("is null for a ConvexError carrying a payload that is not a sentence", () => {
+    expect(explainedError(new ConvexError({ kind: "RateLimitError" }))).toBeNull();
   });
 });
