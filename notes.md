@@ -16,7 +16,9 @@ left empty rather than renumbering everything under it.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
-   data that would fix this.)
+   data that would fix this. Although, I'm not certain how synergies was initially
+   calculated/derived and warrants an explanation/discussion because I fear the
+   synergy data may be misrepresented.)
 
    **Still open, and now on purpose.** `setCardContext` was built to carry
    exactly this and synergy was left out of it: eight partner names per card
@@ -43,7 +45,8 @@ left empty rather than renumbering everything under it.
    `sourceHash` over the card pool, so stamping it on `draftSessions` at
    creation would let the list mark a stale draft without replaying anything.
    Only helps sessions created after the change, which is fine — it is a
-   forward-looking guard, not a repair.
+   forward-looking guard, not a repair. Another suggestion could be to compare
+   the dates of ingested sets with drafts.
 
    **`draftPicks` (2026-07-29) shrinks this from "unreadable" to "unreplayable".**
    Every pick now stores the pack it saw, so a stranded draft keeps its own
@@ -66,8 +69,11 @@ left empty rather than renumbering everything under it.
    the fix — the list still cannot know before you click, and the `sourceHash`
    fingerprint above is still what would let it.
 
-4. **Show the tokens a card makes.** Split out of the card-shape work, which
-   covered the rest of what was issue #0. A card that reads "create a Map token"
+   Before go ahead fixing this issue, let's do some more research and backup
+   or findings we've listed here. Let's also present a few different solutions
+   that are focused around the user's experience as this app grows/developes.
+
+4. **Show the tokens a card makes.** A card that reads "create a Map token"
    is asking you to know what a Map is, and nothing in the app says.
 
    The data supports it and costs one extra request per set. Scryfall's
@@ -84,6 +90,11 @@ left empty rather than renumbering everything under it.
    one token — so it has to be filtered rather than taken whole. And the hover
    already draws three boxes on a double-faced card with a stats panel, so where
    a token goes is a layout question before it is a data one.
+
+   These findings bring up an interesting tangent: what else does `all_parts`
+   and `components` return for us? I'm curious if there's anything else you
+   think we could use to enhance the user's experience from that data. Also,
+   what the heck is a `combo_piece`?
 
 5. **The coach still manufactures a fault when it cannot find one — prompt
    changed, not yet observed.** Reported on draft-v2: a Room dealing 4 damage to
@@ -137,9 +148,9 @@ Coach
 Stickytongue Sentinel is a solid 3‑mana 3/3 with reach and a bounce effect, but Mudflat Village’s mana acceleration, creature‑only mana restriction, and graveyard recursion give it a higher deck impact (+1.4 pp versus the +0.3 pp from Sentinel’s synergy) and the margin of error shows the advantage is statistically meaningful, so the “close call” claim is inaccurate and you should have taken Mudflat Village instead. Your reasoning that “exactly what my archetype wants” is off‑base: the archetype you’re building (a creature‑heavy green/blue midrange) benefits more from the extra early mana and the ability to replay cheap creatures than from Sentinel’s bounce effect, which rarely creates a decisive advantage.
 ```
 
-I could understand the misread based purely off stats - sure. But This happened at P2P1. I had 9 cards in my main deck that were all blue and green.
+I could understand the misread based purely off stats - sure. But this happened at P2P1. I had 9 cards in my main deck that were all blue and green and the coach telling me a black mana card was what I was meant to take feels crazy.
 
-Please, take my complaint with a grain of salt because I'm not an MTG expert and I want the coaching, but still - this smells funky to me.
+Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
 
 9. I'm concerned the deck builder algorithm isn't also looking at the cards in the sideboard? I've built a deck twice now and both times gotten an essentially perfect score. I didn't think I was THAT good so I just wanted to double check the algorithm for deck building also checks sideboard pieces.
 
@@ -160,6 +171,12 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 - Now answerable from data rather than authored: `setStats.archetypes` carries
   per-card win rate per deck-colour-pair, so "which deck wants this card" has a
   ground truth.
+- Another approach for a very similar/overlapping goal would be to ask what type of
+  deck does this card belong in: mid-range, aggro, control, etc. I don't even know
+  what all the deck types are and what their descriptions would be - that'd be very
+  cool indeed. I think the only reason I suggested "Boros" as an archetype is
+  because it's a name that fits into a MTG vernacular AND (generally) seems to
+  imply aggro-style decks.
 
 2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
    publishes three public datasets per set/format; the stats pipeline pulls only
@@ -183,27 +200,36 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
    - **Format speed.** Life totals and board state per turn say when games are
      actually decided. That is real pick advice: in a fast format a six-drop is
      worse than its raw GIH WR implies, and right now nothing in scoring knows
-     how fast a format is.
+     how fast a format is. IMPORTANT: I wonder how valid this point is...Each
+     data set belongs to a particular format. It's my understanding that drafting
+     formats are generally speedy games. So maybe something can be inferred by the
+     draft format alone? This app is meant to focus primarily on the draft experience.
    - **Curve and land-count truth.** End-of-turn lands in play vs winning,
      measured rather than assumed. This is now the _second_ route to a number
      the deck builder wanted and could not get — see the `DECK` note in
      `core/config.ts` for why the game dataset cannot supply it either.
    - **Gameplay coaching** (attacks, blocks, tempo) — the weakest fit. This is a
      _draft_ tutor; per-turn play coaching is a different product, and the data
-     existing is not a reason to build it.
+     existing is not a reason to build it. CONTRADICTORY NOTE: I actually think
+     this is a pretty neat idea! The main point of this app is to become a better
+     MTG player!
 
    If we do pick this up: the pipeline already streams gzip and never keeps raw
    files, so adding replay is a new derivation pass, not new infrastructure.
 
 3. What about a button on the side panel or something for the user to click to
-   get a hint/make a suggestion/pick for them? (Stats-on-hover is the always-on
-   version — a passive win-rate readout. This is the on-demand, ask-for-it one.)
+   get a hint/make a suggestion/pick for them? Show the raw & context best? Or
+   just the context best perhaps since the user should always be caring about
+   the deck they're currently drafting? (Stats-on-hover is the always-on version —
+   a passive win-rate readout. This is the on-demand, ask-for-it one.)
 
 4. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
    only "this card has the higher win rate". A pick-order distribution is a
    better teacher than a scalar, and it is the same new draft-data pass that
    `human-bots` in the roadmap needs — the bots consume it, the player sees it.
+   - I don't full understand this note. Can you explain the perks and how this
+     could improve the user's experience?
 
 5. **Sealed mode.** Six packs, no passing, build the 40. `makePack` and
    `suggestDeck` already exist, so this is mostly a new screen — and it is a
@@ -214,10 +240,15 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 6. **Re-serve your own misses.** `stats.overview` already computes
    `topMistakes`. Storing the seed + pick index and dealing that exact pack back
    weeks later is spaced repetition on the mistakes you personally make.
+   - This feels like it has the potential to be an AWESOME mini-game!
+     We could introduce a star UX rating system. It could help w/user retention.
 
 7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
 8. Holy FUCK awesome idea: be able to share drafts with friends! And/or send them a challenge to see what they would've drafted! And then ping the original member when their friend completed their draft. And show a diff between the 2 users!
+   - This brings up a secondary thought: what is the suggested way for users to contact/share contact info in the context of the app? How do other apps encourage their users to connect with others? And what's the mechanism in which a user actually knows about a friend's info within the app for them to both connect?
+
+9. One thing this app feels like it's desperately missing is some kinda progression/indication that the user is learning and improving. Something kinda like, "I was there, but now I'm here!"
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -243,6 +274,9 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
+   - Is this even still an issue?
+   - Also, related kinda but not really: it'd be very rad if we could have some kinda
+     mock-auth so, as a dev, I could sign in offline - but low priority.
 
 # Roadmap (pick per future session):
 
