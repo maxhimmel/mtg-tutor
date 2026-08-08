@@ -54,7 +54,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^22.7.0",
+    "convex-test": "^0.0.54",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
