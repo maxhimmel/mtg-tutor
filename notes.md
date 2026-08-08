@@ -66,10 +66,7 @@ left empty rather than renumbering everything under it.
    the fix — the list still cannot know before you click, and the `sourceHash`
    fingerprint above is still what would let it.
 
-4. We should create a favicon/logo for the app!
-   - Minimalist + cute + easy to see at a glance.
-
-5. **Show the tokens a card makes.** Split out of the card-shape work, which
+4. **Show the tokens a card makes.** Split out of the card-shape work, which
    covered the rest of what was issue #0. A card that reads "create a Map token"
    is asking you to know what a Map is, and nothing in the app says.
 
@@ -88,7 +85,7 @@ left empty rather than renumbering everything under it.
    already draws three boxes on a double-faced card with a stats panel, so where
    a token goes is a layout question before it is a data one.
 
-6. **The coach still manufactures a fault when it cannot find one — prompt
+5. **The coach still manufactures a fault when it cannot find one — prompt
    changed, not yet observed.** Reported on draft-v2: a Room dealing 4 damage to
    a creature, described by the player as "good removal", drew "calling it good
    removal mischaracterizes what the card does". It does kill a creature; the
@@ -111,7 +108,7 @@ left empty rather than renumbering everything under it.
    and the panel's eyebrow says "Your call on the gap", so a `misread` badge
    under an A+ is not read as a second opinion on the card.
 
-7. I noticed the "your call on the gap" doesn't have name highlighting as seen here (Embermouth Sentinel wasn't highlighted) and it should - just like the coach does:
+6. I noticed the "your call on the gap" doesn't have name highlighting as seen here (Embermouth Sentinel wasn't highlighted) and it should - just like the coach does:
 
 ```
 Your call on the gap
@@ -145,8 +142,6 @@ I could understand the misread based purely off stats - sure. But This happened 
 Please, take my complaint with a grain of salt because I'm not an MTG expert and I want the coaching, but still - this smells funky to me.
 
 9. I'm concerned the deck builder algorithm isn't also looking at the cards in the sideboard? I've built a deck twice now and both times gotten an essentially perfect score. I didn't think I was THAT good so I just wanted to double check the algorithm for deck building also checks sideboard pieces.
-
-10. I notice the abbreviations for deck colors doesn't include splashed colors - which I kinda think it should. Weird to see a deck w/7 white cards being splashed and not acknowledged whenever we're labeling a deck by its color abbreviations.
 
 # Ideas:
 
