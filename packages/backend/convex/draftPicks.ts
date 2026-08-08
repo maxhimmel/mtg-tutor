@@ -87,6 +87,44 @@ export async function storedScores(
   return rows.sort((a, b) => a.pickIndex - b.pickIndex).map((r) => r.score);
 }
 
+/**
+ * The pool as the draft left it, out of the LAST pick's row alone.
+ *
+ * A row's `poolBefore` holds every card taken before it, so the final row holds
+ * 44 of the 45 -- and the 45th is the card that row is about, sitting in its own
+ * `pack`. One document, ~1.5KB at P3P15 where the pack is down to a single card.
+ *
+ * That is the whole reason `draft.build` can correct a finished draft's colours
+ * without replaying it: rebuilding the pool through `loadBoard` would read the
+ * set's ~46KB card document, and would throw on a draft whose set has since been
+ * re-ingested -- which must not be a way to lose your deck.
+ *
+ * Pick order, because that is what a bench position indexes: `poolBefore` for
+ * pick n holds positions 0..n-1, so the picked card appends at exactly n.
+ */
+export function poolFromLastPick(row: Doc<"draftPicks">): PoolCard[] {
+  const picked = inPack(row.pack, row.pickedName);
+  return [...row.poolBefore, { name: picked.name, colors: picked.colors }];
+}
+
+/**
+ * `null` when the session has no row for its last pick, rather than a throw.
+ *
+ * Sessions drafted before `draftPicks` existed have rows only if the backfill
+ * could replay them, which by definition excludes the ones whose set has moved
+ * on. A caller that wants to refresh something derived should leave it alone in
+ * that case; none of them is worth failing a mutation over.
+ */
+export async function storedPool(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+  pickCount: number,
+): Promise<PoolCard[] | null> {
+  if (pickCount <= 0) return null;
+  const row = await storedPick(ctx, sessionId, pickCount - 1);
+  return row ? poolFromLastPick(row) : null;
+}
+
 function inPack(pack: EngineCard[], name: string): EngineCard {
   const card = pack.find((c) => c.name === name);
   if (!card) {
