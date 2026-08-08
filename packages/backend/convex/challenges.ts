@@ -1,8 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { diffDrafts, forkImpact, summarizeDiff } from "@mtg-tutor/core";
 import type { DiffSide } from "@mtg-tutor/core";
-import { mutation, query } from "./_generated/server.js";
+import { internalAction, internalQuery, mutation, query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
+import { internal } from "./_generated/api.js";
 import { challengeAccepted, challengeIssued } from "./analytics.js";
 import { startSession } from "./draft.js";
 import { storedPicks } from "./draftPicks.js";
@@ -385,6 +386,105 @@ export const forkImpacts = query({
     }
   },
 });
+
+/** The challenge row, for the notify action, which has no database of its own. */
+export const forNotify = internalQuery({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => await ctx.db.get(args.challengeId),
+});
+
+/**
+ * Telling the challenger their friend is done.
+ *
+ * The in-app half needs none of this -- `challenges.mine` is reactive, so the
+ * badge lights up on its own. This is the nudge that reaches somebody who is not
+ * looking at the app, and it is the only part of the feature that can be
+ * unconfigured and still leave the rest working.
+ *
+ * TWO THINGS HAVE TO BE TRUE FOR IT TO SEND, and neither is code:
+ *
+ *  1. A VERIFIED SENDING DOMAIN. `access.notifyOwner` sends from Resend's shared
+ *     `onboarding@resend.dev`, which delivers only to the Resend account
+ *     owner's own address -- fine for "somebody wants in", useless for mailing a
+ *     friend. Hence `RESEND_FROM`, and no default: guessing a sender that
+ *     silently fails to deliver is worse than not sending.
+ *  2. `WORKOS_API_KEY`, because the backend cannot otherwise learn an email
+ *     address at all. Identity carries `subject`, `role` and `org_id` and
+ *     nothing else, and there is no users table (decision #2), so the WorkOS
+ *     Management API is the only door from a subject to an address.
+ *
+ * Unset means logged and skipped, exactly as access.ts treats it. Nothing here
+ * throws: this runs after the friend's last pick has already committed, and
+ * failing to send an email must never look like failing to finish a draft.
+ */
+export const notifyChallenger = internalAction({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    const challenge = await ctx.runQuery(internal.challenges.forNotify, {
+      challengeId: args.challengeId,
+    });
+    if (!challenge) return;
+
+    const key = process.env.RESEND_API_KEY;
+    const from = process.env.RESEND_FROM;
+    const workos = process.env.WORKOS_API_KEY;
+    const appUrl = process.env.APP_URL;
+
+    if (!key || !from || !workos || !appUrl) {
+      console.info(
+        `Challenge ${challenge._id} finished; not emailing (unconfigured: ` +
+          `${[!key && "RESEND_API_KEY", !from && "RESEND_FROM", !workos && "WORKOS_API_KEY", !appUrl && "APP_URL"]
+            .filter(Boolean)
+            .join(", ")}).`,
+      );
+      return;
+    }
+
+    const to = await addressOf(challenge.challengerSubject, workos);
+    if (!to) return;
+
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: `Your ${challenge.setCode.toUpperCase()} challenge came back`,
+        text: [
+          `Somebody drafted your ${challenge.setCode.toUpperCase()} packs.`,
+          "",
+          `See where you two went different ways:`,
+          `${appUrl}/challenge/${challenge._id}/diff`,
+        ].join("\n"),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Could not email the challenger: ${response.status} ${await response.text()}`);
+    }
+  },
+});
+
+/**
+ * A WorkOS user id to an email address.
+ *
+ * Raw fetch rather than `@workos-inc/node`, which is only in the web tree via
+ * authkit-nextjs and would need `"use node"` here for one GET. Same trade
+ * access.ts makes with Resend.
+ */
+async function addressOf(subject: string, apiKey: string): Promise<string | null> {
+  const response = await fetch(`https://api.workos.com/user_management/users/${subject}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  if (!response.ok) {
+    console.error(`Could not resolve ${subject} to an address: ${response.status}`);
+    return null;
+  }
+
+  const body = (await response.json()) as { email?: unknown };
+  return typeof body.email === "string" ? body.email : null;
+}
 
 /**
  * The offer, for whoever is holding the link.

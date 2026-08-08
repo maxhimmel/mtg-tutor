@@ -20,7 +20,8 @@ import {
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
+import { challengeFinished, deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
+import { internal } from "./_generated/api.js";
 import { enforce } from "./quota.js";
 import { requireCaller } from "./roles.js";
 import type { Caller } from "./roles.js";
@@ -315,6 +316,36 @@ export const pick = mutation({
         // draft resumed the next morning is not reported as a long sitting.
         ms: Date.now() - Date.parse(session.createdAt),
       });
+
+      // Somebody may be waiting to hear about this one.
+      //
+      // Off `session.challengeId`, so this is a get on a document already in
+      // hand rather than an index lookup, and only on the one pick in
+      // forty-two that finishes a draft. After the patch and after the
+      // analytics: the capture is the thing that must survive, and a scheduled
+      // send here has exactly the rollback semantics posthog.capture does --
+      // it is inside this transaction, so a throw below would unschedule it.
+      //
+      // Guarded rather than asserted. A dangling or already-finished
+      // challengeId must never be able to fail somebody's forty-second pick,
+      // which is the same rule analytics lives under and matters more here,
+      // because ctx.db can throw where a no-op capture cannot.
+      if (session.challengeId) {
+        const challenge = await ctx.db.get(session.challengeId);
+        if (challenge && !challenge.finishedAt) {
+          const finishedAt = new Date().toISOString();
+          await ctx.db.patch(challenge._id, { finishedAt });
+          await challengeFinished(ctx, {
+            challengeId: challenge._id,
+            setCode: session.setCode,
+            format: session.format,
+            ms: Date.now() - Date.parse(session.createdAt),
+          });
+          await ctx.scheduler.runAfter(0, internal.challenges.notifyChallenger, {
+            challengeId: challenge._id,
+          });
+        }
+      }
     }
 
     return {
