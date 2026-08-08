@@ -270,6 +270,15 @@ export default defineSchema({
     // `ingest-sets --force`, which re-crawls Scryfall under the same hash. It
     // is a cheap hint for a list, and a replay is the only real test.
     sourceHash: v.optional(v.string()),
+    // That this draft was taken in answer to a challenge, and which one.
+    //
+    // On the session rather than found by an index on `challenges`, because the
+    // one reader is `draft.pick`'s completion branch: it already holds this
+    // document, so notifying costs a single get on the last pick of a draft and
+    // nothing at all on the other forty-one. It is also what tells the browser a
+    // draft arrived through a link, which is a property on an existing event
+    // rather than a new one.
+    challengeId: v.optional(v.id("challenges")),
   }).index("by_user", ["userId"]),
 
   // What one pick actually saw and scored, written as it happens.
@@ -309,6 +318,78 @@ export default defineSchema({
     // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
+  // One person daring another to draft the same packs, and the two drafts that
+  // came of it.
+  //
+  // "Challenge" already means the counter-argument the commitment ceremony puts
+  // to you before a pick lands (`draftPicks.defense.challengedName`). Two
+  // meanings for one word is deliberate rather than accidental: this is the word
+  // the feature is called by everywhere outside the code, and the ceremony's
+  // sense never appears in the plural or as a table.
+  //
+  // THE ROW IS THE GRANT. Both sessions are named here, so "may I read this
+  // draft" reduces to "am I one of the two people on a row that names it" --
+  // which is why there is no share table and no ACL. The two gates are
+  // `challengeInvite` and `challengeParty` in sessions.ts, and they are the only
+  // exception to `ownedSession` in the app.
+  //
+  // THE _id IS THE LINK. A bearer capability, which is exactly what a link
+  // sent out of band is, and `ctx.db.get` needs no index to honour one. There is
+  // no separate token to rotate because there is nothing to rotate TO: revoking
+  // is `revokedAt`, and a revoked row still answers, so the person holding the
+  // link is told it was withdrawn rather than that it never existed.
+  //
+  // NO STATUS COLUMN. The state is the timestamps -- open, accepted, finished,
+  // revoked -- for the same reason `accessRequests` has none: a status field is
+  // a second answer to a question the data already answers, free to disagree
+  // with it. "Accepted and then wandered off" is likewise derived, from
+  // `acceptedAt` against the last `draftPicks` row of the accepted session,
+  // rather than by teaching `draftSessions.status` a third literal that every
+  // existing reader would have to learn.
+  challenges: defineTable({
+    // Both identity keys, for the reason the feedback table gives: the token
+    // identifier is what `draftSessions.userId` matches, and the WorkOS subject
+    // is what an email lookup and PostHog key on. Carrying one means choosing
+    // which half of the app this row can reach.
+    challengerUserId: v.string(),
+    challengerSubject: v.string(),
+    challengerSessionId: v.id("draftSessions"),
+    // Copied rather than read off the challenger's session, because accepting
+    // deals a NEW draft and these three are its arguments. A challenge is an
+    // offer of a deal, and the offer should not change if the session it came
+    // from is somehow edited later.
+    setCode: v.string(),
+    format: v.string(),
+    seed: v.number(),
+    // What the challenger typed. The backend can learn no name and no email --
+    // identity carries `subject`, `role` and `org_id` and nothing else -- so if
+    // the landing page is to say who this is from, the sender has to say so.
+    // Unverified user text on a page and in a subject line: clamp it.
+    fromName: v.optional(v.string()),
+    note: v.optional(v.string()),
+    createdAt: v.string(),
+    // Set together, once, when somebody takes the challenge up. `friendUserId`
+    // is what makes a second acceptor impossible and what the party gate reads.
+    friendUserId: v.optional(v.string()),
+    friendSubject: v.optional(v.string()),
+    friendSessionId: v.optional(v.id("draftSessions")),
+    acceptedAt: v.optional(v.string()),
+    // Written by draft.pick's completion branch, off `draftSessions.challengeId`
+    // -- one get on a document already in hand, on the one pick in forty-two
+    // that finishes a draft. Also the diff's gate: without it the challenger
+    // could read their friend's picks while the friend was still making them.
+    finishedAt: v.optional(v.string()),
+    // Withdrawing the offer. Illegal once `acceptedAt` is set: by then the
+    // friend has spent one of their three drafts for the day on it.
+    revokedAt: v.optional(v.string()),
+    // That the challenger has seen the finished diff, which is what the unread
+    // badge counts. Qualified by side because both parties can open the diff and
+    // a bare `seenAt` would not say whose eyes it means.
+    challengerSeenAt: v.optional(v.string()),
+  })
+    .index("by_challenger", ["challengerUserId"])
+    .index("by_friend", ["friendUserId"]),
 
   // Frozen on first review so re-reviews are stable. Keyed by position in the
   // session's pick list, which is what draftPicks keys on too.
