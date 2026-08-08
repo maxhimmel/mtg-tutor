@@ -162,6 +162,8 @@ empty rather than renumbering everything under it. 4, 5 and 10 shipped on
 2026-07-30; the sideboard and mana-curve ideas that took 10 and 11 after that
 shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 7 (invite-only access) and 8 (per-user daily limits) shipped on 2026-08-06.
+10 is in use again as of 2026-08-08: a freed number does get reused eventually,
+so anything outside this file that cares should cite by name rather than number.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -248,7 +250,83 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 8. Holy FUCK awesome idea: be able to share drafts with friends! And/or send them a challenge to see what they would've drafted! And then ping the original member when their friend completed their draft. And show a diff between the 2 users!
    - This brings up a secondary thought: what is the suggested way for users to contact/share contact info in the context of the app? How do other apps encourage their users to connect with others? And what's the mechanism in which a user actually knows about a friend's info within the app for them to both connect?
 
+   **Prototyped 2026-08-08 on the `challenge-lab` branch** (never merged; two
+   labs, `pnpm challenge-lab` and `/diff-lab`). What it settled:
+
+   **Two drafters on one seed see identical packs only through pick index 7.**
+   Measured, not reasoned: the boosters *dealt* are identical the whole way,
+   because the human consumes no `rng()` and every bot draws exactly
+   `hand.length` numbers, so the stream position at each `openPack()` is
+   invariant. But at P1P9 your own pack wheels back with your own P1P1 pick
+   gone, and the bot cascade that pick set off has already moved every bot's
+   `colorValue`. Two things about the drift are worth not rediscovering: the
+   picks still mostly AGREE across it — 43 of 45 after a divergence at P1P1 —
+   so a drifted diff looks trustworthy and is not; and drift is not monotonic,
+   because packs re-converge by coincidence, so a contiguous window is
+   conservative and per-row "was this the same pack" is the truth.
+
+   **Dealing the friend a recording of your 45 packs was prototyped and
+   rejected.** It makes all 45 rows compare perfectly and makes their picks
+   inert — nothing they take changes what wheels back — so signal-reading and
+   wheeling, which is most of what a draft teaches, is switched off. It looks
+   like a draft and is a multiple-choice quiz with your answer key. The
+   alignment is not worth the thing being practised. **Live pod, and the diff
+   says out loud where it stops being a comparison.**
+
+   The deal itself is free: `draft.start` already takes an optional `seed`, and
+   `draftPicks.pack` has stored each pick's pack as seen since 2026-07-29 — so
+   each drafter's own packs are on their own rows and a diff needs no replay,
+   which also means it cannot be stranded by a re-ingest the way `review.load`
+   is (issue #3).
+
+   **The screen is an overview above a step-through.** A chronological list of
+   all 45 rows was tried and is the obvious shape and the least useful one. What
+   won is a hero — the draft answered in one line, then only the forks, each as
+   two full card faces the way `TheChallenge` draws one — over a pack-by-pack
+   stepper, where the whole shelf both cards came off is visible, because "they
+   took the better card" and "they took the only other playable in a bad pack"
+   are different lessons and nothing that renders two cards can tell them apart.
+   Clicking a fork drives the stepper. **Still wanted, and not yet drawn: a
+   branching tree of where the two drafts diverged and what that led to** — that
+   is what the rejected timeline was reaching for.
+
+   **How the two people connect: a link, sent out of band.** No friend list, no
+   directory. The backend cannot learn a name or an email — identity carries
+   `subject`, `role` and `org_id` and nothing else (decisions #2 and #15) — so
+   anything nominal needs either a users table or a WorkOS Management API call,
+   and everyone in a private beta already knows you personally.
+
+   **What is genuinely missing, and is the real cost of this feature.** There is
+   no notification primitive of any kind: no inbox, no unread, no cron, no
+   badge; the only email precedent is `access.ts`. And a friend who accepts and
+   wanders off leaves `draftSessions.status` at `"active"` forever — there is no
+   terminal signal in the schema, so "they started and never finished" is
+   unsayable. The link is also a seed that outlives the moment it was made, so
+   it meets issue #3 far more often than a same-day draft does.
+
 9. One thing this app feels like it's desperately missing is some kinda progression/indication that the user is learning and improving. Something kinda like, "I was there, but now I'm here!"
+
+10. **Read your friend's reasoning, pick by pick.** Fell out of #8 as a
+    separate thing rather than a mode of it: the interesting part of another
+    person's draft is not only what they took but why, and a shared draft that
+    carried their sentences would be worth reading even where the two pods have
+    drifted and the picks no longer line up.
+
+    **The data already exists.** `draftPicks.defense` is
+    `{reason, confidence, challengedName, switched}`, written by the commitment
+    ceremony, and decision #11 is emphatic that there is deliberately no edit
+    button on it once the challenger is on screen — so the sentence is a real
+    prediction made before anything was revealed rather than a rationalisation
+    written after. That is exactly what makes it worth showing somebody else.
+    So this is a second reader on a column that is already populated, not a new
+    feature underneath one.
+
+    Two things it would need thinking about. A `defense` only exists for picks
+    made through the challenge ceremony (decision #13 — a row carrying one went
+    through it, a row without one did not), so a draft taken on the passive flow
+    has nothing to show. And a reason written for yourself is not a reason
+    written for a friend; whether people would still be honest in that box once
+    they know it is readable is the question that decides whether this is good.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
