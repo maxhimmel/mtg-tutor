@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { gradeFor } from "@mtg-tutor/core";
@@ -9,6 +9,7 @@ import { ColorPips } from "../components/ColorPips";
 import { PageShell } from "../components/PageShell";
 import { SetIcon } from "../components/SetIcon";
 import { gradeColor, pct, releaseDate } from "../lib/format";
+import { reviewListSeen } from "../lib/analytics";
 
 export default function ReviewIndex() {
   return (
@@ -55,6 +56,20 @@ function DraftList() {
     () => new Map((sets ?? []).map((s) => [`${s.code}:${s.format}`, s])),
     [sets],
   );
+
+  // Once per visit, not once per render: `review.list` is a live subscription
+  // and re-answers whenever any session on the page is written to, which would
+  // otherwise report the same list several times over one reading of it.
+  const counted = useRef(false);
+  useEffect(() => {
+    if (!drafts || counted.current) return;
+    counted.current = true;
+    reviewListSeen({
+      shown: drafts.length,
+      stale: drafts.filter((d) => d.stale === true).length,
+      unknown: drafts.filter((d) => d.stale === undefined).length,
+    });
+  }, [drafts]);
 
   if (drafts === undefined) {
     return <p className="text-base-content/60">Loading drafts…</p>;
@@ -119,8 +134,22 @@ function DraftList() {
                           {name}
                           <ColorPips colors={draft.colorPair} />
                         </span>
-                        <span className="eyebrow">
-                          {draft.setCode.toUpperCase()} · {draft.pickCount} picks
+                        <span className="flex items-center gap-2">
+                          <span className="eyebrow">
+                            {draft.setCode.toUpperCase()} · {draft.pickCount} picks
+                          </span>
+                          {/* Every action on this row replays, so a re-ingested
+                              set makes the whole row refuse rather than one
+                              button. Said here, once, instead of three times.
+                              Absent when unknowable -- see review.list. */}
+                          {draft.stale === true && (
+                            <span
+                              className="badge badge-sm badge-warning"
+                              title="This set has been re-ingested since you drafted it, so its packs would now deal differently and the draft can no longer be rebuilt."
+                            >
+                              set has changed
+                            </span>
+                          )}
                         </span>
                       </span>
                     </span>

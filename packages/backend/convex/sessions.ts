@@ -133,6 +133,27 @@ export async function replayFor(ctx: QueryCtx, session: Doc<"draftSessions">) {
   return { session, engine, setDoc, cardsDoc };
 }
 
+/**
+ * Whether a draft was dealt from set data that has since moved on.
+ *
+ * Three answers, not two. `undefined` means the question cannot be answered --
+ * the session predates the stamp, or the set was ingested with no artifact to
+ * hash -- and it must not collapse to `false`, because "we cannot tell" and
+ * "this is fine" lead a reader to opposite conclusions and only one of them is
+ * safe. A truthy check on the return value is the bug this shape exists to make
+ * visible.
+ *
+ * A hint for a list, never a guard: see the note on `draftSessions.sourceHash`
+ * for the two ways a pool changes without the hash following it.
+ */
+export function staleAgainst(
+  sessionHash: string | undefined,
+  liveHash: string | undefined,
+): boolean | undefined {
+  if (sessionHash === undefined || liveHash === undefined) return undefined;
+  return sessionHash !== liveHash;
+}
+
 /** The caller's sessions, newest first. */
 export async function ownSessions(
   ctx: QueryCtx,

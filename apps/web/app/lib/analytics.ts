@@ -216,6 +216,26 @@ export function draftRefused(p: { setCode: string; format: string; message: stri
 }
 
 /**
+ * How much of somebody's review list is unreadable.
+ *
+ * Re-ingesting a set strands every draft taken against the old data, and the
+ * cost of that has never been measurable: the list could not tell until you
+ * clicked, so nothing anywhere counted how often it happens to a real person.
+ * That is the number that decides whether issue #3 is worth a real fix or is a
+ * theoretical problem we keep describing to each other.
+ *
+ * Per list render rather than per row, and it carries `shown` so the ratio is
+ * readable -- one stale draft out of twenty is a footnote, and eleven out of
+ * twenty is the whole review feature quietly not working. `unknown` counts the
+ * drafts that predate the stamp, because a metric that folded those into either
+ * answer would be reporting a certainty it does not have.
+ */
+export function reviewListSeen(p: { shown: number; stale: number; unknown: number }): void {
+  if (!on()) return;
+  posthog.capture("review_list_seen", p);
+}
+
+/**
  * A signed-in account that may do nothing at all.
  *
  * Read off quota.mine's role rather than by matching the refusal prose, because

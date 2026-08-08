@@ -250,6 +250,26 @@ export default defineSchema({
     // about the session, and because the alternative -- a lookup per verdict --
     // is a read this document was going to do anyway.
     reviewClaimedAt: v.optional(v.string()),
+    // What the set looked like when this draft was dealt, copied from
+    // `sets.sourceHash` at creation.
+    //
+    // A session is {seed, pickedNames} replayed against whatever the set says
+    // TODAY, so re-ingesting a set strands every draft taken against the old
+    // data -- the packs that draft saw no longer exist and nothing can repair
+    // them. `replayFor` says so in human terms, but only once you have already
+    // clicked, because `review.list` reads the denormalized summary and never
+    // replays. It cannot know until it is too late to warn you.
+    //
+    // This is the fingerprint that lets the list mark a stale draft for the
+    // price of reading a ~433-byte `sets` row. Forward-looking only: sessions
+    // created before this existed have no hash and are reported as unknown
+    // rather than as stale, which is honest -- they might be either.
+    //
+    // Deliberately NOT the guard on anything that must be correct. The hash is
+    // absent when a set is ingested with no artifact to hand, and unchanged by
+    // `ingest-sets --force`, which re-crawls Scryfall under the same hash. It
+    // is a cheap hint for a list, and a replay is the only real test.
+    sourceHash: v.optional(v.string()),
   }).index("by_user", ["userId"]),
 
   // What one pick actually saw and scored, written as it happens.

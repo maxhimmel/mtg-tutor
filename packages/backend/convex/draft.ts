@@ -71,7 +71,7 @@ export const start = mutation({
 
     // Before the quota, so a set code that does not exist reports itself as a
     // bad set code rather than as a day's allowance spent on nothing.
-    await setDocFor(ctx, setCode, format);
+    const setDoc = await setDocFor(ctx, setCode, format);
 
     // And after it, so anything that throws below rolls the token back with the
     // transaction -- which is the reason this is a component and not a counter.
@@ -87,6 +87,8 @@ export const start = mutation({
       pickedNames: [],
       status: "active" as const,
       createdAt: new Date().toISOString(),
+      // Free -- setDocFor already read this row above to prove the set exists.
+      sourceHash: setDoc.sourceHash,
     });
 
     // After the insert and after the quota, so nothing is reported that did not
