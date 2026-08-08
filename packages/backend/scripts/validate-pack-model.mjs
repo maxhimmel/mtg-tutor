@@ -364,36 +364,65 @@ if (!noOracle) {
     );
   } else {
     const model = boosters[type];
-    // A bonus sheet by our own rule: cards that are not part of the set. Reading
-    // it off uuids rather than sheet names avoids guessing from labels that
-    // change every set ("theList", "mysticalArchive", "enchantingTales").
+    // A bonus card by our own rule: one that is not part of the set. Judged per
+    // card off uuids, never per sheet. MH3 scatters its eight M3C legends
+    // through the general wildcard and foilReplacement sheets, so asking whether
+    // a whole *sheet* is foreign scores those two zero and reads 4.7pp low --
+    // it saw only the dedicated specialGuest sheet. Sheet names are no better a
+    // guide; they change every set ("theList", "mysticalArchive").
     const own = new Set((data.cards ?? []).map((c) => c.uuid));
-    const isBonusSheet = (name) => {
-      const uuids = Object.keys(model.sheets[name]?.cards ?? {});
-      return uuids.length > 0 && uuids.every((u) => !own.has(u));
-    };
-    const bonusSheets = Object.keys(model.sheets).filter(isBonusSheet);
-
-    const bonusWeight = model.boosters
-      .filter((b) => bonusSheets.some((s) => b.contents[s]))
-      .reduce((n, b) => n + b.weight, 0);
-    const theirRate = bonusWeight / model.boostersTotalWeight;
-    const ourRate = (shapeRates.get("bonus") ?? 0) / totalWeight;
-
-    const theirSize = bonusSheets.reduce(
-      (n, s) => n + Object.keys(model.sheets[s].cards).length,
-      0,
+    const shares = new Map(
+      Object.entries(model.sheets).map(([name, sheet]) => {
+        const cards = Object.entries(sheet.cards ?? {});
+        const total = cards.reduce((n, [, w]) => n + w, 0);
+        const foreign = cards.reduce((n, [u, w]) => (own.has(u) ? n : n + w), 0);
+        return [name, total ? foreign / total : 0];
+      }),
     );
+
+    // Expected bonus cards per pack -- the one currency both sides can state
+    // exactly. Not the share of packs carrying one: an MH3 pack can hold two,
+    // and the two quantities drift apart precisely where the check matters.
+    const theirRate = model.boosters.reduce((rate, b) => {
+      const perPack = Object.entries(b.contents).reduce(
+        (n, [sheet, count]) => n + count * (shares.get(sheet) ?? 0),
+        0,
+      );
+      return rate + (b.weight / model.boostersTotalWeight) * perPack;
+    }, 0);
+    const ourRate = packCards
+      .filter((c) => c.slot === "bonus")
+      .reduce((n, c) => n + (c.openedRate ?? 0), 0);
+
+    const theirSize = new Set(
+      Object.values(model.sheets).flatMap((s) =>
+        Object.keys(s.cards ?? {}).filter((u) => !own.has(u)),
+      ),
+    ).size;
     const ourSize = set.pools.bonus.length;
 
-    console.log(`  booster model: ${type}, bonus sheet(s): ${bonusSheets.join(", ") || "none"}`);
+    const carrying = [...shares].filter(([, s]) => s > 0).map(([n]) => n);
+    console.log(`  booster model: ${type}, bonus cards on: ${carrying.join(", ") || "none"}`);
 
-    Math.abs(theirRate - ourRate) > RATE_TOLERANCE * 3
-      ? fail(`bonus slot rate ${pct(ourRate)} vs MTGJSON ${pct(theirRate)}`)
-      : ok(`bonus slot rate ${pct(ourRate)} vs MTGJSON ${pct(theirRate)}`);
+    if (!packCards.length) {
+      skip(`bonus rate: artifact predates packCards; MTGJSON says ${pct(theirRate)}`);
+    } else {
+      // Expected cards per pack is not bounded by 1 -- OTJ deals theList and
+      // breakingNews together and sits at 1.24 -- so an absolute band alone
+      // grades unevenly, holding OTJ to 1.2% while giving a 6% set 25%. The
+      // error this is here to catch moves by multiples, so demand both: off by
+      // a multiple *and* off by enough to matter. Either alone is sampling.
+      const gap = Math.abs(theirRate - ourRate);
+      const ratio = theirRate > 0 ? ourRate / theirRate : ourRate > 0 ? Infinity : 1;
+      gap > RATE_TOLERANCE * 3 && (ratio < 0.85 || ratio > 1.15)
+        ? fail(`bonus rate ${pct(ourRate)} vs MTGJSON ${pct(theirRate)}`)
+        : ok(`bonus rate ${pct(ourRate)} vs MTGJSON ${pct(theirRate)}`);
+    }
 
-    // Sizes can differ legitimately: MTGJSON counts the sheet as printed, we
-    // count what 17Lands actually saw opened. A gap is worth a look, not a fail.
+    // Sizes can still differ legitimately: MTGJSON counts the sheet as printed,
+    // we count what 17Lands actually saw opened. A gap is worth a look, not a
+    // fail. Counting foreign uuids across every sheet rather than whole sheets
+    // is what makes MH3's 18 line up at all.
     theirSize === ourSize
       ? ok(`bonus pool ${ourSize} cards vs MTGJSON ${theirSize}`)
       : skip(`bonus pool ${ourSize} cards vs MTGJSON ${theirSize} — worth a look`);
