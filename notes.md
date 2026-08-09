@@ -38,24 +38,14 @@ left empty rather than renumbering everything under it.
    for six sets. It is not repairable — the packs that draft saw no longer
    exist.
 
-   `loadBoard` now says so in human terms instead of leaking the engine's
-   message, but `/review` still **lists** those drafts, because `review.list`
-   reads the denormalized summary and never replays — so it cannot know until
-   you click. The cheap fix is a fingerprint: `sets` already carries
-   `sourceHash` over the card pool, so stamping it on `draftSessions` at
-   creation would let the list mark a stale draft without replaying anything.
-   Only helps sessions created after the change, which is fine — it is a
-   forward-looking guard, not a repair. Another suggestion could be to compare
-   the dates of ingested sets with drafts.
+   `loadBoard` says so in human terms instead of leaking the engine's message.
 
    **`draftPicks` (2026-07-29) shrinks this from "unreadable" to "unreplayable".**
    Every pick now stores the pack it saw, so a stranded draft keeps its own
    history: `coachContext` and `verdictContext` read the row and never replay,
-   and work fine on a session whose set has moved on. Only `review.load` still
-   replays and so still fails, which makes it the one thing left to fix — and it
-   could be fixed by reading the rows too, at the cost of the whole-set text read
-   it already does. Sessions drafted before that date have rows only if the
-   backfill could replay them, which by definition excludes the stranded ones.
+   and work fine on a session whose set has moved on. Sessions drafted before
+   that date have rows only if the backfill could replay them, which by
+   definition excludes the stranded ones.
 
    Worth knowing: the 2026-07-29 `POOL_REVISION` bump re-ingested all 17 sets on
    both deployments and stranded **nothing** — the backfill replayed every prod
@@ -63,15 +53,47 @@ left empty rather than renumbering everything under it.
    `packRate` rebuild that broke EOE, not re-ingestion as such. The 2026-08-05
    `9-card-shape` bump behaved the same way on the two sets it was run against.
 
-   `/review/[id]/deck` (2026-08-05) is the third reader to hit this and the first
-   to handle it deliberately: it catches the `ConvexError` and renders the message
-   in place with a way back, rather than a blank page. That is containment, not
-   the fix — the list still cannot know before you click, and the `sourceHash`
-   fingerprint above is still what would let it.
+   `/review/[id]/deck` (2026-08-05) was the third reader to hit this and the
+   first to handle it deliberately: it catches the `ConvexError` and renders the
+   message in place with a way back, rather than a blank page. Containment, not
+   the fix.
 
-   Before go ahead fixing this issue, let's do some more research and backup
-   or findings we've listed here. Let's also present a few different solutions
-   that are focused around the user's experience as this app grows/developes.
+   **The fingerprint is built (2026-08-09), so the list no longer sends you into
+   a wall.** `draftSessions.sourceHash` is stamped at creation from the `sets`
+   row `setDocFor` had already read, so it costs nothing, and `review.list`
+   compares it against the set's hash today — one ~433-byte row per distinct set
+   on the page, against 25 replays of ~46KB apiece. A stale draft is badged
+   before you click. Forward-looking only, as expected: sessions from before the
+   stamp carry no hash.
+
+   **It answers three ways, not two, and that is the part worth keeping.**
+   `staleAgainst` returns `undefined` when either side has no hash, and that must
+   never collapse to "fine" — a draft from before the stamp might be either, and
+   the two answers send a reader in opposite directions. `undefined === undefined`
+   is true, so a naive comparison calls a draft fresh precisely when it knows
+   least about it.
+
+   **It is a hint and cannot be a guard**, which is why `challenges.accept`
+   replays rather than comparing hashes. Two blind spots, both real:
+   `ingest-sets --force` re-crawls Scryfall and writes a new pool under the SAME
+   hash, and the hash is absent entirely when a set is ingested with no artifact
+   to hand — the CLI's on-demand path. Only a replay answers "would this seed
+   still deal those packs", and that is the one question an accept has to get
+   right, because getting it wrong is silent: both drafts work and the comparison
+   is nonsense.
+
+   **What is left is `review.load`**, the last reader that replays — so a
+   stranded draft is now badged and still unopenable. Reading rows instead would
+   fix it, and the shape is no longer hypothetical: `challenges.diff` reads two
+   whole drafts out of `draftPicks` for a measured 138.5KB, against
+   `review.load`'s 218KB. Cheaper than what it would replace, and immune to this
+   issue by construction.
+
+   Another suggestion could be to compare the dates of ingested sets with drafts.
+
+   Before going ahead with the rest of this, let's do some more research and back
+   up the findings listed here. Let's also present a few different solutions
+   focused on the user's experience as this app grows/develops.
 
 4. **Show the tokens a card makes.** A card that reads "create a Map token"
    is asking you to know what a Map is, and nothing in the app says.
@@ -164,6 +186,9 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 7 (invite-only access) and 8 (per-user daily limits) shipped on 2026-08-06.
 10 is in use again as of 2026-08-08: a freed number does get reused eventually,
 so anything outside this file that cares should cite by name rather than number.
+8 (challenge a friend) shipped on 2026-08-09 and is the one exception to the
+delete-and-leave-empty rule: 8b and 8c are follow-ons that cite it, so it keeps
+a one-line stub rather than orphaning them.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -247,62 +272,27 @@ so anything outside this file that cares should cite by name rather than number.
 
 7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
-8. Holy FUCK awesome idea: be able to share drafts with friends! And/or send them a challenge to see what they would've drafted! And then ping the original member when their friend completed their draft. And show a diff between the 2 users!
-   - This brings up a secondary thought: what is the suggested way for users to contact/share contact info in the context of the app? How do other apps encourage their users to connect with others? And what's the mechanism in which a user actually knows about a friend's info within the app for them to both connect?
+8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
+   drafts side by side. What it is and how to test one alone are in `README.md`;
+   the rulings that came out of building it are decisions #17 and #18. The
+   design write-up that used to sit here is gone with the idea, as a shipped
+   idea should be.
 
-   **Prototyped 2026-08-08 on the `challenge-lab` branch** (never merged; two
-   labs, `pnpm challenge-lab` and `/diff-lab`). What it settled:
+   The number is not left empty the way the note at the top of this section
+   describes, because 8b and 8c below are follow-ons that cite it and would be
+   orphaned by an empty slot. They are future work, deliberately not built.
 
-   **Two drafters on one seed see identical packs only through pick index 7.**
-   Measured, not reasoned: the boosters *dealt* are identical the whole way,
-   because the human consumes no `rng()` and every bot draws exactly
-   `hand.length` numbers, so the stream position at each `openPack()` is
-   invariant. But at P1P9 your own pack wheels back with your own P1P1 pick
-   gone, and the bot cascade that pick set off has already moved every bot's
-   `colorValue`. Two things about the drift are worth not rediscovering: the
-   picks still mostly AGREE across it — 43 of 45 after a divergence at P1P1 —
-   so a drifted diff looks trustworthy and is not; and drift is not monotonic,
-   because packs re-converge by coincidence, so a contiguous window is
-   conservative and per-row "was this the same pack" is the truth.
+8b. I'm curious - is it possible for me to send a challenge of "draft-A" to multiple different friends? -- or is it only one challenge per draft?
 
-   **Dealing the friend a recording of your 45 packs was prototyped and
-   rejected.** It makes all 45 rows compare perfectly and makes their picks
-   inert — nothing they take changes what wheels back — so signal-reading and
-   wheeling, which is most of what a draft teaches, is switched off. It looks
-   like a draft and is a multiple-choice quiz with your answer key. The
-   alignment is not worth the thing being practised. **Live pod, and the diff
-   says out loud where it stops being a comparison.**
+If multiple people can get challenges to the same draft it'd be pretty rad to have a ranking system and toggle between each person's journey in comparison to Me vs Friend-A OR Friend-A vs Friend-B, etc.
 
-   The deal itself is free: `draft.start` already takes an optional `seed`, and
-   `draftPicks.pack` has stored each pick's pack as seen since 2026-07-29 — so
-   each drafter's own packs are on their own rows and a diff needs no replay,
-   which also means it cannot be stranded by a re-ingest the way `review.load`
-   is (issue #3).
+I'm certain that's asking a lot and would appreciate some thought going into this idea. The last thing I wanna do is smash a square peg into a round hole - I want the proposed solution to be either a refactor IF APPROPRIATE or fit in smoothly to the current system - but don't be afraid to throw out existing non-conforming implementations that conflict with this feature-ask.
 
-   **The screen is an overview above a step-through.** A chronological list of
-   all 45 rows was tried and is the obvious shape and the least useful one. What
-   won is a hero — the draft answered in one line, then only the forks, each as
-   two full card faces the way `TheChallenge` draws one — over a pack-by-pack
-   stepper, where the whole shelf both cards came off is visible, because "they
-   took the better card" and "they took the only other playable in a bad pack"
-   are different lessons and nothing that renders two cards can tell them apart.
-   Clicking a fork drives the stepper. **Still wanted, and not yet drawn: a
-   branching tree of where the two drafts diverged and what that led to** — that
-   is what the rejected timeline was reaching for.
+8c. If "8b" is possible then a great new idea: we have a "daily challenge" draft!
 
-   **How the two people connect: a link, sent out of band.** No friend list, no
-   directory. The backend cannot learn a name or an email — identity carries
-   `subject`, `role` and `org_id` and nothing else (decisions #2 and #15) — so
-   anything nominal needs either a users table or a WorkOS Management API call,
-   and everyone in a private beta already knows you personally.
-
-   **What is genuinely missing, and is the real cost of this feature.** There is
-   no notification primitive of any kind: no inbox, no unread, no cron, no
-   badge; the only email precedent is `access.ts`. And a friend who accepts and
-   wanders off leaves `draftSessions.status` at `"active"` forever — there is no
-   terminal signal in the schema, so "they started and never finished" is
-   unsayable. The link is also a seed that outlives the moment it was made, so
-   it meets issue #3 far more often than a same-day draft does.
+- Once a day we could spin up a new draft challenge where anyone who's a member could test their skills at drafting today's packs - which would be the same for anyone who tries.
+- And then we could leverage the challenge diff views for this daily challenge.
+- And see the best drafts/decks people made, most popular archetype - biggest/most common mistakes.
 
 9. One thing this app feels like it's desperately missing is some kinda progression/indication that the user is learning and improving. Something kinda like, "I was there, but now I'm here!"
 
@@ -328,6 +318,19 @@ so anything outside this file that cares should cite by name rather than number.
     written for a friend; whether people would still be honest in that box once
     they know it is readable is the question that decides whether this is good.
 
+    `defense` related: how come we don't show the `defense` reasoning w/the
+    current challenge mode?
+
+11. Would it be possible - IN LOCAL DEV ENVIRONMENTS ONLY - to somehow utilize a
+    shell/terminal + claude and route all AI related queries there to emulate nearly
+    identical usage that we currently have using the ai-sdk + spending AI tokens?
+    - If so, could we still run AI benchmarks using this system?
+    - If we can't still run benchmarks I think it's still worth developing because
+      I tend to run out of free grok tokens while testing/tinkering.
+    - Definitely think this thru in terms of properly mirroring how we currently
+      utilize the ai-sdk/agents/contexts/etc at runtime -- the last thing I'd want is
+      false responses while using a shell/terminal + claude.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
@@ -335,6 +338,25 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
 1. Deep multi-ply permutation re-simulation (chess.com-style alternate lines —
    replay the whole draft down a different branch). The MVP stores the RNG seed
    specifically to keep this possible later without a retrofit.
+   - Worth a second look at how close we are to something like this w/the
+     newly added challenge mode ...
+   - **Closer than expected: the single-ply case shipped 2026-08-09.**
+     `forkImpact` in `core/src/draft/diff.ts` re-runs the pod with exactly one
+     pick swapped and counts how many of your remaining packs come out
+     different. It is sound because the engine is deterministic in a specific
+     way — hand length at a given pick is the same for every seat regardless of
+     who took what, each bot draws one number per card in its hand, and the
+     human draws none — so the rng stream position is invariant and swapping a
+     pick changes which cards are where and nothing else. A finished draft
+     replays in ~0.16ms, so a handful of lines costs under a millisecond.
+   - What it cannot do is the multi-ply part, and the obstacle is not cost. Past
+     the wheel your real next pick may not exist in the counterfactual pack, so
+     something has to decide what you would have done — and every answer to that
+     is a policy. `reach` carries the assumption out loud ("and drafted the same
+     way after"); `delay` needs none, because your own pick cannot reach your own
+     packs before the wheel. Going deeper means either a stated model of the
+     player or an interface that lets them choose, and that is the design
+     question this item is really waiting on.
 2. Longitudinal review-quiz trend tracking (persist each quiz outcome + add stats
    panels showing judgment improvement over time). Natural 2nd iteration once the
    review loop feels right; MVP only shows a session score. Nothing persists
@@ -790,3 +812,77 @@ The architecture, the data pipeline and the deploy story are all documented in
 
     Only the colours are refreshed. `overallScore`, `accuracy` and `pickCount` are
     about picks, and setting a card aside does not change a pick.
+
+17. **What a comparison of two drafts is allowed to claim** (2026-08-09, the
+    challenge feature). Five rulings, and the first is the one everything else
+    is downstream of.
+
+    **Live pod, not replayed packs.** Dealing the friend a recording of your
+    forty-two packs aligns every row and makes their picks inert — nothing they
+    take changes what wheels back — so signal-reading and wheeling, which is
+    most of what a draft teaches, are switched off. It looks like a draft and is
+    a multiple-choice quiz with your answer key. Prototyped and rejected on the
+    merits, and it will keep looking like an obvious simplification, because the
+    thing it costs is invisible in the diff it produces.
+
+    **`samePack` is per row and computed, never a constant.** The prototype's
+    `DRIFTS_AFTER = 7` is an artifact of `DRAFT.seats`, and worse it assumes
+    drift is monotonic. Swept over 1000 seed/divergence combinations on
+    `fakeSet`: the delay between diverging and seeing a different pack is never
+    less than 8 and 8 exactly is reachable — that is the wheel, and it holds for
+    a divergence at ANY index — **339 combinations never drift at all**, and 657
+    drift and then re-converge. Two people can take different cards and still
+    see all forty-two packs identical. The first seed I picked for the tests was
+    one of the 339, so the drift assertions passed by never being exercised: a
+    fixture too uniform to reproduce the phenomenon is trap #4 in a new costume.
+
+    **Their score is their stored score.** A replay grades on raw power, and the
+    whole point of comparing two people rather than two attempts is that each
+    was graded against their own pool. That is why the diff reads `draftPicks`
+    rather than replaying — which also makes it the one full-draft reader that a
+    re-ingest cannot strand, and it costs 138.5KB against `review.load`'s 218KB.
+
+    **The comparison is a braid, not a tree.** A tree fans out and never
+    rejoins; two drafts run a fixed forty-two picks in parallel and re-converge
+    constantly, so every fork drawn as a branch claims two futures that never
+    happened. And the branch point is where the PACKS first differed, not where
+    the picks did — at least eight picks apart — so a diagram drawn on
+    disagreements puts the fork where the effect is and gets the causation
+    backwards. The arc between the two is the one claim the drawing exists to
+    make.
+
+    **"Challenge" means two things in this repo on purpose.** The friend invite
+    (plural: `challenges`, `convex/challenges.ts`, `/challenge/*`) and the
+    counter-argument the commitment ceremony puts to a pick (singular:
+    `core/src/tutor/challenge.ts`, `TheChallenge`, `draftPicks.defense
+    .challengedName`, decision #11). Renaming either was considered: the
+    ceremony's sense is load-bearing in the validators, and the invite's is the
+    word the feature is called by everywhere outside the code. The comparison
+    logic is therefore `core/src/draft/diff.ts` and not a second `challenge.ts`.
+
+18. **The row is the grant, and `ownedSession` never learned about it**
+    (2026-08-09). A challenge names both drafts, so "may I read this one"
+    reduces to "am I one of the two people on a row that names it" — no share
+    table, no ACL, and `ownedSession` is untouched, because it answers a
+    different question and runs forty-two times a draft where a widened check is
+    somewhere to be silently wrong forever.
+
+    **Two gates, and the second is easy to miss.** `challengeParty` cannot guard
+    the landing page: the person the link was written for is by definition not
+    yet on the row, so a party check refuses precisely the invitee.
+    `challengeInvite` asks only that they are signed in, because the id IS the
+    capability — that is what a link is — and grants reading the offer and
+    taking it up, nothing behind it. Missing row and wrong row refuse in the
+    same sentence, so nothing answers "does this challenge exist" to anyone who
+    asks.
+
+    **`accept` is deliberately not idempotent.** It deals a draft and spends a
+    quota token, so the friendly-looking "just return the existing session"
+    hands somebody two drafts. Revoking is illegal once accepted, because by
+    then the friend has spent one of their three for the day.
+
+    **No status column, on `challenges` or on `draftSessions`.** The state is
+    the timestamps, for the reason `accessRequests` has none. "Accepted and
+    wandered off" stays derivable rather than teaching
+    `draftSessions.status` a third literal every existing reader would have to
+    learn.

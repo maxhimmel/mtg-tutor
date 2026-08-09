@@ -18,11 +18,13 @@ import {
   summarizeDraft,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
-import type { QueryCtx } from "./_generated/server.js";
-import type { Doc } from "./_generated/dataModel.js";
-import { deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
+import type { MutationCtx, QueryCtx } from "./_generated/server.js";
+import type { Doc, Id } from "./_generated/dataModel.js";
+import { challengeFinished, deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
+import { internal } from "./_generated/api.js";
 import { enforce } from "./quota.js";
 import { requireCaller } from "./roles.js";
+import type { Caller } from "./roles.js";
 import { loadBoard, ownedSession, setDocFor } from "./sessions.js";
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
@@ -52,6 +54,57 @@ const boardView = (engine: DraftEngine) => ({
   pool: engine.humanPool,
 });
 
+/**
+ * Opening a draft, without deciding who asked for one.
+ *
+ * Split out because a draft can now be started by something other than a player
+ * pressing the button -- taking up a friend's challenge deals the same way,
+ * against a pinned seed -- and the ORDER below is the part that must not be
+ * copied. Each of the three steps is placed against the other two, and a second
+ * hand-written copy of the sequence would be free to get that subtly wrong
+ * while still passing every test.
+ */
+export async function startSession(
+  ctx: MutationCtx,
+  caller: Caller,
+  args: { setCode: string; format?: string; seed?: number; challengeId?: Id<"challenges"> },
+): Promise<Id<"draftSessions">> {
+  const setCode = args.setCode.toLowerCase();
+  const format = args.format ?? "PremierDraft";
+
+  // Before the quota, so a set code that does not exist reports itself as a
+  // bad set code rather than as a day's allowance spent on nothing.
+  const setDoc = await setDocFor(ctx, setCode, format);
+
+  // And after it, so anything that throws below rolls the token back with the
+  // transaction -- which is the reason this is a component and not a counter.
+  await enforce(ctx, "drafts", caller);
+
+  const sessionId = await ctx.db.insert("draftSessions", {
+    userId: caller.userId,
+    setCode,
+    format,
+    // Coerced the same way mulberry32 reads it, so a caller cannot pin a seed
+    // that behaves differently from one newSeed would have produced.
+    seed: args.seed === undefined ? newSeed() : args.seed >>> 0,
+    pickedNames: [],
+    status: "active" as const,
+    createdAt: new Date().toISOString(),
+    // Free -- setDocFor already read this row above to prove the set exists.
+    sourceHash: setDoc.sourceHash,
+    // Set only when this draft answers a challenge. What `pick` reads on the
+    // last pick of the draft to know whether anyone is waiting to be told.
+    challengeId: args.challengeId,
+  });
+
+  // After the insert and after the quota, so nothing is reported that did not
+  // happen -- a capture above `enforce` would be rolled back with the refusal
+  // anyway, which is the trap analytics.ts is written around.
+  await draftStarted(ctx, caller, { sessionId, setCode, format });
+
+  return sessionId;
+}
+
 export const start = mutation({
   args: {
     setCode: v.string(),
@@ -65,36 +118,7 @@ export const start = mutation({
     seed: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const caller = await requireCaller(ctx);
-    const setCode = args.setCode.toLowerCase();
-    const format = args.format ?? "PremierDraft";
-
-    // Before the quota, so a set code that does not exist reports itself as a
-    // bad set code rather than as a day's allowance spent on nothing.
-    await setDocFor(ctx, setCode, format);
-
-    // And after it, so anything that throws below rolls the token back with the
-    // transaction -- which is the reason this is a component and not a counter.
-    await enforce(ctx, "drafts", caller);
-
-    const sessionId = await ctx.db.insert("draftSessions", {
-      userId: caller.userId,
-      setCode,
-      format,
-      // Coerced the same way mulberry32 reads it, so a caller cannot pin a seed
-      // that behaves differently from one newSeed would have produced.
-      seed: args.seed === undefined ? newSeed() : args.seed >>> 0,
-      pickedNames: [],
-      status: "active" as const,
-      createdAt: new Date().toISOString(),
-    });
-
-    // After the insert and after the quota, so nothing is reported that did not
-    // happen -- a capture above `enforce` would be rolled back with the refusal
-    // anyway, which is the trap analytics.ts is written around.
-    await draftStarted(ctx, caller, { sessionId, setCode, format });
-
-    return sessionId;
+    return await startSession(ctx, await requireCaller(ctx), args);
   },
 });
 
@@ -292,6 +316,36 @@ export const pick = mutation({
         // draft resumed the next morning is not reported as a long sitting.
         ms: Date.now() - Date.parse(session.createdAt),
       });
+
+      // Somebody may be waiting to hear about this one.
+      //
+      // Off `session.challengeId`, so this is a get on a document already in
+      // hand rather than an index lookup, and only on the one pick in
+      // forty-two that finishes a draft. After the patch and after the
+      // analytics: the capture is the thing that must survive, and a scheduled
+      // send here has exactly the rollback semantics posthog.capture does --
+      // it is inside this transaction, so a throw below would unschedule it.
+      //
+      // Guarded rather than asserted. A dangling or already-finished
+      // challengeId must never be able to fail somebody's forty-second pick,
+      // which is the same rule analytics lives under and matters more here,
+      // because ctx.db can throw where a no-op capture cannot.
+      if (session.challengeId) {
+        const challenge = await ctx.db.get(session.challengeId);
+        if (challenge && !challenge.finishedAt) {
+          const finishedAt = new Date().toISOString();
+          await ctx.db.patch(challenge._id, { finishedAt });
+          await challengeFinished(ctx, {
+            challengeId: challenge._id,
+            setCode: session.setCode,
+            format: session.format,
+            ms: Date.now() - Date.parse(session.createdAt),
+          });
+          await ctx.scheduler.runAfter(0, internal.challenges.notifyChallenger, {
+            challengeId: challenge._id,
+          });
+        }
+      }
     }
 
     return {

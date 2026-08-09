@@ -23,6 +23,8 @@
     "bench-report": "node scripts/bench-report.mjs",
     "build": "node scripts/codegen.mjs",
     "build-set-stats": "node scripts/build-set-stats.mjs",
+    "challenge-fixture": "node scripts/challenge-fixture.mjs",
+    "check-access": "node scripts/check-access.mjs",
     "check-availability": "node scripts/check-set-availability.mjs",
     "deploy": "convex deploy",
     "dev": "node scripts/dev.mjs",
@@ -40,8 +42,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
-    "validate-set-stats": "node scripts/validate-set-stats.mjs",
-    "check-access": "node scripts/check-access.mjs"
+    "validate-set-stats": "node scripts/validate-set-stats.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",
@@ -54,7 +55,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^22.7.0",
+    "convex-test": "^0.0.54",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

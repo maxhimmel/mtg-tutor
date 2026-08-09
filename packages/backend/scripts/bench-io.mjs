@@ -30,6 +30,7 @@
 // decision picks only, so that count comes from the pack sizes this draft
 // actually dealt.
 
+import { spawnSync } from "node:child_process";
 import { ConvexHttpClient } from "convex/browser";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { COACH, cardValue, isDecisionPick } from "@mtg-tutor/core";
@@ -143,6 +144,62 @@ for (const phase of ["open", "close"]) {
 }
 record("stats.overview", await client.query(api.iobench.statsOverviewCost, {}));
 
+// ------------------------------------------------------- the challenge comparison
+//
+// Behind a flag because it doubles the run: the comparison needs a second whole
+// draft, and `io-baseline.*.json` has to stay comparable with runs that predate
+// it. Off by default, and the baseline never carries it.
+//
+// The second drafter is manufactured through challengeFixture rather than by
+// inviting anybody, so this needs one identity like every other probe here.
+// Shelled out because those are internalMutations with no public surface --
+// which is the point of them; see convex/challengeFixture.ts.
+if (has("challenge")) {
+  console.log("dealing a second pod for the comparison...");
+
+  // Clear the last run's, or every measured run leaves a friend's forty-two
+  // pick rows behind and `stats.overview` slowly reports a bigger number for
+  // reasons that have nothing to do with the code being measured.
+  spawnSync("npx", ["convex", "run", "challengeFixture:wipe", "{}"], {
+    encoding: "utf8",
+    cwd: new URL("..", import.meta.url).pathname,
+  });
+
+  // The deck has to be locked in before a challenge can be issued off it.
+  await freshToken();
+  await client.mutation(api.draft.build, { sessionId, basicLands: 17 });
+
+  const made = spawnSync(
+    "npx",
+    ["convex", "run", "challengeFixture:outbound", JSON.stringify({ sessionId })],
+    { encoding: "utf8", cwd: new URL("..", import.meta.url).pathname },
+  );
+  if (made.status !== 0) {
+    process.stderr.write(made.stderr || "could not deal the second pod\n");
+    process.exit(1);
+  }
+  const challengeId = JSON.parse(made.stdout.trim()).challengeId;
+
+  await freshToken();
+  record("challenges.diff", await client.query(api.iobench.diffCost, { challengeId }));
+
+  // The forks as the screen has them, because that is how the screen asks:
+  // handing them over is what keeps this from reading both drafts a second time.
+  const { tally } = await client.query(api.challenges.diff, { challengeId });
+  const forks = tally.forks.map((f) => ({ pickIndex: f.pickIndex, theirs: f.theirs }));
+  record(
+    "challenges.forkImpacts",
+    await client.query(api.iobench.forkImpactsCost, { challengeId, forks }),
+  );
+
+  const diff = samples.get("challenges.diff").at(-1);
+  const impacts = samples.get("challenges.forkImpacts").at(-1);
+  console.log(
+    `  diff ${kb(diff.bytesRead)} over ${diff.documentsRead} documents, ` +
+      `fork weights ${kb(impacts.bytesRead)}`,
+  );
+}
+
 // Before saveVerdict but after everything that reads: it writes the claim flag
 // onto the session, and a second call measures the already-claimed early return
 // rather than the path a first review actually takes.
@@ -170,9 +227,10 @@ for (const pick of decisionPicks) {
 
 // ------------------------------------------------------------------- the totals
 
-// How often a real draft + review calls each path. `stats.overview` is per
-// visit to the stats page rather than per draft, so it is measured and reported
-// but deliberately not folded into the per-draft total.
+// How often a real draft + review calls each path. `stats.overview` and the two
+// challenge paths are per VISIT rather than per draft -- a comparison is read
+// when somebody opens it, which may be never or may be twice -- so they are
+// measured and reported and deliberately not folded into the per-draft total.
 const CALLS_PER_DRAFT = {
   "draft.state": 1,
   "draft.pick": picks.length,

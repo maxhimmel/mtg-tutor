@@ -20,6 +20,11 @@ export const env = createEnv({
     // by swapping the host -- a local deployment serves them on a second port of
     // the same loopback address, with no .convex.cloud to replace.
     CONVEX_SITE_URL: z.string().url().optional(),
+    // Where the web app is, so a challenge can be printed as a link somebody
+    // can paste to a friend rather than as an id they have to assemble one
+    // from. Optional: without it the terminal prints the path and says where
+    // it goes, which is worse but not broken.
+    APP_URL: z.string().url().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

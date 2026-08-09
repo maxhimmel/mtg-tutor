@@ -210,9 +210,120 @@ export function breakdownAsked(p: {
  * The most likely thing throttling a private beta, and until now invisible --
  * the refusal is a sentence rendered in the browser and nothing else.
  */
-export function draftRefused(p: { setCode: string; format: string; message: string }): void {
+export function draftRefused(p: {
+  setCode: string;
+  format: string;
+  message: string;
+  /**
+   * That this refusal happened on a challenge link rather than the set picker.
+   *
+   * A property on the existing event rather than a `challenge_draft_refused`
+   * beside it: it is the same wall, hit by somebody who came through a
+   * different door, and a second name would split every chart that already
+   * counts this. It matters because being told no on a link a friend sent is a
+   * worse moment than being told no on your own home screen.
+   */
+  via?: "challenge";
+}): void {
   if (!on()) return;
   posthog.capture("draft_refused", p);
+}
+
+/**
+ * What somebody actually found when they clicked a challenge link.
+ *
+ * The most valuable event in this feature, and the reason it is ONE event with
+ * an outcome rather than seven names: every arm is a real destination -- open,
+ * already taken by somebody else, your own link, one you are mid-draft on, one
+ * that finished, one withdrawn, one whose set has moved -- and the interesting
+ * number is the SHAPE of that distribution. Seven separate events would answer
+ * each in isolation and none of them together.
+ *
+ * `stale` in particular is how the stale-link worry stops being theoretical.
+ */
+export function challengeOpened(p: {
+  challengeId: string;
+  outcome:
+    | "open"
+    | "taken"
+    | "own"
+    | "in-progress"
+    | "finished"
+    | "revoked"
+    | "stale";
+}): void {
+  if (!on()) return;
+  posthog.capture("challenge_opened", p);
+}
+
+/**
+ * The link left the app.
+ *
+ * Issuing a challenge is not sending one, and the gap between the two is a step
+ * nothing else can see: a link created and never copied is somebody who tried
+ * the feature and thought better of it, which reads identically to one that was
+ * sent and ignored if you only count what the backend wrote.
+ */
+export function challengeLinkCopied(p: { challengeId: string; where: string }): void {
+  if (!on()) return;
+  posthog.capture("challenge_link_copied", p);
+}
+
+/**
+ * Somebody opened the comparison, and how much of it was worth comparing.
+ *
+ * `comparable` against `rows` is the question the whole feature rests on. Two
+ * pods off one seed stop being the same question once the wheel brings the first
+ * divergence round, and if that turns out to happen on pick nine every time then
+ * the diff is mostly two drafts side by side rather than one answered twice --
+ * which is worth knowing before building anything else on top of it.
+ */
+export function diffViewed(p: {
+  challengeId: string;
+  rows: number;
+  comparable: number;
+  agreed: number;
+  forks: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("diff_viewed", p);
+}
+
+/**
+ * Which of the three readings actually drives the stepper.
+ *
+ * The hero lists the forks, the braid draws them in time, and the bar ticks
+ * them -- three ways into the same place, built on the theory that they answer
+ * different questions. `from` is what tells us whether that was true, and in
+ * particular whether the braid earned what it cost.
+ */
+export function forkOpened(p: {
+  challengeId: string;
+  pickIndex: number;
+  from: "hero" | "braid" | "tick";
+}): void {
+  if (!on()) return;
+  posthog.capture("fork_opened", p);
+}
+
+/**
+ * How much of somebody's review list is unreadable.
+ *
+ * Re-ingesting a set strands every draft taken against the old data, and the
+ * cost of that has never been measurable: the list could not tell until you
+ * clicked, so nothing anywhere counted how often it happens to a real person.
+ * That is the number that decides whether issue #3 is worth a real fix or is a
+ * theoretical problem we keep describing to each other.
+ *
+ * Per list render rather than per row, and it carries `shown` so the ratio is
+ * readable -- one stale draft out of twenty is a footnote, and eleven out of
+ * twenty is the whole review feature quietly not working. `unknown` counts the
+ * drafts that predate the stamp, because a metric that folded those into either
+ * answer would be reporting a certainty it does not have.
+ */
+export function reviewListSeen(p: { shown: number; stale: number; unknown: number }): void {
+  if (!on()) return;
+  posthog.capture("review_list_seen", p);
 }
 
 /**

@@ -37,6 +37,7 @@ export * from "./tutor/reviewPrompt.js";
 
 export * from "./draft/engine.js";
 export * from "./draft/replay.js";
+export * from "./draft/diff.js";
 export * from "./draft/summary.js";
 export * from "./draft/bots.js";
 export * from "./draft/pack.js";

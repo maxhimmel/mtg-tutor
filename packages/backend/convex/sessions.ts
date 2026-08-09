@@ -103,6 +103,58 @@ export async function loadBoard(ctx: QueryCtx, sessionId: Id<"draftSessions">) {
 }
 
 /**
+ * A challenge link, held by whoever it was sent to.
+ *
+ * The id IS the capability -- that is what a link is -- so this asks only that
+ * the caller is signed in. Deliberately NOT `ownedSession`: an invitation that
+ * only its author can open is not an invitation, and on the landing page the
+ * person it was written for is by definition not yet on the row. It grants
+ * reading the offer and taking it up, and nothing else. The two drafts behind it
+ * need `challengeParty` below.
+ *
+ * A revoked or already-taken challenge is returned rather than refused, so the
+ * caller can be told which of those happened instead of being told the link is
+ * broken. Whether they may ACT on it is `challenges.accept`'s question.
+ */
+export async function challengeInvite(
+  ctx: QueryCtx,
+  challengeId: Id<"challenges">,
+): Promise<Doc<"challenges">> {
+  await requireUserId(ctx);
+  const challenge = await ctx.db.get(challengeId);
+  if (!challenge) throw new ConvexError("That link is not a challenge.");
+  return challenge;
+}
+
+/**
+ * A challenge and which side of it the caller is on.
+ *
+ * The one exception to `ownedSession` in the app, and a separate function rather
+ * than a flag on it for two reasons. `ownedSession` answers "is this session
+ * yours", this answers "are you one of the two people this row names" -- a
+ * different question, so a different name. And `ownedSession` runs on the pick
+ * path forty-two times a draft, where a widened check is a place to be silently
+ * wrong forever.
+ *
+ * No such row and not your row refuse in the SAME sentence, on purpose. Convex
+ * ids are unguessable, so distinguishing them leaks nothing an attacker could
+ * reach -- but it would answer "does this challenge exist" to anyone who asked,
+ * and there is no reason to answer it.
+ */
+export async function challengeParty(
+  ctx: QueryCtx,
+  challengeId: Id<"challenges">,
+): Promise<{ challenge: Doc<"challenges">; side: "challenger" | "friend" }> {
+  const userId = await requireUserId(ctx);
+  const challenge = await ctx.db.get(challengeId);
+
+  if (challenge?.challengerUserId === userId) return { challenge, side: "challenger" };
+  if (challenge?.friendUserId === userId) return { challenge, side: "friend" };
+
+  throw new ConvexError("That challenge is not yours to read.");
+}
+
+/**
  * The replay on its own, for a session already in hand.
  *
  * Split from loadBoard because ownership is a question about the CALLER, and a
@@ -131,6 +183,27 @@ export async function replayFor(ctx: QueryCtx, session: Doc<"draftSessions">) {
   }
 
   return { session, engine, setDoc, cardsDoc };
+}
+
+/**
+ * Whether a draft was dealt from set data that has since moved on.
+ *
+ * Three answers, not two. `undefined` means the question cannot be answered --
+ * the session predates the stamp, or the set was ingested with no artifact to
+ * hash -- and it must not collapse to `false`, because "we cannot tell" and
+ * "this is fine" lead a reader to opposite conclusions and only one of them is
+ * safe. A truthy check on the return value is the bug this shape exists to make
+ * visible.
+ *
+ * A hint for a list, never a guard: see the note on `draftSessions.sourceHash`
+ * for the two ways a pool changes without the hash following it.
+ */
+export function staleAgainst(
+  sessionHash: string | undefined,
+  liveHash: string | undefined,
+): boolean | undefined {
+  if (sessionHash === undefined || liveHash === undefined) return undefined;
+  return sessionHash !== liveHash;
 }
 
 /** The caller's sessions, newest first. */

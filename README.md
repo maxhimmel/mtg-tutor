@@ -40,6 +40,12 @@ pnpm draft dsk PremierDraft
 
 # See your progress, trends, and biggest recurring mistakes
 pnpm stats
+
+# Dare a friend to draft one of your finished drafts
+pnpm challenge
+
+# Take one up -- paste the link you were sent
+mtg-tutor draft --challenge <link>
 ```
 
 The unified `mtg-tutor` CLI dispatches to the same services (`pnpm dev draft dsk`, or the built binary below).
@@ -55,6 +61,43 @@ During a draft, arrow-key through the pack (cards are pre-sorted by win rate wit
 
 When the last pack runs out you build the forty — cut down to 40 cards and set the land count — and only then does the CLI show you the suggested build, how far your deck is from it, the curve and colours side by side, your overall score and your biggest missed picks. Walk away before locking in and `mtg-tutor draft --resume <id>` puts you back on the build screen.
 
+### Challenge a friend to your packs
+
+Finish a draft and you can hand somebody a link to the same deal. They draft it
+in a **pod of their own** off your seed, so what they take still changes what
+wheels back to them — then the two drafts go side by side.
+
+Live pod rather than a recording of your packs, and that is the whole design.
+Dealing them your forty-two packs as you saw them makes every row line up
+perfectly and makes their picks inert: nothing they take changes anything, so
+signal-reading and wheeling — most of what a draft teaches — are switched off. It
+looks like a draft and is a multiple-choice quiz with your answer key.
+
+The price of doing it honestly is that the two pods come apart. **The boosters
+dealt are identical the whole way, but the packs you SEE stop matching once the
+wheel brings the first divergence back round** — at least eight picks after it,
+because your own pick cannot reach your own packs until the pod passes yours on.
+So the comparison says, per row, whether the two of you were actually looking at
+the same cards, and the screen says out loud where it stops being one question
+answered twice. Two things make that worth insisting on: the picks mostly still
+AGREE across the drift, so a diff that has quietly stopped comparing anything
+looks exactly like one that has not; and the drift is not monotonic, because
+packs re-converge by coincidence.
+
+The comparison reads three ways, all driving one stepper:
+
+- **the hero** — the draft answered in a line, then only the forks
+- **the braid** — where the two drafts split and rejoined, each strand inked with
+  the colours that deck was committing to, and an arc joining a fork to the pack
+  it changed several picks later
+- **the shelf** — one pick at a time, with the whole pack both cards came off,
+  because "they took the better card" and "they took the only other playable in a
+  bad pack" are different lessons and two card images cannot tell them apart
+
+Sharing is a link sent out of band. There is no friend list and no directory: the
+backend cannot learn a name or an email address, and everyone in a private beta
+already knows each other.
+
 > **Note on set coverage:** scoring quality depends on how much data a set has in the 17Lands public datasets. Recent, heavily-played sets score best. A set we haven't built stats for is scored on rarity baselines alone — which makes grades close to meaningless — and both clients say so rather than implying a good draft. (The datasets go back years, so this is a matter of which sets we've ingested, not of sets "aging out.")
 
 ## Development
@@ -65,13 +108,62 @@ pnpm test              # unit suites for every package (vitest, via turbo)
 pnpm build             # build every package in dependency order
 pnpm verify-data       # sanity-check the live 17Lands + Scryfall response shapes
 pnpm smoke-draft fdn   # headless full-draft smoke test, against Convex
+pnpm challenge-fixture  # fake the other half of a challenge -- see below
 pnpm login             # sign in; the CLI needs a session to reach the backend
 pnpm bench-llm         # what one draft costs in tokens, and whether the advice held
+pnpm bench-io --challenge  # add the two-draft comparison to the I/O run (doubles it)
 pnpm bench-report      # render that run as a page: cost, quality, and the answers
 ```
 
 Cutting AI token usage without quietly making the coaching worse is a procedure,
 not a diff — `packages/backend/bench/README.md` has it, numbered.
+
+### Testing a challenge on your own
+
+A challenge needs two people and this deployment has one. Inviting a second
+WorkOS account works and is the faithful test, but it costs that account a draft
+a day and forty-two clicks a run, which is a bad loop to be in while moving a
+panel three pixels. So `pnpm challenge-fixture` manufactures whichever half you
+are not playing.
+
+```bash
+pnpm challenge-fixture inbound [setCode] [format]  # a challenge aimed at YOU
+pnpm challenge-fixture outbound <sessionId>        # one you sent, already drafted
+pnpm challenge-fixture finish <sessionId>          # bot-finish a draft in progress
+pnpm challenge-fixture wipe                        # remove every fixture
+```
+
+**`inbound` is the one that cannot be faked any other way.** `accept` refuses
+your own challenge on purpose, so with a single identity there is no route to the
+accept path or the drafting that follows it. This invents the other drafter,
+gives them a finished draft, and prints you a link — and from there everything is
+real. You accept, you make all forty-two picks, and your last one stamps the
+challenge finished and fires the notification, exactly as a friend's would.
+
+**`outbound` is the fast direction:** point it at a finished draft of your own and
+it deals a second pod against the same seed, so the diff is readable immediately
+with your real picks on one side.
+
+**`finish` keeps the picks you already made** and drafts on from there, so you can
+play the first few by hand to watch the board behave and skip the rest without
+losing what you did.
+
+The fixture drafter is deliberately sloppy — it takes the second or third best
+card about a third of the time. A greedy bot agrees with itself on every pick and
+produces a comparison with nothing in it: no forks, no off-shelf callout, an
+empty braid. Two *honest* drafts often do the same, which is the trap worth
+knowing about: swept over 1000 seed/divergence combinations, **339 never come
+apart at all** and 657 drift and then re-converge. A fixture that cannot
+reproduce the phenomenon reads as a screen that works.
+
+Every one of these is an `internalMutation`, so there is no public surface:
+`npx convex run` and the dashboard both already require deployment admin
+credentials, and nothing else can reach them — which matters, because they
+fabricate sessions and stamp challenges finished. The script never passes
+`--prod`, so dev is structural rather than something to remember. Fixture rows
+are owned by a `userId` nobody can authenticate as, which is how `wipe` finds
+them again; it leaves your own sessions alone and removes the challenges that
+pointed at them.
 
 `pnpm dev:web` fans out to the `dev` tasks of `@mtg-tutor/backend` (`convex dev`)
 and `@mtg-tutor/web` (`next dev`) as persistent, uncached turbo tasks, so both
@@ -218,6 +310,21 @@ first one, and it runs on every deploy.
 | `MTG_TUTOR_DEPLOY_KEY` | Lets the deploy scripts rebuild set data with nobody signed in. `openssl rand -hex 32`. Read back by the scripts through the Convex CLI, so Vercel needs no copy of it. |
 | `MTG_TUTOR_ROLES` | `subject=role` pairs, comma-separated. The lockout escape hatch, not the source of truth — a membership set wrong in the dashboard locks you out of the surface that would fix it. |
 | `RESEND_API_KEY`, `OWNER_EMAIL` | Optional. Emails you when someone asks for access. Unset just means the request is recorded and not mailed. |
+| `RESEND_FROM`, `APP_URL` | Optional, and both needed together. Emails the challenger when a friend finishes their packs. Unset means the in-app badge is the only notice — which works on its own, so this is a nicety rather than a prerequisite. |
+
+**Emailing a friend needs a verified sending domain, and that is why
+`RESEND_FROM` has no default.** The access-request mail above sends from Resend's
+shared `onboarding@resend.dev`, which only ever delivers to the Resend account
+owner's own address — fine for "somebody wants in", useless for mailing anybody
+else. Verify a domain in Resend, then set `RESEND_FROM` to an address on it and
+`APP_URL` to the site's origin so the mail can link to the comparison. Guessing a
+sender that silently fails to deliver is worse than not sending, so it fails
+closed and logs which variables were missing.
+
+The address itself is looked up through the WorkOS Management API with the
+`WORKOS_API_KEY` you already set: identity carries `subject`, `role` and `org_id`
+and nothing else, there is no users table, so that is the only route from a
+signed-in person to an inbox.
 
 **WorkOS, once.** All of it in the environment Convex provisioned — Convex
 dashboard → Settings → Integrations → WorkOS Authentication. Not
@@ -271,6 +378,7 @@ apps/
         ui/                    reusable @clack primitives (card picker, formatting)
       services/
         auth/                  login / logout
+        challenge/             issue a link; accepting is a flag on draft
         draft/                 draft screen + entrypoint
         review/                review walkthrough + entrypoint
         stats/                 stats screen
@@ -278,15 +386,18 @@ apps/
     app/
       page.tsx                 set picker
       draft/[sessionId]/       the draft board
+      challenge/               the link, the list, and the two-draft comparison
       callback|sign-in|sign-up WorkOS AuthKit route handlers
       providers.tsx            AuthKit session -> Convex identity bridge
     middleware.ts              redirects unauthenticated visitors to WorkOS
 packages/
   backend/                     @mtg-tutor/backend -- Convex: the shared session store
     convex/
-      schema.ts                sets, draftSessions, reviewVerdicts
+      schema.ts                sets, draftSessions, draftPicks, challenges, reviewVerdicts
       sets.ts                  Scryfall + our-stats ingestion; setStats store
       draft.ts                 start / state / pick / results / save
+      challenges.ts            issue / accept / diff -- one drafter daring another
+      challengeFixture.ts      dev-only: manufacture the other half of a challenge
       http.ts                  the streaming coach endpoint
       auth.config.ts           validates WorkOS RS256 JWTs
 ```

@@ -17,7 +17,7 @@ import { action, internalMutation, internalQuery, mutation, query } from "./_gen
 import type { QueryCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
-import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
+import { loadBoard, ownSessions, ownedSession, staleAgainst } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
 import { storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
@@ -31,9 +31,30 @@ export const list = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const sessions = await ownSessions(ctx, args.limit ?? 25);
+    const finished = sessions.filter((s) => s.status === "complete");
 
-    return sessions
-      .filter((s) => s.status === "complete")
+    // Re-ingesting a set strands every draft taken against the old data, and
+    // this list is where you find out -- or rather, where you used to not find
+    // out, because it reads the stored summary and never replays, so a stranded
+    // draft looked exactly like a readable one until you clicked it.
+    //
+    // One `sets` row per distinct set on the page, at ~433 bytes each, against
+    // 25 replays of ~46KB apiece to learn the same thing. A hash that is absent
+    // on either side answers `undefined`, not `true`: a draft from before the
+    // field existed might be fine, and saying otherwise would be a warning
+    // nobody could act on.
+    const liveHashes = new Map<string, string | undefined>();
+    for (const s of finished) {
+      const key = `${s.setCode}|${s.format}`;
+      if (liveHashes.has(key)) continue;
+      const setDoc = await ctx.db
+        .query("sets")
+        .withIndex("by_code_and_format", (q) => q.eq("code", s.setCode).eq("format", s.format))
+        .unique();
+      liveHashes.set(key, setDoc?.sourceHash);
+    }
+
+    return finished
       .map((s) => ({
         id: s._id,
         setCode: s.setCode,
@@ -47,6 +68,9 @@ export const list = query({
         // finished and never built, and the row that links to the deck should
         // say so rather than sending you to a comparison that does not exist.
         built: s.build != null,
+        // True when the set has been re-ingested since this was drafted, so the
+        // walkthrough will refuse it. `undefined` means unknowable, not fine.
+        stale: staleAgainst(s.sourceHash, liveHashes.get(`${s.setCode}|${s.format}`)),
       }));
   },
 });

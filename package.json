@@ -16,6 +16,8 @@
     "bench-report": "pnpm --filter @mtg-tutor/backend bench-report",
     "build": "turbo run build",
     "build-set-stats": "pnpm --filter @mtg-tutor/backend build-set-stats",
+    "challenge": "pnpm --filter @mtg-tutor/cli challenge",
+    "challenge-fixture": "pnpm --filter @mtg-tutor/backend challenge-fixture",
     "check-availability": "pnpm --filter @mtg-tutor/backend check-availability",
     "dev": "pnpm --filter @mtg-tutor/cli dev",
     "dev:web": "turbo run dev --filter=@mtg-tutor/backend... --filter=@mtg-tutor/web...",

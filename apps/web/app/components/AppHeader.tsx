@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "@mtg-tutor/backend";
 import { UserMenu } from "./UserMenu";
 
 // The app's frame, and only that. It used to take a `children` slot for the
@@ -16,9 +18,39 @@ import { UserMenu } from "./UserMenu";
 const NAV = [
   { href: "/", label: "Draft", match: (p: string) => p === "/" || p.startsWith("/draft") },
   { href: "/review", label: "Review", match: (p: string) => p.startsWith("/review") },
+  {
+    href: "/challenge",
+    label: "Challenges",
+    match: (p: string) => p.startsWith("/challenge"),
+    badge: true,
+  },
   { href: "/principles", label: "Principles", match: (p: string) => p.startsWith("/principles") },
   { href: "/glossary", label: "Glossary", match: (p: string) => p.startsWith("/glossary") },
 ];
+
+/**
+ * The count of finished challenges nobody has looked at.
+ *
+ * The one place gold is allowed to mean "where you are" and does not: this is a
+ * thing waiting for you, which is the same sense as a card pulled out of a pack
+ * -- something of yours, held. The nav marker beside it stays parchment.
+ *
+ * Skipped rather than gated in a wrapper, because the masthead renders above
+ * `<Authenticated>` on every page and a query fired into the gap while AuthKit
+ * is still fetching a token answers "you need to be signed in" for a badge.
+ */
+function UnreadBadge() {
+  const { isAuthenticated } = useConvexAuth();
+  const count = useQuery(api.challenges.unread, isAuthenticated ? {} : "skip");
+
+  if (!count) return null;
+
+  return (
+    <span className="badge badge-xs badge-primary" aria-label={`${count} finished`}>
+      {count}
+    </span>
+  );
+}
 
 export function AppHeader() {
   const pathname = usePathname() ?? "/";
@@ -53,7 +85,10 @@ export function AppHeader() {
                     : "border-transparent text-base-content/55 hover:text-base-content"
                 }`}
               >
-                {item.label}
+                <span className="flex items-center gap-1.5">
+                  {item.label}
+                  {item.badge === true && <UnreadBadge />}
+                </span>
               </Link>
             );
           })}

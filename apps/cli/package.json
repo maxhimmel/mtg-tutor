@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "challenge": "tsx src/services/challenge/main.ts",
     "dev": "tsx src/cli.ts",
     "draft": "tsx src/services/draft/main.ts",
     "login": "tsx src/cli.ts login",
