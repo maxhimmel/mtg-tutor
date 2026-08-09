@@ -13,6 +13,7 @@ import type * as admin from "../admin.js";
 import type * as analytics from "../analytics.js";
 import type * as auth from "../auth.js";
 import type * as cardText from "../cardText.js";
+import type * as challengeFixture from "../challengeFixture.js";
 import type * as challenges from "../challenges.js";
 import type * as draft from "../draft.js";
 import type * as draftPicks from "../draftPicks.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   auth: typeof auth;
   cardText: typeof cardText;
+  challengeFixture: typeof challengeFixture;
   challenges: typeof challenges;
   draft: typeof draft;
   draftPicks: typeof draftPicks;
