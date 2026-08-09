@@ -19,6 +19,7 @@ import { CardName } from "./CardText";
 import { ColorPips } from "./ColorPips";
 import { DeckBoard } from "./DeckBoard";
 import { DeckBuilder } from "./DeckBuilder";
+import { ChallengeAFriend } from "./ChallengeAFriend";
 import { Panel } from "./Panel";
 import { AfterDraft } from "./AfterDraft";
 import { humanError } from "../lib/humanError";
@@ -215,6 +216,10 @@ export function Results({
             <Link href={`/review/${sessionId}`} className="btn btn-primary btn-sm w-full">
               Review it pick by pick
             </Link>
+            {/* Here rather than on the review index, because this is the moment
+                somebody has just finished and has an opinion about the packs.
+                A day later, on a list, they have neither. */}
+            <ChallengeAFriend sessionId={sessionId} where="results" />
             <Link href="/" className="link link-hover text-sm text-base-content/60">
               Draft another set →
             </Link>

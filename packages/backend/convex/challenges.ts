@@ -233,6 +233,10 @@ export const mine = query({
       createdAt: c.createdAt,
       acceptedAt: c.acceptedAt,
       finishedAt: c.finishedAt,
+      // Only ever the caller's own session, so the row can link to the draft
+      // instead of to a page that tells them to go and find it.
+      yourSessionId:
+        c.challengerUserId === caller.userId ? c.challengerSessionId : c.friendSessionId,
       // What the badge counts. Only the challenger has something to be told:
       // the friend was present when their own draft ended.
       unread: c.challengerUserId === caller.userId && c.finishedAt != null && c.challengerSeenAt == null,
@@ -487,6 +491,47 @@ async function addressOf(subject: string, apiKey: string): Promise<string | null
 }
 
 /**
+ * How many finished challenges the caller has not looked at.
+ *
+ * Its own query rather than a count over `mine`, because this one is subscribed
+ * from the masthead on EVERY page and `mine` carries a row's worth of detail per
+ * challenge. Only the challenger index is read: the friend was present when
+ * their own draft ended and has nothing to be told.
+ *
+ * It still reads the rows -- Convex bills documents, and counting them means
+ * fetching them -- which is fine at a private beta's handful and would not be at
+ * a thousand. The fix then is a denormalized counter on a row of its own, the
+ * `setStatsMeta` pattern: if a value exists only to be watched, it belongs
+ * somewhere small enough to watch cheaply. Not worth the second copy today.
+ */
+export const unread = query({
+  args: {},
+  handler: async (ctx) => {
+    const caller = await requireCaller(ctx);
+    const rows = await ctx.db
+      .query("challenges")
+      .withIndex("by_challenger", (q) => q.eq("challengerUserId", caller.userId))
+      .take(50);
+
+    return rows.filter((c) => c.finishedAt != null && c.challengerSeenAt == null).length;
+  },
+});
+
+/** That the challenger has read the finished diff. Idempotent, and only theirs. */
+export const markSeen = mutation({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    const caller = await requireCaller(ctx);
+    const challenge = await ctx.db.get(args.challengeId);
+
+    if (!challenge || challenge.challengerUserId !== caller.userId) return;
+    if (challenge.challengerSeenAt) return;
+
+    await ctx.db.patch(challenge._id, { challengerSeenAt: new Date().toISOString() });
+  },
+});
+
+/**
  * The offer, for whoever is holding the link.
  *
  * Answers for a signed-in stranger, because that is the whole point of a link
@@ -524,6 +569,11 @@ export const invitation = query({
       // both wrong and confusing.
       mine,
       takenByMe: challenge.friendUserId === caller.userId,
+      // Your own session, when it is yours -- so "you are already drafting this"
+      // can be a link rather than an instruction to go and look for it. Not a
+      // cross-user read: it is only ever returned to the person who owns it.
+      yourSessionId:
+        challenge.friendUserId === caller.userId ? challenge.friendSessionId : undefined,
       // Deliberately no staleness hint. Only a replay answers whether this seed
       // still deals the packs the challenger drafted from, `accept` does that
       // replay and refuses in a sentence, and a cheaper guess here would either

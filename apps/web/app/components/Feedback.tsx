@@ -194,7 +194,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 export function routeOf(pathname: string): string {
   return pathname
     .replace(/^\/draft\/[^/]+/, "/draft/[sessionId]")
-    .replace(/^\/review\/[^/]+/, "/review/[sessionId]");
+    .replace(/^\/review\/[^/]+/, "/review/[sessionId]")
+    .replace(/^\/challenge\/[^/]+/, "/challenge/[challengeId]");
 }
 
 function FeedbackFab({

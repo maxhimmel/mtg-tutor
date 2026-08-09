@@ -210,9 +210,100 @@ export function breakdownAsked(p: {
  * The most likely thing throttling a private beta, and until now invisible --
  * the refusal is a sentence rendered in the browser and nothing else.
  */
-export function draftRefused(p: { setCode: string; format: string; message: string }): void {
+export function draftRefused(p: {
+  setCode: string;
+  format: string;
+  message: string;
+  /**
+   * That this refusal happened on a challenge link rather than the set picker.
+   *
+   * A property on the existing event rather than a `challenge_draft_refused`
+   * beside it: it is the same wall, hit by somebody who came through a
+   * different door, and a second name would split every chart that already
+   * counts this. It matters because being told no on a link a friend sent is a
+   * worse moment than being told no on your own home screen.
+   */
+  via?: "challenge";
+}): void {
   if (!on()) return;
   posthog.capture("draft_refused", p);
+}
+
+/**
+ * What somebody actually found when they clicked a challenge link.
+ *
+ * The most valuable event in this feature, and the reason it is ONE event with
+ * an outcome rather than seven names: every arm is a real destination -- open,
+ * already taken by somebody else, your own link, one you are mid-draft on, one
+ * that finished, one withdrawn, one whose set has moved -- and the interesting
+ * number is the SHAPE of that distribution. Seven separate events would answer
+ * each in isolation and none of them together.
+ *
+ * `stale` in particular is how the stale-link worry stops being theoretical.
+ */
+export function challengeOpened(p: {
+  challengeId: string;
+  outcome:
+    | "open"
+    | "taken"
+    | "own"
+    | "in-progress"
+    | "finished"
+    | "revoked"
+    | "stale";
+}): void {
+  if (!on()) return;
+  posthog.capture("challenge_opened", p);
+}
+
+/**
+ * The link left the app.
+ *
+ * Issuing a challenge is not sending one, and the gap between the two is a step
+ * nothing else can see: a link created and never copied is somebody who tried
+ * the feature and thought better of it, which reads identically to one that was
+ * sent and ignored if you only count what the backend wrote.
+ */
+export function challengeLinkCopied(p: { challengeId: string; where: string }): void {
+  if (!on()) return;
+  posthog.capture("challenge_link_copied", p);
+}
+
+/**
+ * Somebody opened the comparison, and how much of it was worth comparing.
+ *
+ * `comparable` against `rows` is the question the whole feature rests on. Two
+ * pods off one seed stop being the same question once the wheel brings the first
+ * divergence round, and if that turns out to happen on pick nine every time then
+ * the diff is mostly two drafts side by side rather than one answered twice --
+ * which is worth knowing before building anything else on top of it.
+ */
+export function diffViewed(p: {
+  challengeId: string;
+  rows: number;
+  comparable: number;
+  agreed: number;
+  forks: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("diff_viewed", p);
+}
+
+/**
+ * Which of the three readings actually drives the stepper.
+ *
+ * The hero lists the forks, the braid draws them in time, and the bar ticks
+ * them -- three ways into the same place, built on the theory that they answer
+ * different questions. `from` is what tells us whether that was true, and in
+ * particular whether the braid earned what it cost.
+ */
+export function forkOpened(p: {
+  challengeId: string;
+  pickIndex: number;
+  from: "hero" | "braid" | "tick";
+}): void {
+  if (!on()) return;
+  posthog.capture("fork_opened", p);
 }
 
 /**
