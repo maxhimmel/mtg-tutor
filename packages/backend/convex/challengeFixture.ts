@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { DraftEngine, cardValue, mulberry32, splitPool, summarizeDraft } from "@mtg-tutor/core";
 import type { EngineCard, SetData } from "@mtg-tutor/core";
 import { internalMutation } from "./_generated/server.js";
+import { internal } from "./_generated/api.js";
 import type { MutationCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
 import { recordPick, storedScores } from "./draftPicks.js";
@@ -200,6 +201,16 @@ export const outbound = internalMutation({
   args: {
     sessionId: v.id("draftSessions"),
     sloppiness: v.optional(v.number()),
+    /**
+     * YOUR WorkOS user id, so the email has somebody real to resolve.
+     *
+     * The challenger here is you -- it is your draft -- but a session stores
+     * only a token identifier, and the address lookup keys on the subject. Left
+     * out, this row gets a fixture subject and `notifyChallenger` fails at the
+     * WorkOS call before Resend is ever reached, which makes the mail path
+     * untestable with one account. The script fills it in from `quota.mine`.
+     */
+    challengerSubject: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const mine = await ctx.db.get(args.sessionId);
@@ -215,7 +226,7 @@ export const outbound = internalMutation({
 
     const challengeId = await ctx.db.insert("challenges", {
       challengerUserId: mine.userId ?? challengerId(),
-      challengerSubject: `${FIXTURE}subject`,
+      challengerSubject: args.challengerSubject ?? `${FIXTURE}subject`,
       challengerSessionId: mine._id,
       setCode: mine.setCode,
       format: mine.format,
@@ -247,6 +258,11 @@ export const outbound = internalMutation({
       acceptedAt: now,
       finishedAt: new Date().toISOString(),
     });
+
+    // What `draft.pick` would have done on the friend's last pick. Scheduled
+    // rather than skipped, so a fixture exercises the notification instead of
+    // quietly being the one path nothing ever tests.
+    await ctx.scheduler.runAfter(0, internal.challenges.notifyChallenger, { challengeId });
 
     return { challengeId, path: `/challenge/${challengeId}/diff`, picks: picked.length };
   },
@@ -286,6 +302,11 @@ export const finish = internalMutation({
       const challenge = await ctx.db.get(session.challengeId);
       if (challenge && !challenge.finishedAt) {
         await ctx.db.patch(challenge._id, { finishedAt: new Date().toISOString() });
+        // The branch `draft.pick` runs on a real last pick, mirrored here
+        // because this skipped the picks.
+        await ctx.scheduler.runAfter(0, internal.challenges.notifyChallenger, {
+          challengeId: challenge._id,
+        });
       }
     }
 
