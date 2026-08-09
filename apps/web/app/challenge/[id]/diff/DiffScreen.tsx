@@ -149,11 +149,13 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
   return (
     <PageShell>
       <PageHeading
-        icon={<SetIcon uri={undefined} className="size-6 text-base-content/50" />}
+        icon={<SetIcon uri={diff.iconUri} className="size-6 text-base-content/50" />}
         title={
           <>
             You vs. a friend{" "}
-            <span className="text-base-content/45">{diff.setCode.toUpperCase()}</span>
+            <span className="text-base-content/45">
+              {diff.setName ?? diff.setCode.toUpperCase()}
+            </span>
           </>
         }
         controls={

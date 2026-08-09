@@ -300,11 +300,23 @@ export const diff = query({
     );
     const tally = summarizeDiff(rows);
 
+    // The set's name and symbol, so the masthead can say which format this was
+    // without the client fetching `sets.list` for two fields. ~433 bytes beside
+    // the 138KB of rows above.
+    const setDoc = await ctx.db
+      .query("sets")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", challenge.setCode).eq("format", challenge.format),
+      )
+      .unique();
+
     return {
       id: challenge._id,
       side,
       setCode: challenge.setCode,
       format: challenge.format,
+      setName: setDoc?.name,
+      iconUri: setDoc?.iconUri,
       fromName: challenge.fromName,
       finishedAt: challenge.finishedAt,
       rows,
