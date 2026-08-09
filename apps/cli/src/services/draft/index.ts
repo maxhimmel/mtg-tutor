@@ -6,14 +6,52 @@ import { convexClient } from "../../core/auth/session.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { finishDraft, runDraft } from "./screen.js";
 import { humanError } from "../../core/ui/humanError.js";
+import { idFromLink } from "../challenge/index.js";
 
 // Draft service entrypoint. `argv` is [setCode?, format?], plus
-// `--resume <sessionId>` to pick an abandoned draft back up.
+// `--resume <sessionId>` to pick an abandoned draft back up, or
+// `--challenge <challengeId>` to take up a friend's.
 export async function run(argv: string[]): Promise<void> {
   const resumeAt = argv.indexOf("--resume");
+  const challengeAt = argv.indexOf("--challenge");
   const positional = argv.filter((a) => !a.startsWith("--"));
 
   const convex = await convexClient();
+
+  // A flag on `draft` rather than a command of its own, because that is what it
+  // is: the same forty-two picks against the same engine, with the deal pinned
+  // to somebody else's seed. `accept` spends a draft from the daily allowance
+  // exactly as starting one does.
+  if (challengeAt !== -1) {
+    const given = argv[challengeAt + 1];
+    if (!given) {
+      p.log.error("--challenge needs the link you were sent, or the id at the end of it.");
+      return;
+    }
+
+    // They were sent a URL, so paste a URL.
+    const challengeId = idFromLink(given) as Id<"challenges"> | null;
+    if (!challengeId) {
+      p.log.error(`"${given}" does not look like a challenge link.`);
+      return;
+    }
+
+    let sessionId: Id<"draftSessions">;
+    try {
+      sessionId = await convex.mutation(api.challenges.accept, { challengeId });
+    } catch (e) {
+      // Every refusal here is a sentence written for a person -- somebody else
+      // took it, it was withdrawn, the set has moved, you are out of drafts --
+      // so it is passed through rather than restated.
+      p.log.error(humanError(e));
+      return;
+    }
+
+    const state = await convex.query(api.draft.state, { sessionId });
+    p.log.success("You're in. Same packs, your own pod.");
+    await runDraft(convex, sessionId, state.setCode, state.format);
+    return;
+  }
 
   if (resumeAt !== -1) {
     const sessionId = argv[resumeAt + 1] as Id<"draftSessions"> | undefined;

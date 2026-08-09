@@ -40,6 +40,12 @@ pnpm draft dsk PremierDraft
 
 # See your progress, trends, and biggest recurring mistakes
 pnpm stats
+
+# Dare a friend to draft one of your finished drafts
+pnpm challenge
+
+# Take one up -- paste the link you were sent
+mtg-tutor draft --challenge <link>
 ```
 
 The unified `mtg-tutor` CLI dispatches to the same services (`pnpm dev draft dsk`, or the built binary below).
@@ -371,6 +377,7 @@ apps/
         ui/                    reusable @clack primitives (card picker, formatting)
       services/
         auth/                  login / logout
+        challenge/             issue a link; accepting is a flag on draft
         draft/                 draft screen + entrypoint
         review/                review walkthrough + entrypoint
         stats/                 stats screen
