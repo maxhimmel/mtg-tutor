@@ -111,6 +111,7 @@ pnpm smoke-draft fdn   # headless full-draft smoke test, against Convex
 pnpm challenge-fixture  # fake the other half of a challenge -- see below
 pnpm login             # sign in; the CLI needs a session to reach the backend
 pnpm bench-llm         # what one draft costs in tokens, and whether the advice held
+pnpm bench-io --challenge  # add the two-draft comparison to the I/O run (doubles it)
 pnpm bench-report      # render that run as a page: cost, quality, and the answers
 ```
 

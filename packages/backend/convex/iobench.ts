@@ -132,6 +132,44 @@ export const resultsCost = query({
   },
 });
 
+/**
+ * The two-draft comparison, which is the only read here that pays for a whole
+ * second person's draft.
+ *
+ * Worth its own probe because the arithmetic said ~180KB and arithmetic has
+ * been wrong about this table before: `poolBefore` grows as `pack` shrinks, so
+ * a row is roughly flat across a draft and the mean is not the shape anyone
+ * guesses. Against `review.load`'s measured 218KB it is the number that decides
+ * whether reading rows instead of replaying was the right trade.
+ *
+ * Per VIEW, not per draft -- like `stats.overview`, so the runner reports it and
+ * keeps it out of the per-draft total.
+ */
+export const diffCost = query({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    await ctx.runQuery(api.challenges.diff, args);
+    return await cost(ctx);
+  },
+});
+
+/**
+ * The fork weights, measured apart from the diff because they are ASKED for
+ * apart from it -- they are the one part that replays, and so the one part a
+ * re-ingested set can take away. Reading them together would hide the ~46KB set
+ * document inside a number the diff is not paying.
+ */
+export const forkImpactsCost = query({
+  args: {
+    challengeId: v.id("challenges"),
+    forks: v.array(v.object({ pickIndex: v.number(), theirs: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    await ctx.runQuery(api.challenges.forkImpacts, args);
+    return await cost(ctx);
+  },
+});
+
 export const framePromptCost = query({
   args: {
     sessionId: v.id("draftSessions"),

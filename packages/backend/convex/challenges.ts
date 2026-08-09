@@ -323,43 +323,40 @@ export const diff = query({
  * down with it.
  */
 export const forkImpacts = query({
-  args: { challengeId: v.id("challenges") },
+  args: {
+    challengeId: v.id("challenges"),
+    /**
+     * The forks to weigh, from the diff the caller is already holding.
+     *
+     * Passed in rather than recomputed, and measured rather than assumed:
+     * re-deriving them here meant reading both drafts' rows a SECOND time, and
+     * `pnpm bench-io --challenge` priced that at 163KB against the 138KB the
+     * diff itself costs -- so opening one comparison read every row twice.
+     * Handed the forks, this needs the seed, the caller's own pick list and the
+     * card pool, which is one session document and the set.
+     *
+     * Client input, and safely so: the worst a wrong index or a made-up name
+     * buys is a wrong number in the asker's own bars. `challengeParty` still
+     * decides whether they may be here at all, and the replay bounds the rest.
+     */
+    forks: v.array(v.object({ pickIndex: v.number(), theirs: v.string() })),
+  },
   handler: async (ctx, args) => {
     const { challenge, side } = await challengeParty(ctx, args.challengeId);
     if (!challenge.finishedAt || !challenge.friendSessionId) return null;
+    if (args.forks.length === 0) return [];
 
     const mine =
       side === "challenger" ? challenge.challengerSessionId : challenge.friendSessionId;
-    const theirs =
-      side === "challenger" ? challenge.friendSessionId : challenge.challengerSessionId;
 
-    const [mineRows, theirRows] = await Promise.all([
-      storedPicks(ctx, mine),
-      storedPicks(ctx, theirs),
-    ]);
+    // The pick list off the session document -- one row of a few hundred bytes,
+    // rather than the forty-two pick rows it could also be read from.
+    const mineSession = await ctx.db.get(mine);
+    if (!mineSession) return null;
 
-    const rows = diffDrafts(
-      mineRows.map((r) => ({
-        pickIndex: r.pickIndex,
-        packNo: r.packNo,
-        pickNo: r.pickNo,
-        pack: r.pack.map((c) => ({ name: c.name, colors: c.colors })),
-        pickedName: r.pickedName,
-        score: r.score.score,
-        grade: r.score.grade,
-      })),
-      theirRows.map((r) => ({
-        pickIndex: r.pickIndex,
-        packNo: r.packNo,
-        pickNo: r.pickNo,
-        pack: r.pack.map((c) => ({ name: c.name, colors: c.colors })),
-        pickedName: r.pickedName,
-        score: r.score.score,
-        grade: r.score.grade,
-      })),
-    );
-    const forks = summarizeDiff(rows).forks;
-    if (forks.length === 0) return [];
+    // A replay apiece, and a caller could otherwise ask for thousands. Forty-two
+    // is every pick in a draft, so nothing legitimate is refused.
+    const forks = args.forks.slice(0, 42);
 
     const setDoc = await ctx.db
       .query("sets")
@@ -377,11 +374,11 @@ export const forkImpacts = query({
       .unique();
     if (!cardsDoc) return null;
 
-    const names = mineRows.map((r) => r.pickedName);
-
     try {
       const set = toSetData(cardsDoc);
-      return forks.map((f) => forkImpact(set, challenge.seed, names, f.pickIndex, f.theirs));
+      return forks.map((f) =>
+        forkImpact(set, challenge.seed, mineSession.pickedNames, f.pickIndex, f.theirs),
+      );
     } catch {
       // The set has moved since this was drafted, so the counterfactual cannot
       // be run. Not an error the reader can act on -- the diff beside it is

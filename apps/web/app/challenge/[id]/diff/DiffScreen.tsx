@@ -44,8 +44,14 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
   const convex = useConvex();
   const diff = useQuery(api.challenges.diff, { challengeId });
   // Its own query on purpose: it is the only part that replays, so a set that
-  // has moved costs the braid its weights instead of the screen.
-  const impacts = useQuery(api.challenges.forkImpacts, { challengeId });
+  // has moved costs the braid its weights instead of the screen. Handed the
+  // forks the diff already found, because re-deriving them here meant reading
+  // both drafts' rows a second time -- 163KB against the diff's own 138KB,
+  // measured, for a list this component is holding.
+  const impacts = useQuery(
+    api.challenges.forkImpacts,
+    diff ? { challengeId, forks: diff.tally.forks.map((f) => ({ pickIndex: f.pickIndex, theirs: f.theirs })) } : "skip",
+  );
   const markSeen = useMutation(api.challenges.markSeen);
 
   const [text, setText] = useState<ReturnType<typeof textIndex> | null>(null);
