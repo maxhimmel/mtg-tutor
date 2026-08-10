@@ -31,7 +31,7 @@ import { Panel } from "../../../components/Panel";
  * drafts most of those are single picks with agreement either side. Twenty-five
  * identical humps across a panel is a waveform: one loud note repeated, with no
  * way to tell a blip from a parting that held for six picks and actually built
- * two different decks. So the excursion is now the RUN's own length -- see
+ * two different decks. So the excursion is the RUN's own length -- see
  * `opennessOf`. The rope barely kinks for one pick and yawns for a sustained
  * one, and the shape of the draft is finally in the shape of the drawing.
  *
@@ -48,8 +48,40 @@ import { Panel } from "../../../components/Panel";
  * the pod passes yours back round, at least eight picks later, and a diagram
  * that puts the branch where you picked differently gets the causation exactly
  * backwards. So the arc survives -- cause on the left, a long span of nothing
- * visible, effect on the right -- and it is now given clear air above the wells
- * to be seen in, because it is the one mark here carrying an argument.
+ * visible, effect on the right -- and it is given clear air above the wells to
+ * be seen in, because it is the one mark here carrying an argument.
+ *
+ * WHOSE HALF IS WHOSE, WHICH THE GUTTER KEPT FAILING TO SAY. It has now been
+ * three notations, and the first two were both a mark standing BESIDE a band
+ * rather than anything attached to it: a dot that keyed nothing, then a bracket
+ * with the name at its outside edge. Both left a reader to infer that this word
+ * goes with that rope, and the inference is exactly the work a label exists to
+ * remove.
+ *
+ * So the rope is named where it ENTERS. Each strand arrives from off the left of
+ * the frame at its own name's height and eases down into its lane over the
+ * run-up before the first pack, in the same smooth step it uses for every lane
+ * change inside the chart -- so the name and the rope are one continuous object
+ * and there is nothing left to infer. Nothing in the run-up is a pick, and the
+ * wells make that plain by starting after it: left of the first well is the rope
+ * arriving, not data.
+ *
+ * That also retires the two-bar colour chip. A chip beside a name is a legend
+ * entry, and the moment a rope emerges from under that name in a DIFFERENT
+ * colour -- which it does, because the chip showed what a side finished on and
+ * the rope starts undecided grey -- the legend is actively misleading. Where
+ * each of you arrived is legible at the other end of its own rope, and the decks
+ * panel below says it in words.
+ *
+ * THE PACKS ARE MEASURED, NOT BOXED. Three dark rectangles with a five-unit gap
+ * between them is a weak delineation at any width and a nearly invisible one in
+ * this theme, and the boundary was then drawn a second time by the labels
+ * underneath -- the two-notations-for-one-fact this file has been trying to
+ * avoid since it started drawing wells. So the well keeps only what a well is
+ * for, which is being a floor for the rope and for the drift shading, and the
+ * boundary moves entirely to the ruler beneath: one span per pack, ticked at
+ * both ends, with the pack's name sitting in a break in its own rule. A pack is
+ * a measured length of the draft, and that is what a dimension line says.
  *
  * Curves, settled. The control that offered corners instead was a comparison
  * aid, and it has done its job: a rope has no corners, and a straight cut to a
@@ -77,12 +109,22 @@ const TOGETHER = 18;
 const OPEN = 16;
 // The strands' own room, inside a well.
 const WELL_H = 86;
+// The right inset, and the run-up on the left: the distance a strand has to come
+// down from its name to its lane. Long enough that the arrival is a shallow
+// curve rather than a hook, and drawn as the same smooth step the lane changes
+// use, so the entrance is in the chart's own hand.
 const PAD = 14;
-// Page showing between one pack's well and the next. Enough to read as a break
-// at any panel width, small enough that no pick loses its place over it.
-const WELL_GAP = 5;
+const LEAD = 56;
+// Page showing between one pack's well and the next. It was five, which is a gap
+// you can find once you know it is there; the packs are delineated by the ruler
+// underneath now, and this is the break agreeing with it rather than carrying it
+// alone.
+const WELL_GAP = 12;
 // Clear air above the wells, for the causal arc and only when there is one.
 const CHANNEL = 22;
+// Where a name sits, and therefore where its rope comes in. Far enough from the
+// lanes that the two names are unmistakably a top half and a bottom half.
+const NAME_INSET = 15;
 
 // Magic's own colours, which is what a reader already knows how to decode. White
 // is pulled back off the top of the range: at #f3efd0 against this near-black
@@ -150,12 +192,20 @@ export function Braid({
   const H = channel + WELL_H + 2;
   const mid = channel + WELL_H / 2;
 
-  const step = (1000 - PAD * 2) / rows.length;
+  // Where each name sits, and where its rope therefore enters the frame. One
+  // number, read by the SVG and by the HTML label beside it, so a name and the
+  // strand leaving it cannot drift apart.
+  const nameY = { yours: NAME_INSET, theirs: H - NAME_INSET };
+
+  const step = (1000 - LEAD - PAD) / rows.length;
   // A pick's own band, and its centre. The turn happens over the pick it belongs
   // to rather than between two of them.
-  const bandL = (i: number) => PAD + i * step;
-  const bandR = (i: number) => PAD + (i + 1) * step;
+  const bandL = (i: number) => LEAD + i * step;
+  const bandR = (i: number) => LEAD + (i + 1) * step;
   const cx = (i: number) => bandL(i) + step / 2;
+  // Where the first well starts, which is where the run-up ends: the rope is in
+  // its lane by the time it is over anything that counts as a pick.
+  const mouth = LEAD + WELL_GAP / 2;
 
   const open = opennessOf(rows);
 
@@ -168,27 +218,36 @@ export function Braid({
     side === "yours" ? row.yourLean : row.theirLean;
 
   /**
-   * One cord, as a path.
+   * One cord, as a path: in from under its name, then a point per pick.
    *
    * The control points sit half a pick either side of the turn and horizontally
    * level with the point they belong to -- the standard smooth step, which makes
-   * a lane change read as the rope easing open.
+   * a lane change read as the rope easing open. The entrance is that same curve
+   * over a longer run, which is what lets a name and a rope read as one object
+   * without the join ever being drawn as a join.
    */
   const strandPath = (side: "yours" | "theirs", cord: 0 | 1) => {
     // The two cords ride half a seam's width either side of the strand's own
     // line, so together they occupy exactly one strand.
     const off = (cord === 0 ? -1 : 1) * ((CORD + SEAM) / 2);
-    return rows
+    const y0 = laneY(0, side) + off;
+    const ny = nameY[side] + off;
+
+    const head = `M 0 ${ny} C ${mouth / 2} ${ny} ${mouth / 2} ${y0} ${mouth} ${y0}`;
+
+    const body = rows
       .map((_, i) => {
         const x = cx(i);
         const y = laneY(i, side) + off;
-        if (i === 0) return `M ${x} ${y}`;
+        if (i === 0) return `L ${x} ${y}`;
         const px = cx(i - 1);
         const py = laneY(i - 1, side) + off;
         const mx = (px + x) / 2;
         return py === y ? `L ${x} ${y}` : `C ${mx} ${py} ${mx} ${y} ${x} ${y}`;
       })
       .join(" ");
+
+    return `${head} ${body}`;
   };
 
   /**
@@ -197,6 +256,10 @@ export function Braid({
    * Two stops per pick at the same offsets its band spans, so each pick's colour
    * ends exactly where the next begins. A soft gradient would paint the blend
    * between "blue" and "blue-black" as a colour neither deck ever was.
+   *
+   * It spans the picks and not the box, so the run-up left of the first pack
+   * takes the first stop's colour by padding -- the rope arrives in the colour
+   * it starts in, which for the first few picks is undecided grey.
    */
   const stops = (side: "yours" | "theirs", cord: 0 | 1) =>
     rows.flatMap((row, i) => {
@@ -210,13 +273,14 @@ export function Braid({
   const cords = [0, 1] as const;
 
   /**
-   * Each pack as a well the strands run through.
+   * Each pack as a floor the strands run over, with the span itself named below.
    *
-   * The boundary was a hairline under the chart and a gap between two labels,
-   * which is not a delineation -- it is a thing you can find if you already know
-   * where to look. A pack is a container in this game and the pick track above
-   * already draws it as one, so the braid draws it the same way: a shallow well
-   * with page showing between it and the next.
+   * The well used to carry the boundary as well -- a bordered rectangle with a
+   * hairline gap to the next -- and it was never strong enough to read while
+   * being just strong enough to make the labels underneath a second drawing of
+   * the same fact. It is a surface now: something for the rope to be legible
+   * against and for the drift shading to sit in. Where one pack ends is said
+   * once, on the ruler.
    */
   let seen = 0;
   const wells = packSpans(rows).map((pack) => {
@@ -258,18 +322,14 @@ export function Braid({
       }
       bodyClassName="gap-3"
     >
-      <div className="flex items-stretch gap-3">
-        {/* NOT a legend. A legend is a list of marks you look up, and there were
-            only ever two rows here to tell apart -- so the honest thing is to
-            say what is already true of the picture: the top half of this chart
-            is yours and the bottom half is theirs.
-
-            So the gutter is the two halves themselves, bracketed, each name
-            pushed to its own outside edge. Nothing to map and nothing to
-            memorise; the label is where the thing it names lives. */}
-        <div className="flex w-28 shrink-0 flex-col" style={{ height: H }} aria-hidden>
-          <LaneLabel lean={last.yourLean} label="You" edge="top" />
-          <LaneLabel lean={last.theirLean} label={them} edge="bottom" />
+      <div className="flex items-stretch gap-2">
+        {/* NOT a legend, and no longer a bracket either. Each name is simply
+            where its own rope comes in, and the run-up does the joining -- so
+            there is nothing here to look up and nothing to map. The positions
+            come from the same `nameY` the paths are drawn from. */}
+        <div className="relative w-28 shrink-0" style={{ height: H }} aria-hidden>
+          <LaneLabel y={nameY.yours} label="You" />
+          <LaneLabel y={nameY.theirs} label={them} />
         </div>
 
         <svg
@@ -291,7 +351,7 @@ export function Braid({
                   key={`${side}-${cord}`}
                   id={`braid-${side}-${cord}`}
                   gradientUnits="userSpaceOnUse"
-                  x1={PAD}
+                  x1={LEAD}
                   x2={1000 - PAD}
                   y1={0}
                   y2={0}
@@ -313,9 +373,7 @@ export function Braid({
               width={well.width}
               height={WELL_H}
               rx={2}
-              className="fill-base-100/50 stroke-base-content/15"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
+              className="fill-base-100/70"
             />
           ))}
 
@@ -329,7 +387,7 @@ export function Braid({
             y={channel}
             width={step}
             height={WELL_H}
-            className="fill-base-content/[0.07] stroke-base-content/25"
+            className="fill-base-content/[0.08] stroke-base-content/25"
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
           />
@@ -341,7 +399,7 @@ export function Braid({
               y={channel}
               width={band.width}
               height={WELL_H}
-              className="fill-warning/[0.11]"
+              className="fill-warning/[0.13]"
             />
           ))}
 
@@ -446,29 +504,10 @@ export function Braid({
         </svg>
       </div>
 
-      <div className="flex gap-3">
-        {/* Matches the key gutter, so the labels start where the SVG does. */}
+      <div className="flex gap-2">
+        {/* Matches the gutter above, so the ruler starts where the chart does. */}
         <span className="w-28 shrink-0" />
-        {/* The drawing's own PAD applied as a percentage: the strands start 14
-            units in from each edge of a 1000-unit box, so without it every label
-            sat about one and a half percent of the width left of its pack. */}
-        <div
-          className="flex flex-1"
-          style={{ paddingLeft: `${(PAD / 1000) * 100}%`, paddingRight: `${(PAD / 1000) * 100}%` }}
-        >
-          {/* No dividers any more. The wells behind the strands are the break
-              now, and a second set of rules under them would be the boundary
-              drawn twice in two different notations. */}
-          {wells.map((well) => (
-            <span
-              key={well.packNo}
-              className="eyebrow text-center"
-              style={{ flexGrow: well.count, flexBasis: 0 }}
-            >
-              Pack {well.packNo}
-            </span>
-          ))}
-        </div>
+        <PackRuler wells={wells} />
       </div>
 
       <p className="border-t border-base-300 pt-2.5 text-sm leading-relaxed text-base-content/65">
@@ -503,45 +542,59 @@ export function Braid({
 }
 
 /**
- * One half of the chart, named at its own outside edge.
+ * A name, at the height its own rope comes in at.
  *
- * The bracket is the claim: this band, top to bottom, is that person's. Its rule
- * stops short of the midline on both sides, so the two read as two brackets
- * rather than as one rule running the height of the panel.
+ * Right-aligned and hard against the chart, so the word and the strand leaving
+ * it are as close as the layout allows and the run-up reads as continuing the
+ * line rather than as reaching across a gap.
  *
- * The colours are what that side FINISHED on, kept because the chart shows them
- * arriving and a reader wants somewhere to see where they arrived. Drawn as the
- * strand's own cross-section -- two bars with the same seam between them the
- * rope has -- so it is the same object the chart is drawing rather than a second
- * notation for it.
- *
- * The name wraps rather than truncating. It was in a fixed 6rem column with
- * `truncate` on it, and the other drafter is called "Your challenger" whenever
- * they have not been named -- so the label that exists to say whose half this is
- * rendered as "A FIXT…".
+ * It wraps rather than truncating. It was in a fixed 6rem column with `truncate`
+ * on it, and the other drafter is called "Your challenger" whenever they have
+ * not been named -- so the label that exists to say whose half this is rendered
+ * as "A FIXT…".
  */
-function LaneLabel({
-  lean,
-  label,
-  edge,
-}: {
-  lean: string;
-  label: string;
-  edge: "top" | "bottom";
-}) {
+function LaneLabel({ y, label }: { y: number; label: string }) {
   return (
-    <div
-      className={`flex min-h-0 flex-1 border-l-2 border-base-content/20 pl-2 ${
-        edge === "top" ? "mb-1 items-start" : "mt-1 items-end"
-      }`}
+    <span
+      className="eyebrow absolute right-0 w-full -translate-y-1/2 text-right leading-tight"
+      style={{ top: y }}
     >
-      <span className="flex min-w-0 items-start gap-2">
-        <span className="mt-px flex h-4 w-4 shrink-0 flex-col gap-px overflow-hidden rounded-[3px]">
-          <span className="flex-1" style={{ background: cordInk(lean, 0) }} />
-          <span className="flex-1" style={{ background: cordInk(lean, 1) }} />
-        </span>
-        <span className="eyebrow leading-tight">{label}</span>
-      </span>
+      {label}
+    </span>
+  );
+}
+
+/**
+ * The packs, as measured spans rather than as boxes.
+ *
+ * A dimension line: one rule per pack running its exact width, ticked at both
+ * ends, with the pack's name sitting in a break in the rule. That is what a pack
+ * IS on this chart -- a measured length of the draft -- and saying it this way
+ * is what lets the wells stop trying to carry the boundary, which they were bad
+ * at: three dark rectangles a shade off the panel behind them.
+ *
+ * Positioned from the same `wells` the SVG draws, as percentages of the same
+ * box: the chart is a 1000-unit viewBox stretched to fill, so one unit is a
+ * tenth of a percent and every tick lands exactly on the floor above it. The
+ * flex row this replaces could not do that -- it grew each label by its pick
+ * count and knew nothing about the gap between one well and the next.
+ */
+function PackRuler({ wells }: { wells: { packNo: number; x: number; width: number }[] }) {
+  return (
+    <div className="relative h-4 min-w-0 flex-1">
+      {wells.map((well) => (
+        <div
+          key={well.packNo}
+          className="absolute inset-y-0 flex items-center gap-2"
+          style={{ left: `${well.x / 10}%`, width: `${well.width / 10}%` }}
+        >
+          <span className="h-2.5 w-px shrink-0 bg-base-content/40" />
+          <span className="h-px min-w-0 flex-1 bg-base-content/20" />
+          <span className="eyebrow shrink-0 whitespace-nowrap">Pack {well.packNo}</span>
+          <span className="h-px min-w-0 flex-1 bg-base-content/20" />
+          <span className="h-2.5 w-px shrink-0 bg-base-content/40" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -592,7 +645,7 @@ function spans(
 }
 
 // Where one pack ends and the next begins. Proportional, and it lines up with
-// the SVG because the picks are evenly spaced and the padding is symmetric.
+// the SVG because the picks are evenly spaced and both insets are known.
 function packSpans(rows: DiffRow[]): { packNo: number; count: number }[] {
   return rows.reduce<{ packNo: number; count: number }[]>((acc, row) => {
     const last = acc[acc.length - 1];
