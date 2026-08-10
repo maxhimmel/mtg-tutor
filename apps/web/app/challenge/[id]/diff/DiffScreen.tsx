@@ -256,8 +256,7 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         faceOf={faceOf}
       />
 
-      <div ref={shelfRef} className="mt-10 scroll-mt-4">
-        <p className="eyebrow mb-3 text-base-content/45">Pick by pick</p>
+      <div ref={shelfRef} className="mt-4 scroll-mt-4">
         <Shelf rows={diff.rows} them={them} at={at} faceOf={faceOf} />
       </div>
     </PageShell>
