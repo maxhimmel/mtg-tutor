@@ -19,9 +19,11 @@ import type { ReactNode } from "react";
  * frame on the scroller, the top edge of the box dissolved the moment you
  * scrolled off the top of it, which is precisely when a reader most needs to
  * see where the box ends and the panel begins. The wrapper carries the edge,
- * the lip and the recessed ground and is never masked; the scroller carries the
- * overflow, the scrollbar and the fade. Only the content moves, and only the
- * content fades.
+ * the shadowed lip and the recessed ground and is never masked; the scroller
+ * carries the overflow, the scrollbar and the fade. The frame holds still and
+ * everything inside it softens at the two edges -- the scrollbar included,
+ * which is what lets the bar run the frame's full height without its ends
+ * being sliced off by the radius.
  *
  * The ground is base-100 inside a base-200 panel, which is how this app has
  * said "recessed" since the deck board's piles. Anything laid in it should sit
