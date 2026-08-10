@@ -3,9 +3,9 @@ import { loadPrincipleSources, loadPrinciples } from "@mtg-tutor/core";
 import { PrinciplesExplorer } from "./PrinciplesExplorer";
 
 export const metadata: Metadata = {
-  title: "Draft principles — mtg-tutor",
+  title: "Draft principles",
   description:
-    "The set-agnostic Magic: The Gathering Limited draft and deckbuilding principles the mtg-tutor coach is grounded in. Free to read, with sources.",
+    "The set-agnostic Magic: The Gathering Limited draft and deckbuilding principles the P1P1 coach is grounded in. Free to read, with sources.",
 };
 
 // A server component so the corpus renders into the HTML and the page is

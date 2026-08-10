@@ -13,8 +13,8 @@ import { RequestAccess } from "./RequestAccess";
 // a page not listed there 307s to sign-in and looks fine in isolation.
 
 export const metadata: Metadata = {
-  title: "Invite only — MTG Draft Tutor",
-  description: "The draft tutor is in a private beta. Ask for an invite.",
+  title: "Invite only",
+  description: "P1P1 is in a private beta. Ask for an invite.",
 };
 
 export default function SignUp() {

@@ -17,8 +17,18 @@ export default function Home() {
     <PageShell>
       <Unauthenticated>
         <section className="max-w-2xl py-6">
+          {/* The break is written rather than left to the viewport, because the
+              two sentences are the two halves of the app -- the draft, then the
+              review -- and a wrap that fell after "Leave" would say nothing.
+              Stacked at 1.05 they read as a couplet, which is the shape of the
+              claim: the second line is what the first one earns you.
+
+              The heading it replaced, "Every pick, graded.", is not lost: the
+              paragraph under it makes the same claim with the numbers in. */}
           <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-            Every pick, graded.
+            Draft on instinct.
+            <br />
+            Leave with reasons.
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-base-content/70">
             Draft a real pack from any recent set. Every pick is scored against 17Lands
