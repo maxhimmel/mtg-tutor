@@ -426,7 +426,16 @@ html {
     width: 0.5625rem;
   }
 
+  /* THE BAR STOPS BEFORE THE CORNERS DO. The frame clips to its own radius, and
+     a scrollbar runs the full height of the box -- so the last dozen pixels at
+     each end were being sliced off at an angle by the curve, which reads as a
+     rendering fault rather than as a rounded box. Insetting the track past the
+     radius is what keeps the whole bar on the straight part of the edge, and it
+     is measured from the radius itself so the two cannot drift apart: change
+     --radius-box and the scrollbar moves with it. The two picks of clearance
+     are so the bar ends visibly short of the curve rather than tangent to it. */
   &::-webkit-scrollbar-track {
+    margin-block: calc(var(--radius-box) + 2px);
     border-radius: 999px;
     background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
