@@ -198,8 +198,26 @@ export function DeckBuilder({
                 </p>
               )}
 
+              {/* The cut cards and the rule naming them, as ONE box on the floor
+                  of the well.
+
+                  Both parts matter. `mt-auto` puts it on the floor because the
+                  wells are grid items stretched to the tallest, so a rule that
+                  simply follows the last card you are playing sits at a different
+                  height in all seven columns -- seven dashed lines at seven
+                  heights, none of which is a boundary you can run an eye along.
+                  On the floor they read as one line across the board, and the
+                  slack falls in the middle where it says something true: there is
+                  room at this cost.
+
+                  The wrapper is what makes the rule stay ON the cards. As two
+                  loose children of the well they were two flex items, and an auto
+                  margin on the first of them is a rule the layout is free to
+                  honour by moving one and not the other -- which is exactly what
+                  it did, stranding the label at the top with its cards at the
+                  bottom. One box cannot come apart. */}
               {cutPiles[i].length > 0 && (
-                <>
+                <div className="mt-auto flex flex-col gap-1.5">
                   {/* Dashed, because the cards under it are drawn with a dashed
                       plate and mean the same thing there: not in your forty. */}
                   <p className="eyebrow border-t border-dashed border-base-300 pt-1.5 text-base-content/35">
@@ -210,7 +228,7 @@ export function DeckBuilder({
                       <BuildRow key={pick.pos} pick={pick} cut onMove={move} />
                     ))}
                   </ul>
-                </>
+                </div>
               )}
             </PileWell>
           ))}
