@@ -25,9 +25,19 @@ const archivo = Archivo({
   display: "swap",
 });
 
+// A template rather than a name repeated in four files. Every page that sets a
+// title sets only its own half of one -- "Glossary", not "Glossary — P1P1" --
+// so the brand appears exactly once in the app and the next rename is one edit
+// here. The default carries the tagline because the home page is the only tab
+// where there is nothing more specific to say, and the only one whose title
+// gets shared.
 export const metadata: Metadata = {
-  title: "mtg-tutor",
-  description: "Practice MTG draft with 17Lands-based scoring",
+  title: {
+    default: "P1P1 — Draft on instinct. Leave with reasons.",
+    template: "%s — P1P1",
+  },
+  description:
+    "Draft a real pack from any recent set. Every pick is scored against 17Lands win-rate data, and the coach tells you what you passed up.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

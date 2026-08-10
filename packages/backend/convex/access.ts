@@ -85,10 +85,10 @@ export const notifyOwner = internalAction({
       body: JSON.stringify({
         // Resend's own sender, which needs no verified domain -- this only ever
         // goes to the one address the deployment is configured with.
-        from: "MTG Tutor <onboarding@resend.dev>",
+        from: "P1P1 <onboarding@resend.dev>",
         to: [to],
         reply_to: args.email,
-        subject: `Draft tutor: ${args.name} wants in`,
+        subject: `P1P1: ${args.name} wants in`,
         text: [
           `${args.name} <${args.email}> asked for access.`,
           args.note ? `\n"${args.note}"\n` : "",

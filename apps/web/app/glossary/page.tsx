@@ -9,9 +9,9 @@ import { PickStrip } from "./figures/PickStrip";
 import { WinRateAxis } from "./figures/WinRateAxis";
 
 export const metadata: Metadata = {
-  title: "Glossary — mtg-tutor",
+  title: "Glossary",
   description:
-    "What GIH WR, IWD, ATA, ALSA, maindeck rate and GP WR actually measure, where each one misleads, and how mtg-tutor grades a pick.",
+    "What GIH WR, IWD, ATA, ALSA, maindeck rate and GP WR actually measure, where each one misleads, and how P1P1 grades a pick.",
 };
 
 // Grouped by the question each number answers, rather than alphabetically or in

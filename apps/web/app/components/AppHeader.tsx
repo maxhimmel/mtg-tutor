@@ -58,11 +58,25 @@ export function AppHeader() {
   return (
     <header className="mb-6 flex flex-wrap items-center justify-between gap-x-6 border-b border-base-300">
       <div className="flex flex-wrap items-center gap-x-6">
+        {/* Pack one, pick one: the coordinate every draft opens on, and the
+            only one the whole format argues about.
+
+            The two halves are a pack and a pick, and the gold goes on the pick
+            -- which is not decoration but the app's own rule applied to its
+            name. Gold here means the choice you made or the card you are
+            holding (see the nav marker below, which is deliberately not gold),
+            and a pick is the only thing in "P1P1" that is a choice.
+
+            Nothing separates the halves but that colour. Spoken it is one word,
+            and a dot or a space between them would make it a filename. The
+            tracking that the old lowercase wordmark carried comes off for the
+            same reason it went on: four alternating letters and figures need
+            the room, where nine tight lowercase letters needed closing up. */}
         <Link
           href="/"
-          className="py-3 font-display text-xl font-semibold tracking-tight text-base-content no-underline"
+          className="py-3 font-display text-xl font-semibold text-base-content no-underline"
         >
-          mtg<span className="text-primary">-</span>tutor
+          P1<span className="text-primary">P1</span>
         </Link>
 
         <nav className="flex items-center gap-x-5" aria-label="Sections">
