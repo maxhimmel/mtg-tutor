@@ -86,30 +86,37 @@ export function DeckBoard({
   // With nothing to compare, every mark and every second number is noise: the
   // board is just your deck, in piles.
   agreed,
+  // Whose the other forty is. The board was written against the app's own
+  // suggestion and said so in four places; a challenge puts a real person on
+  // that side, and "only in the suggestion" is then simply wrong. Defaulted
+  // rather than required, because the results screen's reading is still the
+  // common one.
+  theirs = "the suggestion",
 }: {
   rows: readonly DeckRow[];
   basics: Basics;
   agreed: boolean;
+  theirs?: string;
 }) {
   const piles = pilesOf(rows, basics);
 
   return (
     <div className="flex flex-col gap-4">
-      {!agreed && <Legend />}
+      {!agreed && <Legend theirs={theirs} />}
       {/* auto-fit rather than a fixed seven: the board keeps its columns at a
           placard's width and drops to fewer of them on a narrow screen, which is
           the one thing that must not be traded away -- a squeezed pile is a
           column of truncated names. */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2.5">
         {piles.map((pile) => (
-          <PileColumn key={pile.label} pile={pile} agreed={agreed} />
+          <PileColumn key={pile.label} pile={pile} agreed={agreed} theirs={theirs} />
         ))}
       </div>
     </div>
   );
 }
 
-function Legend() {
+function Legend({ theirs }: { theirs: string }) {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-base-content/55">
       <span className="flex items-center gap-2">
@@ -121,13 +128,21 @@ function Legend() {
           aria-hidden
           className="h-3.5 w-5 rounded-[3px] border border-dashed border-base-content/40"
         />
-        Only in the suggestion
+        Only in {theirs}
       </span>
     </div>
   );
 }
 
-function PileColumn({ pile, agreed }: { pile: Pile; agreed: boolean }) {
+function PileColumn({
+  pile,
+  agreed,
+  theirs,
+}: {
+  pile: Pile;
+  agreed: boolean;
+  theirs: string;
+}) {
   const { basics } = pile;
 
   return (
@@ -170,7 +185,7 @@ function PileColumn({ pile, agreed }: { pile: Pile; agreed: boolean }) {
         <span className="sr-only">
           {agreed
             ? `${pile.mine} cards`
-            : `${pile.mine} in your build, ${pile.theirs} in the suggestion`}
+            : `${pile.mine} in your build, ${pile.theirs} in ${theirs}`}
         </span>
       </header>
 
@@ -179,7 +194,7 @@ function PileColumn({ pile, agreed }: { pile: Pile; agreed: boolean }) {
           {/* Keyed by position: two copies of a common share a name, and nothing
               reorders these rows. */}
           {pile.rows.map((row, i) => (
-            <PileRow key={i} row={row} agreed={agreed} />
+            <PileRow key={i} row={row} agreed={agreed} theirs={theirs} />
           ))}
         </ul>
       )}
@@ -188,7 +203,7 @@ function PileColumn({ pile, agreed }: { pile: Pile; agreed: boolean }) {
         <p className="text-xs tabular-nums text-base-content/45">
           + {basics.mine} basic{basics.mine === 1 ? "" : "s"}
           {!agreed && basics.theirs !== basics.mine && (
-            <span className="text-base-content/30"> · {basics.theirs} suggested</span>
+            <span className="text-base-content/30"> · {basics.theirs} in {theirs}</span>
           )}
         </p>
       )}
@@ -196,7 +211,15 @@ function PileColumn({ pile, agreed }: { pile: Pile; agreed: boolean }) {
   );
 }
 
-function PileRow({ row, agreed }: { row: DeckRow; agreed: boolean }) {
+function PileRow({
+  row,
+  agreed,
+  theirs,
+}: {
+  row: DeckRow;
+  agreed: boolean;
+  theirs: string;
+}) {
   const card = row.built ?? row.suggested;
   if (!card) return null;
 
@@ -217,7 +240,7 @@ function PileRow({ row, agreed }: { row: DeckRow; agreed: boolean }) {
       <CardPlacard card={card} ghost={ghost} className="min-w-0 flex-1" />
       {(ghost || yoursOnly) && (
         <span className="sr-only">
-          {ghost ? "only in the suggestion" : "only in your build"}
+          {ghost ? `only in ${theirs}` : "only in your build"}
         </span>
       )}
     </li>

@@ -284,23 +284,44 @@ export function diffViewed(p: {
   comparable: number;
   agreed: number;
   forks: number;
+  /**
+   * Whether there were two forties to compare, one, or none.
+   *
+   * A challenge unlocks at the forty-second PICK, and a deck is registered by a
+   * separate act somebody may never get round to -- so the deck comparison can
+   * open on an empty state through no fault of its own. This is the number that
+   * decides whether that empty state is a rare edge or the common case, and
+   * therefore whether finishing a challenge should walk somebody into building
+   * their forty rather than just telling them the comparison is ready.
+   */
+  decks: "both" | "yours" | "theirs" | "neither";
 }): void {
   if (!on()) return;
   posthog.capture("diff_viewed", p);
 }
 
 /**
- * Which of the three readings actually drives the stepper.
+ * Which of the readings actually drives the stepper.
  *
- * The hero lists the forks, the braid draws them in time, and the bar ticks
- * them -- three ways into the same place, built on the theory that they answer
+ * The fork cards list them, the braid draws them in time, and the track marks
+ * them -- several ways into the same place, built on the theory that they answer
  * different questions. `from` is what tells us whether that was true, and in
  * particular whether the braid earned what it cost.
+ *
+ * `track` is the summary's run of forty-two ticks, added when it replaced the
+ * prose the screen used to explain itself with. A NEW VALUE rather than a
+ * renaming of the three that were here: `hero` still means the fork cards even
+ * though the panel around them is no longer called that, because a chart in
+ * PostHog cannot be repaired retroactively and a value that changes meaning is
+ * worse than one that reads a little stale.
+ *
+ * Only fires when the step landed on a fork. The track is navigation over the
+ * whole draft, and counting every step would bury the thing being measured.
  */
 export function forkOpened(p: {
   challengeId: string;
   pickIndex: number;
-  from: "hero" | "braid" | "tick";
+  from: "track" | "hero" | "braid" | "tick";
 }): void {
   if (!on()) return;
   posthog.capture("fork_opened", p);

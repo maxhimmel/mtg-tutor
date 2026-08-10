@@ -39,9 +39,15 @@ export function ChallengeAFriend({
   if (challengeId) {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-base-content/70">
-          Send this to somebody. They draft your exact packs, and you will be told when
-          they finish.
+        {/* "Your exact packs" was the word here and it is the one claim this
+            feature is built to avoid making. They are dealt the same cards off
+            the same seed, in a pod of their own -- which is why their picks
+            still change what wheels back to them, and why the comparison has to
+            say per pick whether the two of you were looking at the same
+            shelf. The sender should be told the same thing the receiver is. */}
+        <p className="text-sm leading-relaxed text-base-content/70">
+          Send this to somebody. They open the same cards you did, in a pod of their own —
+          and you will be told when they finish.
         </p>
         <CopyLink challengeId={challengeId} where={where} />
       </div>
@@ -71,6 +77,14 @@ export function ChallengeAFriend({
 
   return (
     <div className="flex flex-col gap-2">
+      {/* What the link is, before asking for anything. The button that opens
+          this said "challenge a friend to these packs" and then went straight to
+          a name field, so the one moment somebody decides whether to send it was
+          also the moment they had least idea what they were sending. */}
+      <p className="text-sm leading-relaxed text-base-content/70">
+        A link that deals somebody the same cards you just drafted. When they finish, you
+        get the two drafts side by side.
+      </p>
       <label className="flex flex-col gap-1">
         <span className="eyebrow">Who is it from?</span>
         <input

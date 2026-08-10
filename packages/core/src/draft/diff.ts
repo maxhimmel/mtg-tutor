@@ -1,6 +1,5 @@
-import type { EngineCard, PoolCard, SetData } from "../model/card.js";
+import type { ColorCode, EngineCard, PoolCard, SetData } from "../model/card.js";
 import { colorKey } from "../scoring/context.js";
-import { committedColors } from "../scoring/score.js";
 import { cardValue } from "../scoring/value.js";
 import { mulberry32 } from "../util/rng.js";
 import { DraftEngine } from "./engine.js";
@@ -59,9 +58,40 @@ export interface DiffRow {
    * different lessons. Only the first is a fork.
    */
   offShelf: boolean;
-  /** The colours each pool was committed to at this point, for the braid. */
-  yourColors: string;
-  theirColors: string;
+  /** What each side was leaning on at this point, for the braid. */
+  yourLean: string;
+  theirLean: string;
+}
+
+/**
+ * The two colours a pool leans on hardest, in WUBRG order.
+ *
+ * NOT `committedColors`, which is every colour with two or more cards in the
+ * pool. That rule is right for a DECK -- a built forty has two or three such
+ * colours and naming all of them is how a splash gets named -- and badly wrong
+ * for a forty-two-card POOL, where four and five are ordinary. The braid drew
+ * its strands from it and got what that implies: every strand multicolour by
+ * about pick four and multicolour for the rest of the draft, on both sides, so
+ * the one dimension only that diagram carried said the same thing everywhere.
+ *
+ * Two, because a draft deck is a pair and a reader who plays this game reads a
+ * pair as a unit. The two-card floor stays, so a single off-colour first pick is
+ * not a lean; an empty answer means nobody has committed to anything yet, which
+ * is the truth for the first few picks and worth drawing as itself.
+ */
+export function leanColors(pool: readonly PoolCard[]): string {
+  const counts = new Map<string, number>();
+  for (const c of pool) for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
+
+  const top = [...counts]
+    .filter(([, n]) => n >= 2)
+    // Count first, then the colour's own letter -- so a tie resolves the same
+    // way every time rather than by whichever card happened to be picked first.
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 2)
+    .map(([c]) => c);
+
+  return colorKey(new Set(top as ColorCode[]));
 }
 
 export interface Fork {
@@ -148,8 +178,8 @@ export function diffDrafts(
       samePack: samePack(y.pack, t.pack),
       agree,
       offShelf: !agree && !y.pack.some((c) => c.name === t.pickedName),
-      yourColors: colorKey(committedColors(yourPool)),
-      theirColors: colorKey(committedColors(theirPool)),
+      yourLean: leanColors(yourPool),
+      theirLean: leanColors(theirPool),
     });
   }
 
