@@ -1,7 +1,8 @@
 "use client";
 
-import { type DeckRow, CURVE_TOP, castingValue, isLand } from "@mtg-tutor/core";
+import type { DeckRow } from "@mtg-tutor/core";
 import { CardPlacard } from "./CardPlacard";
+import { LANDS_PILE, PILE_LABELS, PileGrid, PileWell, pileIndexOf } from "./CurvePiles";
 
 /**
  * A forty, laid out the way a forty is laid out on a table.
@@ -25,7 +26,6 @@ import { CardPlacard } from "./CardPlacard";
 
 interface Pile {
   label: string;
-  // Read aloud in place of the label, which is a bare number on the page.
   spoken: string;
   rows: DeckRow[];
   mine: number;
@@ -40,44 +40,23 @@ export interface Basics {
   theirs: number;
 }
 
-// Lands are the seventh pile rather than a footnote: they are seventeen of the
-// forty, the suggestion disagrees about how many to run, and a board that showed
-// only the spells would be a board showing half a deck.
 function pilesOf(rows: readonly DeckRow[], basics: Basics): Pile[] {
-  const turns: Pile[] = Array.from({ length: CURVE_TOP }, (_, i) => ({
-    label: i + 1 === CURVE_TOP ? `${CURVE_TOP}+` : String(i + 1),
-    spoken: i + 1 === CURVE_TOP ? `Turn ${CURVE_TOP} and up` : `Turn ${i + 1}`,
-    rows: [],
-    mine: 0,
-    theirs: 0,
-  }));
+  const piles: Pile[] = PILE_LABELS.map((pile) => ({ ...pile, rows: [], mine: 0, theirs: 0 }));
   // Basics are not cards anyone drafted, so they are a count rather than rows --
-  // but they are still land slots, so the pile's totals start from them and match
-  // what the deck actually runs.
-  const lands: Pile = {
-    label: "Lands",
-    spoken: "Lands",
-    rows: [],
-    mine: basics.mine,
-    theirs: basics.theirs,
-    basics,
-  };
+  // but they are still land slots, so the lands pile's totals start from them and
+  // match what the deck actually runs.
+  piles[LANDS_PILE] = { ...piles[LANDS_PILE], mine: basics.mine, theirs: basics.theirs, basics };
 
   for (const row of rows) {
     const card = row.built ?? row.suggested;
     if (!card) continue;
-    // The same bucketing manaCurve does, and by castingValue for the same reason:
-    // a split card sits on the half you would actually cast.
-    const pile = isLand(card)
-      ? lands
-      : turns[Math.min(CURVE_TOP, Math.max(1, Math.ceil(castingValue(card)))) - 1];
-
+    const pile = piles[pileIndexOf(card)];
     pile.rows.push(row);
     if (row.built) pile.mine++;
     if (row.suggested) pile.theirs++;
   }
 
-  return [...turns, lands];
+  return piles;
 }
 
 export function DeckBoard({
@@ -103,15 +82,11 @@ export function DeckBoard({
   return (
     <div className="flex flex-col gap-4">
       {!agreed && <Legend theirs={theirs} />}
-      {/* auto-fit rather than a fixed seven: the board keeps its columns at a
-          placard's width and drops to fewer of them on a narrow screen, which is
-          the one thing that must not be traded away -- a squeezed pile is a
-          column of truncated names. */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2.5">
+      <PileGrid>
         {piles.map((pile) => (
           <PileColumn key={pile.label} pile={pile} agreed={agreed} theirs={theirs} />
         ))}
-      </div>
+      </PileGrid>
     </div>
   );
 }
@@ -146,49 +121,41 @@ function PileColumn({
   const { basics } = pile;
 
   return (
-    // A well rather than a bare column. Set side by side with nothing around
-    // them, seven stacks of bright placards read as one field of colour and the
-    // column boundaries have to be inferred from the gaps -- which is exactly the
-    // reading this board depends on. Recessed into the page (base-100 inside a
-    // base-200 panel) each pile is a slot on a table with cards in it, and the
-    // shape of the curve comes off the fills instead of off the cards.
-    <section
-      className="flex flex-col gap-1.5 rounded-lg border border-base-300/70 bg-base-100 p-2"
-      aria-label={pile.spoken}
-    >
-      <header className="flex items-baseline justify-between gap-2 border-b border-base-300 pb-1">
-        <h3 className="font-display text-sm font-semibold tracking-tight text-base-content/80">
-          {pile.label}
-        </h3>
-        {/* Two bare numbers side by side say nothing out loud, so the pair is
-            drawn for the eye and spoken separately. */}
-        <span aria-hidden className="text-xs tabular-nums">
-          <span className={pile.mine === 0 ? "text-base-content/30" : "text-base-content/70"}>
-            {pile.mine}
+    <PileWell
+      label={pile.label}
+      spoken={pile.spoken}
+      aside={
+        <>
+          {/* Two bare numbers side by side say nothing out loud, so the pair is
+              drawn for the eye and spoken separately. */}
+          <span aria-hidden className="text-xs tabular-nums">
+            <span className={pile.mine === 0 ? "text-base-content/30" : "text-base-content/70"}>
+              {pile.mine}
+            </span>
+            {!agreed && (
+              <>
+                <span className="text-base-content/25"> · </span>
+                {/* Dimmed only where the two agree. A column where they do not is
+                    where the shape of the argument is, and it should be findable
+                    by running an eye along the headers. */}
+                <span
+                  className={
+                    pile.theirs === pile.mine ? "text-base-content/30" : "text-base-content/70"
+                  }
+                >
+                  {pile.theirs}
+                </span>
+              </>
+            )}
           </span>
-          {!agreed && (
-            <>
-              <span className="text-base-content/25"> · </span>
-              {/* Dimmed only where the two agree. A column where they do not is
-                  where the shape of the argument is, and it should be findable
-                  by running an eye along the headers. */}
-              <span
-                className={
-                  pile.theirs === pile.mine ? "text-base-content/30" : "text-base-content/70"
-                }
-              >
-                {pile.theirs}
-              </span>
-            </>
-          )}
-        </span>
-        <span className="sr-only">
-          {agreed
-            ? `${pile.mine} cards`
-            : `${pile.mine} in your build, ${pile.theirs} in ${theirs}`}
-        </span>
-      </header>
-
+          <span className="sr-only">
+            {agreed
+              ? `${pile.mine} cards`
+              : `${pile.mine} in your build, ${pile.theirs} in ${theirs}`}
+          </span>
+        </>
+      }
+    >
       {pile.rows.length > 0 && (
         <ul className="flex flex-col gap-0.5">
           {/* Keyed by position: two copies of a common share a name, and nothing
@@ -207,7 +174,7 @@ function PileColumn({
           )}
         </p>
       )}
-    </section>
+    </PileWell>
   );
 }
 
