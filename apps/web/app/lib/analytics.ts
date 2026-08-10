@@ -315,13 +315,20 @@ export function diffViewed(p: {
  * PostHog cannot be repaired retroactively and a value that changes meaning is
  * worse than one that reads a little stale.
  *
+ * `stepper` is the second copy of that track, under the pick-by-pick shelf,
+ * where it carries prev/next arrows. Its own value and not `track`, because the
+ * question it answers is the one that justified drawing the track twice: whether
+ * a reader deep in a pack steps on from where they are, or whether they were
+ * scrolling back up to the summary all along and the tail control is dead
+ * weight. Folded into `track` that number cannot be recovered.
+ *
  * Only fires when the step landed on a fork. The track is navigation over the
  * whole draft, and counting every step would bury the thing being measured.
  */
 export function forkOpened(p: {
   challengeId: string;
   pickIndex: number;
-  from: "track" | "hero" | "braid" | "tick";
+  from: "track" | "hero" | "braid" | "tick" | "stepper";
 }): void {
   if (!on()) return;
   posthog.capture("fork_opened", p);

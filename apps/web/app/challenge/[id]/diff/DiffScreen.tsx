@@ -24,6 +24,7 @@ import { Decks } from "./Decks";
 import { Forks } from "./Forks";
 import { Shelf } from "./Shelf";
 import { Summary } from "./Summary";
+import { TrackStepper } from "./track";
 import type { Face } from "./faces";
 import { theirName } from "./sides";
 
@@ -144,7 +145,11 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
    * not somebody opening a fork, wherever they stepped from.
    */
   const goTo = useCallback(
-    (pickIndex: number, from: "track" | "hero" | "braid" | "tick", scroll: boolean) => {
+    (
+      pickIndex: number,
+      from: "track" | "hero" | "braid" | "tick" | "stepper",
+      scroll: boolean,
+    ) => {
       setAt(pickIndex);
       if (forkIndices.has(pickIndex)) forkOpened({ challengeId, pickIndex, from });
 
@@ -257,7 +262,23 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
       />
 
       <div ref={shelfRef} className="mt-4 scroll-mt-4">
-        <Shelf rows={diff.rows} them={them} at={at} faceOf={faceOf} />
+        <Shelf
+          rows={diff.rows}
+          them={them}
+          at={at}
+          faceOf={faceOf}
+          // Never scrolls: the panel it drives is the one it is attached to, and
+          // re-aligning something the reader is already looking at is a jump
+          // with nothing to show for it.
+          footer={
+            <TrackStepper
+              rows={diff.rows}
+              them={them}
+              at={at}
+              onAt={(i) => goTo(i, "stepper", false)}
+            />
+          }
+        />
       </div>
     </PageShell>
   );
