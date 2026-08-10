@@ -74,3 +74,23 @@ export function FaceCard({
     </span>
   );
 }
+
+/**
+ * A card as its name, with the whole card one hover away.
+ *
+ * The fork list is names rather than art, and the art is what a reader reaches
+ * for the moment a name is not enough. `useCardHover` is already how every other
+ * surface in this app answers that -- so the name carries the same handlers the
+ * face does, and pointing at it opens the full frame with its rules text and its
+ * numbers. A card the set has since dropped simply has nothing to open, which is
+ * what an empty handler set already means.
+ */
+export function FaceName({ face, className }: { face: Face; className?: string }) {
+  const hover = useCardHover(face.card ?? undefined, true);
+
+  return (
+    <span className={`truncate ${className ?? ""}`} {...hover}>
+      {face.name}
+    </span>
+  );
+}
