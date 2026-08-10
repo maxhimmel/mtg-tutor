@@ -99,9 +99,24 @@ const AHEAD_NAVIGABLE = "bg-base-content/30";
 // for size or colour alone to be findable among forty-four siblings.
 const TALL: TickState[] = ["current", "hit", "miss", "fork", "apart"];
 
-const bar = (state: TickState, navigable: boolean) =>
+// The tick you are ON is an object too, whatever it happens to say. That is the
+// one exception, and it is not an exception to the idea above so much as the
+// other half of it: where you are is a fact about the READER, and it does not
+// get smaller because the pick it landed on was uneventful.
+//
+// The comparison is where that bit, because forty of its forty-two picks are
+// agreements -- so the reader's own position was drawn at hairline weight almost
+// every time they moved it, and stepping from a fork onto an agreement felt like
+// the selection had shrunk rather than moved. The halo needs a body to sit on as
+// well: over 2px it reads as a smudge on the rule instead of a mark on a tick.
+//
+// It costs no layout, for the same reason the swell does not: a track with any
+// graded tick in it is already this tall, so promoting one changes nothing. A
+// track of nothing but agreements is 4px taller from its first paint and stays
+// there, since exactly one tick is here at a time.
+const bar = (state: TickState, navigable: boolean, here: boolean) =>
   `w-full rounded-full ${state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]} ${
-    state === "current" ? "tick-lit h-1.5" : TALL.includes(state) ? "h-1.5" : "h-0.5"
+    state === "current" ? "tick-lit h-1.5" : here || TALL.includes(state) ? "h-1.5" : "h-0.5"
   }`;
 
 // The tick the page is scrolled to, which is not the same claim as `current`.
@@ -350,7 +365,8 @@ function FlatTrack({
             }`}
           >
             {ticks.map((tick, i) => {
-              const lit = start + i === here ? HERE : "";
+              const isHere = start + i === here;
+              const lit = isHere ? HERE : "";
 
               return onSelect ? (
                 <button
@@ -384,7 +400,7 @@ function FlatTrack({
                       up to full height is a good extra cue and costs nothing.
                       It is no longer the only cue. */}
                   <span
-                    className={`${bar(tick.state, true)} ${lit} motion-safe:transition-[height,transform] group-hover:h-1.5`}
+                    className={`${bar(tick.state, true, isHere)} ${lit} motion-safe:transition-[height,transform] group-hover:h-1.5`}
                   />
                 </button>
               ) : (
@@ -393,7 +409,7 @@ function FlatTrack({
                 // whether or not its ticks are places to go.
                 <span key={i} className="flex flex-1 items-end py-1.5">
                   <span
-                    className={`${bar(tick.state, false)} ${lit} motion-safe:transition-transform`}
+                    className={`${bar(tick.state, false, isHere)} ${lit} motion-safe:transition-[height,transform]`}
                   />
                 </span>
               );

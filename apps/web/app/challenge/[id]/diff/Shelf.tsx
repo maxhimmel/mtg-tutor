@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { DiffRow } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
 import { gradeColor } from "../../../lib/format";
@@ -30,11 +31,16 @@ export function Shelf({
   them,
   at,
   faceOf,
+  footer,
 }: {
   rows: DiffRow[];
   them: string;
   at: number;
   faceOf: (name: string, colors: readonly string[]) => Face;
+  // Whatever moves it, drawn on its own bottom rule. Passed in rather than built
+  // here because the shelf does not own `at` -- it is told which pick to show,
+  // and a control it rendered itself would be reaching past its own props.
+  footer?: ReactNode;
 }) {
   const row = rows[Math.min(at, rows.length - 1)];
   if (!row) return null;
@@ -44,25 +50,37 @@ export function Shelf({
 
   return (
     <Panel
-      title={`Pack ${row.packNo}, pick ${row.pickNo}`}
+      // The SECTION, named on its own header rule -- which is how the other
+      // four on this page say what they are, and this one was the only one
+      // naming itself on a loose line above the box while spending its header
+      // on a coordinate. Which pick you are looking at is the thing that
+      // changes, so it sits opposite the name, where the counts and badges on
+      // every other panel sit.
+      title="Pick by pick"
       aside={
-        <span
-          className={`badge badge-sm ${
-            state === "fork"
-              ? "badge-primary"
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span className="truncate text-xs font-semibold tabular-nums text-base-content/70">
+            Pack {row.packNo}, pick {row.pickNo}
+          </span>
+          <span
+            className={`badge badge-sm shrink-0 ${
+              state === "fork"
+                ? "badge-primary"
+                : state === "apart"
+                  ? "badge-warning badge-outline"
+                  : "badge-ghost"
+            }`}
+          >
+            {state === "fork"
+              ? "Fork — same pack"
               : state === "apart"
-                ? "badge-warning badge-outline"
-                : "badge-ghost"
-          }`}
-        >
-          {state === "fork"
-            ? "Fork — same pack"
-            : state === "apart"
-              ? "Different packs"
-              : "Same card"}
+                ? "Different packs"
+                : "Same card"}
+          </span>
         </span>
       }
       bodyClassName="gap-4"
+      footer={footer}
     >
       <div className="flex flex-wrap gap-x-8 gap-y-2 border-b border-base-300 pb-3 text-sm">
         <Took mine label="You took" name={row.yours.pickedName} grade={row.yours.grade} />
