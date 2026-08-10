@@ -353,7 +353,7 @@ html {
    element is faded away by that element's own mask, so the top edge of the box
    dissolved as soon as you scrolled off the top of it.
 
-   AND EVERYTHING FADING WHERE IT PASSES UNDER THAT EDGE, which is the one a
+   AND THE CONTENT FADING WHERE IT PASSES UNDER THAT EDGE, which is the one a
    reader takes in without having looked at anything. A fade has to be honest or
    it is worse than the problem: a permanent one at the foot of a box you have
    already scrolled to the bottom of says there is more when there is not. So
@@ -362,30 +362,20 @@ html {
    fade over the first inch of travel and retiring the bottom one over the last.
    No listener, no state, and nothing re-rendered while a thumb is moving.
 
-   THE MASK TAKES THE SCROLLBAR WITH IT, AND THAT IS THE POINT RATHER THAN A
-   COST. The frame clips to its own radius and the bar runs the full height of
-   the box, so the last dozen pixels at each end meet a curve -- and a squared
-   bar sliced at an angle reads as a rendering fault. Shortening the bar to dodge
-   the corner was tried and is the wrong trade: a scrollbar is furniture of the
-   container, it belongs hard against the frame and the full height of it, and a
-   bar that stops short of both is a bar apologising for the box it is in. The
-   ends are softened instead, so there is nothing left at the corner to clip.
+   THE MASK DOES NOT REACH THE SCROLLBAR, which is worth writing down because it
+   is not what you would guess and it cost two attempts to establish. A mask on
+   a scroll container fades everything the container's CONTENT paints and leaves
+   the scrollbar untouched: the bar keeps hard, square ends whatever the mask
+   says. So a rounded frame clipping that container takes a visible bite out of
+   both ends of the bar, and there is no softening anywhere that can hide it.
 
-   WHICH IS WHY THE MASK HAS A LIP AS WELL AS A FADE. The corners need softening
-   whatever the scroll position, and the honest fade cannot supply it: the top
-   fade is zero exactly when you are at the top, which is exactly when the thumb
-   is in the top corner. So the mask is a fixed lip a corner deep, plus the
-   scroll-driven fade on top of it. The two are readable apart because they are
-   nothing like the same size, and the small one is not a claim about content --
-   it is the true statement that the content passes under the frame.
-
-   The lip is also what makes this safe where scroll timelines are missing. The
-   mask is declared unconditionally and only the animation sits inside @supports,
-   so in Firefox the two driven lengths stay at the 0 they are registered with
-   and what is left is the lip alone -- an edge treatment, with the scrollbar and
-   the frame still doing their work. Nothing is ever hidden by it. The failure
-   mode of a fade that cannot be driven must never be content that cannot be
-   seen. */
+   THE FIX IS GEOMETRY, AND IT IS THE CALLER'S. Shortening the bar to dodge the
+   corner was tried and is the wrong trade -- a scrollbar belongs hard against
+   the edge of its box and the full height of it, and one that stops short of
+   both is apologising for the box it is in. What is inset instead is the box:
+   the scrolling element stays square and unclipped and sits a few pixels inside
+   the rounded frame, far enough that its own corners clear the curve. The bar
+   still hugs its box; its box sits inside the frame. See ScrollBox. */
 @property --scroll-fade-top {
   syntax: "<length>";
   initial-value: 0px;
@@ -426,26 +416,18 @@ html {
 
 @utility scroll-box {
   --scroll-fade: 1.75rem;
-  /* The lip: a soft edge at both ends that is always there, whatever the scroll
-     position. It is measured off the frame's own radius so the two cannot drift
-     apart -- `rounded-box` is `border-radius: var(--radius-box)`, and this is
-     the distance the curve eats into the box's straight edge, plus two so the
-     fade finishes clear of it rather than tangent to it. */
-  --scroll-lip: calc(var(--radius-box) + 2px);
 
-  /* Both ends soften over the lip, and the scroll adds to whichever end has
-     more behind it. Declared out here and not inside the @supports below,
-     because the lip has a job even where scroll timelines do not exist: it is
-     what stops the frame's corners slicing the ends off the scrollbar. With the
-     two scroll-driven lengths at the 0 they are registered with, this is the
-     lip and nothing else, which is exactly right. Nothing is ever hidden by it
-     -- it is a gradient a corner's width deep, at the two edges where content
-     genuinely does pass under the frame. */
+  /* Declared out here rather than inside the @supports below, which is free and
+     strictly safer: with the two lengths at the 0 they are registered with this
+     gradient is opaque end to end, so a browser with no scroll timelines gets
+     an unmasked box rather than no rule at all, and one that has them gets the
+     fade. The failure mode of a fade that cannot be driven must never be
+     content that cannot be seen, and here it cannot be anything. */
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 calc(var(--scroll-lip) + var(--scroll-fade-top)),
-    #000 calc(100% - var(--scroll-lip) - var(--scroll-fade-bottom)),
+    #000 var(--scroll-fade-top),
+    #000 calc(100% - var(--scroll-fade-bottom)),
     transparent 100%
   );
   overflow-y: auto;
@@ -467,11 +449,11 @@ html {
     width: 0.5625rem;
   }
 
-  /* Full height, hard against the frame, which is where a scrollbar belongs: it
-     is furniture of the container and not of the content, and every native one
-     -- a page, a textarea, a list view -- sits in a gutter at the inside edge
-     of the padding box. The corners it runs into are handled by the lip above
-     rather than by shortening the bar to dodge them. */
+  /* Full height, hard against the edge of this box, which is where a scrollbar
+     belongs: it is furniture of the container and not of the content, and every
+     native one -- a page, a textarea, a list view -- sits in a gutter at the
+     inside edge of the padding box. Nothing here dodges a corner, because by
+     the time this box is drawn there is no corner near it. */
   &::-webkit-scrollbar-track {
     border-radius: 999px;
     background: color-mix(in oklab, var(--color-base-content) 10%, transparent);

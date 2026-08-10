@@ -64,11 +64,22 @@ export function ScrollBox({
   children: ReactNode;
 }) {
   return (
-    // overflow-hidden so the frame's own radius is what clips the scrollbar's
-    // two ends, rather than the bar running square past a rounded corner.
-    <div className="scroll-well overflow-hidden rounded-box border border-base-content/30 bg-base-100">
+    // THE FRAME HAS A MARGIN, AND THAT IS WHAT THE SCROLLBAR NEEDS. A scrollbar
+    // hugs the edge of the box that scrolls -- that part is right, and native --
+    // but a rounded frame clipping that box takes a bite out of both ends of the
+    // bar, and no amount of softening hides it, because the mask a browser
+    // applies to a scroll container does not reach its scrollbar.
+    //
+    // So the scrolling box is square and unclipped, and it is inset far enough
+    // that its own corners clear the curve: geometrically that is about 0.3 of
+    // the radius, and six pixels against this theme's twelve is comfortably past
+    // it. The bar still hugs its box. Its box simply sits inside the frame,
+    // which is how a rounded container has always had to do this.
+    <div className="scroll-well rounded-box border border-base-content/30 bg-base-100 p-1.5">
       <div
-        className={`scroll-box p-2 ${maxHeight} ${className ?? ""}`}
+        // Its own padding is the focus ring's clearance -- `card-focus` draws
+        // 3px outside the row it is on, and a scroll box clips at its own edge.
+        className={`scroll-box p-1.5 ${maxHeight} ${className ?? ""}`}
         {...(label ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}
       >
         {children}
