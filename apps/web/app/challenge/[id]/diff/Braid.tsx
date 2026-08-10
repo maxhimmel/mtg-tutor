@@ -59,12 +59,22 @@ import { Panel } from "../../../components/Panel";
  * remove.
  *
  * So the rope is named where it ENTERS. Each strand arrives from off the left of
- * the frame at its own name's height and eases down into its lane over the
- * run-up before the first pack, in the same smooth step it uses for every lane
- * change inside the chart -- so the name and the rope are one continuous object
- * and there is nothing left to infer. Nothing in the run-up is a pick, and the
- * wells make that plain by starting after it: left of the first well is the rope
- * arriving, not data.
+ * the frame at its own name's height and eases into its lane over the run-up
+ * before the first pack, in the same smooth step it uses for every lane change
+ * inside the chart -- so the name and the rope are one continuous object and
+ * there is nothing left to infer. Nothing in the run-up is a pick, and the wells
+ * make that plain by starting after it.
+ *
+ * THE TWO ENTRANCES ARE ONE ENTRANCE, MIRRORED, which took a second attempt.
+ * The names were first anchored to the top and bottom of the BOX, which is
+ * symmetric about the box's middle -- and the box's middle is not the chart's,
+ * because the causal arc's channel sits above the wells and nothing balances it
+ * below. So yours fell forty-one units into its lane and theirs rose twenty-one,
+ * at visibly different steepnesses, and the pair read as two unrelated arrivals.
+ * Both anchors are now measured from `mid` and by the same distance -- the
+ * floor's own half-height, so each name sits exactly level with the top or
+ * bottom edge of the floor its rope is about to run along -- and the channel is
+ * matched below. The two curves are congruent by construction.
  *
  * That also retires the two-bar colour chip. A chip beside a name is a legend
  * entry, and the moment a rope emerges from under that name in a DIFFERENT
@@ -76,12 +86,23 @@ import { Panel } from "../../../components/Panel";
  * THE PACKS ARE MEASURED, NOT BOXED. Three dark rectangles with a five-unit gap
  * between them is a weak delineation at any width and a nearly invisible one in
  * this theme, and the boundary was then drawn a second time by the labels
- * underneath -- the two-notations-for-one-fact this file has been trying to
- * avoid since it started drawing wells. So the well keeps only what a well is
- * for, which is being a floor for the rope and for the drift shading, and the
- * boundary moves entirely to the ruler beneath: one span per pack, ticked at
- * both ends, with the pack's name sitting in a break in its own rule. A pack is
- * a measured length of the draft, and that is what a dimension line says.
+ * underneath. So the well keeps only what a well is for, which is being a floor
+ * for the rope and for the drift shading, and the boundary moves entirely to the
+ * ruler beneath: one span per pack, ticked at both ends, with the pack's name in
+ * a break in its own rule. A pack is a measured length of the draft, and that is
+ * what a dimension line says.
+ *
+ * EVERY PICK IS A PLACE TO GO, not only the forks. The forks were the only
+ * clickable thing here on the theory that they are the only DECISIONS -- true,
+ * and beside the point once the track above became navigation over all
+ * forty-two. A reader who has learnt that a pick is something you click does not
+ * carry an exception between two drawings of the same draft, they carry a dead
+ * chart. So the whole band under every pick takes the click, and the fork keeps
+ * only what it always was: the gold tick that says a decision happened here.
+ *
+ * The hover mark is `base-content` and not gold, which is the same choice the
+ * track makes and for the same reason recorded there: gold is how this app says
+ * WHERE YOU ARE, and a hover that borrows it says that forty-two times a second.
  *
  * Curves, settled. The control that offered corners instead was a comparison
  * aid, and it has done its job: a rope has no corners, and a straight cut to a
@@ -120,11 +141,16 @@ const LEAD = 56;
 // underneath now, and this is the break agreeing with it rather than carrying it
 // alone.
 const WELL_GAP = 12;
-// Clear air above the wells, for the causal arc and only when there is one.
+// Clear air above the wells for the causal arc, and the same again below so the
+// drawing is symmetric about its own middle. The bottom half is not spare page:
+// it is what lets the two names sit at equal distances from their lanes, which
+// is the only way the two entrances can be the same curve.
 const CHANNEL = 22;
-// Where a name sits, and therefore where its rope comes in. Far enough from the
-// lanes that the two names are unmistakably a top half and a bottom half.
-const NAME_INSET = 15;
+const H = CHANNEL * 2 + WELL_H;
+const MID = H / 2;
+// Where a name sits, and therefore where its rope comes in: exactly level with
+// the top or bottom edge of the floor its rope is about to run along.
+const NAME_Y = { yours: MID - WELL_H / 2, theirs: MID + WELL_H / 2 };
 
 // Magic's own colours, which is what a reader already knows how to decode. White
 // is pulled back off the top of the range: at #f3efd0 against this near-black
@@ -162,18 +188,21 @@ const spoken = (colors: string): string =>
     ? "no colours yet"
     : [...colors].map((c) => COLOR_NAMES[c] ?? c).join("-");
 
+/** Same pack, different card: the one disagreement that was a decision. */
+const isFork = (row: DiffRow) => row.samePack && !row.agree;
+
 export function Braid({
   rows,
   tally,
   them,
   at,
-  onOpenFork,
+  onSelect,
 }: {
   rows: DiffRow[];
   tally: DiffTally;
   them: string;
   at: number;
-  onOpenFork: (pickIndex: number) => void;
+  onSelect: (pickIndex: number) => void;
 }) {
   if (rows.length === 0) return null;
 
@@ -184,18 +213,6 @@ export function Braid({
     tally.firstDrift === undefined
       ? undefined
       : [...tally.forks].reverse().find((f) => f.pickIndex < (tally.firstDrift ?? 0));
-
-  // Height follows what there is to draw. With no arc there is no argument to
-  // give air to, and twenty-two units of empty panel would be a channel for
-  // nothing.
-  const channel = causingFork ? CHANNEL : 2;
-  const H = channel + WELL_H + 2;
-  const mid = channel + WELL_H / 2;
-
-  // Where each name sits, and where its rope therefore enters the frame. One
-  // number, read by the SVG and by the HTML label beside it, so a name and the
-  // strand leaving it cannot drift apart.
-  const nameY = { yours: NAME_INSET, theirs: H - NAME_INSET };
 
   const step = (1000 - LEAD - PAD) / rows.length;
   // A pick's own band, and its centre. The turn happens over the pick it belongs
@@ -211,8 +228,8 @@ export function Braid({
 
   const laneY = (i: number, side: "yours" | "theirs") =>
     side === "yours"
-      ? mid - TOGETHER / 2 - OPEN * open[i]
-      : mid + TOGETHER / 2 + OPEN * open[i];
+      ? MID - TOGETHER / 2 - OPEN * open[i]
+      : MID + TOGETHER / 2 + OPEN * open[i];
 
   const leanOf = (row: DiffRow, side: "yours" | "theirs") =>
     side === "yours" ? row.yourLean : row.theirLean;
@@ -231,7 +248,7 @@ export function Braid({
     // line, so together they occupy exactly one strand.
     const off = (cord === 0 ? -1 : 1) * ((CORD + SEAM) / 2);
     const y0 = laneY(0, side) + off;
-    const ny = nameY[side] + off;
+    const ny = NAME_Y[side] + off;
 
     const head = `M 0 ${ny} C ${mouth / 2} ${ny} ${mouth / 2} ${y0} ${mouth} ${y0}`;
 
@@ -296,6 +313,21 @@ export function Braid({
     };
   });
 
+  /**
+   * A pick's band, clipped to the floor it belongs to.
+   *
+   * The floor is inset by half the pack gap at each end, so the first and last
+   * pick of every pack have a sliver of band hanging outside it. Drawn raw, that
+   * sliver was the leftmost mark on the whole chart -- which made the ruler's
+   * first tick, sitting correctly on the floor's edge six units further right,
+   * read as misaligned against a column that was itself the thing out of place.
+   */
+  const columnOf = (i: number) => {
+    const well = wells.find((w) => i >= w.from && i < w.to) ?? wells[0];
+    const x = Math.max(bandL(i), well.x);
+    return { x, width: Math.max(0, Math.min(bandR(i), well.x + well.width) - x) };
+  };
+
   // Where the packs stopped being guaranteed to match, drawn as the stretch of
   // floor it is. Cut at the pack breaks and clamped to the wells, so the shading
   // never bleeds across the page showing between one well and the next -- it is
@@ -308,7 +340,7 @@ export function Braid({
     })),
   );
 
-  const here = Math.min(at, rows.length - 1);
+  const here = columnOf(Math.min(at, rows.length - 1));
   const last = rows[rows.length - 1];
 
   return (
@@ -326,10 +358,10 @@ export function Braid({
         {/* NOT a legend, and no longer a bracket either. Each name is simply
             where its own rope comes in, and the run-up does the joining -- so
             there is nothing here to look up and nothing to map. The positions
-            come from the same `nameY` the paths are drawn from. */}
+            come from the same `NAME_Y` the paths are drawn from. */}
         <div className="relative w-28 shrink-0" style={{ height: H }} aria-hidden>
-          <LaneLabel y={nameY.yours} label="You" />
-          <LaneLabel y={nameY.theirs} label={them} />
+          <LaneLabel y={NAME_Y.yours} label="You" />
+          <LaneLabel y={NAME_Y.theirs} label={them} />
         </div>
 
         <svg
@@ -369,7 +401,7 @@ export function Braid({
             <rect
               key={well.packNo}
               x={well.x}
-              y={channel}
+              y={CHANNEL}
               width={well.width}
               height={WELL_H}
               rx={2}
@@ -383,9 +415,9 @@ export function Braid({
               not findable, and one drawn over the rope would read as a scratch
               on it. Under the strands, so the rope stays the brightest thing. */}
           <rect
-            x={bandL(here)}
-            y={channel}
-            width={step}
+            x={here.x}
+            y={CHANNEL}
+            width={here.width}
             height={WELL_H}
             className="fill-base-content/[0.08] stroke-base-content/25"
             strokeWidth={1}
@@ -396,7 +428,7 @@ export function Braid({
             <rect
               key={band.key}
               x={band.x}
-              y={channel}
+              y={CHANNEL}
               width={band.width}
               height={WELL_H}
               className="fill-warning/[0.13]"
@@ -410,9 +442,9 @@ export function Braid({
                   one, drawn where it starts. */}
               <line
                 x1={bandL(tally.firstDrift)}
-                y1={channel}
+                y1={CHANNEL}
                 x2={bandL(tally.firstDrift)}
-                y2={channel + WELL_H}
+                y2={CHANNEL + WELL_H}
                 stroke="currentColor"
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
@@ -426,9 +458,9 @@ export function Braid({
                 // the diagram exists to make and it spent two revisions as the
                 // faintest ink on the panel.
                 <path
-                  d={`M ${cx(causingFork.pickIndex)} ${channel - 1} C ${cx(
+                  d={`M ${cx(causingFork.pickIndex)} ${CHANNEL - 1} C ${cx(
                     causingFork.pickIndex,
-                  )} 1 ${bandL(tally.firstDrift)} 1 ${bandL(tally.firstDrift)} ${channel - 1}`}
+                  )} 1 ${bandL(tally.firstDrift)} 1 ${bandL(tally.firstDrift)} ${CHANNEL - 1}`}
                   fill="none"
                   stroke="currentColor"
                   strokeWidth={1.5}
@@ -440,48 +472,52 @@ export function Braid({
             </>
           )}
 
-          {/* Where you were both asked the same question and answered it
-              differently. In the opening the strands have just made, which is
-              the one place on this diagram it can sit and mean something -- and
-              drawn as a tick, which is what a fork looks like on the track at the
-              top of this page. It reaches to whatever the opening happens to be,
-              so a blip gets a short tick and a sustained parting a long one.
-
-              The hover mark is the pick's whole band and not the tick, for the
-              reason the track gives: it says the true thing about where the
-              click will land, and it works on a mark too small to grow.
+          {/* One target per pick, the whole floor-height band under it, and the
+              fork's gold tick riding along in the same group.
 
               BENEATH THE STRANDS, with the strands made transparent to the
-              pointer. Above them the gold wash fell across the rope and turned a
-              cream cord muddy, and below them without that the rope swallowed
-              every click that landed on it -- which on a wide opening is most of
-              the target. The rope carries no interaction of its own, so it has
-              nothing to lose by not taking the click. */}
-          {tally.forks.map((f) => (
-            <g
-              key={f.pickIndex}
-              className="group cursor-pointer"
-              onClick={() => onOpenFork(f.pickIndex)}
-            >
-              <rect
-                x={bandL(f.pickIndex)}
-                y={channel}
-                width={step}
-                height={WELL_H}
-                className="fill-transparent transition-colors group-hover:fill-primary/15"
-              />
-              <line
-                x1={cx(f.pickIndex)}
-                y1={laneY(f.pickIndex, "yours") + STRAND / 2 + 3}
-                x2={cx(f.pickIndex)}
-                y2={laneY(f.pickIndex, "theirs") - STRAND / 2 - 3}
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-                className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
-              />
-              <title>{`P${f.packNo}P${f.pickNo}: ${f.yours} vs ${f.theirs}`}</title>
-            </g>
-          ))}
+              pointer. Above them the hover wash fell across the rope and dulled
+              it, and below them without that the rope swallowed every click that
+              landed on it -- which on a wide opening is most of the target. The
+              rope carries no interaction of its own, so it has nothing to lose
+              by not taking the click.
+
+              Keyboard reaches these picks through the track at the top of the
+              page, which takes one tab stop for the whole draft and arrows
+              within it. Forty-two more focus stops down here would be the same
+              draft offered twice. */}
+          {rows.map((row, i) => {
+            const band = columnOf(i);
+            return (
+              <g key={i} className="group cursor-pointer" onClick={() => onSelect(i)}>
+                <rect
+                  x={band.x}
+                  y={CHANNEL}
+                  width={band.width}
+                  height={WELL_H}
+                  className="fill-transparent transition-colors group-hover:fill-base-content/[0.12]"
+                />
+                {isFork(row) && (
+                  // In the opening the strands have just made, which is the one
+                  // place on this diagram it can sit and mean something -- and
+                  // drawn as a tick, which is what a fork looks like on the
+                  // track above. It reaches to whatever the opening happens to
+                  // be, so a blip gets a short tick and a sustained parting a
+                  // long one.
+                  <line
+                    x1={cx(i)}
+                    y1={laneY(i, "yours") + STRAND / 2 + 3}
+                    x2={cx(i)}
+                    y2={laneY(i, "theirs") - STRAND / 2 - 3}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
+                  />
+                )}
+                <title>{titleOf(row)}</title>
+              </g>
+            );
+          })}
 
           {(["yours", "theirs"] as const).flatMap((side) =>
             cords.map((cord) => (
@@ -541,6 +577,14 @@ export function Braid({
   );
 }
 
+/** What a pick was, for the pointer that is hovering it. */
+function titleOf(row: DiffRow): string {
+  const where = `P${row.packNo}P${row.pickNo}`;
+  if (row.agree) return `${where}: you both took ${row.yours.pickedName}`;
+  if (row.samePack) return `${where}: ${row.yours.pickedName} vs ${row.theirs.pickedName}`;
+  return `${where}: different packs — ${row.yours.pickedName} vs ${row.theirs.pickedName}`;
+}
+
 /**
  * A name, at the height its own rope comes in at.
  *
@@ -578,6 +622,10 @@ function LaneLabel({ y, label }: { y: number; label: string }) {
  * tenth of a percent and every tick lands exactly on the floor above it. The
  * flex row this replaces could not do that -- it grew each label by its pick
  * count and knew nothing about the gap between one well and the next.
+ *
+ * The end ticks are pulled half their own width outward. A 1px rule laid inside
+ * a boundary sits a whole pixel in from it, which is the difference between a
+ * measurement and a near-measurement at the only two places anybody checks.
  */
 function PackRuler({ wells }: { wells: { packNo: number; x: number; width: number }[] }) {
   return (
@@ -588,11 +636,11 @@ function PackRuler({ wells }: { wells: { packNo: number; x: number; width: numbe
           className="absolute inset-y-0 flex items-center gap-2"
           style={{ left: `${well.x / 10}%`, width: `${well.width / 10}%` }}
         >
-          <span className="h-2.5 w-px shrink-0 bg-base-content/40" />
+          <span className="h-2.5 w-px shrink-0 -translate-x-1/2 bg-base-content/40" />
           <span className="h-px min-w-0 flex-1 bg-base-content/20" />
           <span className="eyebrow shrink-0 whitespace-nowrap">Pack {well.packNo}</span>
           <span className="h-px min-w-0 flex-1 bg-base-content/20" />
-          <span className="h-2.5 w-px shrink-0 bg-base-content/40" />
+          <span className="h-2.5 w-px shrink-0 translate-x-1/2 bg-base-content/40" />
         </div>
       ))}
     </div>

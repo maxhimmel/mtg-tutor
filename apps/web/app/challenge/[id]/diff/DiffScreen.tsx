@@ -137,10 +137,11 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
   /**
    * Move the shelf, and report it only when it landed on a fork.
    *
-   * The track is navigation over all forty-two picks now, not a list of forks,
-   * so firing `fork_opened` on every step would drown the one number the event
-   * exists to produce -- which of the readings actually drives the stepper.
-   * Stepping to an ordinary pick is not somebody opening a fork.
+   * The track is navigation over all forty-two picks now, and so is the braid --
+   * neither is a list of forks any more. Firing `fork_opened` on every step
+   * would drown the one number the event exists to produce, which is which of
+   * the readings actually drives the stepper. Stepping to an ordinary pick is
+   * not somebody opening a fork, wherever they stepped from.
    */
   const goTo = useCallback(
     (pickIndex: number, from: "track" | "hero" | "braid" | "tick", scroll: boolean) => {
@@ -240,7 +241,7 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         tally={diff.tally}
         them={them}
         at={at}
-        onOpenFork={(i) => goTo(i, "braid", true)}
+        onSelect={(i) => goTo(i, "braid", true)}
       />
 
       {/* After the picks, because a deck is what the picks were for -- and
