@@ -348,7 +348,7 @@ function Fork({
           fork lying in it has to be the thing on top or the two are one flat
           surface with a border drawn on it. */}
       <button
-        className="card-focus flex w-full flex-col gap-2 rounded-lg border border-base-300 bg-base-200 px-3 py-2.5 text-left transition-colors hover:border-base-content/25"
+        className="card-focus flex w-full cursor-pointer flex-col gap-2 rounded-lg border border-base-300 bg-base-200 px-3 py-2.5 text-left transition-colors hover:border-base-content/25"
         aria-label={`Pack ${row.packNo}, pick ${row.pickNo} — you took ${row.yours.pickedName}, ${row.yours.grade}; ${them} took ${row.theirs.pickedName}, ${row.theirs.grade}.${
           reach > 0
             ? ` It changed ${reach} of your ${impact?.of ?? 0} later packs, from ${impact?.delay} picks on.`

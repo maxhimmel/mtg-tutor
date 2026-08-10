@@ -65,7 +65,7 @@ export function Explain({
         // A ring rather than a filled chip: it is an offer, not an alert, and
         // this app spends its one filled circle on "yours". Sized to the
         // eyebrow it usually sits beside.
-        className="card-focus flex size-[1.125rem] shrink-0 items-center justify-center rounded-full border border-base-content/30 text-[0.625rem] font-semibold leading-none text-base-content/55 transition-colors hover:border-base-content/60 hover:text-base-content/85 peer"
+        className="card-focus peer flex size-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-full border border-base-content/30 text-[0.625rem] font-semibold leading-none text-base-content/55 transition-colors hover:border-base-content/60 hover:text-base-content/85"
       >
         ?
       </button>

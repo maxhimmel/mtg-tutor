@@ -54,7 +54,13 @@ export function LayoutPicker() {
             // ends up -- but a reader can also just press it and look, which is
             // why this is a title and not a line of type under the control.
             title={layout.blurb}
-            className={`rounded-md px-3 py-1 text-sm transition-colors ${
+            // `cursor-pointer` because this is a BUTTON and the control it is
+            // copied from is made of LINKS. A browser gives an anchor the hand
+            // for free and a button the arrow, and daisyUI's `.btn` is what
+            // usually papers over that -- so dropping `btn` for the segmented
+            // control's own classes silently took the cursor with it. Anything
+            // on this page that is pressable and is not a `.btn` has to say so.
+            className={`cursor-pointer rounded-md px-3 py-1 text-sm transition-colors ${
               here
                 ? "bg-primary font-semibold text-primary-content"
                 : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
