@@ -154,30 +154,26 @@ function PlacardRow({ card, trailing }: { card: Card; trailing?: ReactNode }) {
 // The reusable way to show cards as a condensed vertical list. `trailing` puts
 // per-card extras in a gutter beside the placard rather than inside it, so the
 // placard itself stays exactly the name and cost the printed one carries.
+//
+// One column, and no option for more. There was a `columns` flag that wrapped a
+// list into as many natural-width columns as its container fit, on the reasoning
+// that a placard cannot be widened -- see NATURAL_W -- so the only honest way for
+// a list to use a wide panel is more of them. What it actually did was read a
+// curve-sorted list across then down, putting a one-drop beside a five-drop on
+// every row, which is how the deck builder ended up looking unordered. A wide
+// panel full of cards wants the curve wells in `CurvePiles`, which are columns
+// that MEAN something; this stays the narrow list it was drawn for.
 export function CardPlacardList({
   cards,
   trailing,
-  columns = false,
   className,
 }: {
   cards: Card[];
   trailing?: (card: Card, index: number) => ReactNode;
-  // Wrap into as many natural-width columns as the container fits, instead of
-  // one. A placard cannot be widened to fill a wide panel -- see NATURAL_W -- so
-  // the only honest way for a list to use one is more columns. Read across then
-  // down, which is what a grid does anyway and costs nothing here: the list is
-  // already sorted, so what you scan for is a name, not the next row.
-  columns?: boolean;
   className?: string;
 }) {
   return (
-    <ul
-      className={`${
-        columns
-          ? "grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-x-5 gap-y-0.5"
-          : "flex flex-col gap-0.5"
-      } ${className ?? ""}`}
-    >
+    <ul className={`flex flex-col gap-0.5 ${className ?? ""}`}>
       {/* Keyed by position, not name: drafting two copies of the same card is
           normal, so names are not unique in a pool. */}
       {cards.map((card, i) => (
