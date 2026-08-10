@@ -136,6 +136,14 @@ const bar = (state: TickState, navigable: boolean, here: boolean) =>
 // the ticks sit on a common baseline.
 const HERE = "tick-lit origin-bottom motion-safe:scale-y-[1.7] motion-safe:duration-200";
 
+// The thread of page between one tick and the next, as padding on the tick's own
+// box rather than as a gap in the row. Identical to look at -- the bar inside is
+// exactly where a 3px gap put it -- and it buys the one thing a gap cannot: every
+// tick's box is now exactly its share of the run, so a tick sits directly under
+// the pick it names on any chart drawn to the same width. It also makes the two
+// end ticks' targets a shade wider, which is free.
+const TICK_X = "px-[1.5px]";
+
 /**
  * @param groups One array per pack. The gaps between them are the pack breaks,
  * which is the only thing that says where one pack ended and the next began --
@@ -337,7 +345,11 @@ function FlatTrack({
   const track = (
     <div
       ref={ref}
-      className="flex items-end gap-3"
+      // The gap between packs is a variable so a caller drawing this UNDER a
+      // chart of the same picks can set it in percent and have the two line up
+      // exactly -- see the comparison's braid, where the track is the chart's
+      // own axis. Everywhere else it is the 0.75rem it has always been.
+      className="flex items-end gap-[var(--pick-track-gap,0.75rem)]"
       // A picture of a draft, or a set of places to go. Nothing in between.
       {...(onSelect ? { role: "group", onKeyDown } : { role: "img" })}
       aria-label={label}
@@ -349,7 +361,12 @@ function FlatTrack({
         return (
           <div
             key={group}
-            className={`flex flex-1 items-end gap-[3px] ${
+            // Grown by its own pick count rather than by an equal share, so a
+            // pack with fewer picks in it is narrower -- which is the true
+            // thing, and the only way a track can sit under a chart of the same
+            // draft and agree with it about where each pack ends.
+            style={{ flexGrow: ticks.length, flexBasis: 0 }}
+            className={`flex items-end ${
               // A labelled group is a pack you can point at, so it gets an edge
               // to be pointed at: the ticks sit in a shallow well rather than in
               // a gap.
@@ -390,7 +407,7 @@ function FlatTrack({
                   // the one thing on the track that glows -- see globals.css,
                   // where the halo is area precisely because a mark this small
                   // cannot be found any other way.
-                  className="group flex flex-1 cursor-pointer items-end rounded-sm py-1.5 transition-colors hover:bg-base-content/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70"
+                  className={`group flex flex-1 cursor-pointer items-end rounded-sm py-1.5 ${TICK_X} transition-colors hover:bg-base-content/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70`}
                   aria-label={tick.label}
                   aria-current={tick.state === "current" ? "true" : undefined}
                   tabIndex={start + i === stop ? 0 : -1}
@@ -407,7 +424,7 @@ function FlatTrack({
                 // Same box the navigable form's button is, padding included, so
                 // the track occupies one height on every page that draws one --
                 // whether or not its ticks are places to go.
-                <span key={i} className="flex flex-1 items-end py-1.5">
+                <span key={i} className={`flex flex-1 items-end py-1.5 ${TICK_X}`}>
                   <span
                     className={`${bar(tick.state, false, isHere)} ${lit} motion-safe:transition-[height,transform]`}
                   />
@@ -428,9 +445,13 @@ function FlatTrack({
       {/* One label per group, on the same flex-1 basis the groups sit on, so
           each name is centred under its own well however the packs are sized.
           aria-hidden: every tick already announces its pack in full. */}
-      <div aria-hidden className="flex gap-3">
-        {groups.map((_, group) => (
-          <span key={group} className="eyebrow flex-1 text-center">
+      <div aria-hidden className="flex gap-[var(--pick-track-gap,0.75rem)]">
+        {groups.map((ticks, group) => (
+          <span
+            key={group}
+            style={{ flexGrow: ticks.length, flexBasis: 0 }}
+            className="eyebrow text-center"
+          >
             {groupLabels[group] ?? ""}
           </span>
         ))}
