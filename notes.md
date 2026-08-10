@@ -174,6 +174,8 @@ I could understand the misread based purely off stats - sure. But this happened 
 
 Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
 
+9. See deck builder UI w/Progenitus. The mana pips on the card placard bleed over the edge and the card's name isn't visible at all.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
