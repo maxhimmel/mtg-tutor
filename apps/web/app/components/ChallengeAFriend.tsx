@@ -55,9 +55,13 @@ export function ChallengeAFriend({
   }
 
   if (!open) {
+    // Not "challenge a friend to these packs", which is the same sentence and
+    // three words too long: it wrapped onto a second line in the results rail
+    // and sat there as a two-line block under a one-line button. The packs are
+    // what the panel it opens says first, so the label does not have to.
     return (
       <button className="btn btn-sm btn-outline w-full" onClick={() => setOpen(true)}>
-        Challenge a friend to these packs
+        Challenge a friend
       </button>
     );
   }
@@ -78,9 +82,9 @@ export function ChallengeAFriend({
   return (
     <div className="flex flex-col gap-2">
       {/* What the link is, before asking for anything. The button that opens
-          this said "challenge a friend to these packs" and then went straight to
-          a name field, so the one moment somebody decides whether to send it was
-          also the moment they had least idea what they were sending. */}
+          this used to go straight to a name field, so the one moment somebody
+          decides whether to send it was also the moment they had least idea what
+          they were sending. It is also where "these packs" went. */}
       <p className="text-sm leading-relaxed text-base-content/70">
         A link that deals somebody the same cards you just drafted. When they finish, you
         get the two drafts side by side.
