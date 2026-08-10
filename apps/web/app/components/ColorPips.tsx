@@ -30,3 +30,48 @@ export function ColorPips({ colors, className }: { colors: string; className?: s
     </span>
   );
 }
+
+/**
+ * The colours a pile is made of, and how many cards each.
+ *
+ * The same symbols as `ColorPips` above, which is the whole point of it living
+ * next to it. The draft screen's picks panel and the deck builder both drew this
+ * as a flat disc filled with the colour's ring paint and a number beside it --
+ * accurate, and a mark that appears nowhere else in the game. Every card in the
+ * pack, every placard in a deck list and the colour readout on the results screen
+ * are already printing Magic's own symbol, so a bare dot was the one place a
+ * reader had to work out what the colour meant from the colour alone.
+ *
+ * Ordered by the caller, which in practice means `tally`'s own order: commonest
+ * first, which is what makes the row say which colours the deck is actually in
+ * rather than which colours exist.
+ */
+export function ColorTally({
+  colors,
+  className,
+}: {
+  colors: readonly (readonly [string, number])[];
+  className?: string;
+}) {
+  return (
+    <div className={`flex flex-wrap items-center gap-x-2.5 gap-y-1 ${className ?? ""}`}>
+      {colors.map(([color, n]) => (
+        <span
+          key={color}
+          className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
+          title={COLOR_NAMES[color] ?? color}
+        >
+          {/* Hidden rather than left to speak for itself: ManaCost names what it
+              draws "Mana cost White", which is true of a card's cost and wrong
+              for a count of cards. The name a reader needs is on the line below,
+              where it can be said as "7 White". */}
+          <span aria-hidden className="leading-none">
+            <ManaCost cost={`{${color}}`} className="text-[11px]" />
+          </span>
+          {n}
+          <span className="sr-only">{COLOR_NAMES[color] ?? color}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
