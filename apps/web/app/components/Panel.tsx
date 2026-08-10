@@ -31,7 +31,10 @@ export function Panel({
   return (
     <section className={`card border border-base-300 bg-base-200 ${className ?? ""}`}>
       {(title != null || aside != null) && (
-        <div className="flex items-center justify-between gap-3 border-b border-base-300 px-4 py-2.5">
+        // Wraps, because an aside is allowed to be a control and a control is
+        // wider than a count. Without it the comparison's sort buttons pushed
+        // the header past the panel's own edge on a phone.
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-base-300 px-4 py-2.5">
           {title != null ? <h2 className="eyebrow">{title}</h2> : <span />}
           {aside}
         </div>

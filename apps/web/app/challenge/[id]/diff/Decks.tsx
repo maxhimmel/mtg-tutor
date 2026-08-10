@@ -52,6 +52,7 @@ export function Decks({
   theirDeck,
   yourSessionId,
   faceOf,
+  className,
 }: {
   rows: DiffRow[];
   them: string;
@@ -59,6 +60,7 @@ export function Decks({
   theirDeck: SideDeck;
   yourSessionId: string;
   faceOf: (name: string, colors: readonly string[]) => Face;
+  className?: string;
 }) {
   const built = useMemo(() => {
     // Every pick in order IS the pool, which is the same list `sideboard`
@@ -94,7 +96,7 @@ export function Decks({
   // plainly, with the way out, rather than hidden behind an absent panel.
   if (!built.yours || !built.theirs) {
     return (
-      <Panel title="The two decks" className="mt-4">
+      <Panel title="The two decks" className={className}>
         <p className="text-base-content/70">
           {!built.yours && !built.theirs
             ? "Neither of you has registered a forty yet."
@@ -119,7 +121,7 @@ export function Decks({
 
   return (
     <Panel
-      className="mt-4"
+      className={className}
       title="The two decks"
       aside={
         <span className="text-xs text-base-content/50">

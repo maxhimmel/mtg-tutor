@@ -25,14 +25,28 @@ import type { ReactNode } from "react";
 export function Who({ mine, children }: { mine?: boolean; children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span
-        aria-hidden
-        className={`size-2 shrink-0 rounded-full ${
-          mine ? "bg-primary" : "border border-base-content/55"
-        }`}
-      />
+      <Dot mine={mine} />
       <span className="eyebrow truncate">{children}</span>
     </span>
+  );
+}
+
+/**
+ * The mark on its own, for the places the thing it marks is not a label.
+ *
+ * The fork list sets a card's NAME behind it, and a card name is not an eyebrow
+ * -- uppercasing and letter-spacing "Ferocious Werefox" makes it unreadable as
+ * the specific card it is. Split out rather than copied so there is still one
+ * place the filled-against-hollow rule lives.
+ */
+export function Dot({ mine }: { mine?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`size-2 shrink-0 rounded-full ${
+        mine ? "bg-primary" : "border border-base-content/55"
+      }`}
+    />
   );
 }
 

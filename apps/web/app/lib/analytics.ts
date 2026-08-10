@@ -295,6 +295,19 @@ export function diffViewed(p: {
    * their forty rather than just telling them the comparison is ready.
    */
   decks: "both" | "yours" | "theirs" | "neither";
+  /**
+   * Which shape the screen was read in.
+   *
+   * A PROPERTY ON AN EXISTING EVENT, deliberately, and the same one is on
+   * `fork_opened` below. The comparison is being tried in four layouts and the
+   * only question worth asking about them is behavioural -- does a braid that
+   * never leaves the screen get used more than one you scroll past -- which is
+   * `fork_opened` split by this. Minting `diff_layout_viewed` would have put
+   * that answer in a second event nobody can cross against the first, to measure
+   * something that may not outlive the experiment; adding a property leaves
+   * every chart already drawn on these two events standing.
+   */
+  layout: string;
 }): void {
   if (!on()) return;
   posthog.capture("diff_viewed", p);
@@ -324,11 +337,20 @@ export function diffViewed(p: {
  *
  * Only fires when the step landed on a fork. The track is navigation over the
  * whole draft, and counting every step would bury the thing being measured.
+ *
+ * `braid` covers the rail as well as the panel, and that is not laziness. The
+ * rail IS the braid -- same rope, same measure, same geometry, stood on end --
+ * and a value that meant "the drawing, but only when it was lying down" would be
+ * a distinction no chart wants. Which of the two a reader had is `layout`, so
+ * "does a permanent braid get used more than one you scroll past" is one
+ * breakdown of this event rather than a comparison across two values that would
+ * have to be added back together first.
  */
 export function forkOpened(p: {
   challengeId: string;
   pickIndex: number;
   from: "track" | "hero" | "braid" | "tick" | "stepper";
+  layout: string;
 }): void {
   if (!on()) return;
   posthog.capture("fork_opened", p);
@@ -430,7 +452,7 @@ export function feedbackRefused(p: {
  * breakdown that cannot name the old surface reads as though nothing was ever
  * changed there.
  */
-export type SettingSurface = "menu" | "board" | "sets";
+export type SettingSurface = "menu" | "board" | "sets" | "diff";
 
 /**
  * A setting moved.

@@ -306,6 +306,177 @@ html {
   @apply rounded-box border border-base-content/20 bg-base-200 shadow-2xl;
 }
 
+/* A region that scrolls inside a page that already scrolls.
+
+   The app had quietly acquired three of these before any of them was designed
+   -- the draft board's maindeck and sideboard lists, and the comparison's fork
+   list -- and every one was a `max-h-*` with `overflow-y-auto` beside it and
+   nothing else. On macOS, where the system default is to show scroll bars only
+   while scrolling, that is a box with no scrollbar, no edge and no way whatever
+   to know that half of what is in it is below the fold. The content just stops,
+   and a reader has no reason to think it did not simply end.
+
+   So the anatomy is fixed here, and it says the same thing three ways, because
+   no one of the three reaches every reader.
+
+   A SCROLLBAR THAT IS ALWAYS DRAWN, and `::-webkit-scrollbar` is the only lever
+   that does it. Styling those pseudo-elements is what takes a Chromium or
+   Safari box off overlay scrollbars and onto classic ones: they reserve their
+   own gutter and are painted whether or not anything is moving. It is also the
+   only one of the three signals that says how much more there is and
+   whereabouts in it you are.
+
+   THE STANDARD PROPERTIES ARE WORSE THAN USELESS HERE, which took shipping the
+   wrong thing to find out. `scrollbar-width` and `scrollbar-color` look like
+   the modern spelling of this and are not: they recolour whatever scrollbar the
+   platform had already decided on, and on macOS -- where the default is to show
+   scroll bars only while scrolling -- that is an overlay scrollbar, recoloured,
+   still invisible at rest. Worse, setting either of them is what makes Chromium
+   and Safari IGNORE the `::-webkit-scrollbar` rules, so the one lever that works
+   is switched off by the one that reads like a better version of it.
+
+   AND THE APP WAS ALREADY SETTING ONE. daisyUI declares `scrollbar-color` on
+   :root, and it is an inherited property, so every element in this app arrives
+   carrying a non-auto value and no `::-webkit-scrollbar` rule anywhere could
+   ever have taken effect. That is why the first version of this shipped with a
+   themed scrollbar nobody could see: it was not that the rules were wrong, it
+   was that they were never consulted. `scroll-box` puts the property back to
+   `auto` explicitly for that reason and no other. The page's own scrollbar is
+   left alone -- a page that scrolls is not a claim anybody needs help reading.
+
+   Firefox has none of these pseudo-elements and keeps its own scrollbar; the
+   edge and the fade carry it there.
+
+   AN EDGE AND A LIP, so the box reads as a slot cut into the panel rather than
+   as the end of a list. The frame is the caller's (see ScrollBox) and sits on a
+   wrapper OUTSIDE the mask, which is not a detail: a border on the scrolling
+   element is faded away by that element's own mask, so the top edge of the box
+   dissolved as soon as you scrolled off the top of it.
+
+   AND THE CONTENT FADING WHERE IT PASSES UNDER THAT EDGE, which is the one a
+   reader takes in without having looked at anything. A fade has to be honest or
+   it is worse than the problem: a permanent one at the foot of a box you have
+   already scrolled to the bottom of says there is more when there is not. So
+   the depth is cut from the scroll position itself -- a scroll-progress
+   timeline animating the two lengths the mask is built out of, growing the top
+   fade over the first inch of travel and retiring the bottom one over the last.
+   No listener, no state, and nothing re-rendered while a thumb is moving.
+
+   THE MASK DOES NOT REACH THE SCROLLBAR, which is worth writing down because it
+   is not what you would guess and it cost two attempts to establish. A mask on
+   a scroll container fades everything the container's CONTENT paints and leaves
+   the scrollbar untouched: the bar keeps hard, square ends whatever the mask
+   says. So a rounded frame clipping that container takes a visible bite out of
+   both ends of the bar, and there is no softening anywhere that can hide it.
+
+   THE FIX IS GEOMETRY, AND IT IS THE CALLER'S. Shortening the bar to dodge the
+   corner was tried and is the wrong trade -- a scrollbar belongs hard against
+   the edge of its box and the full height of it, and one that stops short of
+   both is apologising for the box it is in. What is inset instead is the box:
+   the scrolling element stays square and unclipped and sits a few pixels inside
+   the rounded frame, far enough that its own corners clear the curve. The bar
+   still hugs its box; its box sits inside the frame. See ScrollBox. */
+@property --scroll-fade-top {
+  syntax: "<length>";
+  initial-value: 0px;
+  inherits: false;
+}
+
+@property --scroll-fade-bottom {
+  syntax: "<length>";
+  initial-value: 0px;
+  inherits: false;
+}
+
+/* Each animates one end and leaves the other alone, so the two ends can be
+   driven over different stretches of the same scroll by `animation-range`.
+   The missing half of each pair is the registered initial value. */
+@keyframes scroll-fade-in {
+  to {
+    --scroll-fade-top: var(--scroll-fade);
+  }
+}
+
+@keyframes scroll-fade-out {
+  from {
+    --scroll-fade-bottom: var(--scroll-fade);
+  }
+}
+
+/* The lip of the slot, on the wrapper rather than on the thing that scrolls --
+   an inset shadow on the scroller would be masked away by the scroller's own
+   fade, at exactly the two edges it exists to describe. Top and bottom only:
+   this is a box the content passes under, not a box it sits in a hole in, and
+   shadow down the sides would say the second thing. */
+@utility scroll-well {
+  box-shadow:
+    inset 0 0.5rem 0.6rem -0.5rem color-mix(in oklab, black 70%, transparent),
+    inset 0 -0.5rem 0.6rem -0.5rem color-mix(in oklab, black 70%, transparent);
+}
+
+@utility scroll-box {
+  --scroll-fade: 1.75rem;
+
+  /* Declared out here rather than inside the @supports below, which is free and
+     strictly safer: with the two lengths at the 0 they are registered with this
+     gradient is opaque end to end, so a browser with no scroll timelines gets
+     an unmasked box rather than no rule at all, and one that has them gets the
+     fade. The failure mode of a fade that cannot be driven must never be
+     content that cannot be seen, and here it cannot be anything. */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--scroll-fade-top),
+    #000 calc(100% - var(--scroll-fade-bottom)),
+    transparent 100%
+  );
+  overflow-y: auto;
+
+  /* NOT A NO-OP, and the single load-bearing line in this block. daisyUI sets
+     `scrollbar-color` on :root, and `scrollbar-color` is an INHERITED property
+     -- so every element in this app arrives with a non-auto value, and a
+     non-auto value is exactly what makes Chromium and Safari ignore the four
+     rules below. Deleting our own declaration was not enough; the inherited one
+     had to be answered. Back at `auto`, the pseudo-elements are honoured and
+     the scrollbar is classic: its own gutter, painted at rest.
+     Anyone tidying this away will hand macOS its overlay scrollbar back. */
+  scrollbar-color: auto;
+
+  /* The gutter is reserved and the bar is painted at rest. See the header:
+     `scrollbar-width` and `scrollbar-color` must never be set to anything else
+     here, because setting either is what makes a browser drop these. */
+  &::-webkit-scrollbar {
+    width: 0.5625rem;
+  }
+
+  /* Full height, hard against the edge of this box, which is where a scrollbar
+     belongs: it is furniture of the container and not of the content, and every
+     native one -- a page, a textarea, a list view -- sits in a gutter at the
+     inside edge of the padding box. Nothing here dodges a corner, because by
+     the time this box is drawn there is no corner near it. */
+  &::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--color-base-content) 65%, transparent);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    animation:
+      scroll-fade-in linear both,
+      scroll-fade-out linear both;
+    animation-timeline: scroll(self block), scroll(self block);
+    animation-range: 0 var(--scroll-fade), calc(100% - var(--scroll-fade)) 100%;
+  }
+}
+
 /* The one-line label above every panel and section. Small, wide-tracked, and
    quiet -- it names the region without competing with what is inside it. */
 @utility eyebrow {
