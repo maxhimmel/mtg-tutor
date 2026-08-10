@@ -143,13 +143,22 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
    * would drown the one number the event exists to produce, which is which of
    * the readings actually drives the stepper. Stepping to an ordinary pick is
    * not somebody opening a fork, wherever they stepped from.
+   *
+   * TWO OF THE `from` VALUES NOW NAME A DIFFERENT SURFACE, and any chart split
+   * by them has a seam where this shipped. `hero` was a grid of fork cards with
+   * card art in them and is now a ranked list of lines; `track` was a copy of
+   * the pick track beside the score and is now the braid's own axis, under the
+   * chart. The question each answers is unchanged -- which reading of the
+   * comparison a person actually navigates from -- which is why the values were
+   * kept rather than renamed into a second event nobody could compare against
+   * the first.
    */
   const goTo = useCallback(
     (
       pickIndex: number,
       from: "track" | "hero" | "braid" | "tick" | "stepper",
       scroll: boolean,
-    ) => {
+    ): void => {
       setAt(pickIndex);
       if (forkIndices.has(pickIndex)) forkOpened({ challengeId, pickIndex, from });
 
@@ -221,14 +230,23 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         }
       />
 
+      {/* ONE COLUMN, and the rank comes from the panels themselves rather than
+          from the grid. These two were tried side by side, on the theory that
+          the two things a reader wants in the first four seconds should share
+          the fold -- and the two panels have nothing in common but that. The
+          score is four numbers and a rule, and it is finished; the fork list is
+          however many forks the draft happened to produce. Set in a row they
+          were a short box beside a long one, with the short one's column reading
+          as a hole. Two panels are only a row when they are the same kind of
+          thing.
+
+          So the ranking is what each panel IS: the score opens, then the forks,
+          then the drawing of the whole draft, then the two forties, then the
+          pick-by-pick reference -- ordered by how long each takes to read. Every
+          one of them now spans the page, which is also what let the fork list
+          lay itself out three abreast instead of one row per fork. */}
       <div className="flex flex-col gap-4">
-        <Summary
-          rows={diff.rows}
-          tally={diff.tally}
-          them={them}
-          at={at}
-          onAt={(i, scroll) => goTo(i, "track", scroll)}
-        />
+        <Summary rows={diff.rows} tally={diff.tally} them={them} />
 
         <Forks
           rows={diff.rows}
@@ -242,17 +260,19 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
       </div>
 
       <Braid
+        className="mt-4"
         rows={diff.rows}
         tally={diff.tally}
         them={them}
         at={at}
-        onSelect={(i) => goTo(i, "braid", true)}
+        onSelect={goTo}
       />
 
       {/* After the picks, because a deck is what the picks were for -- and
           before the pick-by-pick shelf, which is the reference section rather
           than part of the argument. */}
       <Decks
+        className="mt-4"
         rows={diff.rows}
         them={them}
         yourDeck={diff.yourDeck}

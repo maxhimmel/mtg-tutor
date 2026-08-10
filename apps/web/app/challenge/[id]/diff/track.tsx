@@ -1,7 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
-import type { DiffRow, DiffTally } from "@mtg-tutor/core";
+import type { DiffRow } from "@mtg-tutor/core";
 import { PickTrack, type Tick, type TickState } from "../../../components/PickTrack";
 
 /**
@@ -31,7 +30,9 @@ import { PickTrack, type Tick, type TickState } from "../../../components/PickTr
  * card off different packs did not agree about anything, and drawing that as
  * agreement is the exact false claim this whole feature is shaped to avoid.
  */
-export const stateOf = (row: DiffRow): TickState =>
+export type DiffState = Extract<TickState, "agreed" | "fork" | "apart">;
+
+export const stateOf = (row: DiffRow): DiffState =>
   !row.samePack ? "apart" : row.agree ? "agreed" : "fork";
 
 /** One group per pack, which is what draws the breaks between them. */
@@ -63,6 +64,7 @@ export function DiffTrack({
   at,
   onAt,
   label = "Every pick in both drafts, in order. Select one to read it below.",
+  packLabels = true,
 }: {
   rows: DiffRow[];
   them: string;
@@ -72,6 +74,15 @@ export function DiffTrack({
   // is the only thing that differs between them -- which is exactly the part a
   // screen reader has no other way to know.
   label?: string;
+  /**
+   * Whether the track names its own packs and sits them in wells.
+   *
+   * Off under the braid, where the chart above has already drawn a floor per
+   * pack and the ruler between them has already named it -- a third statement of
+   * the same boundary, in a third notation. The wells also carry an inset, and
+   * an inset is exactly what stops a tick landing under the pick it names.
+   */
+  packLabels?: boolean;
 }) {
   // Off the rows' own pack numbers rather than counted from one, so the labels
   // cannot drift from the groups if a draft ever has fewer than three packs.
@@ -83,7 +94,7 @@ export function DiffTrack({
       label={label}
       onSelect={onAt}
       here={Math.min(at, rows.length - 1)}
-      groupLabels={packNos.map((n) => `Pack ${n}`)}
+      groupLabels={packLabels ? packNos.map((n) => `Pack ${n}`) : undefined}
     />
   );
 }
@@ -93,10 +104,10 @@ export function DiffTrack({
  * it a stepper.
  *
  * The pick-by-pick panel is the one thing on this screen driven entirely from
- * somewhere else: the summary's track, the fork cards and the braid all sit
- * above it, and by the time you have read one pack of fifteen cards every one of
- * them is off the top of the window. Going to the next pick meant scrolling back
- * up to find a control, and that is where a reader stops stepping.
+ * somewhere else: the fork list and the braid's own track both sit above it, and
+ * by the time you have read one pack of fifteen cards every one of them is off
+ * the top of the window. Going to the next pick meant scrolling back up to find
+ * a control, and that is where a reader stops stepping.
  *
  * Drawn as the track and not as some new widget, because a reader who learnt the
  * ticks at the top of the page should not have to learn a second thing at the
@@ -116,8 +127,8 @@ export function DiffTrack({
  * something taller than it reads as floating in the strip rather than sitting at
  * the foot of the panel.
  *
- * No counter. The tones are named once, beside the track that is a picture of
- * the draft, and this copy carries its own pack labels -- a reader down here can
+ * No counter. The tones are named once, on the split rule at the top of the
+ * page, and this copy carries its own pack labels -- a reader down here can
  * see which pack they are in and how far along it. Anything more would be the
  * panel's own header rule, restated.
  */
@@ -219,53 +230,110 @@ const Glyph = ({ children }: { children: string }) => (
 );
 
 /**
- * What the three tones mean, with the count that makes each one worth a look.
+ * Every pick sorted into the three things a pick can be, as one rule.
  *
- * The swatch is the tick itself at the height the track draws it, not a
- * differently-shaped chip that happens to share a colour -- a legend whose marks
- * are not the marks is a second thing to decode.
+ * This replaces a legend -- three swatches with three counts beside them -- and
+ * the two sentences that were doing the same arithmetic in prose a few lines
+ * above it ("you took the same card on 34 of 42 picks", "8 of 42 picks had the
+ * same cards in front of both of you"). Three counts of one whole is a
+ * proportion, and a reader should not have to do the division: 34, 5 and 3 in a
+ * row says almost nothing, while a rule that is mostly one tone with two short
+ * stretches in it says the whole finding at a glance -- you drafted this set
+ * nearly the same way, and here is exactly how much of it was actually a
+ * comparison.
+ *
+ * It is the page's legend as well, and it is placed first for that reason: the
+ * three tones are learnt here, once, and then the braid and the track below
+ * spend them without explaining themselves again.
+ *
+ * COUNTED FROM `stateOf`, NOT FROM THE TALLY, and that is a correction rather
+ * than a shortcut. `tally.agreed` is every row where the two of you took the
+ * same card, INCLUDING rows where you were looking at different packs -- so
+ * agreed + forks + apart could come to more than there are picks, and a bar
+ * claiming to be a partition would have been quietly lying by a pick or two.
+ * `stateOf` is the rule the track and the braid already draw by, and it does
+ * partition: same pack and same card, same pack and not, or not the same pack.
  */
-export function TrackLegend({ tally }: { tally: DiffTally }) {
-  const apart = tally.rows - tally.comparable;
+export function PickSplit({ rows }: { rows: DiffRow[] }) {
+  if (rows.length === 0) return null;
+
+  const counts: Record<DiffState, number> = { agreed: 0, fork: 0, apart: 0 };
+  for (const row of rows) counts[stateOf(row)]++;
+
+  const parts = [
+    {
+      key: "agreed" as const,
+      count: counts.agreed,
+      tone: "bg-base-content/25",
+      label: <>same card</>,
+      spoken: "took the same card off the same pack",
+    },
+    {
+      key: "fork" as const,
+      count: counts.fork,
+      tone: "bg-primary",
+      label: (
+        <>
+          <span className="text-base-content/80">fork{counts.fork === 1 ? "" : "s"}</span> —
+          same pack, you chose differently
+        </>
+      ),
+      spoken: "forks: the same pack, and you chose differently",
+    },
+    {
+      key: "apart" as const,
+      count: counts.apart,
+      tone: "bg-warning/45",
+      label: <>different packs — not the same question</>,
+      spoken: "off different packs, so not the same question",
+    },
+  ].filter((part) => part.count > 0);
 
   return (
-    <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-base-content/60">
-      <Swatch state="agreed" count={tally.agreed}>
-        same card
-      </Swatch>
-      <Swatch state="fork" count={tally.forks.length}>
-        <span className="text-base-content/80">
-          fork{tally.forks.length === 1 ? "" : "s"}
-        </span>{" "}
-        — same pack, you chose differently
-      </Swatch>
-      <Swatch state="apart" count={apart}>
-        different packs — not the same question
-      </Swatch>
-    </ul>
-  );
-}
+    <div className="flex flex-col gap-2.5">
+      {/* One rule, split where the draft splits. Each segment grows by its own
+          count, so the widths ARE the proportions -- and they are parted by a
+          hairline of page rather than butted, because three tones meeting edge
+          to edge read as one bar with a gradient in it. */}
+      <div
+        className="flex h-2 gap-[3px]"
+        role="img"
+        aria-label={`All ${rows.length} picks: ${parts
+          .map((part) => `${part.count} ${part.spoken}`)
+          .join("; ")}.`}
+      >
+        {parts.map((part) => (
+          <span
+            key={part.key}
+            // A floor, because a single fork in forty-two is a fortieth of the
+            // rule and would round away to a smudge on a narrow screen -- and
+            // one fork is exactly the case where a reader most needs to see
+            // that there was one. Two picks of width costs the long segment
+            // nothing anybody can measure.
+            style={{ flexGrow: part.count, flexBasis: 0, minWidth: "0.375rem" }}
+            className={`rounded-full ${part.tone}`}
+          />
+        ))}
+      </div>
 
-function Swatch({
-  state,
-  count,
-  children,
-}: {
-  state: "agreed" | "fork" | "apart";
-  count: number;
-  children: ReactNode;
-}) {
-  const tone =
-    state === "agreed" ? "h-0.5 bg-base-content/25" : state === "fork" ? "h-1.5 bg-primary" : "h-1.5 bg-warning/45";
-
-  return (
-    <li className="flex items-center gap-2">
-      <span aria-hidden className="flex h-1.5 w-3 items-end">
-        <span className={`w-full rounded-full ${tone}`} />
-      </span>
-      <span>
-        <span className="font-semibold tabular-nums text-base-content/80">{count}</span> {children}
-      </span>
-    </li>
+      <ul
+        aria-hidden
+        className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-base-content/60"
+      >
+        {parts.map((part) => (
+          <li key={part.key} className="flex items-center gap-2">
+            {/* The segment itself, cut short -- not a differently-shaped chip
+                that happens to share a colour. */}
+            <span aria-hidden className={`h-2 w-3 shrink-0 rounded-full ${part.tone}`} />
+            <span>
+              <span className="font-semibold tabular-nums text-base-content/80">
+                {part.count}
+              </span>{" "}
+              {part.label}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
