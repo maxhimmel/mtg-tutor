@@ -68,10 +68,10 @@ import { Panel } from "../../../components/Panel";
  * THE TWO ENTRANCES ARE ONE ENTRANCE, MIRRORED, which took a second attempt.
  * The names were first anchored to the top and bottom of the BOX, which is
  * symmetric about the box's middle -- and the box's middle is not the chart's,
- * because the causal arc's channel sits above the wells and nothing balances it
+ * because the causal arc's channel sits above the wells and nothing balanced it
  * below. So yours fell forty-one units into its lane and theirs rose twenty-one,
  * at visibly different steepnesses, and the pair read as two unrelated arrivals.
- * Both anchors are now measured from `mid` and by the same distance -- the
+ * Both anchors are now measured from `MID` and by the same distance -- the
  * floor's own half-height, so each name sits exactly level with the top or
  * bottom edge of the floor its rope is about to run along -- and the channel is
  * matched below. The two curves are congruent by construction.
@@ -87,10 +87,19 @@ import { Panel } from "../../../components/Panel";
  * between them is a weak delineation at any width and a nearly invisible one in
  * this theme, and the boundary was then drawn a second time by the labels
  * underneath. So the well keeps only what a well is for, which is being a floor
- * for the rope and for the drift shading, and the boundary moves entirely to the
- * ruler beneath: one span per pack, ticked at both ends, with the pack's name in
- * a break in its own rule. A pack is a measured length of the draft, and that is
- * what a dimension line says.
+ * for the rope and for the drift shading, and the boundary moves to the ruler
+ * beneath. A pack is a measured length of the draft, and that is what a
+ * dimension line says.
+ *
+ * THE PAGE BETWEEN PACKS BELONGS TO NOBODY, which is the second thing that
+ * ruler taught. The gap was first taken OUT of the packs -- each floor inset by
+ * half of it at both ends -- so the first and last pick of every pack had a
+ * sliver of band hanging outside its own floor, and the fix for that was to clip
+ * those bands, which made two picks in six narrower than the rest for a reason
+ * no reader could ever recover. Both were wrong. The gap is now space the layout
+ * allocates BETWEEN packs and no pick owns any of it: every band is exactly one
+ * `step`, every floor starts and ends on a band edge, and nothing anywhere needs
+ * clipping. The measurement was never the problem; the coordinate system was.
  *
  * EVERY PICK IS A PLACE TO GO, not only the forks. The forks were the only
  * clickable thing here on the theory that they are the only DECISIONS -- true,
@@ -136,11 +145,10 @@ const WELL_H = 86;
 // use, so the entrance is in the chart's own hand.
 const PAD = 14;
 const LEAD = 56;
-// Page showing between one pack's well and the next. It was five, which is a gap
-// you can find once you know it is there; the packs are delineated by the ruler
-// underneath now, and this is the break agreeing with it rather than carrying it
-// alone.
-const WELL_GAP = 12;
+// Page between one pack and the next, allocated by the layout and owned by no
+// pick. Taken out of the picks instead, it made two bands in every six narrower
+// than their neighbours -- see the header.
+const PACK_GAP = 12;
 // Clear air above the wells for the causal arc, and the same again below so the
 // drawing is symmetric about its own middle. The bottom half is not spare page:
 // it is what lets the two names sit at equal distances from their lanes, which
@@ -214,15 +222,18 @@ export function Braid({
       ? undefined
       : [...tally.forks].reverse().find((f) => f.pickIndex < (tally.firstDrift ?? 0));
 
-  const step = (1000 - LEAD - PAD) / rows.length;
+  const packs = packSpans(rows);
+
+  // One width for every pick, with the page between packs taken off the top
+  // rather than out of the picks either side of it.
+  const step = (1000 - LEAD - PAD - (packs.length - 1) * PACK_GAP) / rows.length;
+  const shift = packs.flatMap((pack, p) => Array<number>(pack.count).fill(p * PACK_GAP));
+
   // A pick's own band, and its centre. The turn happens over the pick it belongs
   // to rather than between two of them.
-  const bandL = (i: number) => LEAD + i * step;
-  const bandR = (i: number) => LEAD + (i + 1) * step;
+  const bandL = (i: number) => LEAD + i * step + shift[i];
+  const bandR = (i: number) => bandL(i) + step;
   const cx = (i: number) => bandL(i) + step / 2;
-  // Where the first well starts, which is where the run-up ends: the rope is in
-  // its lane by the time it is over anything that counts as a pick.
-  const mouth = LEAD + WELL_GAP / 2;
 
   const open = opennessOf(rows);
 
@@ -250,7 +261,9 @@ export function Braid({
     const y0 = laneY(0, side) + off;
     const ny = NAME_Y[side] + off;
 
-    const head = `M 0 ${ny} C ${mouth / 2} ${ny} ${mouth / 2} ${y0} ${mouth} ${y0}`;
+    // The run-up ends where the first floor begins: the rope is in its lane by
+    // the time it is over anything that counts as a pick.
+    const head = `M 0 ${ny} C ${LEAD / 2} ${ny} ${LEAD / 2} ${y0} ${LEAD} ${y0}`;
 
     const body = rows
       .map((_, i) => {
@@ -298,9 +311,12 @@ export function Braid({
    * the same fact. It is a surface now: something for the rope to be legible
    * against and for the drift shading to sit in. Where one pack ends is said
    * once, on the ruler.
+   *
+   * It starts and ends on a band edge, exactly, because the gap between packs is
+   * space of its own rather than something borrowed from the picks at the seam.
    */
   let seen = 0;
-  const wells = packSpans(rows).map((pack) => {
+  const wells = packs.map((pack) => {
     const from = seen;
     seen += pack.count;
     return {
@@ -308,39 +324,24 @@ export function Braid({
       count: pack.count,
       from,
       to: seen,
-      x: bandL(from) + WELL_GAP / 2,
-      width: pack.count * step - WELL_GAP,
+      x: bandL(from),
+      width: pack.count * step,
     };
   });
 
-  /**
-   * A pick's band, clipped to the floor it belongs to.
-   *
-   * The floor is inset by half the pack gap at each end, so the first and last
-   * pick of every pack have a sliver of band hanging outside it. Drawn raw, that
-   * sliver was the leftmost mark on the whole chart -- which made the ruler's
-   * first tick, sitting correctly on the floor's edge six units further right,
-   * read as misaligned against a column that was itself the thing out of place.
-   */
-  const columnOf = (i: number) => {
-    const well = wells.find((w) => i >= w.from && i < w.to) ?? wells[0];
-    const x = Math.max(bandL(i), well.x);
-    return { x, width: Math.max(0, Math.min(bandR(i), well.x + well.width) - x) };
-  };
-
   // Where the packs stopped being guaranteed to match, drawn as the stretch of
-  // floor it is. Cut at the pack breaks and clamped to the wells, so the shading
-  // never bleeds across the page showing between one well and the next -- it is
-  // the floor of a pack being marked, and there is no floor in the gap.
+  // floor it is. Cut at the pack breaks, so the shading never crosses the page
+  // showing between one floor and the next: it is a floor being marked, and
+  // there is no floor in the gap.
   const drifted = wells.flatMap((well) =>
     spans(rows, (r) => !r.samePack, well.from, well.to).map((run) => ({
       key: `${run.from}`,
-      x: Math.max(bandL(run.from), well.x),
-      width: Math.min(bandR(run.to - 1), well.x + well.width) - Math.max(bandL(run.from), well.x),
+      x: bandL(run.from),
+      width: bandR(run.to - 1) - bandL(run.from),
     })),
   );
 
-  const here = columnOf(Math.min(at, rows.length - 1));
+  const here = Math.min(at, rows.length - 1);
   const last = rows[rows.length - 1];
 
   return (
@@ -415,9 +416,9 @@ export function Braid({
               not findable, and one drawn over the rope would read as a scratch
               on it. Under the strands, so the rope stays the brightest thing. */}
           <rect
-            x={here.x}
+            x={bandL(here)}
             y={CHANNEL}
-            width={here.width}
+            width={step}
             height={WELL_H}
             className="fill-base-content/[0.08] stroke-base-content/25"
             strokeWidth={1}
@@ -473,7 +474,11 @@ export function Braid({
           )}
 
           {/* One target per pick, the whole floor-height band under it, and the
-              fork's gold tick riding along in the same group.
+              fork's gold tick riding along in the same group. Every one of them
+              is exactly one `step` wide, everywhere, including at the seams --
+              a target that quietly narrows because of where it sits in a pack is
+              a target that behaves differently for no reason a reader could
+              recover.
 
               BENEATH THE STRANDS, with the strands made transparent to the
               pointer. Above them the hover wash fell across the rope and dulled
@@ -486,38 +491,34 @@ export function Braid({
               page, which takes one tab stop for the whole draft and arrows
               within it. Forty-two more focus stops down here would be the same
               draft offered twice. */}
-          {rows.map((row, i) => {
-            const band = columnOf(i);
-            return (
-              <g key={i} className="group cursor-pointer" onClick={() => onSelect(i)}>
-                <rect
-                  x={band.x}
-                  y={CHANNEL}
-                  width={band.width}
-                  height={WELL_H}
-                  className="fill-transparent transition-colors group-hover:fill-base-content/[0.12]"
+          {rows.map((row, i) => (
+            <g key={i} className="group cursor-pointer" onClick={() => onSelect(i)}>
+              <rect
+                x={bandL(i)}
+                y={CHANNEL}
+                width={step}
+                height={WELL_H}
+                className="fill-transparent transition-colors group-hover:fill-base-content/[0.12]"
+              />
+              {isFork(row) && (
+                // In the opening the strands have just made, which is the one
+                // place on this diagram it can sit and mean something -- and
+                // drawn as a tick, which is what a fork looks like on the track
+                // above. It reaches to whatever the opening happens to be, so a
+                // blip gets a short tick and a sustained parting a long one.
+                <line
+                  x1={cx(i)}
+                  y1={laneY(i, "yours") + STRAND / 2 + 3}
+                  x2={cx(i)}
+                  y2={laneY(i, "theirs") - STRAND / 2 - 3}
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                  className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
                 />
-                {isFork(row) && (
-                  // In the opening the strands have just made, which is the one
-                  // place on this diagram it can sit and mean something -- and
-                  // drawn as a tick, which is what a fork looks like on the
-                  // track above. It reaches to whatever the opening happens to
-                  // be, so a blip gets a short tick and a sustained parting a
-                  // long one.
-                  <line
-                    x1={cx(i)}
-                    y1={laneY(i, "yours") + STRAND / 2 + 3}
-                    x2={cx(i)}
-                    y2={laneY(i, "theirs") - STRAND / 2 - 3}
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                    className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
-                  />
-                )}
-                <title>{titleOf(row)}</title>
-              </g>
-            );
-          })}
+              )}
+              <title>{titleOf(row)}</title>
+            </g>
+          ))}
 
           {(["yours", "theirs"] as const).flatMap((side) =>
             cords.map((cord) => (
@@ -609,39 +610,52 @@ function LaneLabel({ y, label }: { y: number; label: string }) {
 }
 
 /**
- * The packs, as measured spans rather than as boxes.
+ * The draft as one measured length, divided where the packs divide.
  *
- * A dimension line: one rule per pack running its exact width, ticked at both
- * ends, with the pack's name sitting in a break in the rule. That is what a pack
- * IS on this chart -- a measured length of the draft -- and saying it this way
- * is what lets the wells stop trying to carry the boundary, which they were bad
- * at: three dark rectangles a shade off the panel behind them.
+ * ONE RULE, not three. The first version drew a separate dimension line per
+ * pack -- tick, rule, name, rule, tick -- which put two ticks and a gap at every
+ * seam to say the single fact that one pack ended and the next began. Three
+ * measurements laid end to end is also the wrong claim: a draft is not three
+ * things that happen to be adjacent, it is forty-two picks in order, and the
+ * pack breaks are divisions of it. So the rule runs the whole drafted span, from
+ * the first band's left edge to the last band's right, and a single tick stands
+ * at each boundary. Nothing marks the two outer ends, because the rule simply
+ * stopping is already where the draft stops.
  *
  * Positioned from the same `wells` the SVG draws, as percentages of the same
  * box: the chart is a 1000-unit viewBox stretched to fill, so one unit is a
- * tenth of a percent and every tick lands exactly on the floor above it. The
- * flex row this replaces could not do that -- it grew each label by its pick
- * count and knew nothing about the gap between one well and the next.
+ * tenth of a percent and every tick lands exactly on the seam above it.
  *
- * The end ticks are pulled half their own width outward. A 1px rule laid inside
- * a boundary sits a whole pixel in from it, which is the difference between a
- * measurement and a near-measurement at the only two places anybody checks.
+ * The names sit ON the rule with the panel's own colour behind them, which is
+ * how a break in a rule is drawn when the thing breaking it is set in type of
+ * an unknown width.
  */
 function PackRuler({ wells }: { wells: { packNo: number; x: number; width: number }[] }) {
+  const seams = wells
+    .slice(0, -1)
+    .map((well, i) => (well.x + well.width + wells[i + 1].x) / 2);
+
   return (
     <div className="relative h-4 min-w-0 flex-1">
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-base-content/20"
+        style={{ left: `${LEAD / 10}%`, right: `${PAD / 10}%` }}
+      />
+      {seams.map((x) => (
+        <span
+          key={x}
+          className="absolute top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 bg-base-content/45"
+          style={{ left: `${x / 10}%` }}
+        />
+      ))}
       {wells.map((well) => (
-        <div
+        <span
           key={well.packNo}
-          className="absolute inset-y-0 flex items-center gap-2"
-          style={{ left: `${well.x / 10}%`, width: `${well.width / 10}%` }}
+          className="eyebrow absolute top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-base-200 px-2"
+          style={{ left: `${(well.x + well.width / 2) / 10}%` }}
         >
-          <span className="h-2.5 w-px shrink-0 -translate-x-1/2 bg-base-content/40" />
-          <span className="h-px min-w-0 flex-1 bg-base-content/20" />
-          <span className="eyebrow shrink-0 whitespace-nowrap">Pack {well.packNo}</span>
-          <span className="h-px min-w-0 flex-1 bg-base-content/20" />
-          <span className="h-2.5 w-px shrink-0 translate-x-1/2 bg-base-content/40" />
-        </div>
+          Pack {well.packNo}
+        </span>
       ))}
     </div>
   );
@@ -692,8 +706,9 @@ function spans(
   return out;
 }
 
-// Where one pack ends and the next begins. Proportional, and it lines up with
-// the SVG because the picks are evenly spaced and both insets are known.
+// Where one pack ends and the next begins. The gap between them is allocated
+// from the width before the picks are laid out, so this is a count of picks and
+// nothing more.
 function packSpans(rows: DiffRow[]): { packNo: number; count: number }[] {
   return rows.reduce<{ packNo: number; count: number }[]>((acc, row) => {
     const last = acc[acc.length - 1];
