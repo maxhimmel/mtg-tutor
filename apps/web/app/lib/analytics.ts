@@ -241,6 +241,47 @@ export function buildCompared(p: {
 }
 
 /**
+ * How much building the build screen actually did.
+ *
+ * `deck_built` says a forty was locked in, and cannot say whether anybody moved
+ * a card to get there -- the mutation stores a land count and the cuts were
+ * written one at a time by `draft.bench`, which is the same mutation the draft
+ * screen has been calling since pick one. So a deck built entirely by pressing
+ * "lock in" on whatever the draft left behind is indistinguishable, in the data,
+ * from one somebody spent ten minutes on.
+ *
+ * That distinction decides what the screen is. If `moves` is near zero across
+ * the board then this is a confirmation dialog with forty-five cards on it and
+ * should be built as one; if it is not, the board is doing the work it was
+ * redrawn to do. Which is the other half: it was two panels and is now the curve
+ * wells, and "did the reshape change how much people build" is exactly this
+ * number before and after.
+ *
+ * A separate event rather than a property on `deck_built` -- the usual move here
+ * -- because that one is captured in a Convex mutation that has no idea what
+ * happened in the browser, and an analytics-only argument threaded through
+ * `draft.build` would put it in the CLI's signature too. Same `sessionId`, so
+ * the two still cross.
+ */
+export function deckShaped(p: {
+  sessionId: string;
+  setCode: string;
+  format: string;
+  /** Cards pressed, both directions summed. Zero means nothing was built here. */
+  moves: number;
+  cuts: number;
+  plays: number;
+  /** Presses of the land stepper, which is the other half of a forty. */
+  landSteps: number;
+  basicLands: number;
+  /** How many of the forty-five ended up in the sideboard. */
+  benched: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("deck_shaped", p);
+}
+
+/**
  * Someone tried to start a draft and was told no.
  *
  * The most likely thing throttling a private beta, and until now invisible --

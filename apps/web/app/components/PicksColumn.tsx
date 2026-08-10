@@ -10,8 +10,7 @@ import {
   deckPiles,
   tally,
 } from "@mtg-tutor/core";
-import { ringFor } from "../lib/cardFrame";
-import { COLOR_NAMES } from "../lib/format";
+import { ColorTally } from "./ColorPips";
 import { CardPlacardList } from "./CardPlacard";
 import { ManaCurve } from "./ManaCurve";
 import { Panel } from "./Panel";
@@ -114,27 +113,10 @@ export function PicksColumn({
       title={`Picks (${pool.length})`}
       aside={
         // The one place in the chrome that carries Magic's colours, and it is
-        // earned: which colours you are in is the question this panel answers,
-        // and each swatch is the exact ring painted on the cards it counts.
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          {[...colors]
-            .sort((a, b) => b[1] - a[1])
-            .map(([color, n]) => (
-              <span
-                key={color}
-                className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
-                title={COLOR_NAMES[color] ?? color}
-              >
-                <span
-                  aria-hidden
-                  className="size-2.5 rounded-full ring-1 ring-black/40"
-                  style={{ background: ringFor(color) }}
-                />
-                {n}
-                <span className="sr-only">{COLOR_NAMES[color] ?? color}</span>
-              </span>
-            ))}
-        </div>
+        // earned: which colours you are in is the question this panel answers.
+        // `tally` already orders by count, so the re-sort that used to be here
+        // was sorting an already-sorted list.
+        <ColorTally colors={colors} />
       }
     >
       {/* Above the counts, because it answers a question they cannot: the tally

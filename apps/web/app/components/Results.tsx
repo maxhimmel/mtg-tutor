@@ -154,6 +154,8 @@ export function Results({
         </header>
         <DeckBuilder
           sessionId={sessionId}
+          setCode={results.setCode}
+          format={results.format}
           pool={results.pool}
           sideboard={results.sideboard}
           onBuilt={load}

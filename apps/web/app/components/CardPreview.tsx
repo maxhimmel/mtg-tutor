@@ -17,6 +17,10 @@ import { CardStats, hasStats } from "./CardStats";
 
 interface HoverState {
   card: Card;
+  // The element the preview is hanging off, kept alongside the rect it was
+  // measured from. The rect is what `place` needs; the element is what says
+  // whether that rect still describes anything -- see the stranding effect below.
+  el: HTMLElement;
   anchor: DOMRect;
   showStats: boolean;
 }
@@ -49,8 +53,12 @@ export function useCardHover(card: Card | undefined, showStats = false) {
   };
 }
 
-// Imperative hide, for when the hovered element unmounts before onMouseLeave can
-// fire -- e.g. picking a card swaps the whole pack for the next one.
+// Imperative hide, for a caller that knows it is about to strand the preview --
+// e.g. picking a card swaps the whole pack for the next one. No longer the only
+// defence: the provider watches for its anchor leaving the document and closes
+// on its own. This is the earlier of the two, closing before the render that
+// causes the problem rather than after it, which is worth having where the
+// caller already knows.
 export function useHidePreview() {
   const ctx = useContext(HoverPreviewContext);
   return ctx?.hide ?? (() => {});
@@ -205,7 +213,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
 
   const show = useCallback((card: Card, el: HTMLElement, showStats: boolean) => {
     if (suspended.current) return;
-    setHover({ card, anchor: el.getBoundingClientRect(), showStats });
+    setHover({ card, el, anchor: el.getBoundingClientRect(), showStats });
   }, []);
   const hide = useCallback(() => {
     setHover(null);
@@ -224,6 +232,54 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // never fires and the image hangs over the route you just navigated to.
   const pathname = usePathname();
   useEffect(hide, [pathname, hide]);
+
+  /**
+   * The preview must not outlive its anchor, and `onMouseLeave` is not enough to
+   * promise that.
+   *
+   * `anchor` is a DOMRect in VIEWPORT coordinates, measured once, and the preview
+   * is `fixed`. So the preview is only ever correct while the thing it was
+   * measured from is still where it was. Two ways that stops being true and
+   * neither of them fires a mouse event:
+   *
+   * SCROLL. The card slides away and the image stays nailed to the screen beside
+   * where it used to be. Hidden rather than repositioned: a hover preview is a
+   * statement about where the pointer is, and once the page has moved under it
+   * that statement has expired -- following the card would also mean deciding
+   * what to do when it leaves the viewport entirely.
+   *
+   * UNMOUNT. The element under the cursor is destroyed before it can be left, so
+   * no leave event is ever dispatched and the image hangs there. The build screen
+   * is where this shows up worst -- pressing a card moves it to the other list in
+   * its well, which is an unmount and a mount, with the pointer never moving.
+   *
+   * The observer is what makes this general. `useHidePreview` exists for the same
+   * problem and puts the job on the caller, which means every list that can drop a
+   * row under the cursor has to remember; this one holds regardless of what caused
+   * the DOM to change. Scoped to while a preview is open, and `isConnected` on one
+   * element is the whole of the work it does per mutation.
+   */
+  useEffect(() => {
+    if (!hover) return;
+    const { el } = hover;
+
+    const stranded = () => {
+      if (!el.isConnected) hide();
+    };
+    const observer = new MutationObserver(stranded);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Capture, because a scroll event does not bubble -- the draft screen's piles
+    // and the review's lists are their own scrollers, and a listener that only
+    // heard the window would miss every one of them.
+    window.addEventListener("scroll", hide, { capture: true, passive: true });
+    window.addEventListener("resize", hide);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", hide, { capture: true });
+      window.removeEventListener("resize", hide);
+    };
+  }, [hover, hide]);
 
   // Position after render so the box size is known and clamping is accurate.
   // useEffect (not layout) keeps this off the server render; the box stays at
