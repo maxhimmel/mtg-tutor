@@ -101,9 +101,14 @@ export const DEFAULT_SETTINGS: Settings = {
   // better is the question this pair of flows exists to answer.
   pickCeremony: "challenge",
   setView: "grid",
-  // The page as it shipped, so nobody wakes up in a layout they did not ask for
-  // and every reading of the pinned ones is a reading somebody chose.
-  diffLayout: "ribbon",
+  // The console, which is the finding rather than the safe answer. It defaulted
+  // to the ribbon while the layouts were being compared, so that every reading
+  // of a pinned one was a reading somebody had chosen and the numbers meant
+  // something. That comparison is over: an instrument you cannot scroll past is
+  // better than one you can, and defaulting to the older shape now would mean
+  // almost nobody ever sees the one that won -- a default is not a neutral
+  // position, it is the answer for everybody who never opens the control.
+  diffLayout: "console",
 };
 
 export const SETTINGS_KEY = "mtg-tutor:settings";
@@ -136,7 +141,7 @@ export function storedSettings(raw: string): Partial<Settings> {
   // DELETED, not set to undefined. The provider spreads this over the defaults,
   // and a key that is present carrying `undefined` overwrites the default with
   // nothing rather than falling through to it -- which would leave the layout
-  // unset instead of back on the ribbon.
+  // unset instead of back on the default.
   if (
     rest.diffLayout !== undefined &&
     !DIFF_LAYOUTS.some((layout) => layout.id === rest.diffLayout)
