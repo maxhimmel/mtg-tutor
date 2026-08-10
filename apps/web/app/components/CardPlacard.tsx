@@ -40,9 +40,23 @@ const NATURAL_W = "max-w-[17rem]";
 export function CardPlacard({
   card,
   ghost = false,
+  onClick,
+  label,
   className,
 }: {
   card: Card;
+  // What happens when the card itself is pressed, which is how the build screen
+  // moves one between the deck and the sideboard. A placard is already the whole
+  // target -- name, cost, colour -- so a separate move button beside it was a
+  // second, smaller thing to hit for the same act.
+  //
+  // The wrapper becomes a real button when this is given rather than staying a
+  // div with a handler: it is already the focus stop and already carries the
+  // hover preview, and two tab stops on one card is one too many.
+  onClick?: () => void;
+  // Said out loud in place of the name, because the name alone does not say what
+  // pressing it does. Required in spirit whenever `onClick` is.
+  label?: string;
   // The same frame with nothing printed in it: a card someone else's deck list
   // plays and yours does not. It keeps the colour, because which colours the
   // suggestion is reaching for is exactly what an absence has to say, and empties
@@ -66,10 +80,19 @@ export function CardPlacard({
   // the draft is over and the numbers are the thing being taught.
   const hover = useCardHover(card, true);
 
+  // Nothing in this app sets a cursor on a bare button and daisyUI's `.btn` is
+  // not in play here, so a pressable placard has to ask for the hand itself.
+  const Wrapper = onClick ? "button" : "div";
+  const press = onClick
+    ? ({ type: "button", onClick, "aria-label": label } as const)
+    : ({ tabIndex: 0 } as const);
+
   return (
-    <div
-      className={`cursor-default rounded-[11px] outline-offset-2 focus-visible:outline focus-visible:outline-primary motion-safe:transition-transform motion-safe:hover:-translate-y-px ${NATURAL_W} ${className ?? ""}`}
-      tabIndex={0}
+    <Wrapper
+      className={`rounded-[11px] text-left outline-offset-2 focus-visible:outline focus-visible:outline-primary motion-safe:transition-transform motion-safe:hover:-translate-y-px ${
+        onClick ? "cursor-pointer" : "cursor-default"
+      } ${NATURAL_W} ${className ?? ""}`}
+      {...press}
       {...hover}
     >
       <div
@@ -113,7 +136,7 @@ export function CardPlacard({
           />
         </div>
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
