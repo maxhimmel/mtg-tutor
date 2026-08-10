@@ -20,9 +20,12 @@ import { SetIcon } from "../../../components/SetIcon";
 import { diffViewed, forkOpened } from "../../../lib/analytics";
 import { humanError } from "../../../lib/humanError";
 import { Braid } from "./Braid";
-import { Hero } from "./Hero";
+import { Decks } from "./Decks";
+import { Forks } from "./Forks";
 import { Shelf } from "./Shelf";
+import { Summary } from "./Summary";
 import type { Face } from "./faces";
+import { theirName } from "./sides";
 
 export function DiffScreen({ challengeId }: { challengeId: string }) {
   return (
@@ -86,12 +89,25 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
     if (!diff || seen.current) return;
     seen.current = true;
     void markSeen({ challengeId });
+    const mineBuilt = diff.yourDeck.basicLands !== undefined;
+    const theirsBuilt = diff.theirDeck.basicLands !== undefined;
     diffViewed({
       challengeId,
       rows: diff.tally.rows,
       comparable: diff.tally.comparable,
       agreed: diff.tally.agreed,
       forks: diff.tally.forks.length,
+      // Off the registered forties rather than off what the panel rendered: the
+      // panel can also fall back when a re-ingest drops a card, and that is a
+      // different fact from nobody having built a deck.
+      decks:
+        mineBuilt && theirsBuilt
+          ? "both"
+          : mineBuilt
+            ? "yours"
+            : theirsBuilt
+              ? "theirs"
+              : "neither",
     });
   }, [diff, challengeId, markSeen]);
 
@@ -113,20 +129,50 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
     [text],
   );
 
-  const openFork = useCallback(
-    (pickIndex: number, from: "hero" | "braid" | "tick") => {
+  const forkIndices = useMemo(
+    () => new Set((diff?.tally.forks ?? []).map((f) => f.pickIndex)),
+    [diff],
+  );
+
+  /**
+   * Move the shelf, and report it only when it landed on a fork.
+   *
+   * The track is navigation over all forty-two picks now, not a list of forks,
+   * so firing `fork_opened` on every step would drown the one number the event
+   * exists to produce -- which of the readings actually drives the stepper.
+   * Stepping to an ordinary pick is not somebody opening a fork.
+   */
+  const goTo = useCallback(
+    (pickIndex: number, from: "track" | "hero" | "braid" | "tick", scroll: boolean) => {
       setAt(pickIndex);
-      forkOpened({ challengeId, pickIndex, from });
-      shelfRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (forkIndices.has(pickIndex)) forkOpened({ challengeId, pickIndex, from });
+
+      const node = shelfRef.current;
+      if (!scroll || !node) return;
+
+      // Only when the shelf is not already where you are looking. Re-aligning a
+      // panel somebody is already reading is a jump with nothing to show for it.
+      const box = node.getBoundingClientRect();
+      if (box.top < window.innerHeight * 0.75 && box.bottom > 140) return;
+
+      node.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
     },
-    [challengeId],
+    [challengeId, forkIndices],
   );
 
   // Arrow keys step the shelf, with the usual escape hatch for anything a
-  // person might be typing into.
+  // person might be typing into -- and for the track itself, which handles its
+  // own arrows to move between ticks and says so by preventing the default.
+  // Without that check, focusing the track stepped two picks per press.
   useEffect(() => {
     if (!diff) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) {
         return;
@@ -146,13 +192,17 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
   if (loadError) return <PageNotice tone="error">{loadError}</PageNotice>;
   if (diff === undefined) return <PageNotice>Reading both drafts…</PageNotice>;
 
+  // Named rather than "a friend", because the page is a comparison between two
+  // people and one of them was anonymous in every label on it.
+  const them = theirName(diff.side, diff.fromName);
+
   return (
     <PageShell>
       <PageHeading
         icon={<SetIcon uri={diff.iconUri} className="size-6 text-base-content/50" />}
         title={
           <>
-            You vs. a friend{" "}
+            You vs. {them}{" "}
             <span className="text-base-content/45">
               {diff.setName ?? diff.setCode.toUpperCase()}
             </span>
@@ -165,32 +215,49 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         }
       />
 
-      <Hero
-        rows={diff.rows}
-        tally={diff.tally}
-        faceOf={faceOf}
-        onOpenFork={(i) => openFork(i, "hero")}
-      />
+      <div className="flex flex-col gap-4">
+        <Summary
+          rows={diff.rows}
+          tally={diff.tally}
+          them={them}
+          at={at}
+          onAt={(i, scroll) => goTo(i, "track", scroll)}
+        />
+
+        <Forks
+          rows={diff.rows}
+          tally={diff.tally}
+          impacts={impactByIndex}
+          impactsUnavailable={impacts === null}
+          them={them}
+          faceOf={faceOf}
+          onOpen={(i) => goTo(i, "hero", true)}
+        />
+      </div>
 
       <Braid
         rows={diff.rows}
         tally={diff.tally}
-        impacts={impactByIndex}
-        impactsUnavailable={impacts === null}
+        them={them}
         at={at}
-        onOpenFork={(i) => openFork(i, "braid")}
+        onOpenFork={(i) => goTo(i, "braid", true)}
+      />
+
+      {/* After the picks, because a deck is what the picks were for -- and
+          before the pick-by-pick shelf, which is the reference section rather
+          than part of the argument. */}
+      <Decks
+        rows={diff.rows}
+        them={them}
+        yourDeck={diff.yourDeck}
+        theirDeck={diff.theirDeck}
+        yourSessionId={diff.yourSessionId}
+        faceOf={faceOf}
       />
 
       <div ref={shelfRef} className="mt-10 scroll-mt-4">
         <p className="eyebrow mb-3 text-base-content/45">Pick by pick</p>
-        <Shelf
-          rows={diff.rows}
-          tally={diff.tally}
-          at={at}
-          faceOf={faceOf}
-          onAt={(i) => setAt(i)}
-          onTick={(i) => openFork(i, "tick")}
-        />
+        <Shelf rows={diff.rows} them={them} at={at} faceOf={faceOf} />
       </div>
     </PageShell>
   );

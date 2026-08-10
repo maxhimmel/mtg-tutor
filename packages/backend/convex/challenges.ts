@@ -276,9 +276,11 @@ export const diff = query({
     }
 
     const mineFirst = side === "challenger";
-    const [challengerRows, friendRows] = await Promise.all([
+    const [challengerRows, friendRows, challengerSession, friendSession] = await Promise.all([
       storedPicks(ctx, challenge.challengerSessionId),
       storedPicks(ctx, challenge.friendSessionId),
+      ctx.db.get(challenge.challengerSessionId),
+      ctx.db.get(challenge.friendSessionId),
     ]);
 
     const toSide = (r: Doc<"draftPicks">): DiffSide => ({
@@ -321,8 +323,33 @@ export const diff = query({
       finishedAt: challenge.finishedAt,
       rows,
       tally,
+      // What each of you kept, which is a different comparison from what each of
+      // you took -- two people can draft nearly the same cards and register two
+      // different decks.
+      //
+      // No deck list, for the reason the schema gives: which cards are in the
+      // deck is the maindeck half of splitPool, and a stored copy would be free
+      // to disagree with the picks. So this is the two facts the picks cannot
+      // carry -- what was set aside, and how many basics were run -- and the
+      // browser rebuilds both forties from the rows it already has. Two small
+      // documents against the 138KB of picks already on the wire.
+      //
+      // `basicLands` is undefined until somebody locks their 40 in. Finishing a
+      // draft and building a deck are separate acts, and the challenge unlocks
+      // on the first, so the comparison has to be able to say "not yet".
+      yourDeck: deckOf(mineFirst ? challengerSession : friendSession),
+      theirDeck: deckOf(mineFirst ? friendSession : challengerSession),
+      // Only ever the caller's own, and only so the deck comparison can send
+      // somebody to build the forty it is waiting on rather than to the list of
+      // every draft they have ever taken.
+      yourSessionId: mineFirst ? challenge.challengerSessionId : challenge.friendSessionId,
     };
   },
+});
+
+const deckOf = (session: Doc<"draftSessions"> | null) => ({
+  sideboard: session?.sideboard ?? [],
+  basicLands: session?.build?.basicLands,
 });
 
 /**

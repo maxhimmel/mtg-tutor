@@ -22,7 +22,22 @@ import { useRef, type KeyboardEvent } from "react";
 // The two conditions on folding are one idea, not two. A folded pack has no
 // reachable ticks in it, so a track that folds cannot also be a set of places to
 // go; a caller that wants both gets the flat form, which can be.
-export type TickState = "ahead" | "past" | "current" | "hit" | "miss";
+//
+// The last three states belong to the challenge comparison, where a tick carries
+// how one pick went for TWO drafters rather than one. They live here rather than
+// in a track of the diff's own because a comparison is still a run of picks in
+// order, and a second component drawing that would have been the app teaching
+// two rules for one shape -- and would have had to reinvent the pack breaks, the
+// single tab stop, and the halo that says where the reader is.
+export type TickState =
+  | "ahead"
+  | "past"
+  | "current"
+  | "hit"
+  | "miss"
+  | "agreed"
+  | "fork"
+  | "apart";
 
 export interface Tick {
   state: TickState;
@@ -45,12 +60,25 @@ export interface Tick {
 // colour that makes it. Red is the one grade colour the marks do not use, and it
 // is already what this app means by a pick that went wrong: gradeFor sends D and
 // F here, and the walkthrough writes "✗ not this time" in it two inches away.
+// The comparison's three read as one sentence: nothing happened, a decision
+// happened, or the question was not the same one. Agreeing is the hairline,
+// because forty of forty-two picks agree and a track that draws them all at full
+// weight is a solid bar with the two interesting marks hidden in it.
+//
+// A fork is gold for the same reason `current` is: it is the pick with something
+// in it for you. `apart` is warning because that is already the colour this
+// feature says drift in -- and it is deliberately NOT one of the grade colours
+// doing grade work, since a pick off a different pack has not been judged badly,
+// it has not been judged at all.
 const TONE: Record<TickState, string> = {
   ahead: "bg-base-content/10",
   past: "bg-base-content/65",
   current: "bg-primary",
   hit: "bg-success/60",
   miss: "bg-error/70",
+  agreed: "bg-base-content/25",
+  fork: "bg-primary",
+  apart: "bg-warning/45",
 };
 
 // `ahead` is the one tone that depends on what the track IS, and the same
@@ -69,7 +97,7 @@ const AHEAD_NAVIGABLE = "bg-base-content/30";
 // Where you ARE is still not said with size. It is said with the halo (see
 // tick-lit in globals.css), for the reason recorded there: a tick is too small
 // for size or colour alone to be findable among forty-four siblings.
-const TALL: TickState[] = ["current", "hit", "miss"];
+const TALL: TickState[] = ["current", "hit", "miss", "fork", "apart"];
 
 const bar = (state: TickState, navigable: boolean) =>
   `w-full rounded-full ${state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]} ${
@@ -102,22 +130,37 @@ const HERE = "tick-lit origin-bottom motion-safe:scale-y-[1.7] motion-safe:durat
  * picture: forty-two focus stops that lead nowhere is not navigation.
  * @param here The tick the page is scrolled to, lit on top of whatever it
  * already says. Only meaningful on a flat track long enough to scroll past.
+ * @param groupLabels One name per group, drawn under it. For a navigable track
+ * of several packs, where the gap between groups is the only thing saying a pack
+ * ended and it is far too quiet a signal to count from -- the accordion form
+ * says which pack you are in by opening it, and a flat track has no equivalent.
+ * Left off, a track is unlabelled exactly as before.
  */
 export function PickTrack({
   groups,
   label,
   onSelect,
   here,
+  groupLabels,
 }: {
   groups: Tick[][];
   label: string;
   onSelect?: (index: number) => void;
   here?: number;
+  groupLabels?: string[];
 }) {
   if (groups.length > 1 && !onSelect) {
     return <PackAccordion groups={groups} label={label} />;
   }
-  return <FlatTrack groups={groups} label={label} onSelect={onSelect} here={here} />;
+  return (
+    <FlatTrack
+      groups={groups}
+      label={label}
+      onSelect={onSelect}
+      here={here}
+      groupLabels={groupLabels}
+    />
+  );
 }
 
 const CARD_W = "0.875rem"; // 14px: a pack seen closed, at a card's proportion
@@ -226,11 +269,13 @@ function FlatTrack({
   label,
   onSelect,
   here,
+  groupLabels,
 }: {
   groups: Tick[][];
   label: string;
   onSelect?: (index: number) => void;
   here?: number;
+  groupLabels?: string[];
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const flat = groups.flat();
@@ -274,7 +319,7 @@ function FlatTrack({
   // index its caller thinks in without every caller passing one.
   let offset = 0;
 
-  return (
+  const track = (
     <div
       ref={ref}
       className="flex items-end gap-3"
@@ -287,7 +332,23 @@ function FlatTrack({
         offset += ticks.length;
 
         return (
-          <div key={group} className="flex flex-1 items-end gap-[3px]">
+          <div
+            key={group}
+            className={`flex flex-1 items-end gap-[3px] ${
+              // A labelled group is a pack you can point at, so it gets an edge
+              // to be pointed at: the ticks sit in a shallow well rather than in
+              // a gap.
+              //
+              // The edge is tinted with base-content and not base-300, for the
+              // reason popup-surface gives: base-300 against base-200 is nearly
+              // invisible in this theme, and the accordion gets away with it
+              // only because it sits on base-100. Inside a panel it did not read
+              // as a frame at all.
+              groupLabels
+                ? "rounded-[4px] border border-base-content/20 bg-base-100/40 px-1.5"
+                : ""
+            }`}
+          >
             {ticks.map((tick, i) => {
               const lit = start + i === here ? HERE : "";
 
@@ -298,15 +359,30 @@ function FlatTrack({
                   // Padding rather than a taller bar: a 2px line is not a click
                   // target, and growing it to be one would make the rule heavy
                   // enough to compete with the page it sits under.
-                  className="group flex flex-1 cursor-pointer items-end rounded-sm py-1.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70"
+                  //
+                  // The hover mark is on the TARGET, not on the tick. Growing
+                  // the bar was the whole of it, and growth can only be seen on
+                  // a tick that is short -- every state in TALL is already at
+                  // the height hover was taking it to, so the graded ticks and
+                  // the forks, which are the ones anybody actually aims at, had
+                  // no hover feedback at all. Lighting the padding box instead
+                  // works the same on every state, and it says the true thing:
+                  // this is the area that will take the click.
+                  //
+                  // Deliberately not the halo. `tick-lit` is how the track says
+                  // WHERE YOU ARE, and it can only keep saying that while it is
+                  // the one thing on the track that glows -- see globals.css,
+                  // where the halo is area precisely because a mark this small
+                  // cannot be found any other way.
+                  className="group flex flex-1 cursor-pointer items-end rounded-sm py-1.5 transition-colors hover:bg-base-content/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70"
                   aria-label={tick.label}
                   aria-current={tick.state === "current" ? "true" : undefined}
                   tabIndex={start + i === stop ? 0 : -1}
                   onClick={() => onSelect(start + i)}
                 >
-                  {/* Grows rather than changes colour: the colours already mean
-                      something here, and hover only means "this is where you
-                      would land". */}
+                  {/* Still grows, where there is room to: a hairline tick coming
+                      up to full height is a good extra cue and costs nothing.
+                      It is no longer the only cue. */}
                   <span
                     className={`${bar(tick.state, true)} ${lit} motion-safe:transition-[height,transform] group-hover:h-1.5`}
                   />
@@ -325,6 +401,24 @@ function FlatTrack({
           </div>
         );
       })}
+    </div>
+  );
+
+  if (!groupLabels) return track;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {track}
+      {/* One label per group, on the same flex-1 basis the groups sit on, so
+          each name is centred under its own well however the packs are sized.
+          aria-hidden: every tick already announces its pack in full. */}
+      <div aria-hidden className="flex gap-3">
+        {groups.map((_, group) => (
+          <span key={group} className="eyebrow flex-1 text-center">
+            {groupLabels[group] ?? ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

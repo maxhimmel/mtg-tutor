@@ -3,8 +3,15 @@ import { fakeSet } from "../testing/fakeSet.js";
 import { mulberry32 } from "../util/rng.js";
 import { cardValue } from "../scoring/value.js";
 import { DraftEngine } from "./engine.js";
-import { diffDrafts, forkImpact, samePack, summarizeDiff, type DiffSide } from "./diff.js";
-import type { EngineCard } from "../model/card.js";
+import {
+  diffDrafts,
+  forkImpact,
+  leanColors,
+  samePack,
+  summarizeDiff,
+  type DiffSide,
+} from "./diff.js";
+import type { ColorCode, EngineCard, PoolCard } from "../model/card.js";
 
 /**
  * A seed whose pod actually comes apart when the human diverges.
@@ -139,11 +146,43 @@ describe("forks and off-shelf", () => {
     expect(rows.filter((r) => r.offShelf).every((r) => !r.samePack)).toBe(true);
   });
 
-  it("tracks each side's committed colours without reading a stored pool", () => {
+  it("names what each side leaned on without reading a stored pool", () => {
     const rows = diffDrafts(draft(), draft(DIVERGE));
     const last = rows[rows.length - 1];
-    expect(last.yourColors.length).toBeGreaterThan(0);
-    expect(last.theirColors.length).toBeGreaterThan(0);
+
+    // The old assertion here was `length > 0` on the COMMITTED colours, and it
+    // is what let a real bug ship: a forty-two-card pool commits to four or five
+    // colours, which passes that check and painted every strand of the braid
+    // multicolour from about pick four to the end of the draft, on both sides.
+    expect(last.yourLean.length).toBeGreaterThan(0);
+    expect(last.yourLean.length).toBeLessThanOrEqual(2);
+    expect(last.theirLean.length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("leanColors", () => {
+  const pool = (...colors: string[]): PoolCard[] =>
+    colors.map((c, i) => ({ name: `card-${i}`, colors: [c as ColorCode] }));
+
+  it("is empty until something has two cards behind it", () => {
+    expect(leanColors([])).toBe("");
+    expect(leanColors(pool("U", "B", "R"))).toBe("");
+  });
+
+  it("ignores a colour with only one card in the pool", () => {
+    expect(leanColors(pool("U", "U", "R"))).toBe("U");
+  });
+
+  it("never names more than two, however wide the pool gets", () => {
+    // The whole point. A pool this broad is ordinary by pick forty-two.
+    const wide = pool("W", "W", "U", "U", "U", "B", "B", "B", "B", "R", "R", "G", "G");
+    expect(leanColors(wide)).toBe("UB");
+  });
+
+  it("orders the answer WUBRG rather than by count", () => {
+    // So the pair reads the way a Magic player writes it, and so the same two
+    // colours never render two different ways as the counts move around.
+    expect(leanColors(pool("G", "G", "G", "U", "U"))).toBe("UG");
   });
 });
 

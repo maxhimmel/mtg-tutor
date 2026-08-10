@@ -163,7 +163,7 @@ function Outcome({
       <>
         <Title>This is your link.</Title>
         <Body>
-          Send it to somebody. They will draft your exact packs in a pod of their own, and
+          Send it to somebody. They open the same cards you did, in a pod of their own — and
           you will be told when they finish.
         </Body>
         <div className="mt-7 flex flex-wrap gap-3">

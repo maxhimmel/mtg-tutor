@@ -6,7 +6,6 @@ import { Authenticated, Unauthenticated, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { PageShell } from "../components/PageShell";
 import { SetIcon } from "../components/SetIcon";
-import { releaseDate } from "../lib/format";
 
 export default function ChallengeIndex() {
   return (
@@ -92,7 +91,16 @@ function ChallengeList() {
 
   return (
     <>
-      <h1 className="mb-5 font-display text-2xl font-semibold tracking-tight">Challenges</h1>
+      {/* The empty state explains what a challenge is and the populated one used
+          to explain nothing, which is backwards: somebody with rows here is the
+          one being asked to read a column of states. */}
+      <div className="mb-5 flex flex-col gap-1.5">
+        <h1 className="font-display text-2xl font-semibold tracking-tight">Challenges</h1>
+        <p className="max-w-2xl text-sm leading-relaxed text-base-content/60">
+          Every link you have sent or taken up. Both of you open the same cards in pods of
+          your own, and once you have both finished the two drafts go side by side.
+        </p>
+      </div>
 
       <div className="card overflow-x-auto border border-base-300 bg-base-200">
         <table className="table">
@@ -127,8 +135,13 @@ function ChallengeList() {
                         <span className="font-display font-semibold leading-tight">
                           {set?.name ?? row.setCode.toUpperCase()}
                         </span>
+                        {/* The set picker and the review list both name a
+                            draftable thing as CODE · format. This slot held an
+                            unlabelled date instead, which said neither which
+                            format was played nor what the date was of -- and the
+                            rows are newest-first anyway. */}
                         <span className="eyebrow">
-                          {releaseDate(row.createdAt.slice(0, 10)) ?? row.setCode.toUpperCase()}
+                          {row.setCode.toUpperCase()} · {row.format}
                         </span>
                       </span>
                     </span>
