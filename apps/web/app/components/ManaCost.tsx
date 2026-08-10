@@ -81,7 +81,10 @@ export function ManaCost({
   // Prankster's is "{1}{U} // {1}{U}" -- and running them together prints four
   // pips, which reads as a four-mana card rather than two two-mana halves. The
   // divider is printed for the same reason it is printed on the card.
-  const halves = (cost ?? "").split("//").map(parseManaCost).filter((h) => h.length > 0);
+  const halves = (cost ?? "")
+    .split("//")
+    .map(parseManaCost)
+    .filter((h) => h.length > 0);
   if (halves.length === 0) return null;
 
   return (
@@ -95,14 +98,20 @@ export function ManaCost({
           )}
           {symbols.map((symbol, i) => {
             const code = codeFor(symbol);
+            // The pips are printed touching, which reads as one wide shape at a
+            // glance -- {1}{W}{W} and {3}{W} take about the same room and the
+            // difference between them is the whole point. A hair of air between
+            // them is enough to count them, and in em so it stays a hair at the
+            // 2xl the card frames print these at.
+            const gap = i > 0 ? " ml-[0.14em]" : "";
             return code ? (
               <i
                 key={i}
-                className={`ms ms-${code} ms-cost${shadow ? " ms-shadow" : ""}`}
+                className={`ms ms-${code} ms-cost${gap}${shadow ? " ms-shadow" : ""}`}
                 aria-hidden="true"
               />
             ) : (
-              <span key={i} className="font-mono text-xs" aria-hidden="true">
+              <span key={i} className={`font-mono text-xs${gap}`} aria-hidden="true">
                 {symbol}
               </span>
             );
