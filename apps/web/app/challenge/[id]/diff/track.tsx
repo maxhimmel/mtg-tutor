@@ -254,7 +254,23 @@ const Glyph = ({ children }: { children: string }) => (
  * `stateOf` is the rule the track and the braid already draw by, and it does
  * partition: same pack and same card, same pack and not, or not the same pack.
  */
-export function PickSplit({ rows }: { rows: DiffRow[] }) {
+export function PickSplit({
+  rows,
+  orientation = "horizontal",
+}: {
+  rows: DiffRow[];
+  /**
+   * Which way the whole is divided.
+   *
+   * Vertical is not a second chart, it is this one stood up for a rail -- and
+   * the legend goes with it: each entry grows by its own count exactly as its
+   * segment does, so a label sits level with the stretch of rule it names and
+   * the pair reads as one object rather than as a chart and a key. Laid across,
+   * that trick is not available (the labels are wider than most segments), which
+   * is why the horizontal form wraps its legend underneath instead.
+   */
+  orientation?: "horizontal" | "vertical";
+}) {
   if (rows.length === 0) return null;
 
   const counts: Record<DiffState, number> = { agreed: 0, fork: 0, apart: 0 };
@@ -289,6 +305,54 @@ export function PickSplit({ rows }: { rows: DiffRow[] }) {
     },
   ].filter((part) => part.count > 0);
 
+  const spokenAll = `All ${rows.length} picks: ${parts
+    .map((part) => `${part.count} ${part.spoken}`)
+    .join("; ")}.`;
+
+  if (orientation === "vertical") {
+    return (
+      <div className="flex min-h-0 flex-1 gap-3">
+        <div
+          className="flex w-2 shrink-0 flex-col gap-[3px]"
+          role="img"
+          aria-label={spokenAll}
+        >
+          {parts.map((part) => (
+            <span
+              key={part.key}
+              style={{ flexGrow: part.count, flexBasis: 0, minHeight: "0.375rem" }}
+              className={`rounded-full ${part.tone}`}
+            />
+          ))}
+        </div>
+
+        <ul aria-hidden className="flex min-w-0 flex-1 flex-col text-xs text-base-content/60">
+          {parts.map((part) => (
+            <li
+              key={part.key}
+              // The same grow factor as its own segment, so the label is centred
+              // against the stretch of rule it names -- with a floor, because a
+              // single fork in forty-two is a fortieth of the rail and a label
+              // squeezed under its own line height would sit on top of its
+              // neighbour. The bar keeps the exact proportion either way; below
+              // the floor the label is merely NEAR its segment rather than level
+              // with it, which is the right thing to give up.
+              style={{ flexGrow: part.count, flexBasis: 0, minHeight: "1.75rem" }}
+              className="flex min-h-0 items-center"
+            >
+              <span className="leading-snug">
+                <span className="font-semibold tabular-nums text-base-content/80">
+                  {part.count}
+                </span>{" "}
+                {part.label}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2.5">
       {/* One rule, split where the draft splits. Each segment grows by its own
@@ -298,9 +362,7 @@ export function PickSplit({ rows }: { rows: DiffRow[] }) {
       <div
         className="flex h-2 gap-[3px]"
         role="img"
-        aria-label={`All ${rows.length} picks: ${parts
-          .map((part) => `${part.count} ${part.spoken}`)
-          .join("; ")}.`}
+        aria-label={spokenAll}
       >
         {parts.map((part) => (
           <span

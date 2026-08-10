@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AuthLoading,
   Authenticated,
@@ -19,9 +19,11 @@ import { PageNotice, PageShell } from "../../../components/PageShell";
 import { SetIcon } from "../../../components/SetIcon";
 import { diffViewed, forkOpened } from "../../../lib/analytics";
 import { humanError } from "../../../lib/humanError";
+import { useSettings, type DiffLayout } from "../../../lib/useSettings";
 import { Braid } from "./Braid";
 import { Decks } from "./Decks";
 import { Forks } from "./Forks";
+import { LayoutPicker } from "./LayoutPicker";
 import { Shelf } from "./Shelf";
 import { Summary } from "./Summary";
 import { TrackStepper } from "./track";
@@ -46,6 +48,8 @@ export function DiffScreen({ challengeId }: { challengeId: string }) {
 
 function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
   const convex = useConvex();
+  const { settings } = useSettings();
+  const { diffLayout: layout, diffExplain: explain } = settings;
   const diff = useQuery(api.challenges.diff, { challengeId });
   // Its own query on purpose: it is the only part that replays, so a set that
   // has moved costs the braid its weights instead of the screen. Handed the
@@ -109,8 +113,14 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
             : theirsBuilt
               ? "theirs"
               : "neither",
+      layout,
     });
-  }, [diff, challengeId, markSeen]);
+    // `layout` is read once, at the moment the comparison resolves, which is
+    // after SettingsProvider has restored from localStorage on mount -- so this
+    // is the layout the reader actually got rather than the default they passed
+    // through. Switching layouts mid-read does not re-fire: this event counts
+    // readings, and a reader trying both is one reading, not two.
+  }, [diff, challengeId, markSeen, layout]);
 
   /**
    * A name to something renderable, tolerantly.
@@ -160,7 +170,7 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
       scroll: boolean,
     ): void => {
       setAt(pickIndex);
-      if (forkIndices.has(pickIndex)) forkOpened({ challengeId, pickIndex, from });
+      if (forkIndices.has(pickIndex)) forkOpened({ challengeId, pickIndex, from, layout });
 
       const node = shelfRef.current;
       if (!scroll || !node) return;
@@ -177,7 +187,7 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         block: "start",
       });
     },
-    [challengeId, forkIndices],
+    [challengeId, forkIndices, layout],
   );
 
   // Arrow keys step the shelf, with the usual escape hatch for anything a
@@ -211,68 +221,54 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
   // people and one of them was anonymous in every label on it.
   const them = theirName(diff.side, diff.fromName);
 
-  return (
-    <PageShell>
-      <PageHeading
-        icon={<SetIcon uri={diff.iconUri} className="size-6 text-base-content/50" />}
-        title={
-          <>
-            You vs. {them}{" "}
-            <span className="text-base-content/45">
-              {diff.setName ?? diff.setCode.toUpperCase()}
-            </span>
-          </>
-        }
-        controls={
-          <Link href="/challenge" className="link link-hover text-sm text-base-content/60">
-            All challenges →
-          </Link>
-        }
+  /**
+   * The page's parts, built once, arranged four ways.
+   *
+   * Every layout below is a rearrangement of exactly these -- no layout has a
+   * section another one lacks, and none of them draws a thing twice. That is the
+   * whole rule of the experiment: if two layouts differ in what they SAY as well
+   * as where they put it, then whichever wins wins for a reason nobody can name.
+   *
+   * The score has a second FORM rather than a second copy -- a band across the
+   * page or a rail down it -- and both come out of one component with an
+   * orientation, so the numbers and the sentence cannot drift apart between
+   * layouts.
+   */
+  const parts = {
+    summary: <Summary rows={diff.rows} tally={diff.tally} them={them} explain={explain} />,
+    summaryRail: (
+      <Summary
+        rows={diff.rows}
+        tally={diff.tally}
+        them={them}
+        explain={explain}
+        orientation="vertical"
       />
-
-      {/* ONE COLUMN, and the rank comes from the panels themselves rather than
-          from the grid. These two were tried side by side, on the theory that
-          the two things a reader wants in the first four seconds should share
-          the fold -- and the two panels have nothing in common but that. The
-          score is four numbers and a rule, and it is finished; the fork list is
-          however many forks the draft happened to produce. Set in a row they
-          were a short box beside a long one, with the short one's column reading
-          as a hole. Two panels are only a row when they are the same kind of
-          thing.
-
-          So the ranking is what each panel IS: the score opens, then the forks,
-          then the drawing of the whole draft, then the two forties, then the
-          pick-by-pick reference -- ordered by how long each takes to read. Every
-          one of them now spans the page, which is also what let the fork list
-          lay itself out three abreast instead of one row per fork. */}
-      <div className="flex flex-col gap-4">
-        <Summary rows={diff.rows} tally={diff.tally} them={them} />
-
-        <Forks
-          rows={diff.rows}
-          tally={diff.tally}
-          impacts={impactByIndex}
-          impactsUnavailable={impacts === null}
-          them={them}
-          faceOf={faceOf}
-          onOpen={(i) => goTo(i, "hero", true)}
-        />
-      </div>
-
+    ),
+    forks: (
+      <Forks
+        rows={diff.rows}
+        tally={diff.tally}
+        impacts={impactByIndex}
+        impactsUnavailable={impacts === null}
+        them={them}
+        faceOf={faceOf}
+        explain={explain}
+        onOpen={(i) => goTo(i, "hero", true)}
+      />
+    ),
+    braid: (
       <Braid
-        className="mt-4"
         rows={diff.rows}
         tally={diff.tally}
         them={them}
         at={at}
+        explain={explain}
         onSelect={goTo}
       />
-
-      {/* After the picks, because a deck is what the picks were for -- and
-          before the pick-by-pick shelf, which is the reference section rather
-          than part of the argument. */}
+    ),
+    decks: (
       <Decks
-        className="mt-4"
         rows={diff.rows}
         them={them}
         yourDeck={diff.yourDeck}
@@ -280,8 +276,9 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         yourSessionId={diff.yourSessionId}
         faceOf={faceOf}
       />
-
-      <div ref={shelfRef} className="mt-4 scroll-mt-4">
+    ),
+    shelf: (
+      <div ref={shelfRef} className="scroll-mt-4">
         <Shelf
           rows={diff.rows}
           them={them}
@@ -300,6 +297,264 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
           }
         />
       </div>
+    ),
+  };
+
+  return (
+    <PageShell>
+      <PageHeading
+        icon={<SetIcon uri={diff.iconUri} className="size-6 text-base-content/50" />}
+        title={
+          <>
+            You vs. {them}{" "}
+            <span className="text-base-content/45">
+              {diff.setName ?? diff.setCode.toUpperCase()}
+            </span>
+          </>
+        }
+        controls={
+          <span className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <LayoutPicker />
+            <Link href="/challenge" className="link link-hover text-sm text-base-content/60">
+              All challenges →
+            </Link>
+          </span>
+        }
+      />
+
+      <Layout layout={layout} parts={parts} />
     </PageShell>
+  );
+}
+
+type Parts = {
+  summary: ReactNode;
+  summaryRail: ReactNode;
+  forks: ReactNode;
+  braid: ReactNode;
+  decks: ReactNode;
+  shelf: ReactNode;
+};
+
+/**
+ * Two readings of one comparison.
+ *
+ * The screen has one instrument and one verdict, and both of them could be
+ * permanent -- always on screen, never scrolled past -- but the page has two
+ * edges to pin things to and five sections that want the middle.
+ *
+ * - RIBBON spends nothing. Every section full width, in the order they are worth
+ *   reading. It is the page as it shipped, and it stays because a layout that
+ *   beats nothing has not been shown to beat anything.
+ * - CONSOLE spends both. The verdict goes down the left edge as a rail the
+ *   height of the screen; the braid stays horizontal and pins across the top of
+ *   the reading column. Nothing is ever behind you: the score you are arguing
+ *   about and the drawing you are arguing from are both on screen at every
+ *   section.
+ *
+ * TWO MORE WERE TRIED AND ARE NOT HERE. Both stood the braid on end and pinned
+ * it down the left, and the drawing did not survive the rotation -- `Spine.tsx`
+ * is kept, unwired, with what went wrong written on it. What they settled is why
+ * `console` looks the way it does: PERMANENCE was the good idea, the rotation
+ * was not, so the braid is pinned in the orientation it was always drawn in.
+ *
+ * CONSOLE COLLAPSES TO THE RIBBON BELOW `xl`, which is not a fallback so much as
+ * the honest answer: a rail needs a column of its own and a phone has one column
+ * in total. So the rail is hidden at narrow widths and the in-flow copy of the
+ * verdict takes its place -- which is why the score appears twice in the markup
+ * and never twice on screen.
+ */
+function Layout({ layout, parts }: { layout: DiffLayout; parts: Parts }) {
+  if (layout === "ribbon") {
+    return (
+      <div className="flex flex-col gap-4">
+        {parts.summary}
+        {parts.forks}
+        {parts.braid}
+        {parts.decks}
+        {parts.shelf}
+      </div>
+    );
+  }
+
+  return (
+    /* THE ROW HAS TO END WHERE THE PAGE ENDS, and these two classes are how.
+       They read as a trick and are not one.
+
+       A sticky box is constrained to its containing block, which for the rail is
+       this row's content box -- and `PageShell` puts the page's bottom padding
+       on `<main>`, BELOW this row. So the row stops sixty-four pixels short of
+       where the page stops, and at full scroll a rail of the full height of the
+       screen would not fit inside its own container. Something has to give:
+       either the rail is released and slides up off the top of the screen, or it
+       shrinks to fit. Both are the same complaint -- at the very bottom of the
+       page the rail stops being the height of the screen.
+
+       So the container is extended to the page's real bottom instead. The
+       padding goes on the READING COLUMN, because a flex row's content box is
+       as tall as its tallest item and padding on the row itself would sit
+       outside the box sticky actually measures. The negative margin then takes
+       the same sixty-four pixels back off `main`'s own height, so the page is
+       exactly as long as it was and only the row's box has moved. */
+    <div className="-mb-16 flex items-start gap-4">
+      <Rail>{parts.summaryRail}</Rail>
+      <div className="flex min-w-0 flex-1 flex-col gap-4 pb-16">
+        {/* Pinned with the page's own colour behind it and a rule under it, so
+            the sections do not slide out from under a floating box. `-mt-4`
+            against the padding, so its resting position is unchanged and the
+            padding only shows up as clearance once it catches. */}
+        <div className="z-20 xl:sticky xl:top-0 xl:-mt-4 xl:border-b xl:border-base-300 xl:bg-base-100 xl:pb-3 xl:pt-4">
+          {parts.braid}
+        </div>
+        {/* The widths with no rail to put it in. It sits under the braid rather
+            than over it, because at these widths the braid is not pinned either
+            and the column is simply the ribbon with its instrument first. */}
+        <div className="xl:hidden">{parts.summary}</div>
+        {parts.forks}
+        {parts.decks}
+        {parts.shelf}
+      </div>
+    </div>
+  );
+}
+
+// The rail's clearance: from the top of the viewport once it has pinned, and
+// from the bottom at every moment. One figure, because `top-4` below is the
+// same 1rem and the two must agree or the rail is off-centre in its own gutter.
+const RAIL_GAP = 16;
+const MIN_RAIL_H = 320;
+
+/**
+ * A section that stays, and reaches the bottom of the screen while it does.
+ *
+ * THE HEIGHT IS NOT A HEIGHT, IT IS A BOTTOM EDGE, and that is the resolution of
+ * a contradiction worth writing down because it is easy to feel and hard to
+ * name.
+ *
+ * A sticky box has two lives. In the first it is part of the document: its top
+ * is wherever the page put it, which here is under the masthead and the page's
+ * own heading -- about a hundred and fifty pixels down. In the second it is
+ * pinned, and its top is sixteen pixels down. "Always exactly the height of the
+ * screen" is only well defined in the second life. Given as a fixed
+ * `100dvh - 2rem` it is right once pinned and a hundred and fifty pixels too
+ * tall before that, which is precisely the overflow you see at the top of the
+ * page: the rail runs off the bottom edge and the split rule is cut in half.
+ *
+ * So the constant is the BOTTOM, not the height. The rail always ends one
+ * gutter above the bottom of the screen; its top is wherever the document
+ * currently has it, and the box simply grows upward as that top rises, until it
+ * pins and stops. Nothing jumps, nothing is ever cut off, and "full height"
+ * becomes true at every scroll position rather than at one of them.
+ *
+ * That needs measuring, because CSS has no way to ask how far a box currently is
+ * from the top of the viewport -- `position: sticky` changes where a box is
+ * painted and never what it measures. Hence the effect below. It is the whole
+ * reason this component is not four lines of Tailwind.
+ *
+ * AND THE MEASUREMENT HAS TO BE CLAMPED AT BOTH ENDS, which the first version
+ * was not, and which cost the rail its top edge at the foot of the page. Both
+ * clamps are written up where they are applied; the short of it is that a rail
+ * whose height is read off its own position is a feedback loop unless it is
+ * forbidden from ever growing past the screen.
+ *
+ * The width is the verdict's, not the page's: fifteen rem is what holds "Average
+ * pick score out of 100, across all 42 picks" in four lines rather than seven,
+ * and a rail narrower than its own explanatory sentence is a rail that spends
+ * its height on hyphenation.
+ */
+function Rail({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const column = node.parentElement;
+      // Below `xl` the rail is display:none, where every box reports a top of
+      // zero -- so measuring there would claim the whole viewport for a rail
+      // that is not on screen, and do it on every scroll of a phone.
+      if (!column || node.offsetParent === null) return;
+
+      /**
+       * NEVER ABOVE THE PIN, and this clamp is the whole difference between a
+       * rail and a runaway.
+       *
+       * A sticky box is released at the end of its containing block: the rail's
+       * top goes above its pinned sixteen pixels and then negative as the last
+       * of the page arrives. Fed to the subtraction below, a negative top ADDS
+       * to the height -- and a taller box meets the container's bottom sooner,
+       * which drives the top further up, which makes it taller again. It runs
+       * away in about three frames.
+       *
+       * Clamped, the arithmetic can never ask for more than the pinned height,
+       * so the loop has no way to start.
+       */
+      const top = Math.max(RAIL_GAP, node.getBoundingClientRect().top);
+
+      // What the screen can give, and what is left of the row -- the rail takes
+      // the smaller.
+      //
+      // The second should never bind now that the row reaches the foot of the
+      // page (see the layout above), and it is kept as the thing that makes that
+      // true rather than assumed: a rail is only ever released from its sticky
+      // position because it did not fit, so a rail that always fits is never
+      // released. If the page's bottom padding changes and the row stops
+      // reaching the end again, this shrinks the rail by the difference instead
+      // of letting it slide up off the top of the screen -- the quieter of the
+      // two failures, and the one that still shows every number on it.
+      const toScreenFoot = window.innerHeight - top - RAIL_GAP;
+      const toColumnFoot = column.getBoundingClientRect().bottom - top;
+
+      // Floored, because the arithmetic can go to nothing on a viewport short
+      // enough that the heading alone fills it -- and a rail that computes its
+      // way to zero height has disappeared, which is a worse failure than one
+      // that runs a little past the bottom edge of a window nobody has.
+      setHeight(Math.max(MIN_RAIL_H, Math.min(toScreenFoot, toColumnFoot)));
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    // The rail's top also moves when something ABOVE it changes height without
+    // the window ever resizing -- the heading's controls wrapping, a webfont
+    // landing, the fork list arriving from its own query. Watching the body
+    // catches all of them as one listener.
+    //
+    // It cannot feed back, and the reason is the clamp rather than anything
+    // about the observer: the rail can never be taller than the viewport, the
+    // reading column beside it is five panels and always taller than that, so
+    // the row's height -- and therefore the document's -- is never a function of
+    // the rail's. Remove the clamp and this observer becomes the second half of
+    // a loop.
+    const resized = new ResizeObserver(schedule);
+    resized.observe(document.body);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      resized.disconnect();
+    };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="sticky top-4 hidden min-h-0 w-60 shrink-0 xl:block"
+      // The pinned height until the first measurement lands, which is what the
+      // server renders and what a reader sees for one frame. Right for the state
+      // the rail spends nearly all of its time in, and too tall only at the very
+      // top of the page -- the same failure as before, lasting one frame.
+      style={{ height: height ?? "calc(100dvh - 2rem)" }}
+    >
+      {children}
+    </div>
   );
 }

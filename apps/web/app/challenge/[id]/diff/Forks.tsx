@@ -5,6 +5,7 @@ import type { DiffRow, DiffTally, ForkImpact } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
 import { ScrollBox } from "../../../components/ScrollBox";
 import { gradeColor } from "../../../lib/format";
+import { Explain, type ExplainMode } from "./Explain";
 import { FaceName, type Face } from "./faces";
 import { Dot } from "./sides";
 
@@ -60,6 +61,7 @@ export function Forks({
   them,
   faceOf,
   onOpen,
+  explain,
   className,
 }: {
   rows: DiffRow[];
@@ -69,6 +71,7 @@ export function Forks({
   them: string;
   faceOf: (name: string, colors: readonly string[]) => Face;
   onOpen: (pickIndex: number) => void;
+  explain: ExplainMode;
   className?: string;
 }) {
   const [sort, setSort] = useState<SortKey>("order");
@@ -116,7 +119,7 @@ export function Forks({
         </p>
         {/* "More" would be a lie with no forks above it to be more than. */}
         {apartAndDiffered > 0 && tally.comparable > 0 && (
-          <Apart count={apartAndDiffered} them={them} />
+          <Apart count={apartAndDiffered} them={them} explain={explain} />
         )}
       </Panel>
     );
@@ -170,6 +173,12 @@ export function Forks({
         </ul>
       </ScrollBox>
 
+      {/* The caveat travels with the number, and only when a number was printed.
+          It used to sit under every fork list including the ones where nothing
+          reached anything, explaining the assumptions behind a row of empty
+          bars. A failed replay is NOT one of these: it is the reason a column
+          the reader can see is missing, so it stays a paragraph whatever the
+          page has been told about notes. */}
       {impactsUnavailable ? (
         <p className="text-xs leading-relaxed text-base-content/60">
           Measuring what a fork changed means dealing this pod again with that one pick
@@ -178,20 +187,16 @@ export function Forks({
           pick saw at the time and never replays.
         </p>
       ) : (
-        // The caveat travels with the number, and only when a number was
-        // printed. It used to sit under every fork list including the ones where
-        // nothing reached anything, explaining the assumptions behind a row of
-        // empty bars.
         anyReached && (
-          <p className="text-xs leading-relaxed text-base-content/45">
+          <Explain mode={explain} subject="what a fork changed" align="start" className="self-start">
             &ldquo;Changed N of your later packs&rdquo; is measured by dealing this pod again
             with that one pick swapped and nothing else changed. It assumes you would have
             gone on drafting the same way.
-          </p>
+          </Explain>
         )
       )}
 
-      {apartAndDiffered > 0 && <Apart count={apartAndDiffered} them={them} />}
+      {apartAndDiffered > 0 && <Apart count={apartAndDiffered} them={them} explain={explain} />}
     </Panel>
   );
 }
@@ -260,13 +265,38 @@ function Sort({
  * accounting; the explanation belongs on the shelf, which can show the pack the
  * card is missing from.
  */
-function Apart({ count, them }: { count: number; them: string }) {
+function Apart({
+  count,
+  them,
+  explain,
+}: {
+  count: number;
+  them: string;
+  explain: ExplainMode;
+}) {
+  // THE COUNT NEVER GOES BEHIND THE MARK, whatever the page has been told. It is
+  // the accounting -- the picks this panel is not showing you -- and a list that
+  // silently omits rows unless you hover something is a list that is wrong. Only
+  // the reason they are omitted moves.
+  const why = (
+    <>
+      {them} took {count === 1 ? "a card" : "cards"} you were never offered, so there is no
+      call of yours to set against {count === 1 ? "it" : "them"}. Those are the shaded
+      stretches on the braid.
+    </>
+  );
+
   return (
-    <p className="border-t border-base-300 pt-3 text-sm leading-relaxed text-base-content/60">
-      {count} more pick{count === 1 ? "" : "s"} went differently off packs that had already
-      drifted apart — {them} took {count === 1 ? "a card" : "cards"} you were never offered,
-      so there is no call of yours to set against {count === 1 ? "it" : "them"}. Those are
-      the shaded stretches on the braid below.
+    <p className="flex flex-wrap items-center gap-x-2 border-t border-base-300 pt-3 text-sm leading-relaxed text-base-content/60">
+      <span>
+        {count} more pick{count === 1 ? "" : "s"} went differently off packs that had already
+        drifted apart{explain === "inline" ? <> — {why}</> : "."}
+      </span>
+      {explain === "hover" && (
+        <Explain mode="hover" subject="picks off packs that had drifted" align="start">
+          {why}
+        </Explain>
+      )}
     </p>
   );
 }
