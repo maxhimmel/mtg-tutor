@@ -71,16 +71,6 @@ export const DIFF_LAYOUTS: readonly { id: DiffLayout; label: string; blurb: stri
   },
 ];
 
-/**
- * Where the screen's four passages of explanation live.
- *
- * Nothing is ever cut either way -- see `Explain`. This decides whether a
- * caveat is a paragraph under the thing it qualifies or a question mark beside
- * it, which is most of the difference between a page that reads as prose and one
- * that reads as instruments.
- */
-export type DiffExplain = "inline" | "hover";
-
 export interface Settings {
   // Whether hovering a card mid-draft shows what 17Lands knows about it. Off is
   // drafting blind: the card is just a card, and the numbers wait for the
@@ -99,12 +89,8 @@ export interface Settings {
   // plate per set, scanned by symbol. The list is for comparing them against
   // each other, which is a different job and is why it sorts.
   setView: SetView;
-  // Which shape the challenge comparison is read in, and where its explanations
-  // live. Two settings rather than one because they are independent: the pinned
-  // layouts are what make the prose expensive, but a reader who has learnt the
-  // page wants it gone from the stacked one too.
+  // Which shape the challenge comparison is read in.
   diffLayout: DiffLayout;
-  diffExplain: DiffExplain;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -118,10 +104,6 @@ export const DEFAULT_SETTINGS: Settings = {
   // The page as it shipped, so nobody wakes up in a layout they did not ask for
   // and every reading of the pinned ones is a reading somebody chose.
   diffLayout: "ribbon",
-  // Inline, for the same reason: the passages are how the screen currently
-  // explains itself, and hiding them by default would change what a first-time
-  // reader is told rather than only where they are told it.
-  diffExplain: "inline",
 };
 
 export const SETTINGS_KEY = "mtg-tutor:settings";

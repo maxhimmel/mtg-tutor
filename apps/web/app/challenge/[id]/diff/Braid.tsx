@@ -16,7 +16,7 @@ import {
   spoken,
   titleOf,
 } from "./braidGeometry";
-import { Explain, type ExplainMode } from "./Explain";
+import { Explain } from "./Explain";
 import { DiffTrack } from "./track";
 
 /**
@@ -96,7 +96,7 @@ import { DiffTrack } from "./track";
  * colour -- which it does, because the chip showed what a side finished on and
  * the rope starts undecided grey -- the legend is actively misleading. Where
  * each of you arrived is legible at the other end of its own rope, and the decks
- * panel below says it in words.
+ * panel says it in words.
  *
  * THE PACKS ARE MEASURED, NOT BOXED. Three dark rectangles with a five-unit gap
  * between them is a weak delineation at any width and a nearly invisible one in
@@ -181,7 +181,6 @@ export function Braid({
   them,
   at,
   onSelect,
-  explain,
   className,
 }: {
   rows: DiffRow[];
@@ -193,7 +192,6 @@ export function Braid({
   // them is the draft being stepped through. `scroll` travels with it because
   // only this panel knows whether a hand or a keyboard moved the selection.
   onSelect: (pickIndex: number, from: "braid" | "track", scroll: boolean) => void;
-  explain: ExplainMode;
   className?: string;
 }) {
   /**
@@ -333,11 +331,9 @@ export function Braid({
           <span className="hidden text-xs text-base-content/50 sm:inline">
             each strand is the two colours that side was drafting most
           </span>
-          {explain === "hover" && (
-            <Explain mode="hover" subject="how to read the braid" align="end">
-              <BraidCaption rows={rows} tally={tally} causingFork={causingFork} />
-            </Explain>
-          )}
+          <Explain subject="how to read the braid" align="end">
+            <BraidCaption rows={rows} tally={tally} causingFork={causingFork} />
+          </Explain>
         </span>
       }
       // Tight, because three of the four things in this body are one object:
@@ -585,7 +581,7 @@ export function Braid({
               them={them}
               at={here}
               onAt={(i) => onSelect(i, "track", byPointer.current)}
-              label="Every pick in both drafts, in order. Select one to read it pick by pick below."
+              label="Every pick in both drafts, in order. Select one opens it in the pick-by-pick panel."
               packLabels={false}
             />
           </div>
@@ -598,23 +594,11 @@ export function Braid({
         <PackRuler wells={wells} />
       </div>
 
-      {/* One caption for the whole instrument, which is what it can be now that
-          the drift is drawn in one place instead of three. The summary used to
-          carry a warning-ruled paragraph explaining that the pods come apart and
-          why, ten inches above the panel that SHADES the stretches where they
-          did -- so the reader met the explanation before there was anything to
-          explain and had forgotten it by the time there was. The rule is gone
-          with the paragraph: emphasis in warning ink is what the shading is
-          already doing, right above this line.
-
-          Written once, over in `Spine`, because the rail draws the same
-          instrument and has to explain it in the same words -- one hover away
-          rather than one paragraph down, but the same words. */}
-      {explain === "inline" && (
-        <p className="mt-1.5 border-t border-base-300 pt-2.5 text-sm leading-relaxed text-base-content/65">
-          <BraidCaption rows={rows} tally={tally} causingFork={causingFork} />
-        </p>
-      )}
+      {/* THE CAPTION IS NOT DRAWN HERE ANY MORE. It was four sentences under the
+          chart, and the chart is the thing this panel is for -- so on every
+          reading after the first it was a paragraph standing between an
+          instrument and the section below it. It now hangs off the mark on the
+          header rule, in the same words, written once over in `Spine`. */}
     </Panel>
   );
 }

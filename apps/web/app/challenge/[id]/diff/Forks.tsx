@@ -5,7 +5,7 @@ import type { DiffRow, DiffTally, ForkImpact } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
 import { ScrollBox } from "../../../components/ScrollBox";
 import { gradeColor } from "../../../lib/format";
-import { Explain, type ExplainMode } from "./Explain";
+import { Explain } from "./Explain";
 import { FaceName, type Face } from "./faces";
 import { Dot } from "./sides";
 
@@ -30,8 +30,8 @@ import { Dot } from "./sides";
  * ten forks came to forty card images, and none of them could be compared with
  * any other, because a grid of faces has no axis to compare along. The art was
  * also never the scarce thing here: both of these cards are one click away in
- * the shelf below, at size, in the whole pack they came out of, which is the
- * only place the choice can actually be read. So a fork is a few lines -- where
+ * the pick-by-pick panel, at size, in the whole pack they came out of, which is
+ * the only place the choice can actually be read. So a fork is a few lines -- where
  * it happened, what each of you reached for, how the two graded, and what it
  * went on to change -- and ten of them can be run down with an eye. The full
  * card is still one hover away on either name.
@@ -61,7 +61,6 @@ export function Forks({
   them,
   faceOf,
   onOpen,
-  explain,
   className,
 }: {
   rows: DiffRow[];
@@ -71,7 +70,6 @@ export function Forks({
   them: string;
   faceOf: (name: string, colors: readonly string[]) => Face;
   onOpen: (pickIndex: number) => void;
-  explain: ExplainMode;
   className?: string;
 }) {
   const [sort, setSort] = useState<SortKey>("order");
@@ -119,28 +117,59 @@ export function Forks({
         </p>
         {/* "More" would be a lie with no forks above it to be more than. */}
         {apartAndDiffered > 0 && tally.comparable > 0 && (
-          <Apart count={apartAndDiffered} them={them} explain={explain} />
+          <Apart count={apartAndDiffered} them={them} />
         )}
       </Panel>
     );
   }
+
+  // What the reach number was measured by.
+  const impactNote = (
+    <>
+      &ldquo;Changed N of your later packs&rdquo; is measured by dealing this pod again with
+      that one pick swapped and nothing else changed. It assumes you would have gone on
+      drafting the same way.
+    </>
+  );
+  // Only where a number was actually printed. A failed replay is a different
+  // fact and gets its own paragraph below, because it explains a column the
+  // reader can see is missing.
+  const noteImpact = anyReached && !impactsUnavailable;
 
   return (
     <Panel
       title="Where you chose differently"
       className={className}
       aside={
-        forkRows.length > 1 && (
-          <Sort
-            value={sort}
-            onChange={setSort}
-            // Offered only where the quantity exists. Sorting by what each fork
-            // changed, on a draft where no fork changed anything, is a control
-            // that does nothing when pressed -- and most drafts are that draft,
-            // because your own pick cannot reach your own packs for eight picks
-            // and the card you would have taken is usually gone by then.
-            changed={anyReached}
-          />
+        (forkRows.length > 1 || noteImpact) && (
+          <span className="flex items-center gap-2.5">
+            {forkRows.length > 1 && (
+              <Sort
+                value={sort}
+                onChange={setSort}
+                // Offered only where the quantity exists. Sorting by what each
+                // fork changed, on a draft where no fork changed anything, is a
+                // control that does nothing when pressed -- and most drafts are
+                // that draft, because your own pick cannot reach your own packs
+                // for eight picks and the card you would have taken is usually
+                // gone by then.
+                changed={anyReached}
+              />
+            )}
+            {/* ON THE HEADER RULE, WHICH IS WHERE THE MARK BELONGS AND THE
+                PARAGRAPH DOES NOT. A footnote sits under the thing it qualifies
+                because that is the only place a reader will meet it in order. A
+                question mark is the opposite: it is looked for, not met, and
+                the place a reader looks for what a panel means is the rule with
+                the panel's name on it -- next to the control that is already
+                there. Under a scroll box it was a mark you had to scroll past
+                fifteen forks to find. */}
+            {noteImpact && (
+              <Explain subject="what a fork changed" align="end">
+                {impactNote}
+              </Explain>
+            )}
+          </span>
         )
       }
       bodyClassName="gap-3"
@@ -173,30 +202,19 @@ export function Forks({
         </ul>
       </ScrollBox>
 
-      {/* The caveat travels with the number, and only when a number was printed.
-          It used to sit under every fork list including the ones where nothing
-          reached anything, explaining the assumptions behind a row of empty
-          bars. A failed replay is NOT one of these: it is the reason a column
-          the reader can see is missing, so it stays a paragraph whatever the
-          page has been told about notes. */}
-      {impactsUnavailable ? (
+      {/* A failed replay stays a paragraph whatever the page has been told about
+          notes: it is not a caveat on a number, it is the reason a column the
+          reader can see is missing. */}
+      {impactsUnavailable && (
         <p className="text-xs leading-relaxed text-base-content/60">
           Measuring what a fork changed means dealing this pod again with that one pick
           swapped, and this set has been re-ingested since — so the packs it would deal now
           are not the packs you drafted. Everything above is unaffected: it reads what each
           pick saw at the time and never replays.
         </p>
-      ) : (
-        anyReached && (
-          <Explain mode={explain} subject="what a fork changed" align="start" className="self-start">
-            &ldquo;Changed N of your later packs&rdquo; is measured by dealing this pod again
-            with that one pick swapped and nothing else changed. It assumes you would have
-            gone on drafting the same way.
-          </Explain>
-        )
       )}
 
-      {apartAndDiffered > 0 && <Apart count={apartAndDiffered} them={them} explain={explain} />}
+      {apartAndDiffered > 0 && <Apart count={apartAndDiffered} them={them} />}
     </Panel>
   );
 }
@@ -265,19 +283,11 @@ function Sort({
  * accounting; the explanation belongs on the shelf, which can show the pack the
  * card is missing from.
  */
-function Apart({
-  count,
-  them,
-  explain,
-}: {
-  count: number;
-  them: string;
-  explain: ExplainMode;
-}) {
-  // THE COUNT NEVER GOES BEHIND THE MARK, whatever the page has been told. It is
-  // the accounting -- the picks this panel is not showing you -- and a list that
-  // silently omits rows unless you hover something is a list that is wrong. Only
-  // the reason they are omitted moves.
+function Apart({ count, them }: { count: number; them: string }) {
+  // THE COUNT NEVER GOES BEHIND THE MARK. It is the accounting -- the picks this
+  // panel is not showing you -- and a list that silently omits rows unless you
+  // hover something is a list that is wrong. Only the reason they are omitted
+  // is worth a mark.
   const why = (
     <>
       {them} took {count === 1 ? "a card" : "cards"} you were never offered, so there is no
@@ -290,13 +300,11 @@ function Apart({
     <p className="flex flex-wrap items-center gap-x-2 border-t border-base-300 pt-3 text-sm leading-relaxed text-base-content/60">
       <span>
         {count} more pick{count === 1 ? "" : "s"} went differently off packs that had already
-        drifted apart{explain === "inline" ? <> — {why}</> : "."}
+        drifted apart.
       </span>
-      {explain === "hover" && (
-        <Explain mode="hover" subject="picks off packs that had drifted" align="start">
-          {why}
-        </Explain>
-      )}
+      <Explain subject="picks off packs that had drifted" align="start">
+        {why}
+      </Explain>
     </p>
   );
 }

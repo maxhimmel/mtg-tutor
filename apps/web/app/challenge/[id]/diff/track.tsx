@@ -63,16 +63,24 @@ export function DiffTrack({
   them,
   at,
   onAt,
-  label = "Every pick in both drafts, in order. Select one to read it below.",
+  label = "Every pick in both drafts, in order. Select one opens it in the pick-by-pick panel.",
   packLabels = true,
 }: {
   rows: DiffRow[];
   them: string;
   at: number;
   onAt: (index: number) => void;
-  // Two of these are drawn on the page now, and where the panel they drive sits
-  // is the only thing that differs between them -- which is exactly the part a
-  // screen reader has no other way to know.
+  // Two of these are drawn on the page, and which panel each one drives is the
+  // only thing that differs between them -- exactly the part a screen reader
+  // has no other way to know.
+  //
+  // IT NAMES THE PANEL AND NEVER A DIRECTION. These said "read it below" and
+  // "read it above", which was true of one arrangement of the sections and was
+  // quietly false the first time two of them traded places -- twice now. A
+  // label that encodes the page's running order has to be re-checked every time
+  // that order is touched, by somebody who has no reason to think of it, and it
+  // is wrong in the meantime for the one reader who cannot see the layout and
+  // so has to take it on trust. A panel's NAME survives being moved.
   label?: string;
   /**
    * Whether the track names its own packs and sits them in wells.
@@ -104,10 +112,11 @@ export function DiffTrack({
  * it a stepper.
  *
  * The pick-by-pick panel is the one thing on this screen driven entirely from
- * somewhere else: the fork list and the braid's own track both sit above it, and
- * by the time you have read one pack of fifteen cards every one of them is off
- * the top of the window. Going to the next pick meant scrolling back up to find
- * a control, and that is where a reader stops stepping.
+ * somewhere else: the fork list and the braid's own track are both in other
+ * sections, and by the time you have read one pack of fifteen cards neither is
+ * on screen. Going to the next pick meant scrolling off to find a control, and
+ * that is where a reader stops stepping. Which way you have to scroll depends on
+ * an order that has changed twice; that there is nothing to hand does not.
  *
  * Drawn as the track and not as some new widget, because a reader who learnt the
  * ticks at the top of the page should not have to learn a second thing at the
@@ -172,7 +181,7 @@ export function TrackStepper({
             them={them}
             at={here}
             onAt={onAt}
-            label="Every pick in both drafts, in order. Select one to read it above."
+            label="Every pick in both drafts, in order. Select one to read it in this panel."
           />
         </div>
         <Step way="Next" glyph="→" trailing to={rows[here + 1]} onClick={() => onAt(here + 1)} />
@@ -243,8 +252,8 @@ const Glyph = ({ children }: { children: string }) => (
  * comparison.
  *
  * It is the page's legend as well, and it is placed first for that reason: the
- * three tones are learnt here, once, and then the braid and the track below
- * spend them without explaining themselves again.
+ * three tones are learnt here, once, and then the braid and the track spend them
+ * without explaining themselves again.
  *
  * COUNTED FROM `stateOf`, NOT FROM THE TALLY, and that is a correction rather
  * than a shortcut. `tally.agreed` is every row where the two of you took the

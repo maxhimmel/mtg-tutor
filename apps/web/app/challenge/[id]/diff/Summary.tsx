@@ -2,7 +2,7 @@
 
 import type { DiffRow, DiffTally } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
-import { Explain, type ExplainMode } from "./Explain";
+import { Explain } from "./Explain";
 import { Who } from "./sides";
 import { PickSplit } from "./track";
 
@@ -50,14 +50,12 @@ export function Summary({
   rows,
   tally,
   them,
-  explain,
   orientation = "horizontal",
   className,
 }: {
   rows: DiffRow[];
   tally: DiffTally;
   them: string;
-  explain: ExplainMode;
   orientation?: "horizontal" | "vertical";
   className?: string;
 }) {
@@ -87,12 +85,12 @@ export function Summary({
         title="The short version"
         className={`flex h-full flex-col ${className ?? ""}`}
         bodyClassName="min-h-0 flex-1 gap-5"
+        // The rail is the shape where this sentence costs something: four
+        // lines out of a column that has to hold the proportion as well.
         aside={
-          explain === "hover" && (
-            <Explain mode="hover" subject="the score" align="end">
-              {basis}
-            </Explain>
-          )
+          <Explain subject="the score" align="end">
+            {basis}
+          </Explain>
         }
       >
         {/* EXPLICITLY UNGROWABLE, both of them, and the reason is a rule nobody
@@ -125,9 +123,6 @@ export function Summary({
         <div className="flex shrink-0 flex-col gap-3 border-b border-base-300 pb-4">
           <Score mine label="You" value={tally.yourAverage} />
           <Score label={them} value={tally.theirAverage} />
-          {explain === "inline" && (
-            <span className="text-xs leading-relaxed text-base-content/50">{basis}</span>
-          )}
         </div>
 
         <PickSplit rows={rows} orientation="vertical" />
@@ -144,22 +139,22 @@ export function Summary({
       <div className="flex flex-wrap items-end gap-x-8 gap-y-3 border-b border-base-300 pb-4">
         <Score mine label="You" value={tally.yourAverage} />
         <Score label={them} value={tally.theirAverage} />
-        {/* Directly beside the numbers, not pushed to the far edge. It was set
+        {/* THE SENTENCE, not the mark, which is the one place on this screen
+            the prose stayed put. A mark earns its place where a passage costs
+            something -- four lines out of the rail's scarce column, a caption
+            under an instrument somebody has already learnt to read. Across the
+            whole width of the page this sentence costs nothing: it sits in space
+            that was empty, beside the two numbers it is about, and hiding it
+            would be spending a hover to reclaim room nobody wanted.
+
+            Directly beside the numbers, not pushed to the far edge. It was set
             with `ml-auto` back when this panel was a half-width column, where
             the two ends of a row are a hand's width apart; across the whole page
             that put the sentence explaining the numbers a metre away from the
             numbers, with nothing in between. */}
-        {explain === "inline" ? (
-          <span className="max-w-[22rem] text-xs leading-relaxed text-base-content/50">
-            {basis}
-          </span>
-        ) : (
-          <span className="flex items-center pb-1">
-            <Explain mode="hover" subject="the score" align="start">
-              {basis}
-            </Explain>
-          </span>
-        )}
+        <span className="max-w-[22rem] text-xs leading-relaxed text-base-content/50">
+          {basis}
+        </span>
       </div>
 
       <PickSplit rows={rows} />

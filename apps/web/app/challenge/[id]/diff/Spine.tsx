@@ -16,7 +16,7 @@ import {
   titleOf,
 } from "./braidGeometry";
 import { BraidCaption } from "./Braid";
-import { Explain, type ExplainMode } from "./Explain";
+import { Explain } from "./Explain";
 import { Dot } from "./sides";
 import { stateOf } from "./track";
 
@@ -146,7 +146,6 @@ export function Spine({
   them,
   at,
   onSelect,
-  explain,
   className,
 }: {
   rows: DiffRow[];
@@ -154,7 +153,6 @@ export function Spine({
   them: string;
   at: number;
   onSelect: (pickIndex: number, from: "braid", scroll: boolean) => void;
-  explain: ExplainMode;
   className?: string;
 }) {
   // A click has to take you to what you clicked. An arrow key must not: the rail
@@ -251,7 +249,7 @@ export function Spine({
           names live, because this is the end the ropes come in at. */}
       <div className="flex items-center justify-between gap-2 border-b border-base-300 px-3 py-2.5">
         <h2 className="eyebrow truncate">The draft</h2>
-        <Explain mode={explain} subject="how to read the braid" align="end">
+        <Explain subject="how to read the braid" align="end">
           <BraidCaption rows={rows} tally={tally} causingFork={causingFork} />
         </Explain>
       </div>
