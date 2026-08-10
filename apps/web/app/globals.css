@@ -306,6 +306,112 @@ html {
   @apply rounded-box border border-base-content/20 bg-base-200 shadow-2xl;
 }
 
+/* A region that scrolls inside a page that already scrolls.
+
+   The app had quietly acquired three of these before any of them was designed
+   -- the draft board's maindeck and sideboard lists, and the comparison's fork
+   list -- and every one was a `max-h-*` with `overflow-y-auto` beside it and
+   nothing else. On macOS, where the system default is to show scroll bars only
+   while scrolling, that is a box with no scrollbar, no edge and no way whatever
+   to know that half of what is in it is below the fold. The content just stops,
+   and a reader has no reason to think it did not simply end.
+
+   So the anatomy is fixed here, and it says the same thing three ways, because
+   no one of the three reaches every reader.
+
+   A SCROLLBAR THAT IS ALWAYS DRAWN. Setting `scrollbar-color` is what moves a
+   Chromium or Safari box off overlay scrollbars and onto classic ones: they
+   reserve their own gutter and are painted whether or not anything is moving.
+   It is also the only one of the three that says how much more there is and
+   whereabouts in it you are.
+
+   AN EDGE, so the box reads as a window onto a list rather than as the end of
+   one. Drawn by the caller (see ScrollBox) and tinted with base-content rather
+   than base-300, for the reason popup-surface gives: base-300 against base-200
+   is nearly invisible in this theme.
+
+   AND THE CONTENT FADING WHERE IT PASSES UNDER THAT EDGE, which is the one a
+   reader takes in without having looked at anything. A fade has to be honest or
+   it is worse than the problem: a permanent one at the foot of a box you have
+   already scrolled to the bottom of says there is more when there is not. So it
+   is cut from the scroll position itself -- a scroll-progress timeline animating
+   the two lengths the mask is built out of, growing the top fade over the first
+   inch of travel and retiring the bottom one over the last. No listener, no
+   state, and nothing re-rendered while a thumb is moving.
+
+   THE MASK IS DECLARED INSIDE @supports AND NOWHERE ELSE, which is the part to
+   keep. Where scroll timelines are missing there is no mask at all, so the two
+   lengths stay at the 0 they are registered with and the box is simply unfaded
+   -- it still has its scrollbar and its edge. The failure mode of a fade that
+   cannot be driven must never be content that cannot be seen. */
+@property --scroll-fade-top {
+  syntax: "<length>";
+  initial-value: 0px;
+  inherits: false;
+}
+
+@property --scroll-fade-bottom {
+  syntax: "<length>";
+  initial-value: 0px;
+  inherits: false;
+}
+
+/* Each animates one end and leaves the other alone, so the two ends can be
+   driven over different stretches of the same scroll by `animation-range`.
+   The missing half of each pair is the registered initial value. */
+@keyframes scroll-fade-in {
+  to {
+    --scroll-fade-top: var(--scroll-fade);
+  }
+}
+
+@keyframes scroll-fade-out {
+  from {
+    --scroll-fade-bottom: var(--scroll-fade);
+  }
+}
+
+@utility scroll-box {
+  --scroll-fade: 1.75rem;
+  overflow-y: auto;
+
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-base-content) 35%, transparent)
+    color-mix(in oklab, var(--color-base-content) 8%, transparent);
+
+  /* Safari before 18.2, which has the pseudo-elements and not the properties.
+     Chromium drops these the moment `scrollbar-color` is set, so the two
+     descriptions can never both apply and never have to agree. */
+  &::-webkit-scrollbar {
+    width: 0.5rem;
+  }
+
+  &::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-base-content) 35%, transparent);
+  }
+
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--scroll-fade-top),
+      #000 calc(100% - var(--scroll-fade-bottom)),
+      transparent 100%
+    );
+    animation:
+      scroll-fade-in linear both,
+      scroll-fade-out linear both;
+    animation-timeline: scroll(self block), scroll(self block);
+    animation-range: 0 var(--scroll-fade), calc(100% - var(--scroll-fade)) 100%;
+  }
+}
+
 /* The one-line label above every panel and section. Small, wide-tracked, and
    quiet -- it names the region without competing with what is inside it. */
 @utility eyebrow {
