@@ -13,6 +13,7 @@ export function Panel({
   children,
   className,
   bodyClassName,
+  footer,
 }: {
   title?: string;
   // Sits opposite the title on the header rule: counts, badges, a control.
@@ -20,6 +21,12 @@ export function Panel({
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
+  // The header rule, mirrored: a control that belongs to the panel rather than
+  // to the page beneath it. The comparison's pick stepper is what asked for it
+  // -- a transport floating loose under a bordered panel reads as something the
+  // page forgot to finish, and putting it inside the box says the true thing,
+  // which is that it drives THIS panel and nothing else on the screen.
+  footer?: ReactNode;
 }) {
   return (
     <section className={`card border border-base-300 bg-base-200 ${className ?? ""}`}>
@@ -30,6 +37,13 @@ export function Panel({
         </div>
       )}
       <div className={`card-body gap-2 p-4 ${bodyClassName ?? ""}`}>{children}</div>
+      {footer != null && (
+        // A rule and nothing else, exactly as the header is. A shade was tried
+        // and is wrong twice over: it needs the panel's own bottom radius
+        // restated on it to keep the corners, and anything drawn on base-100
+        // inside a footer -- the track's pack wells are -- goes invisible.
+        <div className="border-t border-base-300 px-4 py-3">{footer}</div>
+      )}
     </section>
   );
 }
