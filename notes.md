@@ -331,6 +331,11 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
       utilize the ai-sdk/agents/contexts/etc at runtime -- the last thing I'd want is
       false responses while using a shell/terminal + claude.
 
+12. New app title:
+
+- Title: P1P1
+- Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
