@@ -12,10 +12,25 @@ import type { ReactNode } from "react";
  * The anatomy is `scroll-box` in globals.css, which is where the reasoning for
  * each part of it lives: a scrollbar that is always drawn, and the content
  * fading out where it runs under the edge, honestly, off the scroll position
- * itself. What is here is the edge and the room inside it -- the frame that
- * makes the box read as a window onto a list rather than as the end of one, and
- * the padding that keeps a focused row's ring from being clipped by the very
- * box that is scrolling it.
+ * itself. What is here is the slot the content passes through.
+ *
+ * TWO ELEMENTS, AND THE FRAME IS THE OUTER ONE. A mask fades everything the
+ * element paints, and a border is something the element paints -- so with the
+ * frame on the scroller, the top edge of the box dissolved the moment you
+ * scrolled off the top of it, which is precisely when a reader most needs to
+ * see where the box ends and the panel begins. The wrapper carries the edge,
+ * the lip and the recessed ground and is never masked; the scroller carries the
+ * overflow, the scrollbar and the fade. Only the content moves, and only the
+ * content fades.
+ *
+ * The ground is base-100 inside a base-200 panel, which is how this app has
+ * said "recessed" since the deck board's piles. Anything laid in it should sit
+ * at panel weight or above, or it disappears into the floor.
+ *
+ * The padding is on the scroller and not the wrapper, so the scrollbar stays
+ * hard against the frame rather than floating an eighth of an inch inside it.
+ * It is there to keep a focused row's ring from being clipped by the very box
+ * that is scrolling it.
  *
  * A MAXIMUM AND NOT A HEIGHT, which is why the prop is spelled that way and is
  * required. A section padded out to a fixed size with three rows in it is empty
@@ -47,13 +62,15 @@ export function ScrollBox({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={`scroll-box rounded-box border border-base-content/15 p-2 ${maxHeight} ${
-        className ?? ""
-      }`}
-      {...(label ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}
-    >
-      {children}
+    // overflow-hidden so the frame's own radius is what clips the scrollbar's
+    // two ends, rather than the bar running square past a rounded corner.
+    <div className="scroll-well overflow-hidden rounded-box border border-base-content/30 bg-base-100">
+      <div
+        className={`scroll-box p-2 ${maxHeight} ${className ?? ""}`}
+        {...(label ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}
+      >
+        {children}
+      </div>
     </div>
   );
 }

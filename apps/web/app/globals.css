@@ -319,16 +319,39 @@ html {
    So the anatomy is fixed here, and it says the same thing three ways, because
    no one of the three reaches every reader.
 
-   A SCROLLBAR THAT IS ALWAYS DRAWN. Setting `scrollbar-color` is what moves a
-   Chromium or Safari box off overlay scrollbars and onto classic ones: they
-   reserve their own gutter and are painted whether or not anything is moving.
-   It is also the only one of the three that says how much more there is and
+   A SCROLLBAR THAT IS ALWAYS DRAWN, and `::-webkit-scrollbar` is the only lever
+   that does it. Styling those pseudo-elements is what takes a Chromium or
+   Safari box off overlay scrollbars and onto classic ones: they reserve their
+   own gutter and are painted whether or not anything is moving. It is also the
+   only one of the three signals that says how much more there is and
    whereabouts in it you are.
 
-   AN EDGE, so the box reads as a window onto a list rather than as the end of
-   one. Drawn by the caller (see ScrollBox) and tinted with base-content rather
-   than base-300, for the reason popup-surface gives: base-300 against base-200
-   is nearly invisible in this theme.
+   THE STANDARD PROPERTIES ARE WORSE THAN USELESS HERE, which took shipping the
+   wrong thing to find out. `scrollbar-width` and `scrollbar-color` look like
+   the modern spelling of this and are not: they recolour whatever scrollbar the
+   platform had already decided on, and on macOS -- where the default is to show
+   scroll bars only while scrolling -- that is an overlay scrollbar, recoloured,
+   still invisible at rest. Worse, setting either of them is what makes Chromium
+   and Safari IGNORE the `::-webkit-scrollbar` rules, so the one lever that works
+   is switched off by the one that reads like a better version of it.
+
+   AND THE APP WAS ALREADY SETTING ONE. daisyUI declares `scrollbar-color` on
+   :root, and it is an inherited property, so every element in this app arrives
+   carrying a non-auto value and no `::-webkit-scrollbar` rule anywhere could
+   ever have taken effect. That is why the first version of this shipped with a
+   themed scrollbar nobody could see: it was not that the rules were wrong, it
+   was that they were never consulted. `scroll-box` puts the property back to
+   `auto` explicitly for that reason and no other. The page's own scrollbar is
+   left alone -- a page that scrolls is not a claim anybody needs help reading.
+
+   Firefox has none of these pseudo-elements and keeps its own scrollbar; the
+   edge and the fade carry it there.
+
+   AN EDGE AND A LIP, so the box reads as a slot cut into the panel rather than
+   as the end of a list. The frame is the caller's (see ScrollBox) and sits on a
+   wrapper OUTSIDE the mask, which is not a detail: a border on the scrolling
+   element is faded away by that element's own mask, so the top edge of the box
+   dissolved as soon as you scrolled off the top of it.
 
    AND THE CONTENT FADING WHERE IT PASSES UNDER THAT EDGE, which is the one a
    reader takes in without having looked at anything. A fade has to be honest or
@@ -371,29 +394,50 @@ html {
   }
 }
 
+/* The lip of the slot, on the wrapper rather than on the thing that scrolls --
+   an inset shadow on the scroller would be masked away by the scroller's own
+   fade, at exactly the two edges it exists to describe. Top and bottom only:
+   this is a box the content passes under, not a box it sits in a hole in, and
+   shadow down the sides would say the second thing. */
+@utility scroll-well {
+  box-shadow:
+    inset 0 0.5rem 0.6rem -0.5rem color-mix(in oklab, black 70%, transparent),
+    inset 0 -0.5rem 0.6rem -0.5rem color-mix(in oklab, black 70%, transparent);
+}
+
 @utility scroll-box {
   --scroll-fade: 1.75rem;
   overflow-y: auto;
 
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--color-base-content) 35%, transparent)
-    color-mix(in oklab, var(--color-base-content) 8%, transparent);
+  /* NOT A NO-OP, and the single load-bearing line in this block. daisyUI sets
+     `scrollbar-color` on :root, and `scrollbar-color` is an INHERITED property
+     -- so every element in this app arrives with a non-auto value, and a
+     non-auto value is exactly what makes Chromium and Safari ignore the four
+     rules below. Deleting our own declaration was not enough; the inherited one
+     had to be answered. Back at `auto`, the pseudo-elements are honoured and
+     the scrollbar is classic: its own gutter, painted at rest.
+     Anyone tidying this away will hand macOS its overlay scrollbar back. */
+  scrollbar-color: auto;
 
-  /* Safari before 18.2, which has the pseudo-elements and not the properties.
-     Chromium drops these the moment `scrollbar-color` is set, so the two
-     descriptions can never both apply and never have to agree. */
+  /* The gutter is reserved and the bar is painted at rest. See the header:
+     `scrollbar-width` and `scrollbar-color` must never be set to anything else
+     here, because setting either is what makes a browser drop these. */
   &::-webkit-scrollbar {
-    width: 0.5rem;
+    width: 0.5625rem;
   }
 
   &::-webkit-scrollbar-track {
     border-radius: 999px;
-    background: color-mix(in oklab, var(--color-base-content) 8%, transparent);
+    background: color-mix(in oklab, var(--color-base-content) 10%, transparent);
   }
 
   &::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: color-mix(in oklab, var(--color-base-content) 35%, transparent);
+    background: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--color-base-content) 65%, transparent);
   }
 
   @supports (animation-timeline: scroll()) {
