@@ -51,6 +51,13 @@ export function CardPlacard({
   // The empty plate is painted base-100, the app's recessed surface, so it reads
   // as a hole punched through the frame. That means a ghost belongs on base-100:
   // today the deck board's piles, which are wells in exactly that colour.
+  //
+  // The dash around that plate is `base-content/40` and not the near-black the
+  // filled plate is edged with, which is what it inherited. A dark dash on a
+  // dark hole is a dash nobody can see, so the mark the board's legend promises
+  // -- and the only thing distinguishing a ghost at a glance from a card in a
+  // dark frame -- was not being drawn. Same token as the legend's swatch, so the
+  // two are the same line in both themes.
   ghost?: boolean;
   className?: string;
 }) {
@@ -74,7 +81,9 @@ export function CardPlacard({
       >
         <div
           className={`flex items-center justify-between gap-2 rounded-md px-1.5 ${
-            ghost ? "border border-dashed border-black/50 bg-base-100" : "border border-black/55"
+            ghost
+              ? "border border-dashed border-base-content/40 bg-base-100"
+              : "border border-black/55"
           }`}
           style={
             ghost
