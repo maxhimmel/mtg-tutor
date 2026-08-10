@@ -467,14 +467,11 @@ export const results = query({
       .sort((a, b) => b.cost - a.cost)
       .slice(0, args.mistakeLimit ?? 5);
 
-    // Building the 40 out of cards the player has said they are not playing is
-    // the app overruling them with its own suggestion. `colorPair` reads the
-    // maindeck for the same reason: it should name the deck, not the pile.
+    // The deck builder reads type lines and colour identity to tell a land from
+    // a spell and a splash from a lane, so both sides want whole cards.
     const bench = normalizeBench(session.sideboard ?? []);
     const { maindeck } = splitPool(engine.humanPool, bench, session.pickedNames.length);
-
-    // The deck builder reads type lines and colour identity to tell a land from
-    // a spell and a splash from a lane, so it wants whole cards.
+    const drafted = hydrate(engine.humanPool, text);
     const playing = hydrate(maindeck, text);
 
     // Handing over the answer before the exercise is what the build step exists
@@ -485,10 +482,23 @@ export const results = query({
     const built = session.build
       ? buildDeck(playing, session.build.basicLands)
       : undefined;
-    // The archetype table is what lets the suggestion consider three colours at
-    // all: it is the only thing that says what the third one costs here.
+    // Forty-five cards, not the forty the player kept. The suggestion used to
+    // read the maindeck, on the reasoning that building out of cards somebody
+    // has said they are not playing overrules them -- but the two decks are then
+    // drawn from the same pile, and a builder asked for the best 23 spells out
+    // of the 23 you already chose can only ever hand them back. The comparison
+    // agreed with itself by construction and every deck scored near-perfect.
+    //
+    // Overruling is the whole point of a second opinion: the interesting line on
+    // that screen is the card you cut that it would have played. The player's 40
+    // is still theirs -- `built` and `colorPair` both read the maindeck, so the
+    // deck is named by what they kept -- and the suggestion stays labelled an
+    // argument rather than an answer.
+    //
+    // The archetype table is what lets it consider three colours at all: it is
+    // the only thing that says what the third one costs here.
     const suggested = built
-      ? suggestDeck(playing, { archetypes: cardsDoc.colorWinRates })
+      ? suggestDeck(drafted, { archetypes: cardsDoc.colorWinRates })
       : undefined;
 
     return {
@@ -497,7 +507,7 @@ export const results = query({
       // ready-made lists -- the same pair `draft.state` hands the draft screen,
       // and for the same reason: benching is keyed on position, so a split that
       // has thrown the positions away is a deck nobody can edit.
-      pool: hydrate(engine.humanPool, text),
+      pool: drafted,
       sideboard: bench,
       build: session.build ?? null,
       deck: suggested ?? null,

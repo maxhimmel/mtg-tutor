@@ -174,8 +174,6 @@ I could understand the misread based purely off stats - sure. But this happened 
 
 Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
 
-9. I'm concerned the deck builder algorithm isn't also looking at the cards in the sideboard? I've built a deck twice now and both times gotten an essentially perfect score. I didn't think I was THAT good so I just wanted to double check the algorithm for deck building also checks sideboard pieces.
-
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -520,6 +518,18 @@ to the data work.
    than named fields, so the class fails rather than the instance. When a pipeline
    both produces and consumes a shape, test the last hop before storage, not the
    first.
+6. **A comparison drawn from one side of itself agrees by construction.** The
+   results screen sets your forty beside the one `suggestDeck` would have built,
+   and for the whole life of that screen the suggestion was handed the MAINDECK
+   rather than the pool — so a builder asked for the best 23 spells out of the 23
+   you had already kept could only ever hand them back. Every deck matched
+   near-perfectly and the screen read as a compliment. It was found by a player
+   saying "I didn't think I was THAT good", not by anything in the codebase,
+   because nothing counted the gap: `deck_built` said the forty was locked in and
+   no event said whether the comparison had anything to tell them. **When two
+   things are compared, measure the DISTANCE between them, not just that both
+   arrived** — a gap pinned at zero is the signature, and it is invisible until
+   something is counting it. `build_compared` now is.
 
 # Deferred trade-offs (revisit when the premise changes):
 

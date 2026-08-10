@@ -23,6 +23,7 @@ import { ChallengeAFriend } from "./ChallengeAFriend";
 import { Panel } from "./Panel";
 import { AfterDraft } from "./AfterDraft";
 import { humanError } from "../lib/humanError";
+import { buildCompared } from "../lib/analytics";
 
 type ResultsData = FunctionReturnType<typeof api.draft.results>;
 
@@ -94,6 +95,27 @@ export function Results({
     void load();
   }, [isAuthenticated, load]);
 
+  // The comparison, once it exists. `results` is refetched when the deck locks
+  // in, so the guard is on the session rather than on the effect running: the
+  // same forty must not be reported twice because the query answered twice.
+  const compared = useRef<string | null>(null);
+  useEffect(() => {
+    const diff = results?.diff;
+    if (!results || !diff || compared.current === sessionId) return;
+    compared.current = sessionId;
+    buildCompared({
+      sessionId,
+      setCode: results.setCode,
+      format: results.format,
+      apart: diff.onlyBuilt.length + diff.onlySuggested.length,
+      onlyBuilt: diff.onlyBuilt.length,
+      onlySuggested: diff.onlySuggested.length,
+      sameColors: diff.colors.built.join("") === diff.colors.suggested.join(""),
+      landsBuilt: diff.lands.built,
+      landsSuggested: diff.lands.suggested,
+    });
+  }, [results, sessionId]);
+
   // Re-ingesting a set strands every draft taken against the old data, and this
   // screen is now linked to from the drafts list -- which reads the stored
   // summary and so cannot know until you click. Said in place rather than as a
@@ -155,6 +177,11 @@ export function Results({
 
   const apart = diff.onlyBuilt.length + diff.onlySuggested.length;
 
+  // Out of forty, so the basics have to be in it. `diff.shared` counts named
+  // cards only, and saying "22 of your 40" about two decks that also agree on
+  // seventeen Islands understates the agreement by nearly half.
+  const shared = diff.shared + Math.min(built.basicLands, deck.basicLands);
+
   return (
     <div className="flex flex-col gap-5">
       {asking && (
@@ -171,7 +198,7 @@ export function Results({
           <h2 className="font-display text-3xl font-semibold leading-tight sm:text-4xl">
             {agreed
               ? "The same forty, card for card."
-              : `${diff.shared} of your ${DECK.size} match the suggested build.`}
+              : `${shared} of your ${DECK.size} match the suggested build.`}
           </h2>
           <p className="max-w-prose text-sm text-base-content/60">
             The suggestion is what the card values and this format&rsquo;s price on a third color

@@ -205,6 +205,42 @@ export function breakdownAsked(p: {
 }
 
 /**
+ * How far apart the player's forty and the suggested one turned out to be.
+ *
+ * `deck_built` says the forty was locked in; this says whether the screen that
+ * opens next had anything to tell them. The suggestion used to be chosen out of
+ * the maindeck rather than the pool, so it could only ever hand back the cards
+ * already kept and `apart` was zero on essentially every draft -- a comparison
+ * that agreed with itself, shipped and unnoticed because nothing counted it.
+ * This is the number that would have caught it, and the one that says whether
+ * the fix went too far the other way: a builder that disagrees on fifteen cards
+ * every time is not a second opinion either.
+ *
+ * In the browser rather than beside `deck_built`, because the diff is computed
+ * in `draft.results` -- a query, where a capture cannot be scheduled -- and the
+ * build mutation deliberately reads no card text, which is what pricing a deck
+ * takes. Once per screen, not once per render.
+ */
+export function buildCompared(p: {
+  sessionId: string;
+  setCode: string;
+  format: string;
+  /** Cards on exactly one of the two lists, both directions summed. */
+  apart: number;
+  /** In your forty and not in the suggestion — the cards it would cut. */
+  onlyBuilt: number;
+  /** In the suggestion and not in your forty — the cards you cut and it kept. */
+  onlySuggested: number;
+  /** Whether the two decks name the same colours. */
+  sameColors: boolean;
+  landsBuilt: number;
+  landsSuggested: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("build_compared", p);
+}
+
+/**
  * Someone tried to start a draft and was told no.
  *
  * The most likely thing throttling a private beta, and until now invisible --
