@@ -1,0 +1,42 @@
+{
+  "tier": "strong",
+  "sets": [
+    "blb",
+    "dft",
+    "dmu",
+    "dsk",
+    "ecl",
+    "eoe",
+    "fdn",
+    "ktk",
+    "lci",
+    "mh3",
+    "mkm",
+    "mom",
+    "neo",
+    "otj",
+    "snc",
+    "sos",
+    "tdm",
+    "woe"
+  ],
+  "format": "TradDraft",
+  "features": [
+    "value",
+    "laneFit",
+    "rare",
+    "laneFitLate",
+    "opennessLate"
+  ],
+  "weights": [
+    31.079206383057887,
+    1.7976377448116148,
+    0.9480813059662057,
+    8.185852625010435,
+    -16.905787360439014
+  ],
+  "trainPicks": 437408,
+  "testPicks": 223026,
+  "trainAccuracy": 0.4952538590972273,
+  "testAccuracy": 0.49444459390384976
+}

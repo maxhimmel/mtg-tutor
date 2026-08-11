@@ -4,6 +4,7 @@ import { fakeMixedSet, fakePlayBoosterSet, fakeSet } from "../testing/fakeSet.js
 import { cardValue } from "../scoring/value.js";
 import { mulberry32 } from "../util/rng.js";
 import { DraftEngine } from "./engine.js";
+import type { PodPolicy } from "./bots.js";
 
 // The net under any change to how a card's value is stored or computed.
 //
@@ -24,7 +25,7 @@ import { DraftEngine } from "./engine.js";
 
 // FNV-1a over the whole deal, not just the picks: two bots taking different
 // cards can leave the human the same choice, and only the packs show it.
-function dealHash(set: SetData, seeds: number): number {
+function dealHash(set: SetData, seeds: number, pod: PodPolicy = "legacy"): number {
   let h = 0x811c9dc5;
   const eat = (s: string) => {
     for (let i = 0; i < s.length; i++) {
@@ -34,7 +35,7 @@ function dealHash(set: SetData, seeds: number): number {
   };
 
   for (let seed = 1; seed <= seeds; seed++) {
-    const engine = new DraftEngine(set, mulberry32(seed));
+    const engine = new DraftEngine(set, mulberry32(seed), pod);
     while (!engine.isComplete()) {
       const pack = engine.currentPack;
       eat(pack.map((c) => c.name).join(","));
@@ -96,5 +97,44 @@ describe("the deal is stable across a corpus of seeds", () => {
 
   it("deals different seeds differently, so the hash is measuring something", () => {
     expect(dealHash(fakeSet(), 20)).not.toBe(dealHash(fakeSet(), 21));
+  });
+});
+
+// The same net under the fitted pods, and it catches something BOT_FINGERPRINT
+// cannot.
+//
+// That fingerprint hashes the weights and the feature NAMES, so it notices a
+// re-fit or a reordered vector. It cannot notice a change to what the features
+// MEAN: rewrite `laneFit`'s formula, or `BotMemory.see`, or the Gumbel draw, or
+// how the engine computes `progress`, and every weight is untouched while the
+// deal moves underneath every draft that stored one of these names.
+//
+// So both guards are needed, and they fail differently on purpose: the
+// fingerprint says "you changed the weights", these say "you changed the deal".
+describe("the fitted pods deal the same way they always have", () => {
+  const GOLDEN: [string, () => SetData, number, number][] = [
+    ["a fixed-shape set", fakeSet, 4107639351, 10842788],
+    ["a Play Booster set", fakePlayBoosterSet, 1069189498, 3502820254],
+    ["a set with rated, thin and unrated cards", fakeMixedSet, 4134235438, 4253524252],
+  ];
+
+  for (const [label, build, table, sharks] of GOLDEN) {
+    it(`deals ${label} to the table pod`, () => {
+      expect(dealHash(build(), SEEDS, "table")).toBe(table);
+    });
+    it(`deals ${label} to the sharks pod`, () => {
+      expect(dealHash(build(), SEEDS, "sharks")).toBe(sharks);
+    });
+  }
+
+  // The control. Two pods that dealt identically would make every hash above
+  // pass while measuring nothing -- and `sharks` differs from `table` mostly in
+  // one coefficient, so this is not a hypothetical.
+  it("deals the two pods differently, and both differently from legacy", () => {
+    const legacy = dealHash(fakeSet(), 50, "legacy");
+    const table = dealHash(fakeSet(), 50, "table");
+    const sharks = dealHash(fakeSet(), 50, "sharks");
+
+    expect(new Set([legacy, table, sharks]).size).toBe(3);
   });
 });

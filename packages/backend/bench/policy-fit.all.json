@@ -1,0 +1,46 @@
+{
+  "tier": "all",
+  "sets": [
+    "blb",
+    "dft",
+    "dmu",
+    "dsk",
+    "ecl",
+    "eoe",
+    "fdn",
+    "ktk",
+    "lci",
+    "mh3",
+    "mkm",
+    "mom",
+    "neo",
+    "otj",
+    "snc",
+    "sos",
+    "tdm",
+    "woe"
+  ],
+  "format": "TradDraft",
+  "features": [
+    "value",
+    "laneFit",
+    "openness",
+    "colorless",
+    "rare",
+    "laneFitLate",
+    "opennessLate"
+  ],
+  "weights": [
+    28.198046094480645,
+    2.0496738712296954,
+    -0.7864641694489368,
+    0.3272532514474984,
+    0.9601231125102393,
+    7.547303248195368,
+    -13.034358834422282
+  ],
+  "trainPicks": 283777,
+  "testPicks": 174540,
+  "trainAccuracy": 0.4778153268235269,
+  "testAccuracy": 0.4764409304457431
+}

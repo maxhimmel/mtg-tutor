@@ -120,7 +120,11 @@ async function complete(
   if (!session) return;
 
   const set = await setFor(ctx, session.setCode, session.format);
-  const engine = new DraftEngine(set, mulberry32(session.seed));
+  // Off the session rather than defaulted, even though the fixture writes no pod
+  // today. The loop below skips a name it cannot find, so replaying under the
+  // wrong policy would not throw -- it would quietly build the deck out of
+  // whichever picks happened to survive, which is the worst available outcome.
+  const engine = new DraftEngine(set, mulberry32(session.seed), session.pod ?? "legacy");
   for (const name of picked) {
     const card = engine.currentPack.find((c) => c.name === name);
     if (card) engine.humanPick(card);

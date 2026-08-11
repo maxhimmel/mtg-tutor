@@ -68,12 +68,41 @@ export type PolicyWeights = readonly number[];
 /**
  * The fitted weights, indexed by POLICY_FEATURES above.
  *
- * PROVISIONAL -- fitted on fdn alone while the 18-set run finishes. Replaced
- * before this lands.
+ * FROZEN. A name here is settled the moment a session stores it -- see
+ * `PodPolicy` in bots.ts. Re-fitting one of these in place re-deals every draft
+ * that recorded it. Add a name instead; `BOT_FINGERPRINT` below goes red either
+ * way, which is what it is for.
+ *
+ * Produced by `pnpm fit-bot-policy`, pooled across all 18 committed sets. Both
+ * are conditional logits over the pack, fitted to which card the human took.
+ *
+ *   table    all drafters
+ *            283,777 train / 174,540 held-out picks from 11,862 drafts
+ *            top-1 47.8% train, 47.7% held out
+ *
+ *   sharks   drafters who went 3-0 (event_match_wins == 3)
+ *            437,408 train / 223,026 held-out picks from 17,037 drafts
+ *            top-1 49.5% train, 49.4% held out
+ *
+ * Train and held-out agree to a tenth of a point in both, which is what says
+ * five parameters are not memorising 280k decisions.
+ *
+ * WHAT THE TWO DISAGREE ABOUT, WHICH IS ALMOST NOTHING
+ *
+ * Only `value` really moves: 28.19 to 31.08. Strong drafters differ from the
+ * field by caring MORE about raw card quality, not by reading signals
+ * differently -- the lane and openness coefficients are the same to two
+ * significant figures. They are also more predictable than the field (49.4%
+ * against 47.7%), which is the same fact from the other side.
+ *
+ * `opennessLate` is large and negative, and that is not "humans avoid open
+ * colours". It is the only route openness has into the score, so it carries the
+ * whole shape of a term that is worth nothing early and a great deal late; the
+ * ablation prices it at +1.47pp, the second most valuable feature here.
  */
 export const FITTED_POLICIES: Record<"table" | "sharks", PolicyWeights> = {
-  table: [28.198, 2.0497, 0.9601, 7.5473, -13.0344],
-  sharks: [28.198, 2.0497, 0.9601, 7.5473, -13.0344],
+  table: [28.1927, 1.7672, 0.9707, 8.1678, -16.734],
+  sharks: [31.0792, 1.7976, 0.9481, 8.1859, -16.9058],
 };
 
 /** How far into the draft this pick is, in [0, 1]. */
