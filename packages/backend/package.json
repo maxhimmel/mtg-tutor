@@ -34,6 +34,7 @@
     "env:push": "convex env set --force --from-file .env.convex",
     "env:watch": "node scripts/watch-env.mjs",
     "feedback": "node scripts/feedback.mjs",
+    "fit-bot-policy": "node scripts/fit-bot-policy.mjs",
     "ingest-sets": "node scripts/ingest-sets.mjs",
     "llm": "node scripts/llm-provider.mjs",
     "new-set": "node scripts/new-set.mjs",

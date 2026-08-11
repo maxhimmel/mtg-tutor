@@ -24,6 +24,7 @@
     "dev:web": "turbo run dev --filter=@mtg-tutor/backend... --filter=@mtg-tutor/web...",
     "draft": "pnpm --filter @mtg-tutor/cli draft",
     "feedback": "pnpm --filter @mtg-tutor/backend feedback",
+    "fit-bot-policy": "pnpm --filter @mtg-tutor/backend fit-bot-policy",
     "ingest-sets": "pnpm --filter @mtg-tutor/backend ingest-sets",
     "llm": "pnpm --filter @mtg-tutor/backend llm",
     "login": "pnpm --filter @mtg-tutor/cli login",
