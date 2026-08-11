@@ -8,7 +8,17 @@ import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 // A new reference page must be listed here or it 307s to sign-in, which is a
 // silent failure -- the page renders fine in isolation and only the route is
 // wrong.
+//
+// `eagerAuth` attaches the access token to the initial document response, where
+// AuthKit's token store reads it before anything renders. Without it the first
+// thing every page load does is fetch that token over a server action, and a
+// single failed fetch used to sign the tab out for good (see app/providers.tsx)
+// -- so this removes the commonest way into that state, and takes a round trip
+// off every page load on the way. The cost is that the token spends up to 30
+// seconds in a cookie script can read, rather than only in memory; script on
+// this origin could already lift it out of the Convex client.
 export default authkitMiddleware({
+  eagerAuth: true,
   middlewareAuth: {
     enabled: true,
     unauthenticatedPaths: [

@@ -487,6 +487,42 @@ export function accessBlocked(p: { source: string }): void {
   posthog.capture("access_blocked", p);
 }
 
+/**
+ * Signed in, and the app cannot tell.
+ *
+ * A friend whose WorkOS session is fine but whose Convex client has decided
+ * they are not authenticated: the set picker shows them the landing page they
+ * signed in to get past, and a draft board shows them a pick that will not go
+ * through. It is caused by one dropped token fetch, and before this there was
+ * no trace of it anywhere -- no error, no refusal, nothing on the server, which
+ * only ever sees a request that did not arrive.
+ *
+ * `route` is where they were standing, and it is the property that decides what
+ * to do about it. On `/` this is a confusing screen; on `/draft` it is somebody
+ * mid-draft whose next pick fails, which is a different severity and a
+ * different fix.
+ */
+export function authStalled(p: { route: string }): void {
+  if (!on()) return;
+  posthog.capture("auth_stalled", p);
+}
+
+/**
+ * And it came back.
+ *
+ * The pair to `auth_stalled` and not subtractable from it, which is the bar this
+ * file sets: the duration is the entire question. Recovery is a backoff that
+ * starts at a second and climbs to five minutes, so `stalledMs` is what says
+ * whether that curve is right, and stalls MINUS recoveries is the count that
+ * never came back at all -- somebody who sat there until they gave up or
+ * reloaded. Those two numbers are the ones that would justify changing the
+ * retry, and neither exists without both events.
+ */
+export function authRecovered(p: { route: string; stalledMs: number }): void {
+  if (!on()) return;
+  posthog.capture("auth_recovered", p);
+}
+
 /** Fires on the mutation resolving, which is why it beats autocapturing the button. */
 export function inviteRequested(): void {
   if (!on()) return;
