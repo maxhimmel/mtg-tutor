@@ -533,7 +533,9 @@ export const notifyChallenger = internalAction({
           `Somebody drafted your ${challenge.setCode.toUpperCase()} packs.`,
           "",
           `See where you two went different ways:`,
-          `${appUrl}/challenge/${challenge._id}/diff`,
+          // Stamped, and it is the only door that says the app was not already
+          // open -- see `diff_viewed.from` in app/lib/analytics.ts.
+          `${appUrl}/challenge/${challenge._id}/diff?from=email`,
         ].join("\n"),
       }),
     });

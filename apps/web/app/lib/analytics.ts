@@ -385,6 +385,27 @@ export function diffViewed(p: {
    * every chart already drawn on these two events standing.
    */
   layout: string;
+  /**
+   * Which door the reader came through.
+   *
+   * A PROPERTY, for the reason `layout` above is one and `draft_refused`'s
+   * `via` is one: this is the same arrival counted by the same charts, and a
+   * `diff_opened_from_results` beside it would split every one of them.
+   *
+   * It exists to judge one change. The comparison unlocks on the friend's
+   * forty-second pick and was reachable from the list, the landing page and an
+   * email -- and from none of them was it reachable from the screen the friend
+   * was actually standing on when they finished, which is how somebody answered
+   * a challenge and was handed the solo completion page. `results` is that
+   * hand-off. If it carries nobody, the hand-off is not the thing that was
+   * missing and the fix is somewhere else.
+   *
+   * `email` is the nudge that reaches the challenger, and is the only value
+   * here that says the app was not already open. `link` is the fallback: a bare
+   * URL, a bookmark, a back button -- everything unstamped, including every
+   * view recorded before this property existed.
+   */
+  from: "results" | "list" | "landing" | "email" | "link";
 }): void {
   if (!on()) return;
   posthog.capture("diff_viewed", p);
