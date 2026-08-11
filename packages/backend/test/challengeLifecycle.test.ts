@@ -259,6 +259,66 @@ describe("challenges.mine", () => {
   });
 });
 
+describe("challenges.forSession", () => {
+  // What the completion screen hangs on. Each of these is a state a real person
+  // ends a draft in, and getting any of them wrong shows the wrong screen at the
+  // one moment the app is being judged.
+  async function taken(t: ReturnType<typeof harness>) {
+    const { sessionId } = await seedWorld(t);
+    const challengeId = await as(t, "alice").mutation(api.challenges.create, {
+      sessionId,
+      fromName: "Alice",
+    });
+    const friendSession = await as(t, "bob").mutation(api.challenges.accept, { challengeId });
+    return { challengeId, sessionId, friendSession };
+  }
+
+  it("says nothing about a draft nobody dared", async () => {
+    const t = harness();
+    const { sessionId } = await seedWorld(t);
+
+    expect(await as(t, "alice").query(api.challenges.forSession, { sessionId })).toBeNull();
+  });
+
+  it("says nothing on the CHALLENGER's own session", async () => {
+    // Not an oversight. `create` leaves the session unstamped because one draft
+    // can be dared out to any number of friends, so there is no single challenge
+    // to name -- and the challenger is told by the badge and the email instead.
+    const t = harness();
+    const { sessionId } = await taken(t);
+
+    expect(await as(t, "alice").query(api.challenges.forSession, { sessionId })).toBeNull();
+  });
+
+  it("names the challenge on the friend's session, and its state as it stands", async () => {
+    const t = harness();
+    const { challengeId, friendSession } = await taken(t);
+
+    const midDraft = await as(t, "bob").query(api.challenges.forSession, {
+      sessionId: friendSession,
+    });
+    expect(midDraft).toEqual({ id: challengeId, state: "accepted", fromName: "Alice" });
+
+    await t.run(async (ctx) =>
+      ctx.db.patch(challengeId as Id<"challenges">, { finishedAt: new Date(0).toISOString() }),
+    );
+
+    const done = await as(t, "bob").query(api.challenges.forSession, {
+      sessionId: friendSession,
+    });
+    expect(done?.state).toBe("finished");
+  });
+
+  it("is not a way to read somebody else's draft", async () => {
+    const t = harness();
+    const { friendSession } = await taken(t);
+
+    await expect(
+      as(t, "carol").query(api.challenges.forSession, { sessionId: friendSession }),
+    ).rejects.toThrow(/does not belong to you/);
+  });
+});
+
 describe("challenges.diff", () => {
   /** Two rows per side, sharing pack A at index 0 and differing at index 1. */
   async function finished(t: ReturnType<typeof harness>) {
