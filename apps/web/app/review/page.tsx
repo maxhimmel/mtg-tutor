@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
-import { Authenticated, Unauthenticated, useQuery } from "convex/react";
+import { Authenticated, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { gradeFor } from "@mtg-tutor/core";
 import { ColorPips } from "../components/ColorPips";
 import { PageShell } from "../components/PageShell";
+import { SignedOut } from "../components/SignedOut";
 import { SetIcon } from "../components/SetIcon";
 import { gradeColor, pct, releaseDate } from "../lib/format";
 import { reviewListSeen } from "../lib/analytics";
@@ -14,7 +15,7 @@ import { reviewListSeen } from "../lib/analytics";
 export default function ReviewIndex() {
   return (
     <PageShell>
-      <Unauthenticated>
+      <SignedOut>
         <section className="max-w-2xl py-6">
           <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight">
             Review a draft.
@@ -37,7 +38,7 @@ export default function ReviewIndex() {
             Accounts are invite only while this is in beta.
           </p>
         </section>
-      </Unauthenticated>
+      </SignedOut>
 
       <Authenticated>
         <DraftList />

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
+import { Authenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { useEffect, useRef, useState } from "react";
 import { PageShell } from "./components/PageShell";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
+import { SignedOut } from "./components/SignedOut";
 import { accessBlocked, draftRefused } from "./lib/analytics";
 import { useSettings, type SetView } from "./lib/useSettings";
 import { humanError } from "./lib/humanError";
@@ -15,7 +16,7 @@ import { humanError } from "./lib/humanError";
 export default function Home() {
   return (
     <PageShell>
-      <Unauthenticated>
+      <SignedOut>
         <section className="max-w-2xl py-6">
           {/* The break is written rather than left to the viewport, because the
               two sentences are the two halves of the app -- the draft, then the
@@ -55,7 +56,7 @@ export default function Home() {
             the coach is grounded in — free, no account needed.
           </p>
         </section>
-      </Unauthenticated>
+      </SignedOut>
 
       <Authenticated>
         <SetPicker />

@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { Authenticated, Unauthenticated, useQuery } from "convex/react";
+import { Authenticated, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { PageShell } from "../components/PageShell";
 import { SetIcon } from "../components/SetIcon";
+import { SignedOut } from "../components/SignedOut";
 
 export default function ChallengeIndex() {
   return (
     <PageShell>
-      <Unauthenticated>
+      <SignedOut>
         <section className="max-w-2xl py-6">
           <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight">
             Draft the same packs.
@@ -34,7 +35,7 @@ export default function ChallengeIndex() {
             Accounts are invite only while this is in beta.
           </p>
         </section>
-      </Unauthenticated>
+      </SignedOut>
 
       <Authenticated>
         <ChallengeList />
