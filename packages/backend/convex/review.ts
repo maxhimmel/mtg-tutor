@@ -17,14 +17,7 @@ import { action, internalMutation, internalQuery, mutation, query } from "./_gen
 import type { QueryCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
-import {
-  loadBoard,
-  ownSessions,
-  ownedSession,
-  setCardsFor,
-  setDocFor,
-  staleAgainst,
-} from "./sessions.js";
+import { loadBoard, ownSessions, ownedSession, staleAgainst } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
 import {
   poolFromLastPick,
@@ -107,9 +100,19 @@ export const list = query({
 // storedScores. The walkthrough has been grading picks by a number the player
 // never saw. The stored rows win.
 //
-// The `setCards` read stays. Only the replay strands a draft; reading the
-// current set's colour-pair rates is a question about the set today, and the
-// deck screen wants them to draw the archetype the deck landed in.
+// IT COSTS MORE, AND THAT IS THE TRADE. Measured with `pnpm bench-io`, fdn seed
+// 42: 218.0KB replaying, 262.7KB reading rows. +44.7KB, once per review, taking
+// a whole draft-plus-review from 2.41MB to 2.45MB.
+//
+// The comment this replaced said rows were "no cheaper than rebuilding them from
+// a pool it has to read anyway", and about bytes it was exactly right -- the
+// rows are an ADDITION, and the replay itself was free. It was wrong only about
+// that being the question. A draft that cannot be opened costs infinity.
+//
+// It reads no set document at all, which took the sting out. `colorWinRates`
+// went out on this query and no reader has ever touched it -- the draft board
+// gets its own from `draft.state`, the deck screen is a different query -- so
+// the ~25KB pool read went with it. Without that it was 287.6KB.
 export const load = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
@@ -127,8 +130,6 @@ export const load = query({
           `its packs can no longer be rebuilt.`,
       );
     }
-
-    const cardsDoc = await setCardsFor(ctx, await setDocFor(ctx, session.setCode, session.format));
 
     // Computed, not read off `session.summary`, which is what this used to do.
     //
@@ -166,7 +167,6 @@ export const load = query({
       seed: String(session.seed),
       createdAt: session.createdAt,
       colorPair: deckColors(maindeck),
-      colorWinRates: cardsDoc.colorWinRates,
       picks: rows.map((row) => {
         const rec = toRecordedPick(row, text);
         return {

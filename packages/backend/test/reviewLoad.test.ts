@@ -168,7 +168,6 @@ describe("review.load on a draft the engine can no longer rebuild", () => {
 
     // Two blue cards, which is where `committedColors` puts the line.
     expect(review.colorPair).toBe("U");
-    expect(review.colorWinRates).toHaveLength(1);
   });
 
   it("is still refused to anybody else", async () => {
