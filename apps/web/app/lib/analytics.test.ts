@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import posthog from "posthog-js";
 
 import {
+  authRecovered,
+  authStalled,
   feedbackOpened,
   feedbackRefused,
   identify,
@@ -54,6 +56,8 @@ describe("without a project token", () => {
       settingChanged("pickCeremony", "passive", "board");
       feedbackOpened({ surface: "coach", source: "ai", route: "/draft/[sessionId]" });
       feedbackRefused({ surface: "coach", reason: "rate", message: "no" });
+      authStalled({ route: "/" });
+      authRecovered({ route: "/", stalledMs: 1200 });
     }).not.toThrow();
 
     expect(capture).not.toHaveBeenCalled();
@@ -104,6 +108,20 @@ describe("with a project token", () => {
     const refused = { surface: "general" as const, reason: "rate" as const, message: "tomorrow" };
     feedbackRefused(refused);
     expect(capture).toHaveBeenCalledWith("feedback_refused", refused);
+  });
+
+  // These two are read by subtraction -- stalls minus recoveries is the number
+  // of people who never got back in -- so a rename does not just break a chart,
+  // it silently makes that difference wrong in one direction.
+  it("names both halves of the auth stall", () => {
+    authStalled({ route: "/draft/[sessionId]" });
+    expect(capture).toHaveBeenCalledWith("auth_stalled", { route: "/draft/[sessionId]" });
+
+    authRecovered({ route: "/draft/[sessionId]", stalledMs: 2400 });
+    expect(capture).toHaveBeenCalledWith("auth_recovered", {
+      route: "/draft/[sessionId]",
+      stalledMs: 2400,
+    });
   });
 
   it("resets on sign-out, so the next person is not the last one", () => {

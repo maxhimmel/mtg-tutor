@@ -8,6 +8,7 @@ import { SettingsProvider } from "./components/SettingsProvider";
 import { HoverPreviewProvider } from "./components/CardPreview";
 import { FeedbackProvider } from "./components/Feedback";
 import { AnalyticsIdentity } from "./components/AnalyticsIdentity";
+import { AuthStall } from "./components/AuthStall";
 
 // No null-guard here any more. The URL is validated in ./env, so a missing one
 // fails the build naming the variable rather than rendering a warning box that
@@ -108,6 +109,12 @@ export function ConvexClientProvider({ children }: { children: React.ReactNode }
       */}
       <AnalyticsIdentity />
       <ConvexProviderWithAuth client={convex} useAuth={useAuthFromAuthKit}>
+        {/*
+          Inside this one rather than beside AnalyticsIdentity, because the gap
+          it counts is between the two providers and only Convex's side of it is
+          readable from in here.
+        */}
+        <AuthStall />
         <SettingsProvider>
           {/*
             Inside ConvexProviderWithAuth because it writes through useMutation
