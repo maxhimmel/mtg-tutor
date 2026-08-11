@@ -279,6 +279,25 @@ export default defineSchema({
     // draft arrived through a link, which is a property on an existing event
     // rather than a new one.
     challengeId: v.optional(v.id("challenges")),
+    // Which bot policy dealt this draft.
+    //
+    // Bots decide what wheels, so {seed, pickedNames} stopped being enough the
+    // moment there was a second policy -- replaying under the wrong one deals
+    // different packs. ABSENT MEANS "legacy" AND ALWAYS WILL: every draft taken
+    // before this column existed was dealt by the original
+    // cardValue + colorBias bot, and that policy has to stay reachable forever
+    // or all of them strand. This is the whole reason smarter bots did not have
+    // to be paid for with everyone's history.
+    //
+    // The corollary is that a name here is FROZEN once any row carries it.
+    // Improving the bots means adding a name, never re-fitting one in place;
+    // BOT_FINGERPRINT in core goes red if somebody tries.
+    //
+    // Deliberately NOT in the localStorage-backed `useSettings` beside
+    // pickCeremony (decision #13). That one is per-pick and switchable
+    // mid-draft because nothing session-level depends on it. This decides the
+    // deal, so it has to be on the row a replay reads.
+    pod: v.optional(v.union(v.literal("table"), v.literal("sharks"))),
   }).index("by_user", ["userId"]),
 
   // What one pick actually saw and scored, written as it happens.

@@ -96,16 +96,15 @@ describe("policyFeatures", () => {
     expect(featuresOf(card("A", ["U"], 0.44), new BotMemory()).value).toBeCloseTo(-0.06);
   });
 
-  it("separates a colourless card from one in a colour nobody is in", () => {
+  // The measured absence, kept as a test so the reasoning is not re-litigated
+  // by someone noticing the gap. A colourless card and a card in a colour nobody
+  // is in score identically here, which LOOKS like a modelling hole -- and
+  // `--ablate` priced closing it at -0.04pp over 458k picks. See POLICY_FEATURES.
+  it("does not distinguish a colourless card from one in an unplayed colour", () => {
     const m = new BotMemory();
-    const artifact = featuresOf(card("Rock", [], 0.6), m);
-    const ignored = featuresOf(blue("Ignored"), m);
+    m.take(blue("A"));
 
-    // Both score 0 on the two shares, which is exactly why `colorless` exists.
-    expect(artifact.laneFit).toBe(ignored.laneFit);
-    expect(artifact.openness).toBe(ignored.openness);
-    expect(artifact.colorless).toBe(1);
-    expect(ignored.colorless).toBe(0);
+    expect(featuresOf(card("Rock", [], 0.6), m)).toEqual(featuresOf(red("Ignored"), m));
   });
 
   it("flags rares and mythics, and nothing else", () => {
@@ -127,7 +126,18 @@ describe("policyFeatures", () => {
     expect(early.laneFitLate).toBe(0);
     expect(early.opennessLate).toBe(0);
     expect(late.laneFitLate).toBe(late.laneFit);
-    expect(late.opennessLate).toBe(late.openness);
+    expect(late.opennessLate).toBe(m.openness(blue("X")));
+  });
+
+  // Signal-reading reaches the score ONLY through the interaction, which is what
+  // the ablation found. A pick in pack 1 cannot be moved by what has flowed.
+  it("ignores openness entirely at the start of the draft", () => {
+    const heavilyBlue = new BotMemory();
+    heavilyBlue.see([blue("A"), blue("B"), blue("C"), blue("D")]);
+
+    expect(featuresOf(blue("X"), heavilyBlue, 0)).toEqual(
+      featuresOf(blue("X"), new BotMemory(), 0),
+    );
   });
 
   it("reuses the caller's array, because a draft scores thousands of these", () => {
@@ -154,7 +164,7 @@ describe("policyScore", () => {
   it("is the dot product of the weights and the features", () => {
     const m = new BotMemory();
     m.take(blue("A"));
-    const weights = [1, 2, 3, 4, 5, 6, 7];
+    const weights = [1, 2, 3, 4, 5];
     const f = policyFeatures(blue("X"), m, 0.5);
 
     expect(policyScore(blue("X"), m, 0.5, weights)).toBeCloseTo(

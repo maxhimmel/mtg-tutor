@@ -28,6 +28,7 @@ import type { Caller } from "./roles.js";
 import { loadBoard, ownedSession, setDocFor } from "./sessions.js";
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
+import type { StoredPod } from "@mtg-tutor/core";
 import {
   recordPick,
   storedPick,
@@ -67,7 +68,13 @@ const boardView = (engine: DraftEngine) => ({
 export async function startSession(
   ctx: MutationCtx,
   caller: Caller,
-  args: { setCode: string; format?: string; seed?: number; challengeId?: Id<"challenges"> },
+  args: {
+    setCode: string;
+    format?: string;
+    seed?: number;
+    challengeId?: Id<"challenges">;
+    pod?: StoredPod;
+  },
 ): Promise<Id<"draftSessions">> {
   const setCode = args.setCode.toLowerCase();
   const format = args.format ?? "PremierDraft";
@@ -95,12 +102,20 @@ export async function startSession(
     // Set only when this draft answers a challenge. What `pick` reads on the
     // last pick of the draft to know whether anyone is waiting to be told.
     challengeId: args.challengeId,
+    // Written once, at creation, and never patched: it decides the deal, so a
+    // draft that changed pod halfway would stop replaying. Omitted rather than
+    // defaulted to a literal, because absent is what the legacy pod IS.
+    pod: args.pod,
   });
 
   // After the insert and after the quota, so nothing is reported that did not
   // happen -- a capture above `enforce` would be rolled back with the refusal
   // anyway, which is the trap analytics.ts is written around.
-  await draftStarted(ctx, caller, { sessionId, setCode, format });
+  //
+  // `pod` rides the existing event rather than minting one. Started-against-
+  // completed split by pod is the whole question -- whether a sharper table
+  // drives people out of drafts -- and it is free once the property is here.
+  await draftStarted(ctx, caller, { sessionId, setCode, format, pod: args.pod ?? "legacy" });
 
   return sessionId;
 }
@@ -116,6 +131,13 @@ export const start = mutation({
      * samples of different drafts. Normal play omits it and gets a fresh deal.
      */
     seed: v.optional(v.number()),
+    /**
+     * Which table to draft against. Omitted means the original bots, which is
+     * what every draft taken before pods existed was dealt by -- see
+     * `draftSessions.pod`. It cannot be changed once the draft starts, because
+     * it decides what wheels.
+     */
+    pod: v.optional(v.union(v.literal("table"), v.literal("sharks"))),
   },
   handler: async (ctx, args) => {
     return await startSession(ctx, await requireCaller(ctx), args);
@@ -315,6 +337,7 @@ export const pick = mutation({
         // From the stored createdAt rather than anything a tab remembers, so a
         // draft resumed the next morning is not reported as a long sitting.
         ms: Date.now() - Date.parse(session.createdAt),
+        pod: session.pod ?? "legacy",
       });
 
       // Somebody may be waiting to hear about this one.

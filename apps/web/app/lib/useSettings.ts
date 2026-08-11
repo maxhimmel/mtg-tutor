@@ -71,6 +71,34 @@ export const DIFF_LAYOUTS: readonly { id: DiffLayout; label: string; blurb: stri
   },
 ];
 
+/**
+ * Which table you sit at.
+ *
+ * `legacy` is deliberately absent. It is what an absent `draftSessions.pod`
+ * means -- the cardValue + colorBias bot every draft before pods was dealt by --
+ * and it stays reachable so none of those strand. Nobody chooses it.
+ *
+ * Unlike every other setting here, this one is COPIED ONTO THE SESSION at
+ * `draft.start` and cannot change after. The bots decide what wheels, so a draft
+ * that switched pods halfway would stop replaying. Decision #13's argument for
+ * keeping pickCeremony out of the database does not carry: that is per-pick and
+ * already recorded per pick, and this one decides the deal.
+ */
+export type Pod = "table" | "sharks";
+
+export const PODS: readonly { id: Pod; label: string; blurb: string }[] = [
+  {
+    id: "table",
+    label: "A real table",
+    blurb: "Seven drafters fitted to how people actually pick, disagreements and all",
+  },
+  {
+    id: "sharks",
+    label: "Sharks",
+    blurb: "The same, fitted to drafters who went 3-0. Good cards wheel less",
+  },
+];
+
 export interface Settings {
   // Whether hovering a card mid-draft shows what 17Lands knows about it. Off is
   // drafting blind: the card is just a card, and the numbers wait for the
@@ -91,6 +119,9 @@ export interface Settings {
   setView: SetView;
   // Which shape the challenge comparison is read in.
   diffLayout: DiffLayout;
+  // Which pod the NEXT draft is dealt against. Read once, at draft.start, and
+  // stored on the session -- changing it later cannot affect a draft in flight.
+  pod: Pod;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -109,6 +140,10 @@ export const DEFAULT_SETTINGS: Settings = {
   // almost nobody ever sees the one that won -- a default is not a neutral
   // position, it is the answer for everybody who never opens the control.
   diffLayout: "console",
+  // The fitted table, not the sharks. A pod of 3-0 drafters is a harder table
+  // to read and a worse one to learn on -- the signals it sends are the ones a
+  // strong pod sends, which is not the pod anybody reading this is sitting at.
+  pod: "table",
 };
 
 export const SETTINGS_KEY = "mtg-tutor:settings";
@@ -147,6 +182,15 @@ export function storedSettings(raw: string): Partial<Settings> {
     !DIFF_LAYOUTS.some((layout) => layout.id === rest.diffLayout)
   ) {
     delete rest.diffLayout;
+  }
+
+  // Same treatment, and it will matter the first time a pod is retired: a
+  // stored value the switcher no longer lists leaves a reader on a control with
+  // nothing pressed. Also catches "legacy" written by hand, which must never
+  // reach draft.start -- the mutation would refuse it, but later rather than
+  // here.
+  if (rest.pod !== undefined && !PODS.some((pod) => pod.id === rest.pod)) {
+    delete rest.pod;
   }
 
   return typeof guiderails === "boolean" && rest.showStats === undefined

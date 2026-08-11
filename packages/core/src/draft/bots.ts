@@ -1,5 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
+import { FITTED_POLICIES, type PolicyWeights, policyScore } from "./policy.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
 // and biases future picks toward its strongest colors, producing readable
@@ -113,20 +114,76 @@ export function botScore(card: EngineCard, memory: BotMemory): number {
   return cardValue(card) + memory.colorBias(card);
 }
 
+/**
+ * Which pod a draft was dealt against.
+ *
+ * A POLICY NAME IS FROZEN THE MOMENT A SESSION STORES IT. Bots decide what
+ * wheels, so a draft is only replayable against the policy it was dealt with --
+ * which is why `draftSessions.pod` records one and why an absent value means
+ * `legacy` forever. Improving the bots later means ADDING a name here, never
+ * editing the weights under an existing one. `BOT_FINGERPRINT` exists to go red
+ * if somebody does.
+ */
+export type PodPolicy = "legacy" | "table" | "sharks";
+
+/**
+ * The pods a draft can be STARTED against, which is not the same set.
+ *
+ * `legacy` has no stored representation -- it is what an absent
+ * `draftSessions.pod` means -- so it must not be requestable either, or a row
+ * could carry the string "legacy" and a row could carry nothing and the two
+ * would mean the same thing by convention rather than by construction. Nobody
+ * chooses the old bot; you get it by having drafted before pods existed.
+ */
+export type StoredPod = Exclude<PodPolicy, "legacy">;
+
+/**
+ * Gumbel noise, which is what turns an argmax into a draw from the softmax.
+ *
+ * Adding an independent Gumbel(0,1) to each candidate's logit and taking the
+ * largest samples exactly from softmax(logits) -- and it does it with ONE
+ * uniform per candidate, which is the only reason a sampled bot is allowed here
+ * at all: `forkImpact` is sound because every bot draws exactly one number per
+ * card in its hand and the human draws none, so the rng stream position is
+ * invariant under a swapped pick. A sampler that drew once per PICK would be
+ * cheaper and would silently turn fork weights into noise.
+ *
+ * Temperature is 1 and is not a knob. The fit is a model of how real drafters
+ * disagree, so sampling at 1 reproduces the measured spread; any other value is
+ * a number with no derivation behind it.
+ */
+function gumbel(u: number): number {
+  // mulberry32 returns [0, 1), and both ends send this to an infinity.
+  const clamped = Math.min(1 - 1e-12, Math.max(1e-12, u));
+  return -Math.log(-Math.log(clamped));
+}
+
 export class Bot {
   private readonly memory = new BotMemory();
+  private readonly weights: PolicyWeights | null;
 
-  constructor(private readonly noise: number = 0.01, private readonly rng: () => number = Math.random) {}
+  constructor(
+    private readonly policy: PodPolicy = "legacy",
+    private readonly rng: () => number = Math.random,
+    private readonly noise: number = 0.01,
+  ) {
+    this.weights = policy === "legacy" ? null : FITTED_POLICIES[policy];
+  }
 
   get pool(): readonly EngineCard[] {
     return this.memory.pool;
   }
 
-  pick(pack: EngineCard[]): EngineCard {
+  pick(pack: EngineCard[], progress = 0): EngineCard {
     let best = pack[0];
     let bestScore = -Infinity;
     for (const card of pack) {
-      const s = botScore(card, this.memory) + (this.rng() - 0.5) * this.noise;
+      // Exactly one draw per card, whichever policy is running, and drawn
+      // before it is used so the two branches consume the stream identically.
+      const u = this.rng();
+      const s = this.weights
+        ? policyScore(card, this.memory, progress, this.weights) + gumbel(u)
+        : botScore(card, this.memory) + (u - 0.5) * this.noise;
       if (s > bestScore) {
         bestScore = s;
         best = card;

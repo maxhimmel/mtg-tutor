@@ -61,7 +61,7 @@ function on(): boolean {
 export async function draftStarted(
   ctx: MutationCtx,
   caller: Caller,
-  p: { sessionId: string; setCode: string; format: string },
+  p: { sessionId: string; setCode: string; format: string; pod: string },
 ): Promise<void> {
   if (!on()) return;
 
@@ -83,7 +83,18 @@ export async function draftStarted(
  */
 export async function draftCompleted(
   ctx: MutationCtx,
-  p: { sessionId: string; setCode: string; format: string; picks: number; ms: number },
+  p: {
+    sessionId: string;
+    setCode: string;
+    format: string;
+    picks: number;
+    ms: number;
+    // Which pod they drafted against. A PROPERTY on this and on draft_started,
+    // not an event of its own: started-against-completed split by pod is the
+    // question -- does a sharper table drive people out of drafts -- and a
+    // second event name could not be crossed against the first.
+    pod: string;
+  },
 ): Promise<void> {
   if (!on()) return;
   await posthog.capture(ctx, { event: "draft_completed", properties: p });
