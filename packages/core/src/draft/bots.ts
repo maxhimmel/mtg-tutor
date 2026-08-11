@@ -35,12 +35,36 @@ import { cardValue } from "../scoring/value.js";
  */
 export class BotMemory {
   private colorValue = new Map<string, number>();
+  private poolQuality = 0;
+  private seenValue = new Map<string, number>();
+  private seenQuality = 0;
   readonly pool: EngineCard[] = [];
 
   take(card: EngineCard): void {
     this.pool.push(card);
-    const q = Math.max(0, cardValue(card) - 0.5);
+    const q = quality(card);
+    this.poolQuality += q;
     for (const c of card.colors) this.colorValue.set(c, (this.colorValue.get(c) ?? 0) + q);
+  }
+
+  /**
+   * A pack this bot looked at, whether or not it took from it.
+   *
+   * The half of a draft the bots have never had. Call it AFTER scoring the pack
+   * and before the next one, so `openness` is a statement about what has already
+   * flowed rather than about the choice currently in hand -- a feature that could
+   * see the pack it is being asked about would let the fit learn "take the colour
+   * this pack happens to be heavy in", which is not signal-reading.
+   *
+   * Reads nothing the legacy policy scores, so accumulating it costs the deal
+   * nothing -- which is what lets this land before any policy uses it.
+   */
+  see(pack: readonly EngineCard[]): void {
+    for (const card of pack) {
+      const q = quality(card);
+      this.seenQuality += q;
+      for (const c of card.colors) this.seenValue.set(c, (this.seenValue.get(c) ?? 0) + q);
+    }
   }
 
   colorBias(card: EngineCard): number {
@@ -51,6 +75,30 @@ export class BotMemory {
     for (const c of card.colors) best = Math.max(best, this.colorValue.get(c) ?? 0);
     return Math.min(0.05, best * 0.3);
   }
+
+  /** Share of the quality this bot has TAKEN that sits in this card's colour. */
+  laneFit(card: EngineCard): number {
+    return share(card, this.colorValue, this.poolQuality);
+  }
+
+  /** Share of the quality this bot has SEEN that sits in this card's colour. */
+  openness(card: EngineCard): number {
+    return share(card, this.seenValue, this.seenQuality);
+  }
+}
+
+// What one card adds to a colour's weight. Above the format's rough midpoint
+// only, so a pile of unplayables cannot claim a lane -- the same expression the
+// colour commitment has always used.
+function quality(card: EngineCard): number {
+  return Math.max(0, cardValue(card) - 0.5);
+}
+
+function share(card: EngineCard, weights: Map<string, number>, total: number): number {
+  if (total <= 0 || card.colors.length === 0) return 0;
+  let best = 0;
+  for (const c of card.colors) best = Math.max(best, weights.get(c) ?? 0);
+  return best / total;
 }
 
 /**
@@ -84,6 +132,8 @@ export class Bot {
         best = card;
       }
     }
+    // After the scoring loop, never before it. See BotMemory.see.
+    this.memory.see(pack);
     this.memory.take(best);
     return best;
   }
