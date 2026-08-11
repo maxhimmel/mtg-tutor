@@ -20,6 +20,7 @@ import { ColorPips } from "./ColorPips";
 import { DeckBoard } from "./DeckBoard";
 import { DeckBuilder } from "./DeckBuilder";
 import { ChallengeAFriend } from "./ChallengeAFriend";
+import { ChallengeAnswered, RESULT_ANCHOR } from "./ChallengeAnswered";
 import { Panel } from "./Panel";
 import { AfterDraft } from "./AfterDraft";
 import { humanError } from "../lib/humanError";
@@ -95,6 +96,24 @@ export function Results({
     void load();
   }, [isAuthenticated, load]);
 
+  /**
+   * Locking the forty in, which swaps this screen for a different one.
+   *
+   * Back to the top, because the screen being replaced is a deck builder that
+   * was scrolled down to the pile somebody was cutting, and nothing about a
+   * re-render moves the page. So the results arrived already scrolled -- past
+   * the masthead, past the top of the challenge banner, which is the one thing
+   * on that screen built to be the only thing on the screen.
+   *
+   * `instant`, not the smooth default: the content underneath is being replaced
+   * in the same beat, and a page gliding upward through two different screens is
+   * a longer way to arrive at the same place looking broken.
+   */
+  const lockedIn = useCallback(async () => {
+    await load();
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [load]);
+
   // The comparison, once it exists. `results` is refetched when the deck locks
   // in, so the guard is on the session rather than on the effect running: the
   // same forty must not be reported twice because the query answered twice.
@@ -152,13 +171,17 @@ export function Results({
             build and your grade are behind the lock.
           </p>
         </header>
+        {/* Its own block under the header rather than a line inside it. What it
+            says is that somebody is on the other side of this build, which is a
+            different order of fact from the instructions for doing it. */}
+        <ChallengeAnswered sessionId={sessionId} stage="building" />
         <DeckBuilder
           sessionId={sessionId}
           setCode={results.setCode}
           format={results.format}
           pool={results.pool}
           sideboard={results.sideboard}
-          onBuilt={load}
+          onBuilt={lockedIn}
         />
       </div>
     );
@@ -190,12 +213,22 @@ export function Results({
         <AfterDraft sessionId={sessionId} setCode={results.setCode} format={results.format} />
       )}
 
+      {/* Above the grade, because a draft taken off somebody's link ends in two
+          verdicts and this is the one they came for. Outside the REVEAL cascade
+          on purpose: those four are the verdict landing in order, and this is
+          the frame around it rather than a fifth beat of it. */}
+      <ChallengeAnswered sessionId={sessionId} stage="built" />
+
       {/* The verdict and the argument for it, side by side. The score used to sit
           in a 360px rail down the right of the page, which cost the deck itself a
           quarter of the width it now spends on piles -- and a number that small
           does not need a column of its own. */}
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
-        <header className={`flex flex-col gap-1.5 ${REVEAL[0]}`}>
+        {/* Where the challenge banner's spur points, when there is one. The
+            offset keeps this heading clear of the masthead rather than tucked
+            under it, which is the difference between arriving at your result and
+            arriving just past it. */}
+        <header id={RESULT_ANCHOR} className={`flex scroll-mt-24 flex-col gap-1.5 ${REVEAL[0]}`}>
           <p className="eyebrow">Deck locked in</p>
           <h2 className="font-display text-3xl font-semibold leading-tight sm:text-4xl">
             {agreed

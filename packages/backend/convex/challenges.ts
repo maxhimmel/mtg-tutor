@@ -245,6 +245,45 @@ export const mine = query({
 });
 
 /**
+ * The challenge a draft was dealt by, if it was dealt by one.
+ *
+ * Exists because the results screen had no way to know. A friend who took a
+ * link finished their forty-two picks, built their forty, and was handed the
+ * solo completion screen -- same page, same buttons, no mention of the person
+ * who dared them and no way to the comparison that had already unlocked. The
+ * challenge was reachable from the list, the landing page and an email, and
+ * from none of them was it reachable from the screen they were standing on.
+ *
+ * Off `session.challengeId`, which `accept` stamps and `create` deliberately
+ * does not: a session can be dared out to any number of friends, so "the
+ * challenge this draft belongs to" is only a question with one answer on the
+ * receiving side. That is the side that needed answering. The challenger is
+ * told by the badge and the email, both of which already exist.
+ *
+ * One get on one document, and reactive -- so a challenger who happens to be
+ * reading their own results is not what this serves, but a friend whose row is
+ * written to while they build does not have to refetch anything.
+ */
+export const forSession = query({
+  args: { sessionId: v.id("draftSessions") },
+  handler: async (ctx, args) => {
+    const session = await ownedSession(ctx, args.sessionId);
+    if (!session.challengeId) return null;
+
+    const challenge = await ctx.db.get(session.challengeId);
+    // A dangling id must read as "no challenge" rather than throw. This query
+    // sits on the screen somebody's draft ends on.
+    if (!challenge) return null;
+
+    return {
+      id: challenge._id,
+      state: stateOf(challenge),
+      fromName: challenge.fromName,
+    };
+  },
+});
+
+/**
  * Both drafts, row by row.
  *
  * Reads `draftPicks` and NEVER replays, which buys two things. Their score is
@@ -494,7 +533,9 @@ export const notifyChallenger = internalAction({
           `Somebody drafted your ${challenge.setCode.toUpperCase()} packs.`,
           "",
           `See where you two went different ways:`,
-          `${appUrl}/challenge/${challenge._id}/diff`,
+          // Stamped, and it is the only door that says the app was not already
+          // open -- see `diff_viewed.from` in app/lib/analytics.ts.
+          `${appUrl}/challenge/${challenge._id}/diff?from=email`,
         ].join("\n"),
       }),
     });

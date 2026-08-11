@@ -156,6 +156,52 @@ function Outcome({
     <p className="mt-4 text-lg leading-relaxed text-base-content/70">{children}</p>
   );
 
+  /**
+   * The offer, which is also what stays on screen while it is being taken up.
+   *
+   * `invitation` is a live query and `accept` writes `friendUserId` to the row
+   * it is watching -- so the instant the mutation lands, this screen re-answers
+   * with `takenByMe` true and renders "You are already drafting this" at
+   * somebody who is, at that exact moment, being sent to the draft. It sat there
+   * for the whole of the navigation, which on a dynamic route is a server round
+   * trip and plainly visible: you accept a challenge and the app tells you off
+   * for accepting it.
+   *
+   * Fixed by holding this page still rather than by putting another one in front
+   * of it. A screen that says "Dealing your pod" is a second thing to read on the
+   * way to a third, and it flashes for however long the round trip takes -- so
+   * the page you pressed the button on simply stays, with the button saying what
+   * it is doing. Nothing moves until the draft board arrives.
+   *
+   * `busy` already spans exactly the right window: set before the mutation and
+   * never cleared on success, because success ends in a route change. Cleared on
+   * failure, which hands the page back with the refusal under the button that
+   * caused it.
+   */
+  const offer = () => (
+    <>
+      <Title>{heading}</Title>
+      <Body>
+        You will draft the same forty-two cards they opened, in a pod of your own — so what
+        you take still changes what wheels back to you. When you finish, the two drafts go
+        side by side.
+      </Body>
+      <div className="mt-7 flex flex-wrap items-center gap-3">
+        <button className="btn btn-primary" disabled={busy} onClick={onTake}>
+          {busy ? "Dealing…" : "Draft these packs"}
+        </button>
+        <Link href="/" className="link link-hover text-sm text-base-content/60">
+          Not now →
+        </Link>
+      </div>
+      <p className="mt-4 text-sm text-base-content/60">
+        This uses one of your drafts for today.
+      </p>
+    </>
+  );
+
+  if (busy) return offer();
+
   // Your own link. Not an error -- the challenger opens it to check it works,
   // and telling them it is not theirs would be both wrong and baffling.
   if (invite.mine) {
@@ -213,7 +259,7 @@ function Outcome({
       <>
         <Title>This one is done.</Title>
         <Body>Both drafts are in. Read them side by side.</Body>
-        <Link href={`/challenge/${invite.id}/diff`} className="btn btn-primary mt-7">
+        <Link href={`/challenge/${invite.id}/diff?from=landing`} className="btn btn-primary mt-7">
           Compare the two drafts
         </Link>
       </>
@@ -236,27 +282,7 @@ function Outcome({
     );
   }
 
-  return (
-    <>
-      <Title>{heading}</Title>
-      <Body>
-        You will draft the same forty-two cards they opened, in a pod of your own — so what
-        you take still changes what wheels back to you. When you finish, the two drafts go
-        side by side.
-      </Body>
-      <div className="mt-7 flex flex-wrap items-center gap-3">
-        <button className="btn btn-primary" disabled={busy} onClick={onTake}>
-          {busy ? "Dealing…" : "Draft these packs"}
-        </button>
-        <Link href="/" className="link link-hover text-sm text-base-content/60">
-          Not now →
-        </Link>
-      </div>
-      <p className="mt-4 text-sm text-base-content/60">
-        This uses one of your drafts for today.
-      </p>
-    </>
-  );
+  return offer();
 }
 
 function Out() {

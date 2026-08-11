@@ -169,7 +169,7 @@ function ChallengeList() {
                     <span className="flex justify-end gap-1.5">
                       {row.state === "finished" ? (
                         <Link
-                          href={`/challenge/${row.id}/diff`}
+                          href={`/challenge/${row.id}/diff?from=list`}
                           className="btn btn-sm btn-primary w-[7.5rem]"
                         >
                           Compare

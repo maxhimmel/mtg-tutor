@@ -30,6 +30,24 @@ import { TrackStepper } from "./track";
 import type { Face } from "./faces";
 import { theirName } from "./sides";
 
+/**
+ * Which door this reading came through, off `?from=` on the URL.
+ *
+ * Read from `location` inside the effect that captures rather than through
+ * `useSearchParams`, which is a hook and would put this component behind a
+ * Suspense boundary it otherwise does not need -- for a value nothing renders.
+ * The effect is client-only by construction, so there is always a `location`.
+ *
+ * Unstamped is `link`, which is honest: a bare URL, a bookmark, a back button
+ * and every view recorded before the property existed are the same fact.
+ */
+function doorway(): "results" | "list" | "landing" | "email" | "link" {
+  const from = new URLSearchParams(window.location.search).get("from");
+  return from === "results" || from === "list" || from === "landing" || from === "email"
+    ? from
+    : "link";
+}
+
 export function DiffScreen({ challengeId }: { challengeId: string }) {
   return (
     <>
@@ -114,6 +132,7 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
               ? "theirs"
               : "neither",
       layout,
+      from: doorway(),
     });
     // `layout` is read once, at the moment the comparison resolves, which is
     // after SettingsProvider has restored from localStorage on mount -- so this

@@ -614,3 +614,238 @@ html {
   animation: gap-draw 620ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
   transform-origin: left center;
 }
+
+/* A cord laying itself down, for the rope on the challenge hand-off.
+
+   gap-draw above cannot do this one: it is scaleX on a box, and a rope that
+   parts and comes back is a curve, which squashes rather than extends under a
+   transform. Dash offset is the only thing that draws a PATH -- the stroke is
+   pushed out of its own dash and then pulled back through it, so the line
+   arrives from one end at whatever angle it happens to be travelling.
+
+   Unit-free, because it is paired with `pathLength="1"` on the path: the SVG
+   then reports its own length as 1 whatever the viewBox is, so one utility
+   serves the wide rope and the short tail that drops out of it without either
+   knowing how long the other is. Without that, every path needs its own
+   hand-measured dasharray and any edit to the curve silently breaks the
+   animation -- it still runs, it just starts part-drawn.
+
+   Held with `both`, so a cord that has not started yet is not drawn at all
+   rather than flashing complete on the first frame. */
+@keyframes rope-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility animate-rope {
+  stroke-dasharray: 1;
+  animation: rope-draw 900ms cubic-bezier(0.3, 0.6, 0.2, 1) both;
+}
+
+/* THE CHALLENGE'S PROGRESS ROPE, AND THE SPUR UNDER ITS BANNER.
+
+   More moving parts than this file usually allows, and the reason is that both
+   of these carry information nothing else on their screen carries. The rope says
+   how far along a three-step sequence somebody is standing; the spur is the only
+   thing telling a reader that a banner filling their whole viewport has a grade
+   and a decklist underneath it. A still spur is a decoration under a hero. A
+   moving one is a signpost. Everything here goes through motion-safe:.
+
+   The travelled leg FILLING, first dot to current, left to right.
+
+   This was a sheen over a rule that was already gold, which is not a progress
+   animation -- it is a highlight passing over a finished thing, and it read as
+   one. The leg now starts empty and gold arrives along it, with the warm leading
+   edge tick-arrive uses so the front reads as light moving through the colour
+   rather than a second colour turning up.
+
+   A BAR THAT GROWS, not a gradient slid through a window. The window version
+   left a gap at the first dot and there was no way to close it: the image is
+   finite, so any position that puts its right end past the box has already
+   pulled its left end inside, and the track's first tenth simply had nothing
+   painted on it. Sliding a picture of a full line is not the same thing as
+   drawing one, and the difference shows up exactly at the ends.
+
+   Rides gap-draw, which is this scale in the other axis and already the app's
+   way of saying a measure opening. Origin at the left edge, so the fill starts
+   ON the first dot by construction rather than by arithmetic.
+
+   The warm leading edge is the bar's OWN gradient rather than a second element
+   chasing it. A gradient has no fixed features to distort, so under scaleX it
+   compresses with the bar and the warm tip stays exactly at the tip -- the front
+   leads the whole way for free.
+
+   No animation, no transform, so a reduced-motion reader is left holding
+   scaleX(1): the finished line, which is the honest resting state.
+
+   1.8s, not the 1.15s this started at: the whole point is to be watched. */
+@utility animate-fill {
+  transform-origin: left center;
+  animation: gap-draw 1800ms cubic-bezier(0.25, 0.55, 0.25, 1) 700ms both;
+}
+
+/* The leg AHEAD, marching toward the stop you have not reached.
+
+   Dotted and travelling, which is the difference between the two legs said in
+   the drawing rather than in a colour: what is behind you is solid and lit, what
+   is in front is a dotted line still moving toward the thing you have not done.
+   It starts once the sweep has finished, so the two never run at once.
+
+   Round dots at 11px centres, not 2px rectangles at 6px. The first pass drew
+   them at the smallest size a dot can be and moved them slower than anything
+   else on the screen, which reads as a stalled line rather than a travelling
+   one. Exactly one period of travel, so the loop has no seam. */
+@keyframes dot-march {
+  to {
+    background-position: 11px 0;
+  }
+}
+
+@utility animate-march {
+  animation: dot-march 1s linear 2.8s infinite;
+}
+
+/* A bead running down the spur to the thing below the fold.
+
+   `transform-box: view-box` is not optional: an SVG child's transform is
+   resolved against its own bounding box by default in some engines, and a
+   circle's bounding box is the circle -- so an unqualified translateY(32.5px)
+   travels a distance defined by the dot's own radius rather than by the cord it
+   is supposed to be running down.
+
+   It fades out at the foot rather than stopping there, so it reads as arriving
+   at the dot already drawn at the end instead of stacking a second one on it.
+   Then most of the cycle is rest: a bead that restarts the moment it lands is a
+   loading spinner, and this is a signpost.
+
+   How far it runs is `--spur-run`, set on the element beside the coordinates it
+   has to agree with. It was written into this keyframe as a number, which meant
+   the cord could not be lengthened without silently leaving the bead to stop
+   partway down it. */
+@keyframes spur-travel {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(var(--spur-run));
+    opacity: 1;
+  }
+  42%,
+  100% {
+    transform: translateY(var(--spur-run));
+    opacity: 0;
+  }
+}
+
+@utility animate-spur {
+  transform-box: view-box;
+  animation: spur-travel 3.2s cubic-bezier(0.4, 0, 0.3, 1) 1.7s infinite;
+}
+
+/* The cord answering the bead that just ran down it.
+
+   A second copy of the same path at full strength, faded in and back out --
+   rather than an animation on the cord itself, which already carries rope-draw
+   and would lose it to whichever `animation` declaration sorted last.
+
+   Same duration and same delay as the bead, so the two stay in phase without
+   either knowing about the other: the afterglow peaks at 32% and the bead lands
+   at 30%. */
+@keyframes spur-after {
+  0%,
+  18% {
+    opacity: 0;
+  }
+  32% {
+    opacity: 1;
+  }
+  62%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@utility animate-afterglow {
+  animation: spur-after 3.2s ease-out 1.7s infinite;
+}
+
+/* The dot at the foot, answering the bead that just landed on it.
+
+   A ring thrown off the dot rather than the dot itself swelling: the dot is the
+   destination and a destination that changes size every three seconds is a
+   thing being fidgeted with. The ring leaves and the dot stays put.
+
+   `transform-origin` is the caller's, set beside the geometry it belongs to --
+   a scale on an SVG circle otherwise grows from the view-box corner and the ping
+   flies off toward the top left. */
+@keyframes spur-ping {
+  0%,
+  28% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  34% {
+    opacity: 0.75;
+  }
+  56%,
+  100% {
+    transform: scale(2.9);
+    opacity: 0;
+  }
+}
+
+@utility animate-ping-once {
+  transform-box: view-box;
+  animation: spur-ping 3.2s cubic-bezier(0.1, 0.6, 0.3, 1) 1.7s infinite;
+}
+
+/* And the label, catching the light a beat after the ring.
+
+   Holds off the left edge for the first quarter of the cycle and off the right
+   for the last, so this is one crossing per lap rather than the continuous
+   shimmer glyph-sheen gives a loading pack. Phased against the same 3.2s clock
+   the bead and the ring are on: bead lands at 30%, ring at 34%, light reaches
+   the words at 26-54%. One event with four parts, not four effects.
+
+   Painted onto a transparent COPY of the label stacked over the real one, so the
+   words keep their own colour and the sheen is only the highlight -- see Spur.
+   Clipping the real label to a gradient would mean owning its resting colour
+   here, in a keyframe, where the theme cannot reach it.
+
+   Runs 160% down to -60%, which is left to right on screen -- see leg-fill on
+   why that is the counter-intuitive direction and why taking the obvious one
+   ran this backwards through the words. */
+@keyframes spur-sheen {
+  0%,
+  26% {
+    background-position: 160% 0;
+  }
+  54%,
+  100% {
+    background-position: -60% 0;
+  }
+}
+
+@utility animate-label-sheen {
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: spur-sheen 3.2s cubic-bezier(0.35, 0, 0.3, 1) 1.7s infinite;
+}
+
+/* Anchors that move the page rather than leaving it -- the spur under the
+   challenge banner is the only one so far, and it exists because that banner
+   deliberately fills the screen. Off entirely for a reader who has asked for
+   less movement, who gets the jump instead. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
