@@ -138,6 +138,20 @@ export type PodPolicy = "legacy" | "table" | "sharks";
 export type StoredPod = Exclude<PodPolicy, "legacy">;
 
 /**
+ * The pod a new draft gets when nobody says otherwise.
+ *
+ * Here rather than in the web app's DEFAULT_SETTINGS, because the CLI starts
+ * drafts too and a default that lived in one client would silently deal the
+ * other a different table -- the CLI is not a lesser client. It began that way
+ * and the CLI got `legacy` while the browser got this.
+ *
+ * `table` and not `sharks`: a pod fitted to 3-0 drafters sends the signals a
+ * strong table sends, and reading those is not the skill anybody drafting here
+ * is trying to practise. Harder to learn from, not just harder to beat.
+ */
+export const DEFAULT_POD: StoredPod = "table";
+
+/**
  * Gumbel noise, which is what turns an argmax into a draw from the softmax.
  *
  * Adding an independent Gumbel(0,1) to each candidate's logit and taking the

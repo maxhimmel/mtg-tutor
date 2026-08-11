@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { COACH } from "@mtg-tutor/core";
+import { COACH, DEFAULT_POD } from "@mtg-tutor/core";
 import type { SettingSurface } from "./analytics";
 
 export type SetView = "grid" | "list";
@@ -140,10 +140,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // almost nobody ever sees the one that won -- a default is not a neutral
   // position, it is the answer for everybody who never opens the control.
   diffLayout: "console",
-  // The fitted table, not the sharks. A pod of 3-0 drafters is a harder table
-  // to read and a worse one to learn on -- the signals it sends are the ones a
-  // strong pod sends, which is not the pod anybody reading this is sitting at.
-  pod: "table",
+  // From core, so the CLI deals the same table. The reasoning for which one is
+  // on DEFAULT_POD itself.
+  pod: DEFAULT_POD,
 };
 
 export const SETTINGS_KEY = "mtg-tutor:settings";
