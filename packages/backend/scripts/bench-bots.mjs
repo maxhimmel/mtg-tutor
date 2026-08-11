@@ -25,9 +25,25 @@
 //            @mtg-tutor/core so this measures the policy rather than a copy of
 //            it (measurement trap #5)
 //
-// Noise is deliberately excluded. It is +-0.005 uniform, carries no information,
-// and can only lower agreement -- so leaving it out reads the shipped bot at its
-// best case, which is the direction a gate should be wrong in.
+// Legacy's noise is deliberately excluded. It is +-0.005 uniform, carries no
+// information, and can only lower agreement -- so leaving it out reads the
+// shipped bot at its best case, which is the direction a gate should be wrong in.
+//
+// HOW TO READ `table` AGAINST `table~`, WHICH IS THE WHOLE POINT
+//
+// `table~` scores far lower and is not worse. Two independent draws from a
+// distribution p agree with probability sum(p^2); an argmax matches a draw from
+// p with probability max(p). So if the fit is anywhere near calibrated:
+//
+//   table~   estimates how often TWO HUMANS given the same pack and pool would
+//            pick the same card as each other
+//   table    estimates the CEILING for any deterministic policy on this data --
+//            no fixed rule can beat "always guess the mode"
+//
+// That is the ceiling this file went looking for with `crowd` and did not find.
+// It says most of the gap to 100% is human disagreement rather than headroom,
+// and it is why the pod samples: seven seats all playing the mode is a table
+// that cannot disagree, which no real pod does.
 //
 // THE ONE LEAK, AND WHICH WAY IT POINTS
 //
@@ -47,9 +63,19 @@
 
 import { ConvexHttpClient } from "convex/browser";
 import { readFileSync, writeFileSync } from "node:fs";
-import { BotMemory, botScore, cardValue, normalizeName } from "@mtg-tutor/core";
+import {
+  BotMemory,
+  FITTED_POLICIES,
+  botScore,
+  cardValue,
+  draftProgress,
+  mulberry32,
+  normalizeName,
+  policyScore,
+} from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { lines, splitRow } from "./lib/csv.mjs";
+import { engineCards } from "./lib/engineCards.mjs";
 
 process.loadEnvFile(new URL("../.env.local", import.meta.url));
 
@@ -67,37 +93,37 @@ const log = (...a) => console.error(...a);
 
 // ---------------------------------------------------------------- the set
 
-// `sets.get` is the scripts' view of a set -- deliberately fat, deliberately not
-// on any hot path, and already what smoke-draft and validate-pack-model call. It
-// hands back the ENGINE half with `value` as ingest settled it, which is the
-// number the bots actually pick by. Recomputing it here from the committed
-// artifact was the alternative and is not sound: only 6 of the 18 artifacts
-// carry `packCards`, and none of them carry rarity or type line, so every
-// unrated card's value would have to be guessed.
+// The ENGINE half of the set, with `value` as ingest settled it -- the number
+// the bots actually pick by. Recomputing it here from the committed artifact was
+// the alternative and is not sound: only 6 of the 18 artifacts carry
+// `packCards`, and none carries rarity or type line, so every unrated card's
+// value would have to be guessed.
+//
+// The deployment is OPTIONAL, because `cache-cards` snapshots this to
+// `datasets/` once. See lib/engineCards.mjs for why a sweep that streams for a
+// quarter of an hour must not also need a backend up for a quarter of an hour.
 const url = process.env.CONVEX_URL;
-if (!url) throw new Error("CONVEX_URL missing -- run `convex dev --once` first.");
-const client = new ConvexHttpClient(url);
+const client = url ? new ConvexHttpClient(url) : null;
 
-log(`fetching ${setCode}/${format} from ${url}`);
-const set = await client.query(api.sets.get, { setCode, format });
-if (!set) throw new Error(`${setCode}/${format} is not ingested on this deployment.`);
-
+const cards = await engineCards(client, api, setCode, format, log);
 const byName = new Map();
-for (const card of set.cards) byName.set(normalizeName(card.name), card);
-log(`${set.cards.length} cards`);
+for (const card of cards) byName.set(normalizeName(card.name), card);
+log(`${cards.length} cards`);
 
 // ---------------------------------------------------------------- the split
 
 // FNV-1a over the draft id. Deterministic, so two runs and two policies see the
 // same held-out drafts without anything being written down.
-function heldOut(draftId) {
+function fnv(draftId) {
   let h = 0x811c9dc5;
   for (let i = 0; i < draftId.length; i++) {
     h ^= draftId.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
-  return h % 5 === 0;
+  return h;
 }
+
+const heldOut = (draftId) => fnv(draftId) % 5 === 0;
 
 // ---------------------------------------------------------------- the policies
 
@@ -158,6 +184,41 @@ const POLICIES = {
     }
     return best;
   },
+  // The fitted policy at its argmax: the single most likely human pick. This is
+  // the number comparable with everything above it.
+  table: (pack, memory, progress) => {
+    let best = pack[0];
+    let bestScore = -Infinity;
+    for (const c of pack) {
+      const s = policyScore(c, memory, progress, FITTED_POLICIES.table);
+      if (s > bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+    return best;
+  },
+  // And what actually ships: a draw from the fitted distribution, which is how
+  // seven seats come to disagree the way seven people do.
+  //
+  // It scores LOWER than `table` by construction and that is not a regression --
+  // top-1 agreement rewards always guessing the mode, and a pod where every seat
+  // guesses the mode is the thing sampling exists to avoid. The gap between the
+  // two rows IS the human disagreement the model measured.
+  "table~": (pack, memory, progress, rng) => {
+    let best = pack[0];
+    let bestScore = -Infinity;
+    for (const c of pack) {
+      const u = Math.min(1 - 1e-12, Math.max(1e-12, rng()));
+      const s =
+        policyScore(c, memory, progress, FITTED_POLICIES.table) - Math.log(-Math.log(u));
+      if (s > bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+    return best;
+  },
 };
 
 // ---------------------------------------------------------------- the sweep
@@ -173,14 +234,13 @@ let drafts = 0;
 
 let header = null;
 let packCols = [];
-let poolCols = [];
 let iDraft = -1;
 let iPack = -1;
 let iPickNo = -1;
 let iPick = -1;
 
 let currentDraft = null;
-let currentHeldOut = false;
+let buffer = [];
 
 // Keyed by pack AND pick, because `pick_number` restarts at 0 in every pack.
 // Bucketing on it alone folds P1P1 -- the one decision in the draft made with no
@@ -196,7 +256,66 @@ const bucket = (packNo, pickNo) => {
   return b;
 };
 
+/**
+ * One drafter's rows, in order, scored by every policy.
+ *
+ * Walked as a trajectory rather than row by row, which the first version did:
+ * `pool_*` says what the drafter had TAKEN and nothing says what they had SEEN,
+ * so a row-at-a-time reading leaves `openness` at zero forever and quietly
+ * measures the fitted policy with its signal term switched off.
+ *
+ * The memory is therefore accumulated exactly the way a bot's is, in the same
+ * order `Bot.pick` uses -- score, then see, then take.
+ */
+function walkDraft(rowsOfDraft) {
+  rowsOfDraft.sort((a, b) => a.packNo - b.packNo || a.pickNo - b.pickNo);
+  const memory = new BotMemory();
+  // Seeded per draft so the sampled policy is reproducible run to run, and does
+  // not correlate across drafters.
+  const rng = mulberry32(fnv(rowsOfDraft[0].draftId));
+
+  for (let i = 0; i < rowsOfDraft.length; i++) {
+    const { pack, picked, packNo, pickNo } = rowsOfDraft[i];
+    if (!picked) {
+      memory.see(pack);
+      continue;
+    }
+    if (pack.length < 2) {
+      memory.see(pack);
+      memory.take(picked);
+      continue;
+    }
+
+    const progress = draftProgress(i, rowsOfDraft.length);
+    const b = bucket(packNo, pickNo);
+    rows++;
+    b.rows++;
+    randomExpected += 1 / pack.length;
+    b.random += 1 / pack.length;
+
+    for (const name of names) {
+      if (POLICIES[name](pack, memory, progress, rng) === picked) {
+        hits.set(name, hits.get(name) + 1);
+        b[name]++;
+      }
+    }
+
+    memory.see(pack);
+    memory.take(picked);
+  }
+  if (rows % 100_000 < rowsOfDraft.length) log(`  ${rows.toLocaleString()} picks scored...`);
+}
+
 const started = Date.now();
+
+const flush = () => {
+  if (buffer.length === 0) return;
+  if (heldOut(currentDraft)) {
+    drafts++;
+    walkDraft(buffer);
+  }
+  buffer = [];
+};
 
 for await (const line of lines({ kind: "draft", setCode, format, localPath: localDraft, log })) {
   if (!header) {
@@ -212,70 +331,47 @@ for await (const line of lines({ kind: "draft", setCode, format, localPath: loca
     // rather than a scan of 586 column names.
     for (let i = 0; i < header.length; i++) {
       const h = header[i];
-      if (h.startsWith("pack_card_")) {
-        const card = byName.get(normalizeName(h.slice("pack_card_".length)));
-        if (card) packCols.push([i, card]);
-      } else if (h.startsWith("pool_")) {
-        const card = byName.get(normalizeName(h.slice("pool_".length)));
-        if (card) poolCols.push([i, card]);
-      }
+      if (!h.startsWith("pack_card_")) continue;
+      const card = byName.get(normalizeName(h.slice("pack_card_".length)));
+      if (card) packCols.push([i, card]);
     }
-    log(`${packCols.length} pack columns and ${poolCols.length} pool columns joined`);
+    log(`${packCols.length} pack columns joined`);
     continue;
   }
 
   const row = splitRow(line);
   const draftId = row[iDraft];
   if (draftId !== currentDraft) {
+    flush();
     currentDraft = draftId;
-    currentHeldOut = heldOut(draftId);
-    if (currentHeldOut) drafts++;
     if (limit && drafts > limit) break;
   }
-  if (!currentHeldOut) continue;
 
-  const picked = byName.get(normalizeName(row[iPick] ?? ""));
+  const name = row[iPick] ?? "";
+  const picked = byName.get(normalizeName(name));
   if (!picked) {
-    if (row[iPick]) unmatched++;
+    if (name) unmatched++;
     else skippedNoPick++;
-    continue;
   }
 
   // The pack as it was offered. A count above 1 is two copies of the same card,
-  // which changes nothing about the decision -- the policies are deterministic
+  // which changes nothing about the decision -- the deterministic policies are
   // functions of the card, so a duplicate can only tie with itself.
   const pack = [];
   for (const [i, card] of packCols) {
     const n = row[i];
     if (n && n !== "0") pack.push(card);
   }
-  if (pack.length < 2) continue; // no decision to get right
 
-  // The pool, taken from the row rather than accumulated across rows, so this
-  // assumes nothing about the file's ordering.
-  const memory = new BotMemory();
-  for (const [i, card] of poolCols) {
-    const n = row[i];
-    if (!n || n === "0") continue;
-    for (let k = Number(n); k > 0; k--) memory.take(card);
-  }
-
-  const pickNo = Number(row[iPickNo]);
-  const b = bucket(Number(row[iPack]), pickNo);
-  rows++;
-  b.rows++;
-  randomExpected += 1 / pack.length;
-  b.random += 1 / pack.length;
-
-  for (const name of names) {
-    if (POLICIES[name](pack, memory) === picked) {
-      hits.set(name, hits.get(name) + 1);
-      b[name]++;
-    }
-  }
-
-  if (rows % 100_000 === 0) log(`  ${rows.toLocaleString()} picks scored...`);
+  buffer.push({
+    draftId,
+    packNo: Number(row[iPack]),
+    pickNo: Number(row[iPickNo]),
+    pack,
+    picked,
+  });
 }
+flush();
 
 // ---------------------------------------------------------------- report
 

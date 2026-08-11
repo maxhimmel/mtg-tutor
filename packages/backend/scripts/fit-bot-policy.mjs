@@ -1,7 +1,7 @@
 // Fits a bot pick policy to real human drafters.
 //
 //   pnpm fit-bot-policy [--sets fdn,dsk,woe] [--format TradDraft]
-//                       [--train-per-mille 50] [--tier all|strong]
+//                       [--train-per-mille 50] [--test-per-mille 100] [--tier all|strong]
 //                       [--epochs 300] [--drop openness,opennessLate]
 //                       [--out weights.json]
 //
@@ -47,6 +47,7 @@ import {
 } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { lines, splitRow } from "./lib/csv.mjs";
+import { engineCards } from "./lib/engineCards.mjs";
 
 process.loadEnvFile(new URL("../.env.local", import.meta.url));
 
@@ -62,6 +63,12 @@ const setCodes = flag("sets", "fdn").split(",").filter(Boolean);
 // memory -- every kept pick holds ~10 candidates x 7 features -- without letting
 // the sample correlate with when the draft was played.
 const trainPerMille = Number(flag("train-per-mille", 50));
+// And of the held-out fifth. Kept whole in the first version, which is fine for
+// one set and fatal for eighteen: every pick holds ~11 candidates x 7 features,
+// so a full held-out fifth across the library is over a billion numbers and the
+// run dies on `Invalid array length` two thirds of the way in. A tenth of the
+// fifth is still ~15k picks a set, far more than an accuracy to 0.1pp needs.
+const testPerMille = Number(flag("test-per-mille", 100));
 const tier = flag("tier", "all");
 const epochs = Number(flag("epochs", 300));
 const outPath = flag("out");
@@ -73,9 +80,11 @@ const F = POLICY_FEATURES.length;
 
 if (tier !== "all" && tier !== "strong") throw new Error(`--tier must be all or strong`);
 
+// Optional on purpose. Card data is cached in `datasets/` by `cache-cards`, so
+// a fifteen-minute run needs no deployment at all -- see lib/engineCards.mjs for
+// why that is not a convenience.
 const url = process.env.CONVEX_URL;
-if (!url) throw new Error("CONVEX_URL missing -- run `convex dev --once` first.");
-const client = new ConvexHttpClient(url);
+const client = url ? new ConvexHttpClient(url) : null;
 
 function fnv(draftId) {
   let h = 0x811c9dc5;
@@ -105,6 +114,7 @@ const heldOut = (draftId) => fnv(draftId) % 5 === 0;
  * does not correlate with which fifth a draft landed in.
  */
 const keepForTraining = (draftId) => (fnv(draftId) >>> 8) % 1000 < trainPerMille;
+const keepForTest = (draftId) => (fnv(draftId) >>> 8) % 1000 < testPerMille;
 
 // ---------------------------------------------------------------- collection
 
@@ -152,10 +162,9 @@ function walkDraft(rows, byName, into) {
 }
 
 for (const setCode of setCodes) {
-  const set = await client.query(api.sets.get, { setCode, format });
-  if (!set) throw new Error(`${setCode}/${format} is not ingested on this deployment.`);
+  const cards = await engineCards(client, api, setCode, format, log);
   const byName = new Map();
-  for (const card of set.cards) byName.set(normalizeName(card.name), card);
+  for (const card of cards) byName.set(normalizeName(card.name), card);
 
   let header = null;
   let packCols = [];
@@ -172,10 +181,7 @@ for (const setCode of setCodes) {
   const flush = () => {
     if (buffer.length === 0) return;
     const isTest = heldOut(currentId);
-    // Only training drafts are subsampled. The held-out fifth is kept whole:
-    // it is the number this script exists to print, and thinning it would only
-    // make that noisier.
-    if (!isTest && !keepForTraining(currentId)) {
+    if (!(isTest ? keepForTest(currentId) : keepForTraining(currentId))) {
       buffer = [];
       return;
     }
