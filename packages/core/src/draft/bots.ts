@@ -196,7 +196,7 @@ export class Bot {
       // before it is used so the two branches consume the stream identically.
       const u = this.rng();
       const s = this.weights
-        ? policyScore(card, this.memory, progress, this.weights) + gumbel(u)
+        ? policyScore(card, this.memory, progress, this.weights, pack.length) + gumbel(u)
         : botScore(card, this.memory) + (u - 0.5) * this.noise;
       if (s > bestScore) {
         bestScore = s;

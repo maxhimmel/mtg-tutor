@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ColorCode, EngineCard } from "../model/card.js";
 import { BotMemory } from "./bots.js";
-import { POLICY_FEATURES, draftProgress, policyFeatures, policyScore } from "./policy.js";
+import { POLICY_FEATURES, draftProgress, packOpenness, policyFeatures, policyScore } from "./policy.js";
 
 // The features a fitted bot policy reads. Two things are actually at stake here.
 //
@@ -23,8 +23,14 @@ const blue = (n: string) => card(n, ["U"], 0.6);
 const red = (n: string) => card(n, ["R"], 0.6);
 const chaff = (n: string) => card(n, ["R"], 0.4);
 
-const featuresOf = (c: EngineCard, m: BotMemory, progress = 0) =>
-  Object.fromEntries(POLICY_FEATURES.map((f, i) => [f, policyFeatures(c, m, progress)[i]]));
+// A full 15-card pack unless a test is about pack size, so `valueOpen` is at
+// full strength and the other features read in isolation.
+const FULL = 15;
+
+const featuresOf = (c: EngineCard, m: BotMemory, progress = 0, packSize = FULL) =>
+  Object.fromEntries(
+    POLICY_FEATURES.map((f, i) => [f, policyFeatures(c, m, progress, packSize)[i]]),
+  );
 
 describe("laneFit", () => {
   it("is zero before anything has been taken, rather than NaN", () => {
@@ -90,6 +96,43 @@ describe("openness", () => {
   });
 });
 
+describe("valueOpen", () => {
+  // The term that fixes bomb-passing. Confidence should track how much choice is
+  // left in the pack, and it must RESET each pack -- which is exactly what
+  // `progress` cannot do, since it climbs across all 42 picks.
+  it("is at full strength on a fresh pack and near nothing on the dregs", () => {
+    const m = new BotMemory();
+    const bomb = card("Bomb", ["U"], 0.66);
+
+    expect(featuresOf(bomb, m, 0, 15).valueOpen).toBeCloseTo(featuresOf(bomb, m, 0, 15).value);
+    expect(featuresOf(bomb, m, 0, 2).valueOpen).toBeLessThan(
+      featuresOf(bomb, m, 0, 14).valueOpen / 5,
+    );
+  });
+
+  // The shape `progress` could not express: pick 1 of pack 3 is late in the
+  // DRAFT and early in the PACK, and the confidence belongs to the pack.
+  it("is the same at P1P1 and P3P1, however late in the draft that is", () => {
+    const m = new BotMemory();
+    const bomb = card("Bomb", ["U"], 0.66);
+
+    expect(featuresOf(bomb, m, 1, 14).valueOpen).toBe(featuresOf(bomb, m, 0, 14).valueOpen);
+  });
+
+  it("carries the sign of value, so a weak card is not flattered by a full pack", () => {
+    const weak = card("Weak", ["U"], 0.44);
+
+    expect(featuresOf(weak, new BotMemory(), 0, 15).valueOpen).toBeLessThan(0);
+  });
+
+  it("stays in [0,1] for any pack a set can deal", () => {
+    for (const n of [0, 1, 2, 13, 14, 15, 99]) {
+      expect(packOpenness(n)).toBeGreaterThanOrEqual(0);
+      expect(packOpenness(n)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe("policyFeatures", () => {
   it("centres value on the format midpoint", () => {
     expect(featuresOf(card("A", ["U"], 0.62), new BotMemory()).value).toBeCloseTo(0.12);
@@ -142,7 +185,7 @@ describe("policyFeatures", () => {
 
   it("reuses the caller's array, because a draft scores thousands of these", () => {
     const out = new Array(POLICY_FEATURES.length);
-    expect(policyFeatures(blue("A"), new BotMemory(), 0, out)).toBe(out);
+    expect(policyFeatures(blue("A"), new BotMemory(), 0, FULL, out)).toBe(out);
   });
 });
 
@@ -164,10 +207,10 @@ describe("policyScore", () => {
   it("is the dot product of the weights and the features", () => {
     const m = new BotMemory();
     m.take(blue("A"));
-    const weights = [1, 2, 3, 4, 5];
-    const f = policyFeatures(blue("X"), m, 0.5);
+    const weights = POLICY_FEATURES.map((_, i) => i + 1);
+    const f = policyFeatures(blue("X"), m, 0.5, FULL);
 
-    expect(policyScore(blue("X"), m, 0.5, weights)).toBeCloseTo(
+    expect(policyScore(blue("X"), m, 0.5, weights, FULL)).toBeCloseTo(
       f.reduce((s, x, i) => s + x * weights[i], 0),
     );
   });

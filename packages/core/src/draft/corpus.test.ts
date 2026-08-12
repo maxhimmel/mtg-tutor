@@ -113,9 +113,9 @@ describe("the deal is stable across a corpus of seeds", () => {
 // fingerprint says "you changed the weights", these say "you changed the deal".
 describe("the fitted pods deal the same way they always have", () => {
   const GOLDEN: [string, () => SetData, number, number][] = [
-    ["a fixed-shape set", fakeSet, 4107639351, 10842788],
-    ["a Play Booster set", fakePlayBoosterSet, 1069189498, 3502820254],
-    ["a set with rated, thin and unrated cards", fakeMixedSet, 4134235438, 4253524252],
+    ["a fixed-shape set", fakeSet, 1640807346, 2959471123],
+    ["a Play Booster set", fakePlayBoosterSet, 3163042544, 2619367136],
+    ["a set with rated, thin and unrated cards", fakeMixedSet, 1612751832, 1482762941],
   ];
 
   for (const [label, build, table, sharks] of GOLDEN) {

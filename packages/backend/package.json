@@ -39,6 +39,7 @@
     "ingest-sets": "node scripts/ingest-sets.mjs",
     "llm": "node scripts/llm-provider.mjs",
     "new-set": "node scripts/new-set.mjs",
+    "redeal": "node scripts/redeal.mjs",
     "seed-set-stats": "node scripts/seed-set-stats.mjs",
     "smoke-draft": "node scripts/smoke-draft.mjs",
     "test": "vitest run",

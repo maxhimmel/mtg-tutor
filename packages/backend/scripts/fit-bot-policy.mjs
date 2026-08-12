@@ -147,7 +147,7 @@ function walkDraft(rows, byName, into) {
     const chosen = pack.indexOf(picked);
     if (chosen >= 0) {
       for (const card of pack) {
-        const f = policyFeatures(card, memory, progress);
+        const f = policyFeatures(card, memory, progress, pack.length);
         for (let k = 0; k < F; k++) into.feat.push(f[k]);
       }
       into.size.push(pack.length);

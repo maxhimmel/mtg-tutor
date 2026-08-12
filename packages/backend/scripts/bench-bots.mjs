@@ -54,6 +54,17 @@
 // to cards under 200 games, so it is small -- but it flatters the BASELINE,
 // which means a fitted policy beating these numbers has beaten them fairly.
 //
+// WHY THERE IS A BOMB TABLE UNDER THE MAIN ONE
+//
+// Top-1 agreement is an average over 42 picks, and an average will happily hide
+// a policy that is wrong about the picks that matter most. The first fitted pod
+// scored 47.7% -- comfortably past the shipped bot -- while passing rares and
+// mythics at P1P1 roughly twice as often as humans do. Nothing in the aggregate
+// moved, and it was found by somebody drafting and being passed a mythic.
+//
+// P1P1 because it is the one decision with no pool, so nothing but card
+// evaluation is in play and the comparison is clean.
+//
 // THE SPLIT IS BY DRAFT, NEVER BY ROW
 //
 // Reported on the held-out fifth so these numbers stay comparable to whatever a
@@ -199,7 +210,7 @@ const POLICIES = {
     let best = pack[0];
     let bestScore = -Infinity;
     for (const c of pack) {
-      const s = policyScore(c, memory, progress, FITTED_POLICIES.table);
+      const s = policyScore(c, memory, progress, FITTED_POLICIES.table, pack.length);
       if (s > bestScore) {
         bestScore = s;
         best = c;
@@ -220,7 +231,8 @@ const POLICIES = {
     for (const c of pack) {
       const u = Math.min(1 - 1e-12, Math.max(1e-12, rng()));
       const s =
-        policyScore(c, memory, progress, FITTED_POLICIES.table) - Math.log(-Math.log(u));
+        policyScore(c, memory, progress, FITTED_POLICIES.table, pack.length) -
+        Math.log(-Math.log(u));
       if (s > bestScore) {
         bestScore = s;
         best = c;
@@ -237,6 +249,9 @@ const hits = new Map(names.map((n) => [n, 0]));
 const byPick = new Map(); // pickNumber -> {rows, random, ...policy hits}
 let rows = 0;
 let randomExpected = 0;
+// P1P1 packs holding a rare or mythic, and who took it.
+const bombs = { packs: 0, human: 0, ...Object.fromEntries(names.map((n) => [n, 0])) };
+const isBomb = (c) => c.slot === "rare" || c.slot === "mythic";
 let unmatched = 0;
 let skippedNoPick = 0;
 let drafts = 0;
@@ -302,11 +317,20 @@ function walkDraft(rowsOfDraft) {
     randomExpected += 1 / pack.length;
     b.random += 1 / pack.length;
 
+    const firstPick = packNo === 0 && pickNo === 0;
+    const packHasBomb = firstPick && pack.some(isBomb);
+    if (packHasBomb) {
+      bombs.packs++;
+      if (isBomb(picked)) bombs.human++;
+    }
+
     for (const name of names) {
-      if (POLICIES[name](pack, memory, progress, rng) === picked) {
+      const took = POLICIES[name](pack, memory, progress, rng);
+      if (took === picked) {
         hits.set(name, hits.get(name) + 1);
         b[name]++;
       }
+      if (packHasBomb && isBomb(took)) bombs[name]++;
     }
 
     memory.see(pack);
@@ -401,6 +425,16 @@ for (const name of names) {
   console.log(`  ${name.padEnd(7)} ${pct(hits.get(name))}${note}`);
 }
 
+if (bombs.packs > 0) {
+  const bp = (n) => `${((n / bombs.packs) * 100).toFixed(1)}%`;
+  console.log();
+  console.log(
+    `takes the rare or mythic at P1P1 (${bombs.packs.toLocaleString()} such packs)`,
+  );
+  console.log(`  human   ${bp(bombs.human)}   <- the number every policy should be near`);
+  for (const name of names) console.log(`  ${name.padEnd(7)} ${bp(bombs[name])}`);
+}
+
 console.log();
 console.log("by pack and pick (P1P1 is the only decision made with no pool)");
 console.log(`  seat     rows      random   ${names.map((n) => n.padEnd(8)).join("")}`);
@@ -426,6 +460,13 @@ if (jsonOut) {
         rows,
         drafts,
         random: randomExpected / rows,
+        bombsAtP1P1: {
+          packs: bombs.packs,
+          human: bombs.packs ? bombs.human / bombs.packs : null,
+          ...Object.fromEntries(
+            names.map((n) => [n, bombs.packs ? bombs[n] / bombs.packs : null]),
+          ),
+        },
         policies: Object.fromEntries(names.map((n) => [n, hits.get(n) / rows])),
         bySeat: Object.fromEntries(
           [...byPick.entries()].map(([k, b]) => [
