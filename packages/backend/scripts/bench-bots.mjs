@@ -137,12 +137,21 @@ const heldOut = (draftId) => fnv(draftId) % 5 === 0;
 // It reads counts aggregated over the WHOLE dataset, held-out drafts included,
 // so it has seen the answers and no fitted policy is allowed to use it.
 //
-// It was added expecting a ceiling and is not one -- `legacy` beats it, which is
-// the useful result. Knowing what the format takes on average is worth LESS than
-// knowing which two colours this drafter is in, so the context terms are where
-// the headroom is. Read it per pick number rather than in aggregate: at pick 0
-// there is no pool yet and `crowd` wins by ~6pp, which is the cleanest statement
-// of the gap between what wins games and what humans take.
+// It was added expecting a ceiling and is not one, and WHICH WAY IT FALLS
+// DEPENDS ON THE SET -- which was itself worth learning, because the first
+// reading of this was taken from fdn alone and generalised:
+//
+//   fdn  legacy 46.8  crowd 44.5     dsk  legacy 44.9  crowd 43.4
+//   woe  legacy 40.0  crowd 43.6     mkm  legacy 41.8  crowd 43.4
+//
+// So on a set with legible card quality the colour lane beats consensus, and on
+// a harder one consensus beats the shipped bot outright. `crowd` is roughly flat
+// across all four (43-45) while `legacy` swings 40-47, which says the old bot is
+// the thing that varies: it is only as good as `cardValue` is legible.
+//
+// Read it per pick number rather than in aggregate. At P1P1 there is no pool, so
+// `legacy` IS `greedy` and `crowd` wins by ~17pp on fdn -- the cleanest statement
+// available of the gap between what wins games and what humans take.
 const artifact = JSON.parse(
   readFileSync(new URL(`../data/${setCode}.${format}.json`, import.meta.url), "utf8"),
 );
