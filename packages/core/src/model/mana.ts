@@ -63,6 +63,18 @@ export interface CurveBucket<C> {
  *
  * Lands are left out. They are what pays for the curve rather than part of it.
  */
+/**
+ * Which curve bucket a card comes down in, 1..CURVE_TOP.
+ *
+ * Extracted so the chart, the deck builder and the pick path cannot each hold
+ * their own copy of it -- `tiebreak` had a second one, and two conventions for
+ * when a card comes down is one more than the subject supports. It is also what
+ * ingest stores on `EngineCard.turn`, so the number a bot-side reader sees is
+ * the number the chart drew.
+ */
+export const curveTurn = (card: { cmc: number; manaCost?: string }): number =>
+  Math.min(CURVE_TOP, Math.max(1, Math.ceil(castingValue(card))));
+
 export function manaCurve<C extends { cmc: number; typeLine: string; manaCost?: string }>(
   cards: readonly C[],
 ): CurveBucket<C>[] {
@@ -74,8 +86,7 @@ export function manaCurve<C extends { cmc: number; typeLine: string; manaCost?: 
 
   for (const card of cards) {
     if (isLand(card)) continue;
-    const turn = Math.min(CURVE_TOP, Math.max(1, Math.ceil(castingValue(card))));
-    buckets[turn - 1].cards.push(card);
+    buckets[curveTurn(card) - 1].cards.push(card);
   }
   return buckets;
 }

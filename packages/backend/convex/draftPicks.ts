@@ -49,6 +49,8 @@ export async function recordPick(
       isBest: rec.score.isBest,
       indistinguishable: rec.score.indistinguishable,
       bandNames: rec.score.band.map((c) => c.name),
+      ...(rec.score.preferred ? { preferredName: rec.score.preferred.name } : {}),
+      reasons: rec.score.reasons,
       onColor: rec.score.onColor,
       rankInPack: rec.score.rankInPack,
     },
@@ -200,6 +202,10 @@ export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): Recorde
       // A row written before the band existed has none and renders as it always
       // did: one card, which is what it was shown with.
       band: (row.score.bandNames ?? []).map((n) => hydrateCard(inPack(stored, n), text)),
+      ...(row.score.preferredName
+        ? { preferred: hydrateCard(inPack(stored, row.score.preferredName), text) }
+        : {}),
+      reasons: row.score.reasons ?? [],
       onColor: row.score.onColor,
       rankInPack: row.score.rankInPack,
     },

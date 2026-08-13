@@ -9,6 +9,8 @@ import {
   isBasicLand,
   mergeCards,
   normalizeName,
+  curveTurn,
+  detectRole,
   observedRarityBaselines,
   packSize,
   withPackSlots,
@@ -88,7 +90,10 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // so a two-in-one card can be explained and a double-faced one turned over,
 // and "10-context-se" put one standard error per card on the CONTEXT row so the
 // grade can tell a real gap from one inside the error bars -- which the verdict
-// beside it has always been able to do and the score never could.
+// beside it has always been able to do and the score never could, and
+// "11-turn-role" put the curve bucket and the role on the card so the pick path
+// can judge it against the DECK at all, which had been browser-only and so a
+// second opinion rather than the app's.
 // The tag names what changed; the fingerprint makes a change to how a card is
 // VALUED invalidate every pool without anyone remembering to say so. See
 // VALUE_FINGERPRINT.
@@ -97,7 +102,7 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // re-ingest rather than a migration -- and until one runs, a set simply has no
 // stored margins and grades exactly as it always has. That is the safe
 // direction: absent means "cannot say these are the same", never "they are".
-const POOL_REVISION = `10-context-se.${VALUE_FINGERPRINT}`;
+const POOL_REVISION = `11-turn-role.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -473,7 +478,17 @@ export const ingest = action({
       // After the baseline is on, never before: computing it against the raw
       // card would bake in RARITY_BASELINE's fixed guess for every unrated card
       // and quietly undo what observedRarityBaselines just measured.
-      return { ...rated, value: computeCardValue(rated) };
+      //
+      // `turn` and `role` are settled here for the same reason `value` is: both
+      // read the text half of a card, and the pick path has only the engine
+      // half. Doing it once at ingest is what lets the browser and the server
+      // judge a pack against the same deck rather than two.
+      return {
+        ...rated,
+        value: computeCardValue(rated),
+        turn: curveTurn(rated),
+        role: detectRole(rated),
+      };
     });
 
     // Every archetype the format actually produced, at every colour count. The

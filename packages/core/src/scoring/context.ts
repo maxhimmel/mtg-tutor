@@ -1,4 +1,5 @@
 import type { CardContext, ColorCode, ColorWinRate, EngineCard } from "../model/card.js";
+import type { DeckNeeds } from "./tiebreak.js";
 import { SCORING } from "../config.js";
 import { cardValue } from "./value.js";
 
@@ -124,6 +125,23 @@ export interface ScoringContext {
   archetypes: readonly ColorWinRate[];
   /** Per-card context, by the same normalised key `setCardContext` is keyed on. */
   contextFor: (card: EngineCard) => CardContext | undefined;
+  /**
+   * What the deck is still short of, and the reason this interface is the right
+   * place for it.
+   *
+   * This began as a separate argument to `challengeFor`, supplied by the browser
+   * and impossible for anyone else -- the needs read a curve and a set of roles,
+   * which lived on the text half of a card. The result was two authorities over
+   * one pack: the grade computed one answer without needs, the challenge another
+   * with them, and they disagreed on screen three times.
+   *
+   * `packScoringContext` exists to stop exactly that, and says so in its own
+   * comment. Putting needs anywhere else left it telling half the truth. Here,
+   * there is no way to build a context without them and therefore no way for two
+   * callers to hold different ones -- the divergence is not fixed, it is
+   * unrepresentable.
+   */
+  needs: DeckNeeds;
 }
 
 /** One named contribution, in win-rate points. */

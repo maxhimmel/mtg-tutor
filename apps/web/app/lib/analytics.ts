@@ -143,6 +143,12 @@ export function pickMade(p: {
    * Absent on every pick where the top of the pack was separable, which is most
    * of them -- so its rate is also the answer to whether the band forms often
    * enough for any of this to be worth keeping.
+   *
+   * Read off the score rather than the challenge, so it is recorded under BOTH
+   * ceremonies. While it came off the defense it could only exist for a player
+   * who had been argued with, which made the passive rate unmeasurable rather
+   * than merely unmeasured -- and the passive half is where "does a citation
+   * help somebody who was never challenged" is answered.
    */
   tiebroken?: string;
 }): void {

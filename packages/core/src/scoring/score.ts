@@ -15,6 +15,7 @@ import {
   contextValue,
   marginBetween,
 } from "./context.js";
+import { type TiebreakReason, bandOf, deckNeeds, tiebreak } from "./tiebreak.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -98,6 +99,22 @@ export interface PickScore<C extends EngineCard = EngineCard> {
    * the pack there is a single better card and it should be named as one.
    */
   band: C[];
+  /**
+   * Which of the band this deck actually wanted, and why -- the server's own
+   * answer to the question the challenge screen asks.
+   *
+   * Undefined unless a principle decided something, which needs a band of more
+   * than one and a reason that changed the answer.
+   *
+   * This is the field the whole parity exercise was for. The challenge picks a
+   * card out of the band by the deck's needs; before `turn` and `role` reached
+   * the pick path, the grade could not do that and named the float's argmax
+   * instead, so the two panels named two cards off one pack. Both now run the
+   * same `tiebreak` over the same `ctx.needs`, so this IS the challenger.
+   */
+  preferred?: C;
+  /** Why `preferred` was preferred. Empty when nothing was. */
+  reasons: TiebreakReason[];
   onColor: boolean;
   rankInPack: number; // 1 = best available, by raw power
 }
@@ -193,6 +210,10 @@ export function packScoringContext(
     commitment: commitment(maindeck, colors, picksMade, totalPicks),
     archetypes,
     contextFor,
+    // From the same maindeck, at the same moment, by the one function both the
+    // grade and the challenge already call. That is the whole of the fix: two
+    // callers can no longer hold different needs, because neither builds them.
+    needs: deckNeeds(maindeck, picksMade, totalPicks),
   };
 }
 
@@ -282,12 +303,31 @@ export function scorePick<C extends EngineCard>(
   // against the TARGET rather than against the picked card, because that is what
   // the band is a band around -- "cards as good as the best one here", which is
   // the set the pick turned out to belong to.
-  const band: C[] = [];
-  if (indistinguishable && ctx) {
-    for (const card of pack) {
-      if (card.name === picked.name) continue;
-      const m = marginBetween(ctx, target, card);
-      if (m != null && targetValue - contextValue(card, ctx).value <= m) band.push(card);
+  // Assembled by the shared helper, best-first, because `tiebreak` holds the
+  // incoming order on a tie -- so a band built in pack order here and in value
+  // order in `challengeFor` is two different answers to one question. It was.
+  const band: C[] =
+    indistinguishable && ctx
+      ? bandOf(
+          pack
+            .filter((c) => c.name !== picked.name)
+            .map((c) => ({ card: c, value: contextValue(c, ctx).value })),
+          (a, b) => marginBetween(ctx, a, b),
+        )
+      : [];
+
+  // Which of them the deck wanted. Only when a principle actually changed the
+  // answer -- a tiebreak that lands on the card the float had already chosen
+  // agreed with it rather than deciding anything, and "preferred BECAUSE your
+  // curve is thin" is not true of that. Same rule `challengeFor` applies, which
+  // is the point: it is the same call.
+  let preferred: C | undefined;
+  let reasons: TiebreakReason[] = [];
+  if (ctx && band.length > 1) {
+    const broken = tiebreak(band, ctx.needs);
+    if (broken.card.name !== target.name) {
+      preferred = broken.card;
+      reasons = broken.reasons;
     }
   }
 
@@ -324,6 +364,8 @@ export function scorePick<C extends EngineCard>(
     isBest,
     indistinguishable,
     band,
+    ...(preferred ? { preferred } : {}),
+    reasons,
     onColor,
     rankInPack,
   };

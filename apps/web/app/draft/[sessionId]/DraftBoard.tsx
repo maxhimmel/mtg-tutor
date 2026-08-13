@@ -28,7 +28,6 @@ import {
   PACK,
   applyBench,
   calibrationLine,
-  deckNeeds,
   claimOutcome,
   explainPick,
   hydrate,
@@ -39,7 +38,6 @@ import {
   packScoringContext,
   splitCitations,
   splitPool,
-  tiebreakLine,
   textIndex,
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
@@ -473,20 +471,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     );
   }, [state, pool, packContext]);
 
-  // What the deck is still short of, which is the other half of judging a pack
-  // and the half no server can compute: `EngineCard` carries no mana value and
-  // no type line, so a curve and a creature count only exist where the cards
-  // have been hydrated. That is here.
-  //
-  // Read off the same maindeck as the scoring context above, at the same moment,
-  // so the card the challenge puts up and the deck it claims to be serving are
-  // describing one pool.
-  const needs = useMemo(() => {
-    if (!state) return undefined;
-    const maindeck = splitPool(pool, state.sideboard, pool.length).maindeck;
-    return deckNeeds(maindeck, pool.length, state.totalPicks);
-  }, [state, pool]);
-
   /**
    * The one thing the two ways of drafting do not share.
    *
@@ -500,7 +484,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const board: CeremonyBoard = {
     pack,
     scoring: scoringContext,
-    needs,
     busy: picking,
     error: commitError,
     clearError: () => setCommitError(null),
@@ -764,20 +747,19 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         benched: bench ?? false,
         carried,
         msDeliberating: Date.now() - packArrivedAt.current,
+        // Off the SCORE, not off the challenge. It used to be read from the
+        // defense, so it could only ever be recorded for a player who had been
+        // argued with -- which made the passive ceremony's rate structurally
+        // unmeasurable rather than merely unmeasured. One id, matching the one
+        // sentence shown; a list would break into a property PostHog cannot
+        // group on.
+        ...(score.reasons[0] ? { tiebroken: score.reasons[0].principle } : {}),
         ...(defense
           ? {
               confidence: defense.confidence,
               challenged: defense.challengedName !== undefined,
               ...(defense.outcome
-                ? {
-                    stood: defense.outcome.stood,
-                    separable: defense.outcome.separable,
-                    // One id, matching the one sentence the reveal shows. A list
-                    // would break into a property PostHog cannot group on.
-                    ...(defense.outcome.reasons[0]
-                      ? { tiebroken: defense.outcome.reasons[0].principle }
-                      : {}),
-                  }
+                ? { stood: defense.outcome.stood, separable: defense.outcome.separable }
                 : {}),
             }
           : {}),
@@ -1166,18 +1148,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                         <p className="text-sm leading-relaxed text-base-content/80">
                           {calibrationLine(lastView.call.confidence, lastView.call.outcome)}
                         </p>
-                        {/* Why that card was the one put up, and only when a
-                            principle actually chose it -- which is the case
-                            where the player has just been told the two cards
-                            were indistinguishable and would otherwise be left
-                            wondering why the app picked the one it did. Muted
-                            and below, because it explains the question rather
-                            than answering it. */}
-                        {tiebreakLine(lastView.call.outcome) && (
-                          <p className="mt-1.5 text-xs leading-relaxed text-base-content/60">
-                            {tiebreakLine(lastView.call.outcome)}
-                          </p>
-                        )}
                       </div>
                     )}
 

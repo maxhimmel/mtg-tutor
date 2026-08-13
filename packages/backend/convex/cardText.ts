@@ -142,6 +142,9 @@ export function hydratePick(rec: RecordedPick, index: TextIndex): RecordedPick<C
       rawBest: hydrateCard(rec.score.rawBest, index),
       contextBest: hydrateCard(rec.score.contextBest, index),
       band: hydrate(rec.score.band, index),
+      ...(rec.score.preferred
+        ? { preferred: hydrateCard(rec.score.preferred, index) }
+        : { preferred: undefined }),
     },
   };
 }

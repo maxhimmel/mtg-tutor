@@ -195,6 +195,8 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 12. When a card is hovered and the enlarged version is shown and then I click/select the card the hover disappears. That feels incorrect because I didn't STOP hovering over the card.
 
+13. This might be a dupe: i want the "your call on the gap" section to have the same highlighting behavior the coach section has.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -376,6 +378,8 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
 - Title: P1P1
 - Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
+
+12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely when they're referenced (i.e. by the coach/"your call on the gap")
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 

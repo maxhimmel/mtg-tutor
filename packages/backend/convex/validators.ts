@@ -36,6 +36,18 @@ export const packSlot = v.union(
 // Five fields per card, and every one of them is read by dealing a pack or
 // scoring a pick. This document is retrieved 42 times a draft and Convex bills
 // the whole of it, so anything a reader only wants to SHOW belongs in cardText.
+// What a card does, in the categories a Limited deck is counted in. Mirrors
+// core's CardRole exactly; a value here that core does not know is a card the
+// tiebreak would silently score as nothing.
+export const cardRole = v.union(
+  v.literal("removal"),
+  v.literal("evasion"),
+  v.literal("card advantage"),
+  v.literal("creature"),
+  v.literal("land"),
+  v.literal("other"),
+);
+
 export const engineCard = v.object({
   name: v.string(),
   colors: v.array(colorCode),
@@ -45,6 +57,17 @@ export const engineCard = v.object({
   // existed, which a re-ingest fills in.
   slot: v.optional(packSlot),
   packRate: v.optional(v.number()),
+  // The curve bucket and the role, settled at ingest so the pick path can judge
+  // a card against the DECK -- which the draft principles are almost entirely
+  // about, and which needed a mana value and a type line the engine's half of a
+  // card does not carry. See core's EngineCard for what the split cost before
+  // this and what these two fields cost instead.
+  //
+  // Optional because a pool ingested before they existed has neither, and a push
+  // validates every stored document. Narrowing them to required is a separate
+  // change, after every set has been re-ingested.
+  turn: v.optional(v.number()),
+  role: v.optional(cardRole),
   // Required, not optional -- see EngineCard.value. The formula's inputs are on
   // cardText now, so a card without this cannot be scored at all, and a push
   // validates every stored document: this deploying is the proof that no pool
@@ -262,6 +285,13 @@ export const storedPickScore = v.object({
   // absent on rows written before the verdict stopped naming a single winner
   // out of a tie -- those render the way they always did.
   bandNames: v.optional(v.array(v.string())),
+  // Which of the band the deck wanted, and the principles that say why. Stored
+  // so the review shows what the player was shown rather than recomputing it
+  // against a deck that has since been rebuilt.
+  preferredName: v.optional(v.string()),
+  reasons: v.optional(
+    v.array(v.object({ principle: v.string(), note: v.string() })),
+  ),
   onColor: v.boolean(),
   rankInPack: v.number(),
 });

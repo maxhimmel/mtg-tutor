@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NO_NEEDS } from "../testing/fakeSet.js";
 import type { CardContext, ColorCode, ColorWinRate } from "../model/card.js";
 import { mkCard } from "../testing/fakeSet.js";
 import {
@@ -30,6 +31,7 @@ const ctxOf = (over: Partial<ScoringContext> = {}): ScoringContext => ({
   commitment: 1,
   archetypes: ARCHETYPES,
   contextFor: () => undefined,
+  needs: NO_NEEDS,
   ...over,
 });
 

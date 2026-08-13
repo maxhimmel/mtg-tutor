@@ -1,20 +1,15 @@
 import type { Card, EngineCard } from "../model/card.js";
+import { detectRole as roleOf } from "../model/role.js";
 import { type PickScore, gapMargin } from "./score.js";
 import { cardValue } from "./value.js";
 
 const pct = (v?: number) => (v == null ? "n/a" : `${(v * 100).toFixed(1)}%`);
 
-export type CardRole = "removal" | "evasion" | "card advantage" | "creature" | "other";
+// Moved to model/role.ts, where it is an ingest-time classifier rather than a
+// helper for one sentence of prose -- see there for why. Re-exported because
+// this file's own line about removal still asks the question.
+export { type CardRole, detectRole } from "../model/role.js";
 
-export function detectRole(card: Card): CardRole {
-  const t = card.oracleText.toLowerCase();
-  if (/(destroy target|deals \d+ damage to|exile target (creature|permanent)|target creature gets -)/.test(t))
-    return "removal";
-  if (/(draw (a|two|three|\d+) cards?)/.test(t)) return "card advantage";
-  if (/(flying|menace|can't be blocked|trample)/.test(t)) return "evasion";
-  if (/\bcreature\b/.test(card.typeLine.toLowerCase())) return "creature";
-  return "other";
-}
 
 function wheelNote(alsa?: number): string {
   if (alsa == null) return "";
@@ -61,7 +56,7 @@ export function explainPick(ps: PickScore<Card>): string[] {
     // the pack is the one you took or the one you are being pointed at.
     if (rawBest.name !== contextBest.name && rawBest.name !== picked.name)
       lines.push(`Strongest card in the pack was ${rawBest.name} (GIH WR ${pct(rawBest.gihWinRate)}).`);
-    if (detectRole(contextBest) === "removal")
+    if (roleOf(contextBest) === "removal")
       lines.push(`${contextBest.name} is efficient removal — premium in most archetypes.`);
     if (contextBest.alsa != null)
       lines.push(`${contextBest.name} ${wheelNote(contextBest.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);

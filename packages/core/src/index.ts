@@ -6,6 +6,7 @@ export * from "./config.js";
 export * from "./model/card.js";
 export * from "./model/keywords.js";
 export * from "./model/mana.js";
+export * from "./model/role.js";
 export * from "./model/typeLine.js";
 export * from "./model/setData.js";
 export * from "./model/hydrate.js";

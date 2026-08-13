@@ -1,7 +1,7 @@
 "use client";
 
 import type { Card, PickScore } from "@mtg-tutor/core";
-import { gapMargin } from "@mtg-tutor/core";
+import { gapMargin, tiebreakLine } from "@mtg-tutor/core";
 import { gradeColor, points } from "../lib/format";
 import { CardPlacard } from "./CardPlacard";
 
@@ -117,7 +117,19 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                 ? score.band
                 : [score.contextBest]
               ).map((c) => (
-                <CardPlacard key={c.name} card={c} />
+                <div key={c.name} className="flex flex-col gap-0.5">
+                  <CardPlacard card={c} />
+                  {/* The one the deck wanted, marked inside the set rather than
+                      shown instead of it. Same card the challenge put up, from
+                      the same `tiebreak` over the same needs -- which is what
+                      the whole parity change bought, and what stops this panel
+                      and the one below it naming two cards off one pack. */}
+                  {score.preferred?.name === c.name && (
+                    <p className="text-xs leading-relaxed text-base-content/60">
+                      {tiebreakLine(c.name, score.reasons)}
+                    </p>
+                  )}
+                </div>
               ))}
             </div>
             {/* Said in words, not left to be read off two numbers. The whole

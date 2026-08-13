@@ -42,6 +42,7 @@ describe("buildPickContext", () => {
     isBest: false,
   indistinguishable: false,
     band: [],
+    reasons: [],
     onColor: true,
     rankInPack: 2,
   };
@@ -164,6 +165,7 @@ describe("buildPickContext showing the verdict's working", () => {
       isBest: true,
   indistinguishable: false,
     band: [],
+    reasons: [],
       onColor: true,
       rankInPack: 2,
       ...over,
@@ -260,6 +262,7 @@ describe("buildPickContext with a defended pick", () => {
       isBest: true,
   indistinguishable: false,
     band: [],
+    reasons: [],
       onColor: true,
       rankInPack: 2,
     },

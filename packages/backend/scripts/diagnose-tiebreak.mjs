@@ -26,7 +26,15 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
-import { challengeFor, deckNeeds, hydrate, isDecisionPick, normalizeName, packScoringContext, splitPool } from "@mtg-tutor/core";
+import {
+  challengeFor,
+  curveTurn,
+  detectRole,
+  isDecisionPick,
+  normalizeName,
+  packScoringContext,
+  scorePick,
+} from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { draftPicks } from "./lib/draftCache.mjs";
 
@@ -88,18 +96,37 @@ for (const c of artifact.cards) {
   contextByKey.set(key, {
     ...(c.iwd != null ? { iwd: c.iwd } : {}),
     ...(c.maindeckRate != null ? { maindeckRate: c.maindeckRate } : {}),
+    // The error bars, which ingest settles onto the context row. `scorePick`
+    // reads them through `marginBetween`, so leaving them out means no band ever
+    // forms on the GRADE side and the parity count sits at zero while the
+    // challenge side works perfectly -- which reads as "nothing to compare"
+    // rather than as a broken rig.
+    ...(c.gihWr != null && c.gihN > 0
+      ? { se: Math.round(Math.sqrt((c.gihWr * (1 - c.gihWr)) / c.gihN) * 1e5) / 1e5 }
+      : {}),
   });
   if (c.gihWr != null && c.gihN > 0) ratedByKey.set(key, { gihWinRate: c.gihWr, gihGames: c.gihN });
 }
 
 // Whole cards, the way the browser makes them: engine half joined to text half.
 const index = { get: (name) => textByKey.get(normalizeName(name)) };
+// Ingest settles `turn` and `role` on the card; `datasets/` was cached before it
+// did, so they are derived here from the same two functions ingest calls. Not a
+// convenience: without them every card looks like a two-drop with no role, no
+// need is ever met, and the sweep reports a confident zero for a working
+// feature. It did that twice -- once for `gapMargin`, once for these.
+const shaped = (card, text) => ({
+  ...card,
+  turn: curveTurn(text ?? card),
+  role: detectRole(text ?? { oracleText: "", typeLine: "" }),
+});
+
 const whole = (engineCards) =>
   engineCards.map((c) => {
     const text = index.get(c.name);
     const rated = ratedByKey.get(normalizeName(c.name)) ?? {};
     return text
-      ? { ...text, ...rated, ...c }
+      ? shaped({ ...text, ...rated, ...c }, text)
       : {
           ...c,
           ...rated,
@@ -115,7 +142,8 @@ const whole = (engineCards) =>
 // ---------------------------------------------------------------- the sweep
 
 let decisions = 0; // picks the challenge ceremony would actually run on
-let banded = 0; // more than one card inside the margin of the best
+let checked = 0; // picks where both the grade and the challenge preferred a card
+let diverged = 0; // ...and named different ones. Must be zero.
 let fired = 0; // a principle changed the challenger and wrote a sentence
 const byPrinciple = new Map();
 let missingText = 0;
@@ -145,20 +173,24 @@ for (const draft of cache.drafts) {
         const ctx = packScoringContext(maindeck, pool.length, rows.length, colorWinRates, (c) =>
           contextByKey.get(normalizeName(c.name)),
         );
-        const needs = deckNeeds(maindeck, pool.length, rows.length);
+        // The needs ride the context now, so there is no second call to compare
+        // against -- which is the point of the change this measures. Parity is
+        // checked instead: the challenge and the GRADE must name the same card,
+        // because both run one tiebreak over one set of needs.
+        const challenge = challengeFor(packCards, proposed, ctx);
+        const score = scorePick(packCards, proposed, maindeck, ctx);
 
-        // Run it both ways: what the float alone would put up, and what the
-        // shipped call with needs puts up. The difference is the feature.
-        const plain = challengeFor(packCards, proposed, ctx);
-        const withNeeds = challengeFor(packCards, proposed, ctx, needs);
-
-        if (withNeeds && plain) {
-          if (withNeeds.reasons.length > 0) {
+        if (challenge) {
+          if (challenge.reasons.length > 0) {
             fired++;
-            const id = withNeeds.reasons[0].principle;
+            const id = challenge.reasons[0].principle;
             byPrinciple.set(id, (byPrinciple.get(id) ?? 0) + 1);
           }
-          if (withNeeds.challenger.name !== plain.challenger.name) banded++;
+          // Both sides preferred a card, and it must be the same card.
+          if (score.preferred && challenge.reasons.length > 0) {
+            checked++;
+            if (score.preferred.name !== challenge.challenger.name) diverged++;
+          }
         }
       }
     }
@@ -174,7 +206,10 @@ console.log(`
 ${setCode} ${format} -- ${decisions.toLocaleString()} challenged picks from ${walked.toLocaleString()} drafts
 
   a principle wrote a sentence            ${String(fired).padStart(7)}  ${pct(fired)}
-  it changed which card was put up        ${String(banded).padStart(7)}  ${pct(banded)}
+
+parity -- the grade and the challenge naming one card
+  picks where both preferred a card       ${String(checked).padStart(7)}
+  ...and they disagreed                   ${String(diverged).padStart(7)}  ${diverged === 0 ? "(as it must be)" : "*** DIVERGENCE ***"}
 
 which principle decided, when one did`);
 for (const [id, n] of [...byPrinciple].sort((a, b) => b[1] - a[1])) {
