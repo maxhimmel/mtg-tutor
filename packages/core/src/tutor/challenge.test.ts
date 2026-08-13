@@ -168,6 +168,38 @@ describe("challengeFor with deck needs", () => {
     expect(ch?.challenger.name).toBe("Cheap Body");
     expect(ch?.gap).toBeCloseTo(0.075, 6);
   });
+
+  /**
+   * And the one number that must NOT follow the card put up.
+   *
+   * `contextBestName` is checked against the card the server graded against, so
+   * the reveal can decline to grade a certainty over a pair the server has since
+   * contradicted. The server has no hydrated cards and so no needs -- it always
+   * answers with the float's maximum. If this followed the tiebreak the two
+   * would disagree on exactly the picks where a principle decided something,
+   * the check would fail, and the reveal would drop the calibration block and
+   * the tiebreak sentence together. Which is what it did.
+   */
+  it("reports the float's whole-pack best even when it puts up another card", () => {
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx, needs);
+
+    expect(ch?.challenger.name).toBe("Cheap Body");
+    expect(ch?.contextBestName).toBe("Expensive Body");
+  });
+
+  it("reports the proposed card when that is the best in the pack", () => {
+    const ch = challengeFor([bomb, twoDrop], bomb, ctx, needs);
+    expect(ch?.contextBestName).toBe("Big Bomb");
+  });
+
+  // The same answer the caller used to reconstruct, so a pack with no tiebreak
+  // in it is unaffected by any of this.
+  it("agrees with the old derivation whenever no principle was consulted", () => {
+    const ch = challengeFor([mine, bomb, twoDrop], mine, ctx, needs);
+
+    expect(ch?.reasons).toEqual([]);
+    expect(ch?.contextBestName).toBe(ch?.challenger.name);
+  });
 });
 
 describe("tiebreakLine", () => {
@@ -176,6 +208,7 @@ describe("tiebreakLine", () => {
       {
         challenger: card("Cheap Body", { value: 0.575 }),
         reasons,
+        contextBestName: "Cheap Body",
         gap: 0.01,
         margin: 0.01,
         separable: false,
@@ -218,6 +251,7 @@ describe("resolveChallenge", () => {
   const challenge: Challenge = {
     challenger: card("Big Bomb", { value: 0.62 }),
     reasons: [],
+    contextBestName: "Big Bomb",
     gap: 0.04,
     margin: 0.01,
     separable: true,

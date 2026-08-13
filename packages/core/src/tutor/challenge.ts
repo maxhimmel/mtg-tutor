@@ -70,6 +70,24 @@ export interface Challenge<C extends Card = Card> {
    */
   reasons: TiebreakReason[];
   /**
+   * The whole pack's context-best BY VALUE ALONE, which is not always the card
+   * put up.
+   *
+   * Its only job is to be checked against the card the server graded against, so
+   * the reveal can drop a calibration reading rather than score a player's stated
+   * certainty over a pair the server has since contradicted.
+   *
+   * It has to be carried rather than derived from `challenger`, and that is the
+   * whole reason it exists. The caller used to reconstruct it -- "the challenger
+   * was the best card that was not the proposed one, so the whole-pack best is
+   * whichever of those two is higher" -- which was true until `tiebreak` could
+   * put up a card that is inside the band but not the float's maximum. Then the
+   * reconstruction named a card the server would never name, the check failed,
+   * and the reveal silently dropped the very block it had just gained a sentence
+   * in. Computed here, beside the values it is about.
+   */
+  contextBestName: string;
+  /**
    * `contextValue(challenger) - contextValue(proposed)`, in win-rate points.
    * Positive means the challenger is genuinely the better card for this deck.
    */
@@ -140,11 +158,17 @@ export function challengeFor<C extends Card>(
   // Against the card actually put up, never against the float's winner -- the
   // gap, the margin and the separability all have to describe the pair the
   // player is shown, or the calibration line grades a comparison nobody saw.
-  const gap = contextValue(challenger, ctx).value - contextValue(proposed, ctx).value;
+  const proposedValue = contextValue(proposed, ctx).value;
+  const gap = contextValue(challenger, ctx).value - proposedValue;
   const margin = gapMargin(challenger, proposed);
   return {
     challenger,
     reasons,
+    // By value alone and over the whole pack, which is the one question the
+    // server also answers -- so it stays keyed to `top` rather than to whatever
+    // the tiebreak put up. Ties go to the card that is not the proposed one,
+    // which is what the caller's own derivation did before this moved here.
+    contextBestName: proposedValue > top.value ? proposed.name : top.card.name,
     gap,
     margin,
     // An unmeasurable margin is not a tie. Saying two cards are

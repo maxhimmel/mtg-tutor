@@ -138,10 +138,15 @@ export function useChallenge({
         challengedName: challenge.challenger.name,
         proposedName: proposal.card.name,
         outcome,
-        // The better of the pair by the browser's own ranking, which is what the
-        // whole pack's context-best must be: the challenger was the best card
-        // that was not the proposed one.
-        expectedBestName: outcome.edge > 0 ? proposal.card.name : challenge.challenger.name,
+        // The browser's own whole-pack context-best, BY VALUE, which is the
+        // question the server answers too. Read off the challenge rather than
+        // reconstructed from the pair: once `tiebreak` can put up a card that is
+        // inside the margin but not the float's maximum, "the better of the two
+        // cards shown" and "the best card in the pack" stop being the same
+        // sentence -- and reconstructing it named a card the server never would,
+        // which failed the check below and dropped the whole calibration block
+        // exactly when a principle had just decided something.
+        expectedBestName: challenge.contextBestName,
       },
     );
   };
