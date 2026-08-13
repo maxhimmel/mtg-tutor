@@ -3,7 +3,7 @@
 //   pnpm fit-bot-policy [--sets fdn,dsk,woe] [--format TradDraft]
 //                       [--train-per-mille 50] [--test-per-mille 100] [--tier all|strong]
 //                       [--epochs 300] [--drop openness,opennessLate]
-//                       [--out weights.json]
+//                       [--out weights.json] [--refresh]
 //
 // WHAT IS BEING FITTED
 //
@@ -35,19 +35,22 @@
 // Same FNV-1a over draft_id, same held-out fifth, so the accuracy this prints
 // and the accuracy bench-bots prints are about the same drafts. Fitting on the
 // held-out fifth would make every number here a lie in the flattering direction.
+//
+// THE PACKS COME OFF DISK, THE FEATURES NEVER DO
+//
+// First run per set streams the dataset and writes `datasets/picks.*.bin`; every
+// run after it reads that instead, which is the difference between fifteen
+// minutes and seconds. Only the DEAL is cached -- what was on offer and what was
+// taken. Feature rows are recomputed here on every run, deliberately: they are
+// the thing being iterated on, and a cache of them would go stale exactly when
+// somebody edits POLICY_FEATURES, silently, against columns that no longer mean
+// what their names say. See lib/draftCache.mjs.
 
 import { ConvexHttpClient } from "convex/browser";
 import { writeFileSync } from "node:fs";
-import {
-  BotMemory,
-  POLICY_FEATURES,
-  draftProgress,
-  normalizeName,
-  policyFeatures,
-} from "@mtg-tutor/core";
+import { BotMemory, POLICY_FEATURES, draftProgress, policyFeatures } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
-import { lines, splitRow } from "./lib/csv.mjs";
-import { engineCards } from "./lib/engineCards.mjs";
+import { draftPicks } from "./lib/draftCache.mjs";
 
 process.loadEnvFile(new URL("../.env.local", import.meta.url));
 
@@ -79,6 +82,10 @@ const log = (...a) => console.error(...a);
 const F = POLICY_FEATURES.length;
 
 if (tier !== "all" && tier !== "strong") throw new Error(`--tier must be all or strong`);
+
+// Re-reads the datasets rather than the cached packs, for when 17Lands has
+// published more drafts.
+const refresh = has("refresh");
 
 // Optional on purpose. Card data is cached in `datasets/` by `cache-cards`, so
 // a fifteen-minute run needs no deployment at all -- see lib/engineCards.mjs for
@@ -127,14 +134,13 @@ let totalDrafts = 0;
 let skippedTier = 0;
 
 /** One drafter's 42 rows, walked in order so the memory is built like a bot's. */
-function walkDraft(rows, byName, into) {
+function walkDraft(rows, into) {
   rows.sort((a, b) => a.packNo - b.packNo || a.pickNo - b.pickNo);
   const memory = new BotMemory();
   const totalPicks = rows.length;
 
   for (let i = 0; i < rows.length; i++) {
-    const { pack, pickedName } = rows[i];
-    const picked = byName.get(pickedName);
+    const { pack, picked } = rows[i];
     // A pick naming a card the ingested pool does not have. Rare (83 of 149k on
     // fdn) and unrecoverable, and it must not silently become "chose index 0".
     if (!picked || pack.length < 2) {
@@ -162,79 +168,25 @@ function walkDraft(rows, byName, into) {
 }
 
 for (const setCode of setCodes) {
-  const cards = await engineCards(client, api, setCode, format, log);
-  const byName = new Map();
-  for (const card of cards) byName.set(normalizeName(card.name), card);
-
-  let header = null;
-  let packCols = [];
-  let iDraft = -1;
-  let iPack = -1;
-  let iPickNo = -1;
-  let iPick = -1;
-  let iWins = -1;
-
-  let currentId = null;
-  let buffer = [];
+  const cache = await draftPicks({ client, api, setCode, format, refresh, log });
   const before = train.size.length;
 
-  const flush = () => {
-    if (buffer.length === 0) return;
-    const isTest = heldOut(currentId);
-    if (!(isTest ? keepForTest(currentId) : keepForTraining(currentId))) {
-      buffer = [];
-      return;
-    }
-    walkDraft(buffer, byName, isTest ? test : train);
-    totalDrafts++;
-    buffer = [];
-  };
-
-  for await (const line of lines({ kind: "draft", setCode, format, log })) {
-    if (!header) {
-      header = splitRow(line);
-      iDraft = header.indexOf("draft_id");
-      iPack = header.indexOf("pack_number");
-      iPickNo = header.indexOf("pick_number");
-      iPick = header.indexOf("pick");
-      iWins = header.indexOf("event_match_wins");
-      for (let i = 0; i < header.length; i++) {
-        if (!header[i].startsWith("pack_card_")) continue;
-        const card = byName.get(normalizeName(header[i].slice("pack_card_".length)));
-        if (card) packCols.push([i, card]);
-      }
-      continue;
-    }
-
-    const row = splitRow(line);
-    const draftId = row[iDraft];
-    if (draftId !== currentId) {
-      flush();
-      currentId = draftId;
-    }
-
+  for (const draft of cache.drafts) {
     // `rank` is published but comes back empty on these files, so the strong
     // tier is defined by the record instead: a 3-0 drafter. Same signal
     // build-set-stats already uses for trophyPickRate, and unambiguous where a
     // rank bucket would need a threshold nobody can justify.
-    if (tier === "strong" && row[iWins] !== "3") {
+    if (tier === "strong" && draft.wins !== 3) {
       skippedTier++;
       continue;
     }
 
-    const pack = [];
-    for (const [i, card] of packCols) {
-      const n = row[i];
-      if (n && n !== "0") pack.push(card);
-    }
-    buffer.push({
-      packNo: Number(row[iPack]),
-      pickNo: Number(row[iPickNo]),
-      pack,
-      pickedName: normalizeName(row[iPick] ?? ""),
-    });
+    const isTest = heldOut(draft.id);
+    if (!(isTest ? keepForTest(draft.id) : keepForTraining(draft.id))) continue;
+
+    walkDraft(cache.rows(draft), isTest ? test : train);
+    totalDrafts++;
   }
-  flush();
 
   log(`${setCode}: ${train.size.length - before} training picks`);
 }
@@ -244,7 +196,7 @@ log(
   `collected ${train.size.length.toLocaleString()} train / ` +
     `${test.size.length.toLocaleString()} test picks from ${totalDrafts.toLocaleString()} drafts`,
 );
-if (skippedTier) log(`${skippedTier.toLocaleString()} rows skipped by --tier ${tier}`);
+if (skippedTier) log(`${skippedTier.toLocaleString()} drafts skipped by --tier ${tier}`);
 
 const trainFeat = Float64Array.from(train.feat);
 const testFeat = Float64Array.from(test.feat);

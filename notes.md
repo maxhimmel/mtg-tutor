@@ -191,6 +191,8 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 10. The "//" separator on the card placard's mana section is white and hard to read.
 
+11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to spend overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual mana-cost for this card?
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -368,7 +370,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
 
-12. New app title:
+11. New app title:
 
 - Title: P1P1
 - Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
@@ -475,24 +477,43 @@ re-ingest — see Ideas #2 for the other route to the same number.
    expensive part — a draft-data pass that reads `pool_*` and `draft_id` — now
    exists.
 
-   **A refit takes ~15 minutes and almost none of it is fitting.** Five sixths is
-   streaming and decompressing 18 draft CSVs (90-206MB gzipped each) and turning
-   them into feature rows; the gradient descent over ~284k picks is seconds. That
-   cost is paid again on every run, and the day this was built it was paid FIVE
-   times — three of them only to learn that a feature earned nothing.
+   **A refit took ~15 minutes and almost none of it was fitting.** Five sixths
+   was streaming and decompressing 18 draft CSVs (90-206MB gzipped each) and
+   splitting 586-column rows; the gradient descent over ~284k picks is seconds.
+   That cost was paid again on every run, and the day this was built it was paid
+   FIVE times — three of them only to learn that a feature earned nothing.
 
-   The rows do not change when the weights do. Extract once into a flat
-   Float32Array on disk under `datasets/` (already gitignored, where
-   `cache-cards` writes), and a refit becomes near-instant — which also makes
-   ablation, temperature probes and per-stage calibration checks cheap enough to
-   run before committing to a hypothesis rather than after. That is the actual
-   prize: the wrong diagnoses cost fifteen minutes each and would have cost
-   seconds.
+   Done. `datasets/picks.<set>.<format>.bin` holds the deal, and both
+   `fit-bot-policy` and `bench-bots` read it instead of the network: fdn goes 46s
+   → 4.4s and 32s → 1s, with bit-identical output on both. The prize is not the
+   minutes, it is that ablation, temperature probes and per-stage calibration
+   checks are now cheap enough to run BEFORE committing to a hypothesis. The
+   wrong diagnoses cost fifteen minutes each and should have cost seconds.
 
-   **The cache key has to include the feature list**, or a POLICY_FEATURES change
-   silently refits against stale columns — the exact train/serve skew
-   `policy.ts` exists to prevent, reintroduced through the back door. Key on the
-   feature names plus set, format, tier and the sampling per-mille.
+   **The obvious thing to cache is the feature matrix, and it is the wrong
+   thing.** Feature rows are exactly what changes when somebody is iterating on
+   `POLICY_FEATURES` — so that cache is stale on the runs that matter most, and
+   stale silently, refitting against columns that no longer mean what their names
+   say. That is the train/serve skew `policy.ts` exists to prevent, coming back
+   in through the door marked "optimisation". What does NOT change when the
+   policy does is the DEAL: which cards were on offer and which one the human
+   took. So that is what is stored, features are recomputed every run, and the
+   cache never has to know what a feature is.
+
+   Two things fell out of choosing the packs. It is thirty times smaller — two
+   bytes a candidate rather than seven floats — so it holds EVERY draft (fdn:
+   816k picks, 16MB) rather than a sample, and `--train-per-mille` became a
+   filter over memory instead of a reason to re-read 200MB. And it serves any
+   consumer of these files, which is why `bench-bots` got it for free.
+
+   The file stores `draft_id` as the string the dataset gave, never a hash of it.
+   The split is FNV over that id and the two scripts each keep their own copy of
+   that hash on purpose; a cache that hashed ids centrally would quietly become
+   the shared helper both of those comments forbid. What it does decide is when
+   it is stale: pack entries are indices into the set's EngineCards, so the
+   header carries a fingerprint of their names, values, slots and colours, and a
+   re-ingest rebuilds rather than reading someone else's indices.
+
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
    Also what `contextValue`'s speed term is waiting on: the axis is stored and
@@ -573,99 +594,99 @@ to the data work.
 
 # Measurement traps worth not falling into twice:
 
-1. **`trophyPickRate` cannot be fitted against.** It is the pick rate among 3-0
-   drafters and is the only decision-level ground truth we hold, which makes it
-   the obvious objective for a pick scorer — and it is nearly circular with
-   `maindeckRate`. Maindeck rate ALONE ranks trophy picks at rho 0.90, against
-   0.81 for the card value being improved. A weight search against it duly found
-   +0.12 held-out, which is not a better scorer but one that has learned to
-   predict one drafter behaviour from another. Use it as a CONSTRAINT — it
-   catches a wrong sign or a wrong shape, and did both — never as a target.
-2. **A fixture with no gaps hides a whole class of bug.** `splashCost` paid a
-   card 1.5pp to add a colour, because a width nobody drafted falls back to the
-   format's own rate, which is higher than a measured wider archetype. Every
-   test fixture had contiguous archetype widths; the real data had a hole. Found
-   by reading a stored pick.
-3. **Most of the gaps a pick is graded on are smaller than the error bars on the
-   win rates they came from.** A GIH WR is a proportion over `gihGames`, so it
-   carries a standard error of sqrt(p(1-p)/n), and a difference of two carries
-   the sum of their variances — about **±1pp between two well-sampled commons**,
-   against a `winRateGapK` of 750 that turns 1pp into 7.5 points of grade. A 94
-   and a 100 can be the same pick. `gapMargin` computes it and the coach prompt
-   states it, because a scorer that reports a difference the data cannot resolve,
-   with no error bar beside it, gets believed. One sigma deliberately: two would
-   call nearly every pick in the format a tie.
-4. **A test that cannot fail reads as coverage.** Both the replay corpus and the
-   value fingerprint were written with input batteries that could not have
-   noticed the change they existed to catch — every ALSA value sat at the nudge's
-   pivot or past its clamp. Perturb the thing under test and watch the guard go
-   red before trusting it.
-5. **A test one function upstream of the hole also reads as coverage, and this
-   one passes.** Trap #4 is a test that cannot go red. This is a test that is
-   correct, goes red properly, and is pointed at the wrong function. `layout` and
-   `backImageUrl` were added to `ScryfallCard`, to `CardText`, to `mergeCards` and
-   to the validator, with tests on `mergeCards` — and every stored row had
-   neither, because `textHalf` in `convex/cardText.ts` is a hand-written
-   projection that nobody added them to. Scryfall returned them, the mapping
-   mapped them, the validator accepted the narrower object, the re-crawl reported
-   success. **Adding a card field takes five edits and the fifth is the one no
-   test was watching**; `test/cardText.test.ts` now compares whole key sets rather
-   than named fields, so the class fails rather than the instance. When a pipeline
-   both produces and consumes a shape, test the last hop before storage, not the
-   first.
-6. **A comparison drawn from one side of itself agrees by construction.** The
-   results screen sets your forty beside the one `suggestDeck` would have built,
-   and for the whole life of that screen the suggestion was handed the MAINDECK
-   rather than the pool — so a builder asked for the best 23 spells out of the 23
-   you had already kept could only ever hand them back. Every deck matched
-   near-perfectly and the screen read as a compliment. It was found by a player
-   saying "I didn't think I was THAT good", not by anything in the codebase,
-   because nothing counted the gap: `deck_built` said the forty was locked in and
-   no event said whether the comparison had anything to tell them. **When two
-   things are compared, measure the DISTANCE between them, not just that both
-   arrived** — a gap pinned at zero is the signature, and it is invisible until
-   something is counting it. `build_compared` now is.
+1.  **`trophyPickRate` cannot be fitted against.** It is the pick rate among 3-0
+    drafters and is the only decision-level ground truth we hold, which makes it
+    the obvious objective for a pick scorer — and it is nearly circular with
+    `maindeckRate`. Maindeck rate ALONE ranks trophy picks at rho 0.90, against
+    0.81 for the card value being improved. A weight search against it duly found
+    +0.12 held-out, which is not a better scorer but one that has learned to
+    predict one drafter behaviour from another. Use it as a CONSTRAINT — it
+    catches a wrong sign or a wrong shape, and did both — never as a target.
+2.  **A fixture with no gaps hides a whole class of bug.** `splashCost` paid a
+    card 1.5pp to add a colour, because a width nobody drafted falls back to the
+    format's own rate, which is higher than a measured wider archetype. Every
+    test fixture had contiguous archetype widths; the real data had a hole. Found
+    by reading a stored pick.
+3.  **Most of the gaps a pick is graded on are smaller than the error bars on the
+    win rates they came from.** A GIH WR is a proportion over `gihGames`, so it
+    carries a standard error of sqrt(p(1-p)/n), and a difference of two carries
+    the sum of their variances — about **±1pp between two well-sampled commons**,
+    against a `winRateGapK` of 750 that turns 1pp into 7.5 points of grade. A 94
+    and a 100 can be the same pick. `gapMargin` computes it and the coach prompt
+    states it, because a scorer that reports a difference the data cannot resolve,
+    with no error bar beside it, gets believed. One sigma deliberately: two would
+    call nearly every pick in the format a tie.
+4.  **A test that cannot fail reads as coverage.** Both the replay corpus and the
+    value fingerprint were written with input batteries that could not have
+    noticed the change they existed to catch — every ALSA value sat at the nudge's
+    pivot or past its clamp. Perturb the thing under test and watch the guard go
+    red before trusting it.
+5.  **A test one function upstream of the hole also reads as coverage, and this
+    one passes.** Trap #4 is a test that cannot go red. This is a test that is
+    correct, goes red properly, and is pointed at the wrong function. `layout` and
+    `backImageUrl` were added to `ScryfallCard`, to `CardText`, to `mergeCards` and
+    to the validator, with tests on `mergeCards` — and every stored row had
+    neither, because `textHalf` in `convex/cardText.ts` is a hand-written
+    projection that nobody added them to. Scryfall returned them, the mapping
+    mapped them, the validator accepted the narrower object, the re-crawl reported
+    success. **Adding a card field takes five edits and the fifth is the one no
+    test was watching**; `test/cardText.test.ts` now compares whole key sets rather
+    than named fields, so the class fails rather than the instance. When a pipeline
+    both produces and consumes a shape, test the last hop before storage, not the
+    first.
+6.  **A comparison drawn from one side of itself agrees by construction.** The
+    results screen sets your forty beside the one `suggestDeck` would have built,
+    and for the whole life of that screen the suggestion was handed the MAINDECK
+    rather than the pool — so a builder asked for the best 23 spells out of the 23
+    you had already kept could only ever hand them back. Every deck matched
+    near-perfectly and the screen read as a compliment. It was found by a player
+    saying "I didn't think I was THAT good", not by anything in the codebase,
+    because nothing counted the gap: `deck_built` said the forty was locked in and
+    no event said whether the comparison had anything to tell them. **When two
+    things are compared, measure the DISTANCE between them, not just that both
+    arrived** — a gap pinned at zero is the signature, and it is invisible until
+    something is counting it. `build_compared` now is.
 
-7. **An average over every decision hides the decisions that matter most.** The
-   first fitted bot policy scored 47.7% top-1 against real human picks, well past
-   the shipped bot's 46.8%, and every aggregate in `bench-bots` said it was
-   better. It was also passing rares and mythics at P1P1 about twice as often as
-   humans do — 34% against 61% on SOS, and the same on all four sets checked.
-   A bomb is one card in fourteen and one pick in forty-two, so being wrong about
-   it costs almost nothing in the mean and nearly everything in whether the pod
-   feels real. **Found by drafting, not by measuring**: a mythic came round at
-   P1P2 and did not look like something a person would pass.
+7.  **An average over every decision hides the decisions that matter most.** The
+    first fitted bot policy scored 47.7% top-1 against real human picks, well past
+    the shipped bot's 46.8%, and every aggregate in `bench-bots` said it was
+    better. It was also passing rares and mythics at P1P1 about twice as often as
+    humans do — 34% against 61% on SOS, and the same on all four sets checked.
+    A bomb is one card in fourteen and one pick in forty-two, so being wrong about
+    it costs almost nothing in the mean and nearly everything in whether the pod
+    feels real. **Found by drafting, not by measuring**: a mythic came round at
+    P1P2 and did not look like something a person would pass.
 
-   **The failure was in CONFIDENCE, not ranking**, which is the part worth
-   carrying. The same model's argmax found bombs MORE often than humans (80.6%);
-   sampling from it found them far less (34.4%). A model can rank correctly and
-   still put the wrong probability on being right, and only the sampled number
-   shows it — every accuracy metric in the harness was blind to it.
+    **The failure was in CONFIDENCE, not ranking**, which is the part worth
+    carrying. The same model's argmax found bombs MORE often than humans (80.6%);
+    sampling from it found them far less (34.4%). A model can rank correctly and
+    still put the wrong probability on being right, and only the sampled number
+    shows it — every accuracy metric in the harness was blind to it.
 
-   **The first diagnosis was wrong and cost a fit.** The obvious suspect was
-   pooling sets whose value scales differ — SOS squeezes its cards into
-   0.61-0.67 where others spread wider — so a per-pack z-score went in. The fit
-   gave it a weight of 0.11 and an ablation cost of −0.02pp, because within a
-   pack a z-score is just `value / sd` and therefore competes with `value` for
-   the same job. Scale was never the problem. **A plausible cause is not a
-   diagnosis; fitting one costs fifteen minutes and proves nothing on its own.**
+    **The first diagnosis was wrong and cost a fit.** The obvious suspect was
+    pooling sets whose value scales differ — SOS squeezes its cards into
+    0.61-0.67 where others spread wider — so a per-pack z-score went in. The fit
+    gave it a weight of 0.11 and an ablation cost of −0.02pp, because within a
+    pack a z-score is just `value / sd` and therefore competes with `value` for
+    the same job. Scale was never the problem. **A plausible cause is not a
+    diagnosis; fitting one costs fifteen minutes and proves nothing on its own.**
 
-   What found it was measuring the thing directly: fit a sharpness multiplier per
-   stage of the draft and see where it lands.
+    What found it was measuring the thing directly: fit a sharpness multiplier per
+    stage of the draft and see where it lands.
 
-       P1 early 1.25   P1 mid 1.0    P1 late 0.5
-       P2 early 1.25   P2 mid 1.0    P2 late 0.5
-       P3 early 1.0    P3 mid 0.75   P3 late 0.5
+        P1 early 1.25   P1 mid 1.0    P1 late 0.5
+        P2 early 1.25   P2 mid 1.0    P2 late 0.5
+        P3 early 1.0    P3 mid 0.75   P3 late 0.5
 
-   Confidence belongs to the PACK, not the draft: high on a full pack, low on the
-   dregs, and it resets three times. `progress` climbs monotonically across all
-   42 picks and cannot express that shape at any weight, so the fit settled for
-   one global level — too flat at P1P1, too sharp on the last few cards. The
-   general lesson: **an interaction term can only bend a model along the axis you
-   gave it.** Check that the axis is the one the behaviour actually varies on.
+    Confidence belongs to the PACK, not the draft: high on a full pack, low on the
+    dregs, and it resets three times. `progress` climbs monotonically across all
+    42 picks and cannot express that shape at any weight, so the fit settled for
+    one global level — too flat at P1P1, too sharp on the last few cards. The
+    general lesson: **an interaction term can only bend a model along the axis you
+    gave it.** Check that the axis is the one the behaviour actually varies on.
 
-   `bench-bots` now reports the P1P1 bomb rate beside the aggregate, with the
-   human rate first, because the aggregate on its own said nothing was wrong.
+    `bench-bots` now reports the P1P1 bomb rate beside the aggregate, with the
+    human rate first, because the aggregate on its own said nothing was wrong.
 
 # Deferred trade-offs (revisit when the premise changes):
 
@@ -1004,9 +1025,9 @@ The architecture, the data pipeline and the deploy story are all documented in
         `core/src/tutor/challenge.ts`, `TheChallenge`, `draftPicks.defense
 
     .challengedName`, decision #11). Renaming either was considered: the
-    ceremony's sense is load-bearing in the validators, and the invite's is the
-    word the feature is called by everywhere outside the code. The comparison
-    logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
+ceremony's sense is load-bearing in the validators, and the invite's is the
+word the feature is called by everywhere outside the code. The comparison
+logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
 
 18. **The row is the grant, and `ownedSession` never learned about it**
     (2026-08-09). A challenge names both drafts, so "may I read this one"

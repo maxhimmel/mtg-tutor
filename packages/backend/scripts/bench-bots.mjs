@@ -1,7 +1,7 @@
 // How human-like the draft bots actually are, measured against real human picks.
 //
 //   pnpm bench-bots [--set fdn] [--format TradDraft] [--draft path.csv.gz]
-//                   [--limit 20000] [--json out.json]
+//                   [--limit 20000] [--json out.json] [--refresh]
 //
 // THE GATE ON `human-bots`, AND WHY IT EXISTS
 //
@@ -71,6 +71,15 @@
 // fitted policy scores later. Splitting by row would put pick 3 of a draft in
 // train and pick 4 in test, and a policy conditioned on the pool would be
 // reading its own training data back.
+//
+// THE PACKS COME OFF DISK
+//
+// Streaming and gunzipping the dataset was five sixths of this run, and this is
+// a script somebody runs repeatedly while changing a policy -- the packs are the
+// one part that does not change when the policy does. First run per set writes
+// `datasets/picks.*.bin` and every run after it reads that. Policies are still
+// played over every held-out pick on every run; nothing about a SCORE is cached.
+// See lib/draftCache.mjs.
 
 import { ConvexHttpClient } from "convex/browser";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -85,8 +94,7 @@ import {
   policyScore,
 } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
-import { lines, splitRow } from "./lib/csv.mjs";
-import { engineCards } from "./lib/engineCards.mjs";
+import { draftPicks } from "./lib/draftCache.mjs";
 
 process.loadEnvFile(new URL("../.env.local", import.meta.url));
 
@@ -100,6 +108,9 @@ const format = flag("format", "TradDraft");
 const localDraft = flag("draft");
 const limit = Number(flag("limit", 0));
 const jsonOut = flag("json");
+// Re-reads the dataset rather than the cached packs, for when 17Lands has
+// published more drafts.
+const refresh = process.argv.includes("--refresh");
 const log = (...a) => console.error(...a);
 
 // ---------------------------------------------------------------- the set
@@ -116,10 +127,16 @@ const log = (...a) => console.error(...a);
 const url = process.env.CONVEX_URL;
 const client = url ? new ConvexHttpClient(url) : null;
 
-const cards = await engineCards(client, api, setCode, format, log);
-const byName = new Map();
-for (const card of cards) byName.set(normalizeName(card.name), card);
-log(`${cards.length} cards`);
+const cache = await draftPicks({
+  client,
+  api,
+  setCode,
+  format,
+  localPath: localDraft,
+  refresh,
+  log,
+});
+log(`${cache.cards.length} cards`);
 
 // ---------------------------------------------------------------- the split
 
@@ -252,19 +269,12 @@ let randomExpected = 0;
 // P1P1 packs holding a rare or mythic, and who took it.
 const bombs = { packs: 0, human: 0, ...Object.fromEntries(names.map((n) => [n, 0])) };
 const isBomb = (c) => c.slot === "rare" || c.slot === "mythic";
-let unmatched = 0;
-let skippedNoPick = 0;
+// Over the whole dataset rather than the held-out fifth, which is what these
+// have always counted: they are a statement about the ingest joining the file,
+// not about the sample.
+const unmatched = cache.unmatched;
+const skippedNoPick = cache.noPick;
 let drafts = 0;
-
-let header = null;
-let packCols = [];
-let iDraft = -1;
-let iPack = -1;
-let iPickNo = -1;
-let iPick = -1;
-
-let currentDraft = null;
-let buffer = [];
 
 // Keyed by pack AND pick, because `pick_number` restarts at 0 in every pack.
 // Bucketing on it alone folds P1P1 -- the one decision in the draft made with no
@@ -291,12 +301,12 @@ const bucket = (packNo, pickNo) => {
  * The memory is therefore accumulated exactly the way a bot's is, in the same
  * order `Bot.pick` uses -- score, then see, then take.
  */
-function walkDraft(rowsOfDraft) {
+function walkDraft(rowsOfDraft, draftId) {
   rowsOfDraft.sort((a, b) => a.packNo - b.packNo || a.pickNo - b.pickNo);
   const memory = new BotMemory();
   // Seeded per draft so the sampled policy is reproducible run to run, and does
   // not correlate across drafters.
-  const rng = mulberry32(fnv(rowsOfDraft[0].draftId));
+  const rng = mulberry32(fnv(draftId));
 
   for (let i = 0; i < rowsOfDraft.length; i++) {
     const { pack, picked, packNo, pickNo } = rowsOfDraft[i];
@@ -341,70 +351,12 @@ function walkDraft(rowsOfDraft) {
 
 const started = Date.now();
 
-const flush = () => {
-  if (buffer.length === 0) return;
-  if (heldOut(currentDraft)) {
-    drafts++;
-    walkDraft(buffer);
-  }
-  buffer = [];
-};
-
-for await (const line of lines({ kind: "draft", setCode, format, localPath: localDraft, log })) {
-  if (!header) {
-    header = splitRow(line);
-    iDraft = header.indexOf("draft_id");
-    iPack = header.indexOf("pack_number");
-    iPickNo = header.indexOf("pick_number");
-    iPick = header.indexOf("pick");
-    if (iPickNo < 0 || iPick < 0 || iDraft < 0) {
-      throw new Error("not a 17Lands draft dataset");
-    }
-    // Resolved once. Per row this is an array walk over precomputed indices
-    // rather than a scan of 586 column names.
-    for (let i = 0; i < header.length; i++) {
-      const h = header[i];
-      if (!h.startsWith("pack_card_")) continue;
-      const card = byName.get(normalizeName(h.slice("pack_card_".length)));
-      if (card) packCols.push([i, card]);
-    }
-    log(`${packCols.length} pack columns joined`);
-    continue;
-  }
-
-  const row = splitRow(line);
-  const draftId = row[iDraft];
-  if (draftId !== currentDraft) {
-    flush();
-    currentDraft = draftId;
-    if (limit && drafts > limit) break;
-  }
-
-  const name = row[iPick] ?? "";
-  const picked = byName.get(normalizeName(name));
-  if (!picked) {
-    if (name) unmatched++;
-    else skippedNoPick++;
-  }
-
-  // The pack as it was offered. A count above 1 is two copies of the same card,
-  // which changes nothing about the decision -- the deterministic policies are
-  // functions of the card, so a duplicate can only tie with itself.
-  const pack = [];
-  for (const [i, card] of packCols) {
-    const n = row[i];
-    if (n && n !== "0") pack.push(card);
-  }
-
-  buffer.push({
-    draftId,
-    packNo: Number(row[iPack]),
-    pickNo: Number(row[iPickNo]),
-    pack,
-    picked,
-  });
+for (const draft of cache.drafts) {
+  if (!heldOut(draft.id)) continue;
+  drafts++;
+  walkDraft(cache.rows(draft), draft.id);
+  if (limit && drafts >= limit) break;
 }
-flush();
 
 // ---------------------------------------------------------------- report
 
