@@ -144,7 +144,7 @@ function walkDraft(rows, into) {
     // A pick naming a card the ingested pool does not have. Rare (83 of 149k on
     // fdn) and unrecoverable, and it must not silently become "chose index 0".
     if (!picked || pack.length < 2) {
-      memory.see(pack, picked ?? undefined);
+      memory.see(pack);
       if (picked) memory.take(picked);
       continue;
     }
@@ -162,9 +162,7 @@ function walkDraft(rows, into) {
 
     // The order the engine uses: score the pack, THEN record having seen it, so
     // openness never includes the pack the features were just computed against.
-    // The drafter's own card is named because a signal is one somebody PASSED
-    // you -- the same argument as in `Bot.pick`, and skew here is invisible.
-    memory.see(pack, picked);
+    memory.see(pack);
     memory.take(picked);
   }
 }

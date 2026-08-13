@@ -153,6 +153,36 @@ export type PolicyWeights = readonly number[];
  * colours". It is the only route openness has into the score, so it carries the
  * whole shape of a term that is worth nothing early and a great deal late; the
  * ablation prices it at +1.47pp, the second most valuable feature here.
+ *
+ * AND THE FEATURE THE PRINCIPLES ARGUE FOR INSTEAD, WHICH IS WORSE
+ *
+ * That reading has a competitor. `openness` correlates with `laneFit` at about
+ * +0.44 -- stable across fdn and dsk at both checkpoints, measured by
+ * `scripts/diagnose-openness.mjs` -- because a drafter takes out of what they
+ * are shown, so a large negative coefficient could be a redundancy correction
+ * rather than an opinion about signals.
+ *
+ * The draft principles define a signal more narrowly than `openness` does, and
+ * all three of them point the same way: SIG-03 says a signal is a card somebody
+ * PASSED you, SIG-04 that you read it off what is ABSENT, SIG-05 that the
+ * informative event is a good card arriving LATE. `openness` counts the
+ * drafter's own picks, weights a card out of a fresh pack exactly like one
+ * wheeling back at six, and reports an abundance rather than a surprise.
+ *
+ * A feature built to the narrower spec -- passed cards only, weighted by the
+ * complement of `packOpenness`, minus the drafter's own unweighted passed share
+ * so the set's composition divides out -- was implemented and fitted over
+ * fdn+dsk, 75,646 train / 36,145 held-out picks:
+ *
+ *   these seven features                     52.5% held-out top-1
+ *   + signal + signalLate                    52.5%  (-0.04pp and +0.00pp ablated)
+ *   signal and signalLate in openness' place 51.4%  -1.1pp
+ *
+ * It earns nothing beside `openness` and is a full point worse in its place, so
+ * it is not here. Worth writing down because the argument for it is a good one
+ * and will occur to somebody again: being closer to how a strong drafter
+ * DESCRIBES signal-reading did not make it a better predictor of what drafters
+ * DO. The script's header carries the rest.
  */
 export const FITTED_POLICIES: Record<"table" | "sharks", PolicyWeights> = {
   table: [3.7889, 43.0546, 1.8065, -0.3002, 1.5222, 7.9243, -16.2986],

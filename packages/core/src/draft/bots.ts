@@ -1,6 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import { FITTED_POLICIES, type PolicyWeights, packOpenness, policyScore } from "./policy.js";
+import { FITTED_POLICIES, type PolicyWeights, policyScore } from "./policy.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
 // and biases future picks toward its strongest colors, producing readable
@@ -39,11 +39,6 @@ export class BotMemory {
   private poolQuality = 0;
   private seenValue = new Map<string, number>();
   private seenQuality = 0;
-  // The two halves of `signal`, both counting PASSED cards only. See there.
-  private passedValue = new Map<string, number>();
-  private passedQuality = 0;
-  private lateValue = new Map<string, number>();
-  private lateQuality = 0;
   readonly pool: EngineCard[] = [];
 
   take(card: EngineCard): void {
@@ -64,35 +59,12 @@ export class BotMemory {
    *
    * Reads nothing the legacy policy scores, so accumulating it costs the deal
    * nothing -- which is what lets this land before any policy uses it.
-   *
-   * `taken` is the card this bot took out of this pack, and is what separates
-   * the two accumulators below from `seenValue`. A signal is a card somebody
-   * PASSED you (SIG-03), so the card you took yourself is not one -- counting it
-   * makes the feature partly a restatement of `laneFit`, which is the collinearity
-   * `signal` exists to get out of. Omit it and the passed counters read the whole
-   * pack; every real caller supplies it.
    */
-  see(pack: readonly EngineCard[], taken?: EngineCard): void {
-    // At most one card, by name, so a pack holding two copies of a common still
-    // reports the copy that was passed.
-    let skipped = taken === undefined;
-    const lateness = 1 - packOpenness(pack.length);
-
+  see(pack: readonly EngineCard[]): void {
     for (const card of pack) {
       const q = quality(card);
       this.seenQuality += q;
       for (const c of card.colors) this.seenValue.set(c, (this.seenValue.get(c) ?? 0) + q);
-
-      if (!skipped && card.name === taken!.name) {
-        skipped = true;
-        continue;
-      }
-      this.passedQuality += q;
-      this.lateQuality += q * lateness;
-      for (const c of card.colors) {
-        this.passedValue.set(c, (this.passedValue.get(c) ?? 0) + q);
-        this.lateValue.set(c, (this.lateValue.get(c) ?? 0) + q * lateness);
-      }
     }
   }
 
@@ -113,54 +85,6 @@ export class BotMemory {
   /** Share of the quality this bot has SEEN that sits in this card's colour. */
   openness(card: EngineCard): number {
     return share(card, this.seenValue, this.seenQuality);
-  }
-
-  /**
-   * How much MORE of this colour is reaching the bot late than its overall
-   * presence at the table would predict.
-   *
-   * WHAT WAS WRONG WITH `openness`, WHICH THIS DOES NOT REPLACE SO MUCH AS
-   * DEMOTE TO ITS CONTROL GROUP
-   *
-   * `openness` is the share of all quality seen that sits in a colour, and the
-   * dominant term in that is how much good stuff the SET prints in that colour
-   * -- which is the same number for all eight seats and every draft of the
-   * format. A feature that is mostly a set constant cannot say anything about
-   * this seat, and the fit's own result is what that looks like from the
-   * outside: the main effect ablated to nothing and the interaction took a large
-   * NEGATIVE weight, which as a claim about drafting ("late, avoid what has
-   * flowed") is backwards from SIG-05 and SIG-06.
-   *
-   * THE PRINCIPLES SAY WHICH CARDS COUNT, AND WHEN
-   *
-   *   SIG-03  a signal is a card somebody PASSED you
-   *   SIG-04  read signals by noticing what is ABSENT
-   *   SIG-05  a bomb that shows up at pick 4 means the seats above you are not
-   *           in that colour
-   *
-   * All three are about lateness, and `openness` weights a card seen out of a
-   * fresh pack exactly like the same card wheeling back at six. In an eight-seat
-   * pod a card still present at size 6 has been declined by eight drafters;
-   * `packOpenness` is already the measure of that, so its complement is how much
-   * a sighting is worth as evidence.
-   *
-   * WHY A DIFFERENCE AND NOT A RATE
-   *
-   * A lateness-weighted share on its own would still be dominated by the set's
-   * composition -- a colour the set prints heavily is a colour that arrives late
-   * heavily too. Subtracting the bot's own unweighted passed share divides that
-   * out: what is left is the colour arriving late MORE than its own supply
-   * accounts for, which is the absence SIG-04 is about, stated as arithmetic.
-   *
-   * Both halves are the bot's own observations, so this needs no set-level table
-   * and is seat-specific by construction. It is zero-centred, which is what lets
-   * a coefficient on it mean one thing: positive is open, negative is cut.
-   */
-  signal(card: EngineCard): number {
-    return (
-      share(card, this.lateValue, this.lateQuality) -
-      share(card, this.passedValue, this.passedQuality)
-    );
   }
 }
 
@@ -280,7 +204,7 @@ export class Bot {
       }
     }
     // After the scoring loop, never before it. See BotMemory.see.
-    this.memory.see(pack, best);
+    this.memory.see(pack);
     this.memory.take(best);
     return best;
   }
