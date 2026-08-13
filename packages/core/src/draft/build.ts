@@ -159,7 +159,21 @@ function surplus(cards: readonly Card[], against: Map<string, number>): Card[] {
   return out;
 }
 
-export function compareDecks(built: BuiltDeck, suggested: DeckSuggestion): DeckDiff {
+/**
+ * What comparing two decks needs, which is less than either kind of deck has.
+ *
+ * `compareDecks` and `alignDecks` took a `DeckSuggestion` and were handed a
+ * second BuiltDeck by the challenge screen, which compares two players' forties
+ * -- structurally fine until the suggestion grew a mana base neither comparison
+ * reads. Naming the overlap is what stops the next field added to a suggestion
+ * from breaking a comparison that never wanted it.
+ */
+export type ComparableDeck = Pick<
+  DeckSuggestion,
+  "colors" | "spells" | "nonbasicLands" | "basicLands" | "curve"
+>;
+
+export function compareDecks(built: BuiltDeck, suggested: ComparableDeck): DeckDiff {
   const builtCards = [...built.spells, ...built.nonbasicLands];
   const suggestedCards = [...suggested.spells, ...suggested.nonbasicLands];
 
@@ -206,7 +220,7 @@ export interface DeckRow {
  * copy, if only one side plays it, is left on its own row -- the same count
  * `compareDecks` reaches by multiset.
  */
-export function alignDecks(built: BuiltDeck, suggested: DeckSuggestion): DeckRow[] {
+export function alignDecks(built: BuiltDeck, suggested: ComparableDeck): DeckRow[] {
   const mine = [...built.spells, ...built.nonbasicLands].sort(byCurve);
   const theirs = [...suggested.spells, ...suggested.nonbasicLands].sort(byCurve);
 

@@ -245,12 +245,15 @@ describe("resolveChallenge", () => {
 });
 
 describe("claimOutcome", () => {
-  const outcome = (over: Partial<ReturnType<typeof resolveChallenge>>) => ({
+  const outcome = (
+    over: Partial<ReturnType<typeof resolveChallenge>>,
+  ): ReturnType<typeof resolveChallenge> => ({
     stood: true,
     challengerName: "Big Bomb",
     edge: 0.04,
     margin: 0.01,
     separable: true,
+    reasons: [],
     ...over,
   });
 
@@ -299,6 +302,7 @@ describe("calibrationLine", () => {
     edge: -0.04,
     margin: 0.01,
     separable: true,
+    reasons: [],
   };
   const tied = { ...separable, edge: -0.002, separable: false };
 
