@@ -127,7 +127,7 @@ this machine** instead — your subscription's usage window rather than API
 credit. Two terminals:
 
 ```bash
-pnpm claude-bridge     # leave it running
+pnpm claude-bridge     # leave it running (--echo to print the answers too)
 pnpm llm claude-cli    # point the dev deployment at it (pnpm llm groq / anthropic to switch back)
 ```
 
@@ -137,6 +137,20 @@ OpenAI-compatible wire format the provider seam already knows, and spawning one
 `claude -p` per request. Nothing in the app learns that the CLI exists.
 `llm.ts` refuses a non-loopback `CLAUDE_BRIDGE_URL`, because a bridge is a
 laptop or it is nothing.
+
+It narrates, which is most of what makes it usable. A call is announced when it
+**arrives**, named by the pick it is about, and again when it lands:
+
+```
+-> 09:09:43 coach   Pack 1, Pick 3 — pick 3 of 45, 42 to come.  [12.4KB in]
+<- 09:09:46 coach   stop - 1.1s to first token - 3.0s - 9,412 in (7,200 cached) / 312 out
+```
+
+The arrival line is the diagnostic that matters: if the coach fails and no `->`
+appeared, the request never left Convex, which is a different problem entirely.
+A player who clicks on mid-answer reads as `cancelled`, and the child is killed
+rather than left running up usage nobody will see. `--echo` prints the answers
+as they stream, for when the app is not what you are watching.
 
 What crosses faithfully: the system/user prompt pair, `--json-schema` for the
 review's structured output, streaming, the `fast` flag as `--effort low`, and

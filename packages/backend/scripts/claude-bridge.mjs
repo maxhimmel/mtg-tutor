@@ -2,7 +2,15 @@
 // paid API key. Dev only.
 //
 //   pnpm claude-bridge            # leave it running in its own terminal
+//   pnpm claude-bridge --echo     # ...and print the answers as they stream
 //   pnpm llm claude-cli           # point the dev deployment at it
+//
+// It narrates. A call is announced when it ARRIVES, named by the pick it is
+// about, and again when it lands with what it cost -- because the useful moment
+// is while you are waiting, and a log that only speaks afterwards is a log that
+// cannot tell you a request never arrived. Which is the failure this bridge is
+// most likely to have: the deployment not reaching this machine at all looks,
+// from the app, exactly like a slow coach.
 //
 // Why a server at all: Convex functions run in a V8 isolate with no
 // child_process, so nothing inside the deployment can shell out. The only seam
@@ -51,6 +59,12 @@ import { fileURLToPath } from "node:url";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.CLAUDE_BRIDGE_PORT ?? 8787);
+
+// Off by default. The answers are the same ones on screen in the app, so
+// echoing them is for the times the app is not what you are watching --
+// tuning a prompt, or reading what the coach said about a pick you already
+// clicked past.
+const ECHO = process.argv.includes("--echo") || process.env.CLAUDE_BRIDGE_ECHO === "1";
 
 // Read per call rather than once, so the tests can hand it a stub that emits a
 // canned stream and records the arguments it was given -- which is the only way
@@ -310,6 +324,31 @@ export function readRequest(body) {
   };
 }
 
+const clock = () => new Date().toTimeString().slice(0, 8);
+const secs = (ms) => `${(ms / 1000).toFixed(1)}s`;
+const count = (n) => n.toLocaleString("en-US");
+
+/**
+ * What this call is FOR, inferred from its shape rather than told.
+ *
+ * The app sends nothing that names the area, and it should not start: the whole
+ * design is that nothing upstream knows this bridge exists. The three shapes
+ * map cleanly today -- the coach streams, the verdict is the only schema, and
+ * the review frames are the only plain text -- so the label is worth having.
+ * It is a label and not a fact: a second streaming caller would wear the coach's
+ * name until this line is taught otherwise.
+ */
+const areaOf = (req) => (req.stream ? "coach" : req.schema ? "verdict" : "frame");
+
+// Every prompt this app writes opens with `situationLine`, which says which
+// pick is being asked about -- so one line of the body is a better name for a
+// call than any id the wire carries.
+function situation(prompt) {
+  const first = prompt.split("\n", 1)[0] ?? "";
+  const line = first.startsWith("Situation: ") ? first.slice("Situation: ".length) : first;
+  return line.length > 72 ? `${line.slice(0, 71)}…` : line;
+}
+
 const envelope = (req, extra) => ({
   id: req.id,
   created: Math.floor(Date.now() / 1000),
@@ -333,7 +372,7 @@ function sendJSON(res, status, payload) {
 const sendError = (res, status, message) =>
   sendJSON(res, status, { error: { message, type: "claude_bridge_error" } });
 
-async function completion(req, res, request) {
+async function completion(res, request, started) {
   const budget = request.maxTokens ? request.maxTokens * CHARS_PER_TOKEN : Infinity;
 
   if (!request.stream) {
@@ -348,22 +387,19 @@ async function completion(req, res, request) {
     const overBudget = (result.usage?.output_tokens ?? 0) > (request.maxTokens ?? Infinity);
     if (overBudget) content = content.slice(0, budget);
 
+    const finish = finishOf(result.stopReason, overBudget);
     sendJSON(
       res,
       200,
       envelope(request, {
         object: "chat.completion",
-        choices: [
-          {
-            index: 0,
-            message: { role: "assistant", content },
-            finish_reason: finishOf(result.stopReason, overBudget),
-          },
-        ],
+        choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: finish }],
         usage: toOpenAIUsage(result.usage, Math.ceil(content.length / CHARS_PER_TOKEN)),
       }),
     );
-    return;
+    // Nothing streamed, so there was nothing to echo as it went.
+    if (ECHO) console.log(`\n${content}\n`);
+    return { finish, usage: result.usage };
   }
 
   res.writeHead(200, {
@@ -376,17 +412,27 @@ async function completion(req, res, request) {
     res.write(`data: ${JSON.stringify(envelope(request, { object: "chat.completion.chunk", ...extra }))}\n\n`);
 
   let sent = 0;
+  let ttft;
   let truncated = false;
+  let cancelled = false;
   let stopChild = () => {};
-  res.on("close", () => stopChild());
+  // A player who moves on mid-pick: the answer stops being wanted, so it stops
+  // being generated, and the log says so rather than reporting a call that
+  // looks like every other one.
+  res.on("close", () => {
+    if (!res.writableFinished) cancelled = true;
+    stopChild();
+  });
   const result = await ask({
     ...request,
     register: (stop) => (stopChild = stop),
     onText: (piece) => {
+      ttft ??= Date.now() - started;
       const room = budget - sent;
       const text = piece.length > room ? piece.slice(0, room) : piece;
       if (text) {
         sent += text.length;
+        if (ECHO) process.stdout.write(text);
         chunk({ choices: [{ index: 0, delta: { content: text } }] });
       }
       if (piece.length >= room) {
@@ -397,12 +443,15 @@ async function completion(req, res, request) {
     },
   });
 
+  if (ECHO && sent > 0) process.stdout.write("\n");
+  const finish = finishOf(result.stopReason, truncated);
   chunk({
-    choices: [{ index: 0, delta: {}, finish_reason: finishOf(result.stopReason, truncated) }],
+    choices: [{ index: 0, delta: {}, finish_reason: finish }],
     usage: toOpenAIUsage(result.usage, Math.ceil(sent / CHARS_PER_TOKEN)),
   });
   res.write("data: [DONE]\n\n");
   res.end();
+  return { finish, usage: result.usage, ttft, cancelled };
 }
 
 export const server = createServer((req, res) => {
@@ -427,12 +476,34 @@ export const server = createServer((req, res) => {
     }
 
     const started = Date.now();
-    const label = `${request.stream ? "stream" : request.schema ? "object" : "text"} ${request.model ?? "default"}`;
+    const area = areaOf(request);
+    const size = Buffer.byteLength(request.prompt) + Buffer.byteLength(request.system ?? "");
+    // Announced before the child is even spawned, so a request that arrives and
+    // then hangs still says who it was.
+    console.log(
+      `-> ${clock()} ${area.padEnd(7)} ${situation(request.prompt)}  [${(size / 1024).toFixed(1)}KB in]`,
+    );
     try {
-      await completion(req, res, request);
-      console.log(`${label} -- ${Date.now() - started}ms`);
+      const stats = await completion(res, request, started);
+      const parts = [
+        stats.cancelled ? "cancelled" : stats.finish,
+        stats.ttft === undefined ? null : `${secs(stats.ttft)} to first token`,
+        secs(Date.now() - started),
+      ];
+      const usage = stats.usage;
+      const cached = usage?.cache_read_input_tokens ?? 0;
+      const input = (usage?.input_tokens ?? 0) + cached + (usage?.cache_creation_input_tokens ?? 0);
+      // A killed child never reports what it had spent, and "0 in / 0 out"
+      // would read as a call that cost nothing rather than one whose cost is
+      // unknown. Say nothing instead.
+      if (input > 0) {
+        parts.push(
+          `${count(input)} in${cached ? ` (${count(cached)} cached)` : ""} / ${count(usage.output_tokens ?? 0)} out`,
+        );
+      }
+      console.log(`<- ${clock()} ${area.padEnd(7)} ${parts.filter(Boolean).join(" - ")}`);
     } catch (e) {
-      console.error(`${label} -- failed: ${e.message}`);
+      console.error(`<- ${clock()} ${area.padEnd(7)} failed after ${secs(Date.now() - started)}: ${e.message}`);
       // A stream that has already begun cannot become an error response. llm.ts
       // reads a short body as partial coaching, which is what the player sees.
       if (res.headersSent) res.end();
@@ -445,7 +516,9 @@ export const server = createServer((req, res) => {
 // take a port to do it.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   server.listen(PORT, HOST, () => {
-    console.log(`claude-bridge on http://${HOST}:${PORT}/v1 -- point LLM_PROVIDER=claude-cli at it`);
+    console.log(`claude-bridge on http://${HOST}:${PORT}/v1`);
     console.log(`  pnpm llm claude-cli   (and pnpm llm groq / anthropic to switch back)`);
+    console.log(ECHO ? "  echoing answers as they stream" : "  --echo prints the answers too");
+    console.log("waiting for a call...");
   });
 }
