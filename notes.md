@@ -370,7 +370,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
 
-11. New app title:
+12. New app title:
 
 - Title: P1P1
 - Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
@@ -418,7 +418,12 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
    optional rather than required.
-   - Is this even still an issue?
+   - Is this even still an issue? Structurally yes — `schema.ts` still has
+     `userId: v.optional(v.string())` with the "set once auth lands" comment, so
+     the shape that allows an unreachable row is unchanged. Whether any such row
+     survives is a question for the deployment rather than the code, and user
+     tables here are disposable: if the answer is "a few dev rows", the fix is to
+     delete them and make the field required, not to migrate them.
    - Also, related kinda but not really: it'd be very rad if we could have some kinda
      mock-auth so, as a dev, I could sign in offline - but low priority.
 
@@ -440,79 +445,21 @@ the whole of the gap to 23. `DECK` stays 23/17, honestly labelled in
 `core/config.ts`. Recovering it means a new pass over the game CSVs and a
 re-ingest — see Ideas #2 for the other route to the same number.
 
-2. **`human-bots` shipped 2026-08-11.** A conditional logit over the pack, fitted
-   to which card the human took, pooled across all 18 sets: 47.7% held-out top-1
-   against the old bot's 46.8% overall, and 54.0% against 46.8% on fdn. Weights
-   are five constants in `core/draft/policy.ts`; `pnpm fit-bot-policy` re-derives
-   them and `pnpm bench-bots` scores any policy against real picks.
+`human-bots` shipped 2026-08-11 and its tooling finished on 2026-08-13. The pods
+are fitted conditional logits over the pack (`core/draft/policy.ts`), `pnpm
+fit-bot-policy` re-derives them, `pnpm bench-bots` scores any policy against real
+human picks, and both read cached packs off `datasets/` rather than the network —
+a refit went from ~15 minutes to seconds, which is what makes ablation cheap
+enough to run before committing to a hypothesis rather than after. Every finding
+that came out of it lives beside the code it constrains: `policy.ts` for what the
+features are and why each earns its place, `bench-bots.mjs` for how to read the
+sampled row against the argmax row, `draftCache.mjs` for what is cached and what
+deliberately is not. Nothing stranded, and a pod name is frozen the moment a row
+carries it — improving bots means ADDING a name, never re-fitting one in place.
 
-   **Nothing stranded, and that was the design rather than luck.**
-   `draftSessions.pod` records which policy dealt a draft and an absent value
-   means the original `cardValue + colorBias` bot forever, so every draft taken
-   before this replays untouched — the legacy corpus hashes are unchanged, which
-   is the proof. The cost is that a pod name is frozen once a row carries it:
-   improving bots means ADDING a name, never re-fitting one in place.
-
-   Four things worth not rediscovering:
-   - **The bots sample rather than take the argmax**, via Gumbel noise, which
-     costs exactly one rng draw per card and so leaves `forkImpact`'s invariant
-     intact. Seven seats all playing the modal pick is a table that cannot
-     disagree, and disagreement is most of what a pod teaches.
-   - **That sampling also produced the ceiling this file kept looking for.** Two
-     draws from a distribution agree at `sum(p^2)` and an argmax matches a draw
-     at `max(p)`, so the sampled row estimates how often TWO HUMANS agree with
-     each other (~39% on fdn) and the argmax row estimates the ceiling for any
-     deterministic rule (~54%). Most of the gap to 100% is human disagreement,
-     not headroom.
-   - **Signal-reading is real, small, and only works as an interaction.** A bare
-     "how open is this colour" term ablates to −0.02pp; the same term multiplied
-     by draft progress is worth +1.47pp, the second most valuable feature after
-     raw card value. What has flowed says nothing in pack 1.
-   - **Strong drafters differ from the field almost entirely in one
-     coefficient** — they weight raw card quality higher (31.08 vs 28.19) and
-     read signals no differently. They are also more predictable for it (49.4%
-     vs 47.7%), which is the same fact from the other side.
-
-   Ideas #4 (show the field) is the player-facing half and is still unbuilt; the
-   expensive part — a draft-data pass that reads `pool_*` and `draft_id` — now
-   exists.
-
-   **A refit took ~15 minutes and almost none of it was fitting.** Five sixths
-   was streaming and decompressing 18 draft CSVs (90-206MB gzipped each) and
-   splitting 586-column rows; the gradient descent over ~284k picks is seconds.
-   That cost was paid again on every run, and the day this was built it was paid
-   FIVE times — three of them only to learn that a feature earned nothing.
-
-   Done. `datasets/picks.<set>.<format>.bin` holds the deal, and both
-   `fit-bot-policy` and `bench-bots` read it instead of the network: fdn goes 46s
-   → 4.4s and 32s → 1s, with bit-identical output on both. The prize is not the
-   minutes, it is that ablation, temperature probes and per-stage calibration
-   checks are now cheap enough to run BEFORE committing to a hypothesis. The
-   wrong diagnoses cost fifteen minutes each and should have cost seconds.
-
-   **The obvious thing to cache is the feature matrix, and it is the wrong
-   thing.** Feature rows are exactly what changes when somebody is iterating on
-   `POLICY_FEATURES` — so that cache is stale on the runs that matter most, and
-   stale silently, refitting against columns that no longer mean what their names
-   say. That is the train/serve skew `policy.ts` exists to prevent, coming back
-   in through the door marked "optimisation". What does NOT change when the
-   policy does is the DEAL: which cards were on offer and which one the human
-   took. So that is what is stored, features are recomputed every run, and the
-   cache never has to know what a feature is.
-
-   Two things fell out of choosing the packs. It is thirty times smaller — two
-   bytes a candidate rather than seven floats — so it holds EVERY draft (fdn:
-   816k picks, 16MB) rather than a sample, and `--train-per-mille` became a
-   filter over memory instead of a reason to re-read 200MB. And it serves any
-   consumer of these files, which is why `bench-bots` got it for free.
-
-   The file stores `draft_id` as the string the dataset gave, never a hash of it.
-   The split is FNV over that id and the two scripts each keep their own copy of
-   that hash on purpose; a cache that hashed ids centrally would quietly become
-   the shared helper both of those comments forbid. What it does decide is when
-   it is stale: pack entries are indices into the set's EngineCards, so the
-   header carries a fingerprint of their names, values, slots and colours, and a
-   re-ingest rebuilds rather than reading someone else's indices.
+**What did not ship is the player-facing half.** Ideas #4 (show the field) is
+still unbuilt, and the expensive part it was waiting on — a draft-data pass that
+reads `pool_*` and `draft_id` — now exists and is fast.
 
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
@@ -669,7 +616,9 @@ to the data work.
     gave it a weight of 0.11 and an ablation cost of −0.02pp, because within a
     pack a z-score is just `value / sd` and therefore competes with `value` for
     the same job. Scale was never the problem. **A plausible cause is not a
-    diagnosis; fitting one costs fifteen minutes and proves nothing on its own.**
+    diagnosis, and fitting one proves nothing on its own.** It cost fifteen
+    minutes at the time and costs seconds now, which removes the excuse for not
+    checking and none of the reason the check was needed.
 
     What found it was measuring the thing directly: fit a sharpness multiplier per
     stage of the draft and see where it lands.
@@ -687,6 +636,24 @@ to the data work.
 
     `bench-bots` now reports the P1P1 bomb rate beside the aggregate, with the
     human rate first, because the aggregate on its own said nothing was wrong.
+
+8.  **"Agrees with the human 48% of the time" is not a score until you know what
+    two humans score.** This file spent three separate attempts looking for a
+    ceiling for pick agreement — including `crowd`, which ranks by observed pick
+    rate and was expected to be one and is not. The ceiling fell out of sampling
+    for free, and it is arithmetic rather than a measurement: two independent
+    draws from a distribution `p` agree with probability `sum(p^2)`, and an argmax
+    matches a draw with probability `max(p)`. So a calibrated model's sampled row
+    estimates how often TWO HUMANS handed the same pack would agree with each
+    other (~39% on fdn) and its argmax row estimates the ceiling for any
+    deterministic rule (~54%). Most of the gap to 100% is people disagreeing, not
+    headroom, and a policy scoring 48% is much closer to the top of its range than
+    the number looks.
+
+    The general form: before treating agreement-with-a-human as an accuracy, ask
+    what the irreducible disagreement is. Any metric whose label is a human
+    decision has one, it is usually large, and reading the raw number without it
+    invites paying for headroom that does not exist.
 
 # Deferred trade-offs (revisit when the premise changes):
 
@@ -1110,3 +1077,27 @@ logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
     there" — which is the right side to err on: without it, a verdict that would
     be cut off in production reads as fine locally, and that is precisely the
     prompt somebody is here to tune.
+
+20. **Caching the feature matrix was the obvious optimisation and is the wrong
+    one** (2026-08-13, `scripts/lib/draftCache.mjs`). `fit-bot-policy` and
+    `bench-bots` each spent five sixths of a fifteen-minute run gunzipping 17Lands
+    CSVs, and the cache that suggests itself is the thing the fit consumes:
+    feature rows. But feature rows are exactly what changes when somebody is
+    iterating on `POLICY_FEATURES`, so that cache is stale on the runs it exists
+    for — and stale silently, refitting against columns that no longer mean what
+    their names say, which is the train/serve skew `policy.ts` exists to prevent
+    arriving through the door marked optimisation. Keying on the feature list
+    fixes the correctness and leaves a cache invalidated by every experiment worth
+    running.
+
+    What does not change when the policy does is the DEAL — which cards were on
+    offer and which one was taken — so that is what is stored, and features are
+    recomputed every run in seconds. Three things follow, and the third is why
+    this is written down rather than left in the file header: the cache is thirty
+    times smaller, so it holds every draft rather than a sample; it serves any
+    consumer of these files rather than just the fit; and **it decides nothing.**
+    `draft_id` is stored as the dataset spelled it, never hashed, because the
+    train/test split is FNV over that id and the two scripts keep their own copies
+    of that hash on purpose — a cache that hashed centrally would quietly become
+    the shared helper both of those comments forbid. The only thing it is allowed
+    to decide is when it is stale.
