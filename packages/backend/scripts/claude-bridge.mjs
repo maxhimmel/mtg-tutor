@@ -324,9 +324,64 @@ export function readRequest(body) {
   };
 }
 
+// Colour is switched off when stdout is not a terminal, so a redirected log is
+// plain text rather than escape codes, and by NO_COLOR because that is the
+// convention and this is somebody else's terminal.
+const COLOUR =
+  (Boolean(process.stdout.isTTY) || process.env.FORCE_COLOR === "1") && !process.env.NO_COLOR;
+const paint = (code) => (text) => (COLOUR ? `\u001b[${code}m${text}\u001b[0m` : String(text));
+const dim = paint(2);
+const bold = paint(1);
+const green = paint(32);
+const red = paint(31);
+const yellow = paint(33);
+const cyan = paint(36);
+
 const clock = () => new Date().toTimeString().slice(0, 8);
 const secs = (ms) => `${(ms / 1000).toFixed(1)}s`;
 const count = (n) => n.toLocaleString("en-US");
+
+// One glyph in a fixed column is what makes a screen of these scannable: the
+// eye finds the failures without reading a word. The colour lives here and not
+// in the words beside it, so a line has one thing shouting rather than three.
+const MARK = {
+  start: cyan("▶"),
+  stop: green("✓"),
+  length: yellow("✂"),
+  cancelled: yellow("⊘"),
+  failed: red("✗"),
+};
+
+// `stop` and `length` are the wire's words for these, and neither says what
+// happened to anyone reading a terminal.
+const OUTCOME = { stop: "answered", length: "cut at max_tokens", cancelled: "cancelled" };
+
+let calls = 0;
+const kb = (bytes) => `${(bytes / 1024).toFixed(1)}KB`;
+
+// An echoed answer is a block of prose in the middle of a column of records, so
+// it is dimmed and gutter-marked to read as quoted rather than as more log.
+const quoted = (n, text) => dim(text.replace(/\n/g, `\n${gutter(n)}`));
+
+/**
+ * Both lines of a call, in the same columns.
+ *
+ * Fixed-width fields first and the sentence last, because a ragged right edge
+ * is readable and a ragged middle is not. The em-dash inside a situation line
+ * is why the separator here is a middle dot: the same glyph doing duty as
+ * punctuation and as a field boundary is what made the first version of this
+ * hard to read.
+ */
+const tag = (n) => `#${String(n).padStart(2, "0")}`;
+
+const line = (n, mark, area, rest) =>
+  `${dim(clock())} ${dim(tag(n))} ${mark} ${bold(area.padEnd(7))} ${rest}`;
+
+// Echoed prose sits under the call it came from, with the number in the same
+// column the record above uses. Without it, two overlapping calls produce two
+// blocks of text and no way to tell which said what -- and overlapping is not
+// exotic here, the review fires its calls together.
+const gutter = (n) => `${" ".repeat(9)}${dim(`${tag(n)} │`)} `;
 
 /**
  * What this call is FOR, inferred from its shape rather than told.
@@ -372,7 +427,7 @@ function sendJSON(res, status, payload) {
 const sendError = (res, status, message) =>
   sendJSON(res, status, { error: { message, type: "claude_bridge_error" } });
 
-async function completion(res, request, started) {
+async function completion(res, request, started, n) {
   const budget = request.maxTokens ? request.maxTokens * CHARS_PER_TOKEN : Infinity;
 
   if (!request.stream) {
@@ -398,7 +453,7 @@ async function completion(res, request, started) {
       }),
     );
     // Nothing streamed, so there was nothing to echo as it went.
-    if (ECHO) console.log(`\n${content}\n`);
+    if (ECHO) console.log(`${gutter(n)}${quoted(n, content)}`);
     return { finish, usage: result.usage };
   }
 
@@ -432,7 +487,10 @@ async function completion(res, request, started) {
       const text = piece.length > room ? piece.slice(0, room) : piece;
       if (text) {
         sent += text.length;
-        if (ECHO) process.stdout.write(text);
+        if (ECHO) {
+          if (sent === text.length) process.stdout.write(gutter(n));
+          process.stdout.write(quoted(n, text));
+        }
         chunk({ choices: [{ index: 0, delta: { content: text } }] });
       }
       if (piece.length >= room) {
@@ -477,18 +535,21 @@ export const server = createServer((req, res) => {
 
     const started = Date.now();
     const area = areaOf(request);
+    // Two lines a few seconds apart are only a pair if something says so, and
+    // review fires calls that overlap. The number is what pairs them.
+    const n = (calls += 1);
     const size = Buffer.byteLength(request.prompt) + Buffer.byteLength(request.system ?? "");
     // Announced before the child is even spawned, so a request that arrives and
     // then hangs still says who it was.
     console.log(
-      `-> ${clock()} ${area.padEnd(7)} ${situation(request.prompt)}  [${(size / 1024).toFixed(1)}KB in]`,
+      line(n, MARK.start, area, `${situation(request.prompt)} ${dim(`· ${kb(size)} in`)}`),
     );
     try {
-      const stats = await completion(res, request, started);
+      const stats = await completion(res, request, started, n);
+      const outcome = stats.cancelled ? "cancelled" : stats.finish;
       const parts = [
-        stats.cancelled ? "cancelled" : stats.finish,
-        stats.ttft === undefined ? null : `${secs(stats.ttft)} to first token`,
         secs(Date.now() - started),
+        stats.ttft === undefined ? null : `${secs(stats.ttft)} to first token`,
       ];
       const usage = stats.usage;
       const cached = usage?.cache_read_input_tokens ?? 0;
@@ -498,12 +559,22 @@ export const server = createServer((req, res) => {
       // unknown. Say nothing instead.
       if (input > 0) {
         parts.push(
-          `${count(input)} in${cached ? ` (${count(cached)} cached)` : ""} / ${count(usage.output_tokens ?? 0)} out`,
+          `${count(input)} in${cached ? ` (${count(cached)} cached)` : ""} · ${count(usage.output_tokens ?? 0)} out`,
         );
       }
-      console.log(`<- ${clock()} ${area.padEnd(7)} ${parts.filter(Boolean).join(" - ")}`);
+      console.log(
+        line(
+          n,
+          MARK[outcome] ?? MARK.stop,
+          area,
+          `${OUTCOME[outcome] ?? outcome} ${dim(`· ${parts.filter(Boolean).join(" · ")}`)}`,
+        ),
+      );
     } catch (e) {
-      console.error(`<- ${clock()} ${area.padEnd(7)} failed after ${secs(Date.now() - started)}: ${e.message}`);
+      console.error(
+        line(n, MARK.failed, area, `failed ${dim(`· ${secs(Date.now() - started)}`)}`),
+        `\n${" ".repeat(16)}${e.message}`,
+      );
       // A stream that has already begun cannot become an error response. llm.ts
       // reads a short body as partial coaching, which is what the player sees.
       if (res.headersSent) res.end();
@@ -516,9 +587,11 @@ export const server = createServer((req, res) => {
 // take a port to do it.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   server.listen(PORT, HOST, () => {
-    console.log(`claude-bridge on http://${HOST}:${PORT}/v1`);
-    console.log(`  pnpm llm claude-cli   (and pnpm llm groq / anthropic to switch back)`);
-    console.log(ECHO ? "  echoing answers as they stream" : "  --echo prints the answers too");
-    console.log("waiting for a call...");
+    console.log(`${bold("claude-bridge")} ${dim("·")} http://${HOST}:${PORT}/v1`);
+    console.log(`  switch on   pnpm llm claude-cli   ${dim("(groq / anthropic to go back)")}`);
+    console.log(
+      `  answers     ${ECHO ? "echoed as they stream" : `not echoed          ${dim("(--echo prints them)")}`}`,
+    );
+    console.log(dim("  waiting for a call…\n"));
   });
 }
