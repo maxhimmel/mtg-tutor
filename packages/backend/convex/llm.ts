@@ -32,13 +32,59 @@ const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5";
 // have to agree on this string.
 const COMPATIBLE_NAME = "local";
 
-function isAnthropic(): boolean {
+// scripts/claude-bridge.mjs, which answers from the Claude Code CLI on the
+// developer's own machine. It speaks the openai-compatible wire format, so it
+// is the same client with a different endpoint and its own defaults -- the one
+// thing it must not share is `local`'s NAME, because bench-llm keys its stored
+// baselines by provider and the two are not comparable.
+const CLI_NAME = "claude-cli";
+const DEFAULT_CLI_URL = "http://127.0.0.1:8787/v1";
+const DEFAULT_CLI_MODEL = "sonnet";
+
+type Provider = "anthropic" | "openai-compatible" | typeof CLI_NAME;
+
+function provider(): Provider {
   // Anthropic stays the default so an unconfigured production deployment keeps
   // behaving exactly as it did before this file existed.
-  return (process.env.LLM_PROVIDER ?? "anthropic") === "anthropic";
+  const configured = process.env.LLM_PROVIDER ?? "anthropic";
+  return configured === "openai-compatible" || configured === CLI_NAME ? configured : "anthropic";
+}
+
+function isAnthropic(): boolean {
+  return provider() === "anthropic";
+}
+
+// What a usage row calls this call. `local` predates the third provider and
+// keeps its name: renaming it would orphan every stored benchmark baseline.
+function providerLabel(): string {
+  return provider() === "openai-compatible" ? COMPATIBLE_NAME : provider();
 }
 
 function resolve(): LanguageModel {
+  if (provider() === CLI_NAME) {
+    const baseURL = process.env.CLAUDE_BRIDGE_URL ?? DEFAULT_CLI_URL;
+    // The bridge spawns a process on whatever machine it runs on, so it is a
+    // developer's own laptop or it is nothing. A deployment that cannot reach
+    // loopback would otherwise spend a minute timing out and report it as the
+    // coach being unavailable, which is true and useless.
+    if (!/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:|\/)/.test(baseURL)) {
+      throw new CoachUnavailableError(
+        `LLM_PROVIDER=${CLI_NAME} is for local development and needs a loopback CLAUDE_BRIDGE_URL; got ${baseURL}.`,
+      );
+    }
+    return createOpenAICompatible({
+      // Deliberately the same namespace as the openai-compatible provider: the
+      // bridge is one, and tuning() below has to reach it under this key for
+      // the fast flag to cross at all.
+      name: COMPATIBLE_NAME,
+      baseURL,
+      // The bridge answers from a CLI login rather than a key, and rejects
+      // requests from anywhere but this machine.
+      apiKey: "claude-bridge",
+      supportsStructuredOutputs: true,
+    })(process.env.CLAUDE_BRIDGE_MODEL ?? DEFAULT_CLI_MODEL);
+  }
+
   if (!isAnthropic()) {
     const baseURL = process.env.LLM_BASE_URL;
     if (!baseURL) {
@@ -188,7 +234,7 @@ async function report(
       cacheWriteTokens: usage.inputTokenDetails.cacheWriteTokens,
       reasoningTokens: usage.outputTokenDetails.reasoningTokens,
       finishReason,
-      provider: isAnthropic() ? "anthropic" : COMPATIBLE_NAME,
+      provider: providerLabel(),
       model: typeof model === "string" ? model : model.modelId,
       ms: Date.now() - started,
     });

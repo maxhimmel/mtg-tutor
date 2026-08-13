@@ -113,10 +113,69 @@ pnpm login             # sign in; the CLI needs a session to reach the backend
 pnpm bench-llm         # what one draft costs in tokens, and whether the advice held
 pnpm bench-io --challenge  # add the two-draft comparison to the I/O run (doubles it)
 pnpm bench-report      # render that run as a page: cost, quality, and the answers
+pnpm claude-bridge     # coach from the Claude Code CLI instead of a paid key -- see below
 ```
 
 Cutting AI token usage without quietly making the coaching worse is a procedure,
 not a diff — `packages/backend/bench/README.md` has it, numbered.
+
+### Coaching from the CLI you already pay for
+
+Tinkering with prompts costs tokens, and a free Groq allowance runs out in an
+afternoon. `pnpm claude-bridge` answers the coach from the **Claude Code CLI on
+this machine** instead — your subscription's usage window rather than API
+credit. Two terminals:
+
+```bash
+pnpm claude-bridge     # leave it running (--echo to print the answers too)
+pnpm llm claude-cli    # point the dev deployment at it (pnpm llm groq / anthropic to switch back)
+```
+
+Convex functions run in a V8 isolate with no `child_process`, so nothing inside
+the deployment can shell out; the bridge is a loopback HTTP server speaking the
+OpenAI-compatible wire format the provider seam already knows, and spawning one
+`claude -p` per request. Nothing in the app learns that the CLI exists.
+`llm.ts` refuses a non-loopback `CLAUDE_BRIDGE_URL`, because a bridge is a
+laptop or it is nothing.
+
+It narrates, which is most of what makes it usable. A call is announced when it
+**arrives**, named by the pick it is about, and again when it lands:
+
+```
+09:21:32 #01 ▶ coach   Pack 1, Pick 3 — pick 3 of 45, 42 to come. · 12.4KB in
+09:21:34 #01 ✓ coach   answered · 2.5s · 1.3s to first token · 9,412 in (7,200 cached) · 312 out
+```
+
+The `▶` is the diagnostic that matters: if the coach fails and no `▶` appeared,
+the request never left Convex, which is a different problem entirely. The mark
+column is where the eye goes — `✓` answered, `✂` cut at `max_tokens`, `⊘`
+cancelled, `✗` failed — and the number pairs the two lines, because the review
+fires calls that overlap. Colour is off when stdout is not a terminal and under
+`NO_COLOR`, so a redirected log is plain text.
+
+A player who clicks on mid-answer reads as `⊘ cancelled`, and the child is
+killed rather than left running up usage nobody will see. `--echo` prints the
+answers as they stream, in a gutter under the call they came from.
+
+What crosses faithfully: the system/user prompt pair, `--json-schema` for the
+review's structured output, streaming, the `fast` flag as `--effort low`, and
+truncation at `max_tokens`. The child gets no tools, no skills, no MCP servers
+and no settings file, and runs outside the repo — a coach that had picked up
+this repo's `CLAUDE.md` would answer well and answer as something other than the
+app.
+
+What does not: **token counts are inflated**, because Claude Code wraps every
+prompt in its own framing (~150 tokens on an empty call), and cache *writes* are
+unreportable through this wire format. Benchmarks still run and are still worth
+running — `bench-llm` stores baselines per provider, so a `claude-cli` run never
+lands on top of a Groq or Anthropic one — but read them for output length, call
+frequency and accuracy, never for what a saving is worth in money.
+
+| Variable | Default | |
+|---|---|---|
+| `CLAUDE_BRIDGE_URL` | `http://127.0.0.1:8787/v1` | must be loopback |
+| `CLAUDE_BRIDGE_MODEL` | `sonnet` | any `--model` alias or id |
+| `CLAUDE_BRIDGE_PORT` | `8787` | read by the bridge, not the deployment |
 
 ### Testing a challenge on your own
 
