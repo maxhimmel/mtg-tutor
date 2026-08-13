@@ -197,6 +197,27 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 13. This might be a dupe: i want the "your call on the gap" section to have the same highlighting behavior the coach section has.
 
+14. Love that the coach noticed the incongruency here:
+
+```
+Last pick
+A+
+100/100
+Nothing scored higher
+Forum of Amity
+Your call on the gap
+read it right
+You took the card worth 2.7pp more than Burrog Barrage, against a ±1.0pp margin of error. You said it was clear, and it was.
+
+Coach
+Wait — Forum of Amity taps for White/Black, not Blue/Red, and it's committed as "on those colors" here, but the text clearly makes W/B mana. That's an off-color land for a UR deck; it doesn't fix anything you're actually casting. Grading the pick as printed: since it produces the wrong colors for your pool, it's a near-blank here despite the eye-popping stats (which reflect a totally different archetype's love of it).
+
+Their reasoning "staying open, not committed to anything" doesn't hold up either — you're 9 picks in with a Blue/Red pool already flagged as committed, so the open-drafting window per has closed, and taking an off-color land isn't "staying open," it's just not advancing your deck. Burrog Barrage is also off your colors (green), so neither pack option actually served this UR pool — but between them you'd rather take a card you might splash or that at least does something (removal-ish) than a land that produces neither of your colors.
+```
+
+- I had 6 cards in my main deck that were blue(U) and red(R). And only 2 cards that were white(W) in my sideboard.
+- I think the problem is that the coach seems to not have known that I picked that card directly into my sideboard.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
