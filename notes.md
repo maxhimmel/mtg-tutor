@@ -482,6 +482,25 @@ re-ingest — see Ideas #2 for the other route to the same number.
    Ideas #4 (show the field) is the player-facing half and is still unbuilt; the
    expensive part — a draft-data pass that reads `pool_*` and `draft_id` — now
    exists.
+
+   **A refit takes ~15 minutes and almost none of it is fitting.** Five sixths is
+   streaming and decompressing 18 draft CSVs (90-206MB gzipped each) and turning
+   them into feature rows; the gradient descent over ~284k picks is seconds. That
+   cost is paid again on every run, and the day this was built it was paid FIVE
+   times — three of them only to learn that a feature earned nothing.
+
+   The rows do not change when the weights do. Extract once into a flat
+   Float32Array on disk under `datasets/` (already gitignored, where
+   `cache-cards` writes), and a refit becomes near-instant — which also makes
+   ablation, temperature probes and per-stage calibration checks cheap enough to
+   run before committing to a hypothesis rather than after. That is the actual
+   prize: the wrong diagnoses cost fifteen minutes each and would have cost
+   seconds.
+
+   **The cache key has to include the feature list**, or a POLICY_FEATURES change
+   silently refits against stale columns — the exact train/serve skew
+   `policy.ts` exists to prevent, reintroduced through the back door. Key on the
+   feature names plus set, format, tier and the sampling per-mille.
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
    Also what `contextValue`'s speed term is waiting on: the axis is stored and
@@ -614,6 +633,47 @@ to the data work.
    things are compared, measure the DISTANCE between them, not just that both
    arrived** — a gap pinned at zero is the signature, and it is invisible until
    something is counting it. `build_compared` now is.
+
+7. **An average over every decision hides the decisions that matter most.** The
+   first fitted bot policy scored 47.7% top-1 against real human picks, well past
+   the shipped bot's 46.8%, and every aggregate in `bench-bots` said it was
+   better. It was also passing rares and mythics at P1P1 about twice as often as
+   humans do — 34% against 61% on SOS, and the same on all four sets checked.
+   A bomb is one card in fourteen and one pick in forty-two, so being wrong about
+   it costs almost nothing in the mean and nearly everything in whether the pod
+   feels real. **Found by drafting, not by measuring**: a mythic came round at
+   P1P2 and did not look like something a person would pass.
+
+   **The failure was in CONFIDENCE, not ranking**, which is the part worth
+   carrying. The same model's argmax found bombs MORE often than humans (80.6%);
+   sampling from it found them far less (34.4%). A model can rank correctly and
+   still put the wrong probability on being right, and only the sampled number
+   shows it — every accuracy metric in the harness was blind to it.
+
+   **The first diagnosis was wrong and cost a fit.** The obvious suspect was
+   pooling sets whose value scales differ — SOS squeezes its cards into
+   0.61-0.67 where others spread wider — so a per-pack z-score went in. The fit
+   gave it a weight of 0.11 and an ablation cost of −0.02pp, because within a
+   pack a z-score is just `value / sd` and therefore competes with `value` for
+   the same job. Scale was never the problem. **A plausible cause is not a
+   diagnosis; fitting one costs fifteen minutes and proves nothing on its own.**
+
+   What found it was measuring the thing directly: fit a sharpness multiplier per
+   stage of the draft and see where it lands.
+
+       P1 early 1.25   P1 mid 1.0    P1 late 0.5
+       P2 early 1.25   P2 mid 1.0    P2 late 0.5
+       P3 early 1.0    P3 mid 0.75   P3 late 0.5
+
+   Confidence belongs to the PACK, not the draft: high on a full pack, low on the
+   dregs, and it resets three times. `progress` climbs monotonically across all
+   42 picks and cannot express that shape at any weight, so the fit settled for
+   one global level — too flat at P1P1, too sharp on the last few cards. The
+   general lesson: **an interaction term can only bend a model along the axis you
+   gave it.** Check that the axis is the one the behaviour actually varies on.
+
+   `bench-bots` now reports the P1P1 bomb rate beside the aggregate, with the
+   human rate first, because the aggregate on its own said nothing was wrong.
 
 # Deferred trade-offs (revisit when the premise changes):
 
