@@ -128,6 +128,23 @@ export function pickMade(p: {
   challenged?: boolean;
   stood?: boolean;
   separable?: boolean;
+
+  /**
+   * The principle id that chose the challenger, when the win rates could not.
+   *
+   * A property here rather than an event of its own, because the question it
+   * has to answer is not "how often does this fire" -- it is whether it fires
+   * and TEACHES, and the evidence for that is `stood` on the same row. A player
+   * who switches more often when a principle picked the card than when the float
+   * did is a player the tiebreak is reaching; the same rate either way means it
+   * chose a different card and changed nothing. A separate event would need a
+   * join to say that, and would say it worse.
+   *
+   * Absent on every pick where the top of the pack was separable, which is most
+   * of them -- so its rate is also the answer to whether the band forms often
+   * enough for any of this to be worth keeping.
+   */
+  tiebroken?: string;
 }): void {
   if (!on()) return;
   posthog.capture("pick_made", p);

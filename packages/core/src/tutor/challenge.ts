@@ -182,6 +182,14 @@ export interface ChallengeOutcome {
   edge: number;
   margin?: number;
   separable: boolean;
+  /**
+   * Why this card was the one put up, when the data had no preference.
+   *
+   * Carried for the same reason `challengerName` is: the reveal is the only
+   * place that describes this pair, and a reason looked up beside it could
+   * describe a different band. Empty in the ordinary case -- see `Challenge`.
+   */
+  reasons: TiebreakReason[];
 }
 
 export function resolveChallenge<C extends Card>(
@@ -191,6 +199,7 @@ export function resolveChallenge<C extends Card>(
   return {
     stood,
     challengerName: challenge.challenger.name,
+    reasons: challenge.reasons,
     // The gap is measured challenger-minus-proposed, and the claim was about the
     // proposed card, so this is that one subtraction read from the other end.
     // Deliberately independent of `stood` -- see the field's note.
@@ -299,6 +308,37 @@ export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): st
   return o.stood
     ? `${stated} You said you were guessing, and this one was there to be read.`
     : `${stated} You said you were guessing, and switching found it.`;
+}
+
+/**
+ * Why that card and not another, when the data could not choose.
+ *
+ * A SECOND SENTENCE, AND ONLY EVER AFTER THE REVEAL
+ *
+ * The challenge screen is deliberately statistics-free -- the printed cards and
+ * the player's own pool, nothing 17Lands knows -- because turning the numbers on
+ * there would make the higher win rate the answer. A principle citation is not a
+ * statistic, but it is still the app having an opinion, and the one thing that
+ * screen must not do is hint at one. So this belongs where `calibrationLine`
+ * already is: after the choice, in the reveal, which is what the reveal is FOR.
+ *
+ * It is also the only moment the sentence is worth anything. Told beforehand
+ * that their curve is thin at two, a player is being coached; told afterwards
+ * that the card they were argued with was chosen BECAUSE their curve is thin at
+ * two, they have learned what the app was looking at -- and can disagree with
+ * it, which the deterministic path has never let anybody do.
+ *
+ * Undefined in the ordinary case, where the challenger won on a gap the data
+ * can see and no principle was consulted. Silence is right there: an explanation
+ * offered on every pick stops being read by the third one.
+ */
+export function tiebreakLine(o: ChallengeOutcome): string | undefined {
+  if (o.reasons.length === 0) return undefined;
+  // One reason, not a list. Two would read as a case being built, and the
+  // tiebreak did not weigh them -- it counted them, and any one of them is the
+  // whole of what it can honestly claim.
+  const [{ principle, note }] = o.reasons;
+  return `${o.challengerName} was the card put up because ${note} [${principle}].`;
 }
 
 /**
