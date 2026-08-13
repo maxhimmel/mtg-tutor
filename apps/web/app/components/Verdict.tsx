@@ -41,8 +41,12 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
   // being told they were wrong by an amount the data cannot see is the one way
   // this flow could teach something false. Undefined when either card is
   // unrated, and then it says so rather than inventing one.
+  // Read off the SCORE rather than recomputed here, so the words and the number
+  // cannot disagree: `scorePick` is what decided the grade, and it decided it
+  // with the margin. `gapMargin` is still called for the size of the bars, which
+  // is a display detail and not a verdict.
   const margin = gapMargin(score.contextBest, score.picked);
-  const unresolved = margin != null && gap <= margin;
+  const unresolved = score.indistinguishable;
 
   return (
     <div className="flex items-start gap-4">
@@ -62,7 +66,17 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
       <div className="flex min-w-0 flex-1 flex-col gap-2.5">
         <div>
           <div className="eyebrow mb-1.5">
-            {score.isBest ? "Nothing scored higher" : "You took"}
+            {/* Three states, not two. "Nothing scored higher" is a claim about
+                the numbers and stays reserved for when it is literally true;
+                a pick inside the error bars is a different and weaker claim --
+                something did score higher, by less than the data can measure --
+                and saying the strong one over it would be the same conflation
+                the score just stopped making. */}
+            {score.isBest
+              ? "Nothing scored higher"
+              : score.indistinguishable
+                ? "Nothing measurably better"
+                : "You took"}
           </div>
           <CardPlacard card={score.picked} />
         </div>
@@ -70,7 +84,10 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
         {!score.isBest && (
           <div>
             <div className="eyebrow mb-1.5 flex items-baseline justify-between gap-2">
-              <span>Graded against</span>
+              {/* "Graded against" is wrong once the grade stopped being measured
+                  against this card: inside the margin the pick scores 100 and
+                  this is simply the nearest thing to it. */}
+              <span>{score.indistinguishable ? "Closest alternative" : "Graded against"}</span>
               <span className="tabular-nums normal-case tracking-normal">
                 {lost}
                 <span className="text-base-content/45">
@@ -87,7 +104,7 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
               {margin == null
                 ? "One of these cards is unrated, so there are no error bars on this gap."
                 : unresolved
-                  ? "That is inside the margin of error: the data cannot tell these two apart."
+                  ? "That is inside the margin of error: the data cannot tell these two apart, so this pick is not marked down for it."
                   : "That gap is larger than the margin of error on the two win rates."}
             </p>
           </div>

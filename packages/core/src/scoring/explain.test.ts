@@ -43,6 +43,7 @@ describe("explainPick on a pick that was not the best", () => {
     contextBestValue: 0.62,
     terms: [],
     isBest: false,
+  indistinguishable: false,
     onColor: true,
     rankInPack: 2,
     ...over,

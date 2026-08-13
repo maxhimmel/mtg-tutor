@@ -151,7 +151,15 @@ export function challengeFor<C extends Card>(
     if (band.length > 1) {
       const broken = tiebreak(band, needs);
       challenger = broken.card;
-      reasons = broken.reasons;
+      // Only when the principle actually CHANGED the answer. Measured over
+      // 35,916 real challenged picks on fdn, a band forms and a principle has
+      // something to say on 42.5% of them -- but on 20.4% it names the card the
+      // float had already chosen, and there "put up BECAUSE your curve is thin"
+      // is not true. The principle agreed; it did not decide.
+      //
+      // The same rule `tiebreak` applies to CURVE-07 internally, one level out:
+      // a reason is only worth stating when it did the deciding.
+      if (broken.card.name !== top.card.name) reasons = broken.reasons;
     }
   }
 

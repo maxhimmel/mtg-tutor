@@ -134,6 +134,14 @@ export const cardContext = v.object({
   speed: v.optional(v.number()),
   iwd: v.optional(v.number()),
   maindeckRate: v.optional(v.number()),
+  // One standard error on the card's GIH win rate, so the GRADE can tell whether
+  // a gap is real. `gapMargin` has always run in the browser over hydrated
+  // cards; the pick path has neither `gihWinRate` nor `gihGames` since the pool
+  // split, which is why the verdict could say two cards were indistinguishable
+  // while the score behind it docked the player anyway. See core's CardContext
+  // for why it rides this row rather than EngineCard -- it is a read that is
+  // already happening, at a nineteenth of the cost.
+  se: v.optional(v.number()),
 });
 
 // One archetype's own win rate, no card dimension. Same shape setStats stores,
@@ -244,6 +252,11 @@ export const storedPickScore = v.object({
   // replaying and the reasons are part of what the pick actually saw.
   terms: v.optional(v.array(v.object({ label: v.string(), delta: v.number() }))),
   isBest: v.boolean(),
+  // Whether the data could separate this pick from the card it was graded
+  // against. Optional because rows written before the grade could see a margin
+  // have none, and `toRecordedPick` recomputes those from the hydrated cards --
+  // the same route the browser's verdict has always taken.
+  indistinguishable: v.optional(v.boolean()),
   onColor: v.boolean(),
   rankInPack: v.number(),
 });

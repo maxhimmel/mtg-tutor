@@ -143,6 +143,26 @@ describe("challengeFor with deck needs", () => {
     expect(ch?.reasons.map((r) => r.principle)).toContain("CURVE-03");
   });
 
+  // A band with a principle in it that agrees with the float is not a principle
+  // deciding anything, and "put up BECAUSE your curve is thin" would not be true
+  // of it. Measured at 20.4% of challenged picks on fdn -- so without this, half
+  // the sentences the player reads would be taking credit for the float's work.
+  it("says nothing when the principle only agrees with the float", () => {
+    // The cheap body is both the float's pick and the deck's, so nothing was
+    // decided by a principle.
+    const better = spell("Cheap Best", {
+      value: 0.58,
+      gihWinRate: 0.58,
+      cmc: 2,
+      manaCost: "{2}",
+      typeLine: "Creature — Goblin",
+    });
+    const ch = challengeFor([mine, better, fiveDrop], mine, ctx, needs);
+
+    expect(ch?.challenger.name).toBe("Cheap Best");
+    expect(ch?.reasons).toEqual([]);
+  });
+
   // The guard. A 4.2pp gap is far outside the bars, so there is no band and no
   // principle gets a vote however much the deck would prefer the other card.
   it("never reaches past a gap the data can actually see", () => {

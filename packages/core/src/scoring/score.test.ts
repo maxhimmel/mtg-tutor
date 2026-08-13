@@ -239,3 +239,88 @@ describe("gapMargin", () => {
     expect(gapMargin(unrated, rated(5000, 0.6))).toBeUndefined();
   });
 });
+
+/**
+ * The grade and the prose beside it, finally answering the same question.
+ *
+ * `gapMargin` has always run in the browser, so the verdict could say "the data
+ * cannot tell these two apart" while the score underneath it -- computed
+ * server-side, where `gihGames` does not exist -- docked the player anyway. On
+ * fdn that is 19.5% of graded misses and on dsk 13.0%
+ * (`scripts/diagnose-margin.mjs`).
+ *
+ * The margin now reaches the grade through `CardContext.se`, and these pin the
+ * three things that could go wrong with that: it must fire inside the margin, it
+ * must NOT fire outside it, and it must refuse to fire at all where there is no
+ * margin to be inside of.
+ */
+describe("scorePick inside the margin of error", () => {
+  const se = (p: number, n: number) => Math.sqrt((p * (1 - p)) / n);
+
+  // ~±1.0pp between two cards at 5,000 games each.
+  const best = card("Best", { gihWinRate: 0.58, gihGames: 5000 });
+  const near = card("Near", { gihWinRate: 0.576, gihGames: 5000 });
+  const far = card("Far", { gihWinRate: 0.55, gihGames: 5000 });
+  // 0.8pp behind the best -- comfortably inside the ~1pp margin the rated cards
+  // get, and far enough back that the score would move if the margin applied.
+  // An earlier fixture sat 0.05pp behind, which rounds to 100 whatever the
+  // margin does and so proved nothing.
+  const unrated = card("Unrated", { gihWinRate: undefined, gihGames: undefined, value: 0.572 });
+
+  const rated = new Map<string, number>([
+    ["Best", se(0.58, 5000)],
+    ["Near", se(0.576, 5000)],
+    ["Far", se(0.55, 5000)],
+  ]);
+
+  const ctx = (withSe = true): ScoringContext => ({
+    colors: new Set<ColorCode>(),
+    commitment: 0,
+    archetypes: [{ colors: "WU", n: 20000, wr: 0.58 }],
+    contextFor: (c) => {
+      const s = rated.get(c.name);
+      return withSe && s != null ? { se: s } : undefined;
+    },
+  });
+
+  it("scores a pick the data cannot separate from the best as the best", () => {
+    const out = scorePick([best, near], near, [], ctx());
+
+    expect(out.indistinguishable).toBe(true);
+    expect(out.score).toBe(100);
+  });
+
+  // And `isBest` stays false, because it means "took the card it was graded
+  // against" -- which drives "Nothing scored higher", and something did.
+  it("does not claim the pick was the best card", () => {
+    const out = scorePick([best, near], near, [], ctx());
+
+    expect(out.isBest).toBe(false);
+    expect(out.contextBest.name).toBe("Best");
+  });
+
+  it("still docks a gap the data can actually see", () => {
+    const out = scorePick([best, far], far, [], ctx());
+
+    expect(out.indistinguishable).toBe(false);
+    expect(out.score).toBeLessThan(100);
+  });
+
+  // An unrated card has no error bars, so there is no margin -- and "we cannot
+  // measure this" must never read as "these are the same".
+  it("refuses to call a pair the same when one of them is unrated", () => {
+    const out = scorePick([best, unrated], unrated, [], ctx());
+
+    expect(out.indistinguishable).toBe(false);
+    expect(out.score).toBeLessThan(100);
+  });
+
+  // A pool ingested before `se` existed carries none, and must grade exactly the
+  // way it always did rather than silently calling everything a tie.
+  it("grades a set with no stored margins the old way", () => {
+    const out = scorePick([best, near], near, [], ctx(false));
+
+    expect(out.indistinguishable).toBe(false);
+    expect(out.score).toBeLessThan(100);
+  });
+});

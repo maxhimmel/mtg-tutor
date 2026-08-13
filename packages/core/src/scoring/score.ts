@@ -8,7 +8,13 @@ import type {
 } from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
-import { type ScoringContext, type ValueTerm, commitment, contextValue } from "./context.js";
+import {
+  type ScoringContext,
+  type ValueTerm,
+  commitment,
+  contextValue,
+  marginBetween,
+} from "./context.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -48,6 +54,28 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   terms: ValueTerm[];
 
   isBest: boolean; // took the card the grade was measured against
+  /**
+   * The gap to that card is inside one standard error of it, so the data cannot
+   * say the pick was worse.
+   *
+   * NOT THE SAME AS `isBest`, AND DELIBERATELY NOT FOLDED INTO IT
+   *
+   * `isBest` means "took the card the grade was measured against" and is what
+   * "Nothing scored higher" is rendered from. A pick inside the margin did NOT
+   * score higher -- something else scored a fraction more, and the fraction is
+   * smaller than the error bars on it. Making `isBest` true for that would put a
+   * true-sounding sentence over a false statement, and would quietly change what
+   * every stored row and every chart on that field already means.
+   *
+   * The SCORE follows this rather than `isBest`, which is the point: 19.5% of
+   * graded misses on fdn and 13.0% on dsk are inside the margin, and the app was
+   * docking them on the same screen whose prose says the two cards cannot be
+   * told apart. Measured by `scripts/diagnose-margin.mjs`.
+   *
+   * False when no margin could be computed -- an unrated card has no error bars,
+   * and "we cannot measure this" must not read as "these are the same".
+   */
+  indistinguishable: boolean;
   onColor: boolean;
   rankInPack: number; // 1 = best available, by raw power
 }
@@ -220,8 +248,20 @@ export function scorePick<C extends EngineCard>(
   const targetValue = ctx ? contextBestValue : rawBestValue;
   const mine = ctx ? pickedInContext : pickedValue;
 
+  const isBest = picked.name === target.name;
+  // Whether the data can separate the pick from what it is being graded against.
+  // Only with a context, because the margin comes off `CardContext.se` -- the
+  // engine replaying a draft with no set to read has no error bars and must not
+  // invent any.
+  const margin = ctx ? marginBetween(ctx, target, picked) : undefined;
+  const indistinguishable = !isBest && margin != null && targetValue - mine <= margin;
+
   let score: number;
-  if (picked.name === target.name) {
+  if (isBest || indistinguishable) {
+    // A pick the data cannot separate from the best scores as the best, because
+    // any number below 100 asserts a difference the data denies -- and the
+    // verdict beside it already says so in words. The two disagreeing is the
+    // thing this closes; the score is the half people believe.
     score = 100;
   } else {
     const gap = targetValue - mine; // in win-rate points (0-1)
@@ -246,7 +286,8 @@ export function scorePick<C extends EngineCard>(
     terms,
     // Tracks whatever the grade was measured against, so a 100/100 pick can
     // never come back marked as a miss.
-    isBest: picked.name === target.name,
+    isBest,
+    indistinguishable,
     onColor,
     rankInPack,
   };

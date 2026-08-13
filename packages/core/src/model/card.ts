@@ -162,6 +162,33 @@ export interface CardContext {
   speed?: number;
   iwd?: number;
   maindeckRate?: number;
+  /**
+   * One standard error on this card's GIH win rate: sqrt(p(1-p)/n).
+   *
+   * Settled at ingest, exactly like `value`, and for the same reason -- the
+   * inputs are on the text half of a card and the pick path has neither.
+   *
+   * WHY IT LIVES HERE AND NOT ON EngineCard
+   *
+   * `gapMargin` has always existed and has always run in the BROWSER, over
+   * hydrated cards, which is why the verdict can say "the data cannot tell these
+   * two apart" while the grade behind it -- computed server-side in `draft.pick`
+   * -- charges for the difference anyway. Closing that needed the margin on the
+   * pick path.
+   *
+   * The obvious home was EngineCard, and it is the expensive one: `setCards` is
+   * a single document read on all 42 picks, so a number per card costs
+   * ~3.4-4.4KB x 42, about +5.1% of a draft's total I/O. `setCardContext` is
+   * already read for the PACK on every pick -- fourteen rows -- so the same
+   * number rides a read that is happening regardless, at ~180 bytes a pick and
+   * +0.3%. Nineteen times cheaper, and this is the table whose whole definition
+   * is "what scoring reads to judge a card".
+   *
+   * Absent for an unrated card, and that absence is load-bearing: a rarity
+   * baseline is not a measurement and has no error bars, so there is no margin
+   * and no claim that two cards are the same. See `marginBetween`.
+   */
+  se?: number;
 }
 
 /** A whole card: what the engine reads, plus what a person reads. */
