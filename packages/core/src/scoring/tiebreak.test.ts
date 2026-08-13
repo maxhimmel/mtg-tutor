@@ -160,6 +160,12 @@ describe("tiebreak", () => {
     expect(reasons.map((r) => r.principle)).toEqual(["CURVE-03"]);
   });
 
+  // The incoming order is part of the contract, not an accident: `bandOf` is the
+  // only thing that assembles a band and it sorts best-first, so holding the
+  // order here keeps the float's ranking as the last word between two cards no
+  // principle could separate. Two callers building bands two ways is what this
+  // makes impossible, and is what happened on 31 of 779 real picks before
+  // `bandOf` existed.
   it("holds the incoming order when nothing separates the band at all", () => {
     const pool = Array.from({ length: 12 }, (_, i) => creature(`C${i}`, (i % 4) + 1));
     const a = trick("First", 3);

@@ -257,44 +257,29 @@ describe("challengeFor with deck needs", () => {
 });
 
 describe("tiebreakLine", () => {
-  const outcome = (reasons: Challenge["reasons"]) =>
-    resolveChallenge(
-      {
-        challenger: card("Cheap Body", { value: 0.575 }),
-        reasons,
-        contextBestName: "Cheap Body",
-        gap: 0.01,
-        margin: 0.01,
-        separable: false,
-      },
-      true,
-    );
-
   // Silence is the ordinary case, and it has to be: an explanation offered on
   // every pick stops being read by the third one.
   it("says nothing when no principle was consulted", () => {
-    expect(tiebreakLine(outcome([]))).toBeUndefined();
+    expect(tiebreakLine("Cheap Body", [])).toBeUndefined();
   });
 
   it("names the card, the reason and the principle it cites", () => {
-    const line = tiebreakLine(
-      outcome([{ principle: "CURVE-04", note: "nothing in your deck comes down on turn 3" }]),
-    );
+    const line = tiebreakLine("Cheap Body", [
+      { principle: "CURVE-04", note: "nothing in your deck comes down on turn 3" },
+    ]);
 
     expect(line).toBe(
-      "Cheap Body was the card put up because nothing in your deck comes down on turn 3 [CURVE-04].",
+      "Cheap Body is the one your deck wanted, because nothing in your deck comes down on turn 3 [CURVE-04].",
     );
   });
 
   // One reason, not a list. Two would read as a case being built, and the
   // tiebreak counted its reasons rather than weighing them.
   it("gives one reason even when several applied", () => {
-    const line = tiebreakLine(
-      outcome([
-        { principle: "DECK-06", note: "your deck is light on creatures" },
-        { principle: "CURVE-01", note: "your curve is thin at the cheap end" },
-      ]),
-    );
+    const line = tiebreakLine("Cheap Body", [
+      { principle: "DECK-06", note: "your deck is light on creatures" },
+      { principle: "CURVE-01", note: "your curve is thin at the cheap end" },
+    ]);
 
     expect(line).toContain("[DECK-06]");
     expect(line).not.toContain("CURVE-01");

@@ -215,8 +215,18 @@ const cost = (card: EngineCard) => card.turn ?? Number.POSITIVE_INFINITY;
  * first would let a two-mana card the deck does not want beat a four-drop that
  * fills its only empty turn.
  *
- * Ties past that hold the incoming order, so the caller's own ranking survives
- * and this is never the reason two runs disagree.
+ * Ties past that hold the INCOMING ORDER, which makes the band's order part of
+ * this function's contract rather than an accident. Callers must hand it over
+ * best-first by context value -- `bandOf` is the one place that assembles one,
+ * so they do.
+ *
+ * That contract was learned the hard way. With no rule at all, `challengeFor`
+ * banded in descending value and `scorePick` in pack order, and a parity sweep
+ * over 23,940 real picks caught them naming different cards on 31 of the 779
+ * where both had a preference -- every one a tie resolved by whichever list was
+ * built first. Breaking those by NAME was tried and is worse: it is stable, but
+ * it throws away the float's ranking, which is real information about two cards
+ * a principle could not separate.
  */
 export function tiebreak<C extends EngineCard>(band: readonly C[], needs: DeckNeeds): Tiebreak<C> {
   if (band.length === 0) throw new Error("tiebreak needs at least one card");
@@ -273,6 +283,25 @@ export function tiebreak<C extends EngineCard>(band: readonly C[], needs: DeckNe
  * indistinguishable is a claim about data, and there is none there to make it
  * with. `challengeFor` already draws that line the same way.
  */
+/**
+ * The band around the best card, best-first.
+ *
+ * The single place a band is assembled, because its ORDER is load-bearing:
+ * `tiebreak` holds it on a tie, so two callers building the same band two ways
+ * get two answers. They did, on 31 of 779 real picks, until this existed.
+ *
+ * `valued` is every candidate with its context value. The caller supplies that
+ * because the two of them compute it for different reasons already -- one to
+ * rank a pack, one to grade a pick -- and computing it twice is the other way
+ * these drift.
+ */
+export function bandOf<C extends EngineCard>(
+  valued: readonly { card: C; value: number }[],
+  marginBetween: (a: C, b: C) => number | undefined,
+): C[] {
+  return indistinguishable([...valued].sort((a, b) => b.value - a.value), marginBetween);
+}
+
 export function indistinguishable<C extends EngineCard>(
   ranked: readonly { card: C; value: number }[],
   marginBetween: (a: C, b: C) => number | undefined,

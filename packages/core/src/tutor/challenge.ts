@@ -1,7 +1,7 @@
 import type { Card } from "../model/card.js";
 import { gapMargin } from "../scoring/score.js";
 import { type ScoringContext, contextValue } from "../scoring/context.js";
-import { type TiebreakReason, indistinguishable, tiebreak } from "../scoring/tiebreak.js";
+import { type TiebreakReason, bandOf, tiebreak } from "../scoring/tiebreak.js";
 import { pp } from "./cardLine.js";
 
 // Making the player commit to a position before they are shown the answer.
@@ -148,10 +148,9 @@ export function challengeFor<C extends Card>(
   let challenger = top.card;
   let reasons: TiebreakReason[] = [];
   {
-    // Ranked before banding, because `indistinguishable` measures every
-    // candidate against the top one and needs to know which that is.
-    const ranked = [...valued].sort((a, b) => b.value - a.value);
-    const band = indistinguishable(ranked, gapMargin);
+    // Through the shared assembler, which sorts best-first -- an order
+    // `tiebreak` depends on and which the grade must build the same way.
+    const band = bandOf(valued, gapMargin);
     if (band.length > 1) {
       const broken = tiebreak(band, ctx.needs);
       challenger = broken.card;
@@ -364,17 +363,24 @@ export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): st
  * two, they have learned what the app was looking at -- and can disagree with
  * it, which the deterministic path has never let anybody do.
  *
- * Undefined in the ordinary case, where the challenger won on a gap the data
- * can see and no principle was consulted. Silence is right there: an explanation
- * offered on every pick stops being read by the third one.
+ * Undefined in the ordinary case, where the winner won on a gap the data can see
+ * and no principle was consulted. Silence is right there: an explanation offered
+ * on every pick stops being read by the third one.
+ *
+ * Takes a name and reasons rather than a `ChallengeOutcome`, because the same
+ * sentence is now true of a pick nobody was challenged over. `scorePick` runs
+ * the same tiebreak against the same `ctx.needs`, so the passive ceremony, the
+ * review and the CLI all have a preferred card and a reason -- and until this
+ * took its arguments loose, only a player who had been argued with could read
+ * one.
  */
-export function tiebreakLine(o: ChallengeOutcome): string | undefined {
-  if (o.reasons.length === 0) return undefined;
+export function tiebreakLine(named: string, reasons: readonly TiebreakReason[]): string | undefined {
+  if (reasons.length === 0) return undefined;
   // One reason, not a list. Two would read as a case being built, and the
   // tiebreak did not weigh them -- it counted them, and any one of them is the
   // whole of what it can honestly claim.
-  const [{ principle, note }] = o.reasons;
-  return `${o.challengerName} was the card put up because ${note} [${principle}].`;
+  const [{ principle, note }] = reasons;
+  return `${named} is the one your deck wanted, because ${note} [${principle}].`;
 }
 
 /**

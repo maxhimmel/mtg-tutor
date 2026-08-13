@@ -285,6 +285,13 @@ export const storedPickScore = v.object({
   // absent on rows written before the verdict stopped naming a single winner
   // out of a tie -- those render the way they always did.
   bandNames: v.optional(v.array(v.string())),
+  // Which of the band the deck wanted, and the principles that say why. Stored
+  // so the review shows what the player was shown rather than recomputing it
+  // against a deck that has since been rebuilt.
+  preferredName: v.optional(v.string()),
+  reasons: v.optional(
+    v.array(v.object({ principle: v.string(), note: v.string() })),
+  ),
   onColor: v.boolean(),
   rankInPack: v.number(),
 });
