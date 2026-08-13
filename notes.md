@@ -193,6 +193,8 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to spend overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual mana-cost for this card?
 
+12. When a card is hovered and the enlarged version is shown and then I click/select the card the hover disappears. That feels incorrect because I didn't STOP hovering over the card.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -370,7 +372,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
 
-12. New app title:
+11. New app title:
 
 - Title: P1P1
 - Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
@@ -952,49 +954,50 @@ The architecture, the data pipeline and the deploy story are all documented in
     challenge feature). Five rulings, and the first is the one everything else
     is downstream of.
 
-        **Live pod, not replayed packs.** Dealing the friend a recording of your
-        forty-two packs aligns every row and makes their picks inert — nothing they
-        take changes what wheels back — so signal-reading and wheeling, which is
-        most of what a draft teaches, are switched off. It looks like a draft and is
-        a multiple-choice quiz with your answer key. Prototyped and rejected on the
-        merits, and it will keep looking like an obvious simplification, because the
-        thing it costs is invisible in the diff it produces.
+            **Live pod, not replayed packs.** Dealing the friend a recording of your
+            forty-two packs aligns every row and makes their picks inert — nothing they
+            take changes what wheels back — so signal-reading and wheeling, which is
+            most of what a draft teaches, are switched off. It looks like a draft and is
+            a multiple-choice quiz with your answer key. Prototyped and rejected on the
+            merits, and it will keep looking like an obvious simplification, because the
+            thing it costs is invisible in the diff it produces.
 
-        **`samePack` is per row and computed, never a constant.** The prototype's
-        `DRIFTS_AFTER = 7` is an artifact of `DRAFT.seats`, and worse it assumes
-        drift is monotonic. Swept over 1000 seed/divergence combinations on
-        `fakeSet`: the delay between diverging and seeing a different pack is never
-        less than 8 and 8 exactly is reachable — that is the wheel, and it holds for
-        a divergence at ANY index — **339 combinations never drift at all**, and 657
-        drift and then re-converge. Two people can take different cards and still
-        see all forty-two packs identical. The first seed I picked for the tests was
-        one of the 339, so the drift assertions passed by never being exercised: a
-        fixture too uniform to reproduce the phenomenon is trap #4 in a new costume.
+            **`samePack` is per row and computed, never a constant.** The prototype's
+            `DRIFTS_AFTER = 7` is an artifact of `DRAFT.seats`, and worse it assumes
+            drift is monotonic. Swept over 1000 seed/divergence combinations on
+            `fakeSet`: the delay between diverging and seeing a different pack is never
+            less than 8 and 8 exactly is reachable — that is the wheel, and it holds for
+            a divergence at ANY index — **339 combinations never drift at all**, and 657
+            drift and then re-converge. Two people can take different cards and still
+            see all forty-two packs identical. The first seed I picked for the tests was
+            one of the 339, so the drift assertions passed by never being exercised: a
+            fixture too uniform to reproduce the phenomenon is trap #4 in a new costume.
 
-        **Their score is their stored score.** A replay grades on raw power, and the
-        whole point of comparing two people rather than two attempts is that each
-        was graded against their own pool. That is why the diff reads `draftPicks`
-        rather than replaying — which also makes it the one full-draft reader that a
-        re-ingest cannot strand, and it costs 138.5KB against `review.load`'s 218KB.
+            **Their score is their stored score.** A replay grades on raw power, and the
+            whole point of comparing two people rather than two attempts is that each
+            was graded against their own pool. That is why the diff reads `draftPicks`
+            rather than replaying — which also makes it the one full-draft reader that a
+            re-ingest cannot strand, and it costs 138.5KB against `review.load`'s 218KB.
 
-        **The comparison is a braid, not a tree.** A tree fans out and never
-        rejoins; two drafts run a fixed forty-two picks in parallel and re-converge
-        constantly, so every fork drawn as a branch claims two futures that never
-        happened. And the branch point is where the PACKS first differed, not where
-        the picks did — at least eight picks apart — so a diagram drawn on
-        disagreements puts the fork where the effect is and gets the causation
-        backwards. The arc between the two is the one claim the drawing exists to
-        make.
+            **The comparison is a braid, not a tree.** A tree fans out and never
+            rejoins; two drafts run a fixed forty-two picks in parallel and re-converge
+            constantly, so every fork drawn as a branch claims two futures that never
+            happened. And the branch point is where the PACKS first differed, not where
+            the picks did — at least eight picks apart — so a diagram drawn on
+            disagreements puts the fork where the effect is and gets the causation
+            backwards. The arc between the two is the one claim the drawing exists to
+            make.
 
-        **"Challenge" means two things in this repo on purpose.** The friend invite
-        (plural: `challenges`, `convex/challenges.ts`, `/challenge/*`) and the
-        counter-argument the commitment ceremony puts to a pick (singular:
-        `core/src/tutor/challenge.ts`, `TheChallenge`, `draftPicks.defense
+            **"Challenge" means two things in this repo on purpose.** The friend invite
+            (plural: `challenges`, `convex/challenges.ts`, `/challenge/*`) and the
+            counter-argument the commitment ceremony puts to a pick (singular:
+            `core/src/tutor/challenge.ts`, `TheChallenge`, `draftPicks.defense
 
-    .challengedName`, decision #11). Renaming either was considered: the
-ceremony's sense is load-bearing in the validators, and the invite's is the
-word the feature is called by everywhere outside the code. The comparison
-logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
+        .challengedName`, decision #11). Renaming either was considered: the
+
+    ceremony's sense is load-bearing in the validators, and the invite's is the
+    word the feature is called by everywhere outside the code. The comparison
+    logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
 
 18. **The row is the grant, and `ownedSession` never learned about it**
     (2026-08-09). A challenge names both drafts, so "may I read this one"
