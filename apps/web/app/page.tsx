@@ -10,7 +10,7 @@ import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
 import { SignedOut } from "./components/SignedOut";
 import { accessBlocked, draftRefused } from "./lib/analytics";
-import { useSettings, type SetView } from "./lib/useSettings";
+import { PODS, useSettings, type Pod, type SetView } from "./lib/useSettings";
 import { humanError } from "./lib/humanError";
 
 export default function Home() {
@@ -110,6 +110,35 @@ function SetViewToggle({
   );
 }
 
+// Named rather than drawn, which is why this is not shaped like SetViewToggle
+// above. Grid-or-list is a picture and needs no word; which seven drafters you
+// are about to sit down with is a word and cannot be a picture.
+//
+// It shows the CURRENT pod rather than the one it switches to -- the opposite of
+// the flip control beside it, deliberately. A view is a way of looking at a page
+// and can be flipped back at any time; this decides what wheels for the next
+// forty-two picks and is fixed the moment the draft starts, so what it says at
+// rest has to be what you are getting. Same reasoning as the terms strip on the
+// board, where the ceremony reads as a state and not as an action.
+function PodToggle({ value, onChange }: { value: Pod; onChange: (pod: Pod) => void }) {
+  const current = PODS.find((p) => p.id === value);
+  const other = PODS.find((p) => p.id !== value);
+  if (!current || !other) return null;
+
+  return (
+    <button
+      type="button"
+      className="btn btn-sm btn-ghost gap-1.5 font-normal"
+      onClick={() => onChange(other.id)}
+      title={`${current.blurb} — click for ${other.label}`}
+      aria-label={`Drafting against: ${current.label}. Switch to ${other.label}.`}
+    >
+      <span className="text-base-content/55">Pod</span>
+      <span>{current.label}</span>
+    </button>
+  );
+}
+
 function SetPicker() {
   const sets = useQuery(api.sets.list);
   const quota = useQuery(api.quota.mine, {});
@@ -134,7 +163,10 @@ function SetPicker() {
     setRefused(null);
     setStarting(setCode);
     try {
-      const sessionId = await startDraft({ setCode, format });
+      // Read here rather than on the board, because it decides the deal and is
+      // copied onto the session -- see draftSessions.pod. Changing the setting
+      // mid-draft cannot reach a draft already dealt.
+      const sessionId = await startDraft({ setCode, format, pod: settings.pod });
       router.push(`/draft/${sessionId}`);
     } catch (e) {
       // Shown on this surface rather than in an alert(), so the way out is
@@ -166,13 +198,16 @@ function SetPicker() {
               {quota.remaining.drafts} of {quota.of.drafts} drafts left today
             </span>
           )}
-          {/* Only once there is something to view. A toggle over an empty page
-              offers a choice between two ways of seeing nothing. */}
+          {/* Both only once there is something to draft. A control over an
+              empty page offers a choice between two ways of seeing nothing. */}
           {sets != null && sets.length > 0 && (
-            <SetViewToggle
-              value={settings.setView}
-              onChange={(setView) => update({ setView }, "sets")}
-            />
+            <>
+              <PodToggle value={settings.pod} onChange={(pod) => update({ pod }, "sets")} />
+              <SetViewToggle
+                value={settings.setView}
+                onChange={(setView) => update({ setView }, "sets")}
+              />
+            </>
           )}
         </div>
       </div>

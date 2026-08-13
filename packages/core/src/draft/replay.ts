@@ -1,6 +1,7 @@
 import type { SetData } from "../model/card.js";
 import { mulberry32 } from "../util/rng.js";
 import { DraftEngine } from "./engine.js";
+import type { PodPolicy } from "./bots.js";
 import type { ScoringContext } from "../scoring/context.js";
 
 // `scoring` is how a caller that CAN read a set's context makes a replay agree
@@ -18,8 +19,13 @@ export function replayDraft(
   seed: number,
   pickedNames: readonly string[],
   scoring?: (engine: DraftEngine) => ScoringContext | undefined,
+  // Which pod dealt this draft. The seed alone stopped being enough the moment
+  // there was more than one bot policy: replaying under the wrong one deals
+  // different packs and throws below, which is at least loud. Callers read it
+  // off the session, where an absent value means "legacy".
+  pod: PodPolicy = "legacy",
 ): DraftEngine {
-  const engine = new DraftEngine(set, mulberry32(seed));
+  const engine = new DraftEngine(set, mulberry32(seed), pod);
 
   for (const name of pickedNames) {
     const card = engine.currentPack.find((c) => c.name === name);

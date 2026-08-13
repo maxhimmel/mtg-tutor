@@ -26,7 +26,7 @@ describe("makePack", () => {
 
 describe("Bot", () => {
   it("commits to colors over time", () => {
-    const bot = new Bot(0, rng(7));
+    const bot = new Bot("legacy", rng(7), 0);
     const mono = (c: ColorCode, gih: number, n: number) => mkCard(`${c}${n}`, "common", [c], gih);
     // Feed packs where an on-color-ish choice exists; bot should lean into its early color.
     bot.pick([mono("U", 0.56, 1), mono("R", 0.55, 2)]); // takes U (slightly better)

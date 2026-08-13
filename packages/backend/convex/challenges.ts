@@ -173,6 +173,12 @@ export const accept = mutation({
       format: challenge.format,
       seed: challenge.seed,
       challengeId: challenge._id,
+      // The challenger's pod, not the friend's preference, and not negotiable.
+      // The seed is shared, so a different pod deals a different forty-two --
+      // and `samePack` would then be comparing two people who never saw the same
+      // booster. Exactly the silent failure the staleness guard above exists to
+      // prevent, arriving through a second door.
+      pod: challengerSession.pod,
     });
 
     await ctx.db.patch(challenge._id, {

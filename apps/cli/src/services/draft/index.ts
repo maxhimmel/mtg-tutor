@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { api } from "@mtg-tutor/backend";
+import { DEFAULT_POD } from "@mtg-tutor/core";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { convexClient } from "../../core/auth/session.js";
 import { spinner } from "../../core/ui/spinner.js";
@@ -150,7 +151,10 @@ export async function run(argv: string[]): Promise<void> {
   // as a stack trace, which is the same information dressed as a crash.
   let sessionId;
   try {
-    sessionId = await convex.mutation(api.draft.start, { setCode, format });
+    // Explicit, and shared with the web. Omitting it is not "no preference" --
+    // an absent pod means the ORIGINAL bots, which exists so pre-pod drafts
+    // still replay, and it silently made every CLI draft the odd one out.
+    sessionId = await convex.mutation(api.draft.start, { setCode, format, pod: DEFAULT_POD });
   } catch (e) {
     p.log.error(humanError(e));
     return;

@@ -59,8 +59,19 @@ interface FeedbackValue {
   open: (seed: FeedbackSeed) => void;
   declare: (standing: Standing | null) => void;
   suspend: (yes: boolean) => void;
-  /** The screen's own declaration, so AiResponse can fall back to it for set and session. */
-  standing: Standing | null;
+  /**
+   * The screen's own declaration, so a seed that names no anchor can fall back
+   * to it for set and session.
+   *
+   * Read through a call rather than held as state, because every reader of it
+   * reads at the moment somebody acts -- the fab as it is clicked, the sheet as
+   * it opens. State would mean the whole tree under this provider re-renders
+   * every time a screen redeclares, and the screen that redeclares most is the
+   * draft board, which does it on every chunk of a streaming coach response.
+   * That put a setState inside a useEffect on a dependency that changes per
+   * token, which React counts as a runaway update after 50 of them.
+   */
+  standing: () => Standing | null;
 }
 
 const FeedbackContext = createContext<FeedbackValue | null>(null);
@@ -81,9 +92,9 @@ export function useFeedbackAnchor(standing: Standing | null): void {
   const ctx = useContext(FeedbackContext);
   const declare = ctx?.declare;
   // Serialised rather than compared by identity: callers build this object
-  // inline every render, so an identity check would redeclare on every chunk of
-  // a streaming coach response. Parsed back out of the key rather than closed
-  // over, so the effect genuinely depends on everything it reads.
+  // inline every render, so an identity check would redeclare on every one.
+  // Parsed back out of the key rather than closed over, so the effect genuinely
+  // depends on everything it reads.
   const key = JSON.stringify(standing ?? null);
   useEffect(() => {
     declare?.(JSON.parse(key) as Standing | null);
@@ -136,12 +147,15 @@ const KINDS: { label: string; Icon: ComponentType; prompt: string; surface: Feed
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [seed, setSeed] = useState<FeedbackSeed | null>(null);
-  const [standing, setStanding] = useState<Standing | null>(null);
   const [suspended, setSuspended] = useState(false);
   const [thanks, setThanks] = useState<string | null>(null);
   const pathname = usePathname() ?? "/";
 
-  const declare = useCallback((next: Standing | null) => setStanding(next), []);
+  const declared = useRef<Standing | null>(null);
+  const declare = useCallback((next: Standing | null) => {
+    declared.current = next;
+  }, []);
+  const standing = useCallback(() => declared.current, []);
   const suspend = useCallback((yes: boolean) => setSuspended(yes), []);
 
   const open = useCallback(
@@ -203,7 +217,7 @@ function FeedbackFab({
   standing,
 }: {
   open: (seed: FeedbackSeed) => void;
-  standing: Standing | null;
+  standing: () => Standing | null;
 }) {
   const trigger = useRef<HTMLDivElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -279,13 +293,16 @@ function FeedbackFab({
             aria-label={kind.label}
             onClick={() => {
               collapse();
+              // Read as it is pressed, which is the only moment it matters: what
+              // the screen was showing when somebody decided to say something.
+              const screen = standing();
               open({
                 // A kind that names a surface wins; otherwise the screen's own
                 // declaration does, and "general" is the floor.
-                surface: kind.surface === "coach" ? (standing?.surface ?? "coach") : (standing?.surface ?? "general"),
+                surface: kind.surface === "coach" ? (screen?.surface ?? "coach") : (screen?.surface ?? "general"),
                 source: "fab",
-                anchor: standing?.anchor,
-                quote: standing?.quote,
+                anchor: screen?.anchor,
+                quote: screen?.quote,
                 prompt: kind.prompt,
               });
             }}
@@ -306,7 +323,7 @@ function FeedbackSheet({
   onSent,
 }: {
   seed: FeedbackSeed;
-  standing: Standing | null;
+  standing: () => Standing | null;
   route: string;
   onClose: () => void;
   onSent: (message: string) => void;
@@ -328,8 +345,12 @@ function FeedbackSheet({
     if (!el?.open) el?.showModal();
   }, []);
 
-  const anchor = seed.anchor ?? standing?.anchor;
-  const quote = seed.quote ?? standing?.quote;
+  // Taken once, as the panel opens. What is being commented on is the screen as
+  // it was when the button was pressed -- a coach still streaming behind the
+  // modal would otherwise rewrite the receipt under somebody mid-sentence.
+  const [screen] = useState(() => standing());
+  const anchor = seed.anchor ?? screen?.anchor;
+  const quote = seed.quote ?? screen?.quote;
 
   const send = async () => {
     const trimmed = note.trim();

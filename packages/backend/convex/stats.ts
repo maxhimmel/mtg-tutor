@@ -105,7 +105,7 @@ export const overview = query({
 
       let engine;
       try {
-        engine = replayDraft(set, session.seed, session.pickedNames, scoring);
+        engine = replayDraft(set, session.seed, session.pickedNames, scoring, session.pod ?? "legacy");
       } catch {
         // Set data changed under a stored draft; skip its detail, keep its summary.
         continue;

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   buildDraftFrame,
   buildReviewContext,
@@ -19,8 +19,13 @@ import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession, staleAgainst } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
-import { hydrate, hydrateCard } from "@mtg-tutor/core";
-import { storedPick, storedScores, toRecordedPick } from "./draftPicks.js";
+import {
+  poolFromLastPick,
+  storedPick,
+  storedPicks,
+  storedScores,
+  toRecordedPick,
+} from "./draftPicks.js";
 import { reviewVerdict } from "./validators.js";
 import { CoachUnavailableError, object, text } from "./llm.js";
 
@@ -76,30 +81,74 @@ export const list = query({
 });
 
 // The whole draft rehydrated for the walkthrough: every pack as the player saw
-// it, the deterministic scoring, and any verdict already frozen.
+// it, the scoring they were actually shown, and any verdict already frozen.
 //
 // A pick is identified by its index in the session's pick list -- that is what
 // reviewVerdicts and draftPicks both key on.
 //
-// This one still replays. It wants every pack of the draft at once, and reading
-// them as rows is no cheaper than rebuilding them from a pool it has to read
-// anyway for the colour-pair rates.
+// THIS NO LONGER REPLAYS, and that is the point rather than a saving.
+//
+// It was the last reader that did (notes.md issue #3). Re-ingesting a set
+// strands every draft taken against the old data -- the packs that draft saw no
+// longer exist -- so the walkthrough was a wall you only met after clicking, on
+// a row `review.list` had already badged as stale. Rows cannot strand: every
+// pick recorded the pack it saw.
+//
+// It also fixes what the replay was quietly getting wrong. `draft.pick` scores
+// against the pack's context rows, and a replay has none, so a replayed history
+// carries RAW-POWER scores while the player was shown context-aware ones -- see
+// storedScores. The walkthrough has been grading picks by a number the player
+// never saw. The stored rows win.
+//
+// IT COSTS MORE, AND THAT IS THE TRADE. Measured with `pnpm bench-io`, fdn seed
+// 42: 218.0KB replaying, 262.7KB reading rows. +44.7KB, once per review, taking
+// a whole draft-plus-review from 2.41MB to 2.45MB.
+//
+// The comment this replaced said rows were "no cheaper than rebuilding them from
+// a pool it has to read anyway", and about bytes it was exactly right -- the
+// rows are an ADDITION, and the replay itself was free. It was wrong only about
+// that being the question. A draft that cannot be opened costs infinity.
+//
+// It reads no set document at all, which took the sting out. `colorWinRates`
+// went out on this query and no reader has ever touched it -- the draft board
+// gets its own from `draft.state`, the deck screen is a different query -- so
+// the ~25KB pool read went with it. Without that it was 287.6KB.
 export const load = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
-    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const session = await ownedSession(ctx, args.sessionId);
+    const rows = await storedPicks(ctx, args.sessionId);
+
+    // Sessions drafted before draftPicks existed (2026-07-29) have rows only if
+    // the backfill could replay them, which by definition excludes the stranded
+    // ones. A ConvexError rather than a blank page, in the same voice replayFor
+    // uses, so the screen that catches it can say something true.
+    if (rows.length === 0) {
+      throw new ConvexError(
+        `This draft cannot be opened: it was taken before its picks were recorded, ` +
+          `and its ${session.setCode.toUpperCase()} card data has changed since, so ` +
+          `its packs can no longer be rebuilt.`,
+      );
+    }
 
     // Computed, not read off `session.summary`, which is what this used to do.
     //
     // The stored summary is a denormalisation for `list` above, which must not
-    // replay 45 picks per row. This query has already replayed -- the maindeck is
-    // sitting in `engine` -- so reading the stored copy bought nothing and cost
+    // rebuild 45 picks per row. Reading the stored copy bought nothing and cost
     // the one thing a copy always costs: it was written when the draft finished,
     // by whatever rule was in force that day. That is why the walkthrough and the
     // breakdown said "WU" about a deck the deck screen, which recomputes, called
     // "WUB". Same reason there is no stored deck list (see buildDeck).
+    //
+    // The pool comes out of the LAST row alone -- `poolBefore` holds 44 of the 45
+    // and the 45th is in that row's own pack -- which is the same ~1.5KB trick
+    // `draft.build` uses to refresh a finished deck's colours.
     const bench = normalizeBench(session.sideboard ?? []);
-    const { maindeck } = splitPool(engine.humanPool, bench, session.pickedNames.length);
+    const { maindeck } = splitPool(
+      poolFromLastPick(rows[rows.length - 1]),
+      bench,
+      session.pickedNames.length,
+    );
 
     const verdicts = await ctx.db
       .query("reviewVerdicts")
@@ -118,21 +167,23 @@ export const load = query({
       seed: String(session.seed),
       createdAt: session.createdAt,
       colorPair: deckColors(maindeck),
-      colorWinRates: cardsDoc.colorWinRates,
-      picks: engine.history.map((h, pickIndex) => ({
-        pickIndex,
-        packNo: h.packNo,
-        pickNo: h.pickNo,
-        // The walkthrough re-renders every pack the player saw, so these go out
-        // whole rather than as the engine's half of a card.
-        pack: hydrate(h.pack, text),
-        picked: hydrateCard(h.picked, text),
-        bestName: h.score.rawBest.name,
-        score: h.score.score,
-        isBest: h.score.isBest,
-        onColor: h.score.onColor,
-        verdict: byIndex.get(pickIndex),
-      })),
+      picks: rows.map((row) => {
+        const rec = toRecordedPick(row, text);
+        return {
+          pickIndex: row.pickIndex,
+          packNo: rec.packNo,
+          pickNo: rec.pickNo,
+          // The walkthrough re-renders every pack the player saw, so these go
+          // out whole rather than as the engine's half of a card.
+          pack: rec.pack,
+          picked: rec.picked,
+          bestName: rec.score.rawBest.name,
+          score: rec.score.score,
+          isBest: rec.score.isBest,
+          onColor: rec.score.onColor,
+          verdict: byIndex.get(row.pickIndex),
+        };
+      }),
     };
   },
 });

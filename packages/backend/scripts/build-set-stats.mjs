@@ -24,13 +24,11 @@
 // Only draft and game data are read. The replay dataset is larger than both
 // combined and nothing here needs it; see notes.md Ideas #2.
 
-import { createReadStream, mkdirSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
-import { createGunzip } from "node:zlib";
-import { Readable } from "node:stream";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkAvailability, availabilityNote } from "./lib/datasets.mjs";
+import { lines as streamDataset, splitRow } from "./lib/csv.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const UA = "mtg-tutor/0.1 (draft-trainer)";
@@ -59,45 +57,7 @@ if (!setCode) {
 
 // ---------------------------------------------------------------- input
 
-const s3 = (kind) =>
-  `https://17lands-public.s3.amazonaws.com/analysis_data/${kind}_data/` +
-  `${kind}_data_public.${setCode.toUpperCase()}.${format}.csv.gz`;
-
-// Streams a dataset line by line, decompressing on the fly. A local path is used
-// as-is so re-deriving does not re-download; without one we stream from S3 and
-// keep nothing on disk.
-async function* lines(kind, localPath) {
-  let input;
-  if (localPath) {
-    log(`${kind}: reading ${localPath}`);
-    input = createReadStream(localPath);
-    if (localPath.endsWith(".gz")) input = input.pipe(createGunzip());
-  } else {
-    const url = s3(kind);
-    log(`${kind}: streaming ${url}`);
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
-    if (!res.ok) throw new Error(`${res.status} fetching ${url}`);
-    input = Readable.fromWeb(res.body).pipe(createGunzip());
-  }
-  yield* createInterface({ input, crlfDelay: Infinity });
-}
-
-// These files quote only fields containing commas, and never embed a quote or
-// newline inside a field.
-function splitRow(line) {
-  const out = [];
-  let cur = "";
-  let quoted = false;
-  for (const ch of line) {
-    if (ch === '"') quoted = !quoted;
-    else if (ch === "," && !quoted) {
-      out.push(cur);
-      cur = "";
-    } else cur += ch;
-  }
-  out.push(cur);
-  return out;
-}
+const lines = (kind, localPath) => streamDataset({ kind, setCode, format, localPath, log });
 
 // Must match normalizeName in @mtg-tutor/core, or names will not join.
 const norm = (n) =>

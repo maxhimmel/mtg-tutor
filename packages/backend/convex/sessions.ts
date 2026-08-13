@@ -173,7 +173,15 @@ export async function replayFor(ctx: QueryCtx, session: Doc<"draftSessions">) {
   // engine's divergence message as an uncaught server error.
   let engine;
   try {
-    engine = replayDraft(toSetData(cardsDoc), session.seed, session.pickedNames);
+    engine = replayDraft(
+      toSetData(cardsDoc),
+      session.seed,
+      session.pickedNames,
+      undefined,
+      // Absent means the original bot, which is what every draft taken before
+      // pods existed was dealt by. See draftSessions.pod.
+      session.pod ?? "legacy",
+    );
   } catch (e) {
     throw new ConvexError(
       `This draft can no longer be rebuilt: the ${session.setCode.toUpperCase()} ` +

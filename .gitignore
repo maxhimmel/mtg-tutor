@@ -21,9 +21,14 @@ scratch/
 # selected deployment is `local:`. Rebuildable from the seed pipeline.
 .convex/
 
-# Raw 17Lands datasets. Build inputs only -- ~1.2GB per set, streamed and
-# reduced to a ~270KB artifact under packages/backend/data, which IS committed.
-# Caching them here just saves re-downloading while tuning metric definitions.
+# 17Lands datasets and what the scripts reduce them to. Build inputs only --
+# ~1.2GB per set raw, reduced to a ~270KB artifact under packages/backend/data,
+# which IS committed. Everything here is re-derivable from a public URL, so it
+# is cached rather than stored: the card snapshots `cache-cards` writes, and the
+# dealt packs `fit-bot-policy` and `bench-bots` read (~20MB a set, and the
+# difference between a fifteen-minute run and a four-second one). Both carry a
+# fingerprint of what they were derived from and rebuild themselves when it
+# moves, which is why a stale cache here cannot quietly change a number.
 datasets/
 
 # Benchmark output, and only the derived half. `pnpm bench-report` rebuilds the

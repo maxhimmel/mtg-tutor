@@ -1,7 +1,8 @@
 import type { EngineCard, SetData } from "../model/card.js";
 import { DRAFT, PACK } from "../config.js";
 import { makePacks, packSizeFor } from "./pack.js";
-import { Bot } from "./bots.js";
+import { Bot, type PodPolicy } from "./bots.js";
+import { draftProgress } from "./policy.js";
 import { scorePick } from "../scoring/score.js";
 import type { ScoringContext } from "../scoring/context.js";
 import { readSignals } from "../scoring/explain.js";
@@ -20,10 +21,18 @@ export class DraftEngine {
   private set: SetData;
   private rng: () => number;
 
-  constructor(set: SetData, rng: () => number = Math.random) {
+  // `pod` defaults to "legacy" everywhere it appears, which is not laziness: a
+  // stored session is only replayable against the policy that dealt it, and
+  // every draft taken before `draftSessions.pod` existed has no value there. An
+  // absent pod has to keep meaning the bot that was running at the time, forever.
+  constructor(
+    set: SetData,
+    rng: () => number = Math.random,
+    private readonly pod: PodPolicy = "legacy",
+  ) {
     this.set = set;
     this.rng = rng;
-    this.bots = Array.from({ length: DRAFT.seats - 1 }, () => new Bot(0.01, rng));
+    this.bots = Array.from({ length: DRAFT.seats - 1 }, () => new Bot(pod, rng));
     this.openPack();
   }
 
@@ -63,11 +72,14 @@ export class DraftEngine {
     this.hands[DRAFT.humanSeat] = pack.filter((c) => c.name !== card.name);
     this.humanPool.push(card);
 
-    // Bots pick from their own hands.
+    // Bots pick from their own hands. They are on the same pick the human just
+    // made, so `history.length - 1` is their index too -- and it counts the
+    // whole draft, where `pickNo` restarts in every pack.
+    const progress = draftProgress(this.history.length - 1, this.totalPicks());
     for (let seat = 1; seat < DRAFT.seats; seat++) {
       const hand = this.hands[seat];
       if (hand.length === 0) continue;
-      const botPick = this.bots[seat - 1].pick(hand);
+      const botPick = this.bots[seat - 1].pick(hand, progress);
       this.hands[seat] = hand.filter((c) => c.name !== botPick.name);
     }
 
