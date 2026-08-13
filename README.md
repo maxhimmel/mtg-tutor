@@ -142,15 +142,20 @@ It narrates, which is most of what makes it usable. A call is announced when it
 **arrives**, named by the pick it is about, and again when it lands:
 
 ```
--> 09:09:43 coach   Pack 1, Pick 3 — pick 3 of 45, 42 to come.  [12.4KB in]
-<- 09:09:46 coach   stop - 1.1s to first token - 3.0s - 9,412 in (7,200 cached) / 312 out
+09:21:32 #01 ▶ coach   Pack 1, Pick 3 — pick 3 of 45, 42 to come. · 12.4KB in
+09:21:34 #01 ✓ coach   answered · 2.5s · 1.3s to first token · 9,412 in (7,200 cached) · 312 out
 ```
 
-The arrival line is the diagnostic that matters: if the coach fails and no `->`
-appeared, the request never left Convex, which is a different problem entirely.
-A player who clicks on mid-answer reads as `cancelled`, and the child is killed
-rather than left running up usage nobody will see. `--echo` prints the answers
-as they stream, for when the app is not what you are watching.
+The `▶` is the diagnostic that matters: if the coach fails and no `▶` appeared,
+the request never left Convex, which is a different problem entirely. The mark
+column is where the eye goes — `✓` answered, `✂` cut at `max_tokens`, `⊘`
+cancelled, `✗` failed — and the number pairs the two lines, because the review
+fires calls that overlap. Colour is off when stdout is not a terminal and under
+`NO_COLOR`, so a redirected log is plain text.
+
+A player who clicks on mid-answer reads as `⊘ cancelled`, and the child is
+killed rather than left running up usage nobody will see. `--echo` prints the
+answers as they stream, in a gutter under the call they came from.
 
 What crosses faithfully: the system/user prompt pair, `--json-schema` for the
 review's structured output, streaming, the `fast` flag as `--effort low`, and
