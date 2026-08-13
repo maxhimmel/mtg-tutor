@@ -48,6 +48,11 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
   const margin = gapMargin(score.contextBest, score.picked);
   const unresolved = score.indistinguishable;
 
+  // How many cards this row is actually about: the band plus the pick itself.
+  // One number for the label and the sentence under it, so they cannot count
+  // differently.
+  const tied = unresolved && score.band.length > 0 ? score.band.length + 1 : 2;
+
   return (
     <div className="flex items-start gap-4">
       <div className="w-16 shrink-0 text-center">
@@ -93,7 +98,7 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                 {!score.indistinguishable
                   ? "Graded against"
                   : score.band.length > 1
-                    ? `The ${score.band.length + 1} the data cannot separate`
+                    ? `The ${tied} the data cannot separate`
                     : "Just as good"}
               </span>
               <span className="tabular-nums normal-case tracking-normal">
@@ -118,12 +123,19 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
             {/* Said in words, not left to be read off two numbers. The whole
                 point of carrying the margin is that a gap smaller than it is not
                 a gap, and a grade sitting above this row is about to imply
-                otherwise. */}
+                otherwise.
+
+                Counts the cards it is talking about rather than assuming two.
+                The row above can be a band of seven, and following it with "the
+                data cannot tell these two apart" reads as a sentence written for
+                a different pack than the one on screen. */}
             <p className="mt-1.5 text-xs leading-relaxed text-base-content/60">
               {margin == null
                 ? "One of these cards is unrated, so there are no error bars on this gap."
                 : unresolved
-                  ? "That is inside the margin of error: the data cannot tell these two apart, so this pick is not marked down for it."
+                  ? tied > 2
+                    ? `That is inside the margin of error: the data cannot separate these ${tied}, so this pick is not marked down for it.`
+                    : "That is inside the margin of error: the data cannot tell these two apart, so this pick is not marked down for it."
                   : "That gap is larger than the margin of error on the two win rates."}
             </p>
           </div>
