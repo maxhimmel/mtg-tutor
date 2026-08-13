@@ -203,7 +203,9 @@ shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
 so anything outside this file that cares should cite by name rather than number.
 8 (challenge a friend) shipped on 2026-08-09 and is the one exception to the
 delete-and-leave-empty rule: 8b and 8c are follow-ons that cite it, so it keeps
-a one-line stub rather than orphaning them.
+a one-line stub rather than orphaning them. 11 (coach from the local Claude Code
+CLI) shipped on 2026-08-13; what it can and cannot be trusted for is in
+`README.md`, and the roads not taken are decision #19.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -365,16 +367,6 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
-
-11. Would it be possible - IN LOCAL DEV ENVIRONMENTS ONLY - to somehow utilize a
-    shell/terminal + claude and route all AI related queries there to emulate nearly
-    identical usage that we currently have using the ai-sdk + spending AI tokens?
-    - If so, could we still run AI benchmarks using this system?
-    - If we can't still run benchmarks I think it's still worth developing because
-      I tend to run out of free grok tokens while testing/tinkering.
-    - Definitely think this thru in terms of properly mirroring how we currently
-      utilize the ai-sdk/agents/contexts/etc at runtime -- the last thing I'd want is
-      false responses while using a shell/terminal + claude.
 
 12. New app title:
 
@@ -1042,3 +1034,58 @@ The architecture, the data pipeline and the deploy story are all documented in
     wandered off" stays derivable rather than teaching
     `draftSessions.status` a third literal every existing reader would have to
     learn.
+
+19. **The coach can answer from the Claude Code CLI, and what that costs is
+    fidelity rather than money** (2026-08-13, Ideas #11). Five rulings, and the
+    first decides the shape of the rest.
+
+    **A loopback HTTP server, because nothing else can reach a laptop.** Convex
+    functions run in a V8 isolate with no `child_process`, so no amount of
+    cleverness inside the deployment shells out. The only seam that reaches this
+    machine is a request, and `llm.ts` already speaks openai-compatible — so the
+    whole feature is an endpoint that spawns `claude -p`, and the app learns
+    nothing. `scripts/claude-bridge.mjs` is the only file that knows the CLI
+    exists.
+
+    **One process per request, which is the slow choice and the honest one.**
+    Keeping a session alive with `--input-format stream-json` would skip a
+    ~1s spawn per pick and would carry conversation history between calls. Every
+    call this app makes is a fresh single turn, so a bridge that answered pick 12
+    while remembering pick 11 would be answering a question the app never asked —
+    and answering it well, which is what makes it dangerous.
+
+    **It refuses shapes it does not implement.** A multi-turn body, a tool
+    definition, a `json_object` response format: 400, not a best effort. This is
+    a bridge for one caller, and the failure mode of the friendly alternative is
+    a fluent answer to a quietly altered question, which nothing downstream can
+    detect. The wire contract it does implement was captured off the AI SDK
+    rather than read out of a spec.
+
+    **`--bare` was the obvious flag and is the wrong one.** It disables hooks,
+    plugins, auto-memory and `CLAUDE.md` discovery in one switch — and documents
+    that Anthropic auth is then strictly `ANTHROPIC_API_KEY`, which would spend
+    money on every call, the one thing this exists to avoid. The isolation is
+    therefore assembled by hand (`--tools ""`, `--setting-sources ""`,
+    `--disable-slash-commands`, `--strict-mcp-config`, a cwd outside the repo)
+    and the key is scrubbed from the child's environment. Likewise
+    `--system-prompt` rather than `--append-system-prompt`: appending leaves
+    Claude Code's own instructions in front of this app's, which is a different
+    model answering.
+
+    **Token counts from this provider are not comparable and the benchmark is
+    still worth running.** Claude Code frames every prompt (~150 tokens on an
+    empty call) and cannot report cache writes through this wire format, so
+    input totals are inflated and no saving can be priced here. Output length,
+    call frequency and accuracy are all real. What keeps that from being a trap
+    is the provider NAME: usage rows record `claude-cli`, and `bench-llm` keys
+    baselines and transcripts by provider, so a free run cannot land on top of
+    an Anthropic one. `local` kept its old name for the same reason — renaming
+    it would orphan every stored baseline.
+
+    `max_tokens` has no equivalent on the CLI and is enforced in the bridge, by
+    real output tokens where they are known and by four-characters-per-token
+    while streaming, where the real count only arrives after the answer does. A
+    `length` finish here means "about here" where Anthropic's means "exactly
+    there" — which is the right side to err on: without it, a verdict that would
+    be cut off in production reads as fine locally, and that is precisely the
+    prompt somebody is here to tune.

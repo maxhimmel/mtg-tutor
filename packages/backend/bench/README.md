@@ -248,10 +248,18 @@ the provider it used and the filename carries it.
   would collide under one filename. Only keep one openai-compatible baseline at
   a time, or rename by hand.
 
+- **The Claude Code bridge** (`pnpm claude-bridge`) records itself as
+  `claude-cli` and so keeps its own baseline, which is the only reason it is
+  safe to benchmark against. A full run costs nothing but subscription usage,
+  which makes it the cheap way to iterate on a prompt — but its INPUT totals are
+  inflated by Claude Code's own framing (~150 tokens a call) and it cannot
+  report cache writes at all. Read it for output length, call frequency and
+  accuracy; price a saving on Anthropic.
+
 Switch providers on the deployment, not in the script:
 
 ```bash
-npx convex env get LLM_PROVIDER      # openai-compatible | anthropic
+npx convex env get LLM_PROVIDER      # openai-compatible | anthropic | claude-cli
 ```
 
 ## Flags
