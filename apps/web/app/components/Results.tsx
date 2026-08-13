@@ -132,6 +132,9 @@ export function Results({
       sameColors: diff.colors.built.join("") === diff.colors.suggested.join(""),
       landsBuilt: diff.lands.built,
       landsSuggested: diff.lands.suggested,
+      ...(results.deck && results.deck.uncastable.length > 0
+        ? { uncastable: results.deck.uncastable.join("") }
+        : {}),
     });
   }, [results, sessionId]);
 
@@ -335,6 +338,43 @@ export function Results({
             </>
           )}
         </div>
+
+        {/* The half of a mana base the suggestion never had. "Add 17 basics" is
+            not a deck: MANA-01 puts the split behind the colour asked for
+            harder, MANA-02 floors a main colour at eight sources, and a readout
+            that stops at the total is silent on both.
+
+            Below the colours because it is the same subject one level down --
+            which colours, then how many of each. */}
+        {Object.keys(deck.basicsByColor).length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-2.5 text-sm text-base-content/55">
+            <span>Suggested mana</span>
+            {Object.entries(deck.basicsByColor).map(([color, n]) => (
+              <span key={color} className="flex items-center gap-1">
+                <ColorPips colors={color} className="text-base" />
+                <span className="tabular-nums">{n}</span>
+              </span>
+            ))}
+            {deck.nonbasicLands.length > 0 && (
+              <span className="text-base-content/45">
+                + {deck.nonbasicLands.length} drafted
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Rare by construction -- `splitBasics` pays every floor it can afford,
+            so this only appears on a deck asking for more colour than any legal
+            land count can serve. It is also the one thing this screen can say
+            that no card score can: every term in the value is about how good a
+            card is, and none of them is about whether you can cast it. */}
+        {deck.uncastable.length > 0 && (
+          <p className="text-sm text-warning">
+            <ColorPips colors={deck.uncastable.join("")} className="text-base" /> cannot reach a
+            reliable number of sources at this land count — eight for a main colour, three for a
+            splash [MANA-02, MANA-05].
+          </p>
+        )}
       </Panel>
 
       {mistakes.length > 0 && (

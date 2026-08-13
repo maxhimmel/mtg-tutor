@@ -10,6 +10,7 @@ import {
   isLandCount,
   isLegalDeck,
 } from "./build.js";
+import { DECK } from "../config.js";
 import { suggestDeck, type DeckSuggestion } from "./deck.js";
 import type { Bench } from "../model/bench.js";
 import type { Card } from "../model/card.js";
@@ -160,7 +161,12 @@ describe("what counts as built", () => {
 });
 
 describe("compareDecks", () => {
-  const suggestionOf = (cards: Card[]) => suggestDeck(cards);
+  // Pinned to the conventional 23, because these are about how the two decks are
+  // COMPARED and not about how many spells a curve wants. Left to the land rule
+  // a 24-card pool of two-drops comes back as a 24-spell deck (DECK-04: nothing
+  // costs five), the suggestion plays both of the cards a disagreement is
+  // supposed to be built out of, and the fixture stops describing anything.
+  const suggestionOf = (cards: Card[]) => suggestDeck(cards, { spellCount: DECK.spellCount });
 
   it("lists only what the two decks disagree about", () => {
     const shared = Array.from({ length: 22 }, (_, i) => spell(`W${i}`, "W", 0.6));
@@ -235,13 +241,17 @@ describe("alignDecks", () => {
     nonbasicLands,
     basicLands: 40 - spells.length - nonbasicLands.length,
     curve: [],
+    basicsByColor: {},
+    uncastable: [],
   });
 
   it("gives a card both decks play one row, not two", () => {
     const shared = Array.from({ length: 22 }, (_, i) => spell(`W${i}`, "W", 0.6));
     const pool = [...shared, spell("Keeper", "U", 0.59), spell("Cut", "U", 0.58)];
 
-    const suggested = suggestDeck(pool);
+    // Pinned for the same reason compareDecks' fixtures are: this is about the
+    // two-pointer merge, not about how many spells a low curve wants.
+    const suggested = suggestDeck(pool, { spellCount: DECK.spellCount });
     const built = buildDeck([...shared, pool[23]], 17);
     const rows = alignDecks(built, suggested);
 
