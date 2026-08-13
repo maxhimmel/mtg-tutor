@@ -43,6 +43,7 @@ export function hydrateScore(score: PickScore, text: TextIndex): PickScore<Card>
     picked: hydrateCard(score.picked, text),
     rawBest: hydrateCard(score.rawBest, text),
     contextBest: hydrateCard(score.contextBest, text),
+    band: hydrate(score.band, text),
   };
 }
 

@@ -257,6 +257,11 @@ export const storedPickScore = v.object({
   // have none, and `toRecordedPick` recomputes those from the hydrated cards --
   // the same route the browser's verdict has always taken.
   indistinguishable: v.optional(v.boolean()),
+  // The other cards in the pack the data could not separate from the one this
+  // was graded against. Stored by name like every other card on this row, and
+  // absent on rows written before the verdict stopped naming a single winner
+  // out of a tie -- those render the way they always did.
+  bandNames: v.optional(v.array(v.string())),
   onColor: v.boolean(),
   rankInPack: v.number(),
 });

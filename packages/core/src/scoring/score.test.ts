@@ -324,3 +324,67 @@ describe("scorePick inside the margin of error", () => {
     expect(out.score).toBeLessThan(100);
   });
 });
+
+/**
+ * The band, which exists because a coin flip should not be reported as a name.
+ *
+ * `contextBest` is an argmax over floats, so it always names one card even when
+ * the top of the pack is inside its own error bars. Two panels then named two
+ * different cards off the same pack -- the verdict its float winner, the
+ * challenge the one the deck's needs picked out of the same tie -- and a player
+ * reading both saw the app contradict itself twice in four lines.
+ */
+describe("scorePick and the band it could not separate", () => {
+  const se = (p: number, n: number) => Math.sqrt((p * (1 - p)) / n);
+
+  const best = card("Best", { gihWinRate: 0.58, gihGames: 5000 });
+  const near = card("Near", { gihWinRate: 0.577, gihGames: 5000 });
+  const alsoNear = card("Also Near", { gihWinRate: 0.575, gihGames: 5000 });
+  const far = card("Far", { gihWinRate: 0.54, gihGames: 5000 });
+
+  const ses = new Map([
+    ["Best", se(0.58, 5000)],
+    ["Near", se(0.577, 5000)],
+    ["Also Near", se(0.575, 5000)],
+    ["Far", se(0.54, 5000)],
+  ]);
+  const ctx: ScoringContext = {
+    colors: new Set<ColorCode>(),
+    commitment: 0,
+    archetypes: [{ colors: "WU", n: 20000, wr: 0.58 }],
+    contextFor: (c) => {
+      const s = ses.get(c.name);
+      return s != null ? { se: s } : undefined;
+    },
+  };
+
+  it("names every card the data could not separate, not just the argmax", () => {
+    const out = scorePick([best, near, alsoNear, far], near, [], ctx);
+
+    expect(out.indistinguishable).toBe(true);
+    expect(out.band.map((c) => c.name).sort()).toEqual(["Also Near", "Best"]);
+  });
+
+  it("leaves the picked card out of its own band", () => {
+    const out = scorePick([best, near, alsoNear, far], near, [], ctx);
+    expect(out.band.map((c) => c.name)).not.toContain("Near");
+  });
+
+  it("keeps a card the data can separate out of it", () => {
+    const out = scorePick([best, near, alsoNear, far], near, [], ctx);
+    expect(out.band.map((c) => c.name)).not.toContain("Far");
+  });
+
+  // When the data CAN separate the pack there is a single better card, and it
+  // should be named as one rather than dressed up as a tie.
+  it("is empty on a miss the data can actually see", () => {
+    const out = scorePick([best, far], far, [], ctx);
+
+    expect(out.indistinguishable).toBe(false);
+    expect(out.band).toEqual([]);
+  });
+
+  it("is empty when the pick was the best card outright", () => {
+    expect(scorePick([best, far], best, [], ctx).band).toEqual([]);
+  });
+});

@@ -44,6 +44,7 @@ describe("explainPick on a pick that was not the best", () => {
     terms: [],
     isBest: false,
   indistinguishable: false,
+    band: [],
     onColor: true,
     rankInPack: 2,
     ...over,

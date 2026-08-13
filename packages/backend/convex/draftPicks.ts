@@ -48,6 +48,7 @@ export async function recordPick(
       ...(rec.score.terms.length > 0 ? { terms: rec.score.terms } : {}),
       isBest: rec.score.isBest,
       indistinguishable: rec.score.indistinguishable,
+      bandNames: rec.score.band.map((c) => c.name),
       onColor: rec.score.onColor,
       rankInPack: rec.score.rankInPack,
     },
@@ -194,6 +195,11 @@ export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): Recorde
           const gap = row.score.contextBestValue - (row.score.pickedContextValue ?? row.score.pickedValue);
           return margin != null && gap <= margin;
         })(),
+      // Names rather than cards on the row, hydrated back out of the pack it was
+      // stored beside -- the same shape `pickedName` and `contextBestName` take.
+      // A row written before the band existed has none and renders as it always
+      // did: one card, which is what it was shown with.
+      band: (row.score.bandNames ?? []).map((n) => hydrateCard(inPack(stored, n), text)),
       onColor: row.score.onColor,
       rankInPack: row.score.rankInPack,
     },
