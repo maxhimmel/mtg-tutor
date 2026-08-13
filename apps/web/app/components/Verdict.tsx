@@ -84,10 +84,18 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
         {!score.isBest && (
           <div>
             <div className="eyebrow mb-1.5 flex items-baseline justify-between gap-2">
-              {/* "Graded against" is wrong once the grade stopped being measured
-                  against this card: inside the margin the pick scores 100 and
-                  this is simply the nearest thing to it. */}
-              <span>{score.indistinguishable ? "Closest alternative" : "Graded against"}</span>
+              {/* Three labels for three different claims. "Graded against" is
+                  what the grade was measured against and is only true when the
+                  data could measure it. Inside the margin there is no single
+                  better card -- there is a set of cards nothing can separate --
+                  so the label says so and the cards below are all of them. */}
+              <span>
+                {!score.indistinguishable
+                  ? "Graded against"
+                  : score.band.length > 1
+                    ? `The ${score.band.length + 1} the data cannot separate`
+                    : "Just as good"}
+              </span>
               <span className="tabular-nums normal-case tracking-normal">
                 {lost}
                 <span className="text-base-content/45">
@@ -95,7 +103,18 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                 </span>
               </span>
             </div>
-            <CardPlacard card={score.contextBest} />
+            {/* Every card in the tie, not the float's winner. Which of them
+                `contextBest` happens to name is a coin flip at this margin, and
+                printing that one name is what let this panel and the challenge
+                below it argue about a pack neither could rank. */}
+            <div className="flex flex-col gap-1.5">
+              {(score.indistinguishable && score.band.length > 0
+                ? score.band
+                : [score.contextBest]
+              ).map((c) => (
+                <CardPlacard key={c.name} card={c} />
+              ))}
+            </div>
             {/* Said in words, not left to be read off two numbers. The whole
                 point of carrying the margin is that a gap smaller than it is not
                 a gap, and a grade sitting above this row is about to imply

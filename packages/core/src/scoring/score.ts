@@ -76,6 +76,28 @@ export interface PickScore<C extends EngineCard = EngineCard> {
    * and "we cannot measure this" must not read as "these are the same".
    */
   indistinguishable: boolean;
+  /**
+   * Every card the data cannot separate from the one this was graded against,
+   * the picked card excluded.
+   *
+   * WHY A SET AND NOT A CARD
+   *
+   * `contextBest` is an argmax over floats, so it always names exactly one card
+   * -- and when the top of a pack is inside its own error bars, WHICH one is a
+   * coin flip. Reporting that single name as "the closest alternative" claims a
+   * precision the same panel has just denied, and it is what let the verdict
+   * name one card while the challenge, which breaks that tie by the deck's
+   * needs, argued with another. Two blocks, two names, one pack.
+   *
+   * Naming the whole band instead makes both true at once: the verdict says
+   * these were the same, and the challenge says which of them your deck wanted
+   * and why. There is no disagreement left to have, because the verdict has
+   * stopped picking a winner it never had grounds for.
+   *
+   * Empty unless the pick is `indistinguishable` -- when the data CAN separate
+   * the pack there is a single better card and it should be named as one.
+   */
+  band: C[];
   onColor: boolean;
   rankInPack: number; // 1 = best available, by raw power
 }
@@ -256,6 +278,19 @@ export function scorePick<C extends EngineCard>(
   const margin = ctx ? marginBetween(ctx, target, picked) : undefined;
   const indistinguishable = !isBest && margin != null && targetValue - mine <= margin;
 
+  // The other cards the data cannot separate from the target either. Measured
+  // against the TARGET rather than against the picked card, because that is what
+  // the band is a band around -- "cards as good as the best one here", which is
+  // the set the pick turned out to belong to.
+  const band: C[] = [];
+  if (indistinguishable && ctx) {
+    for (const card of pack) {
+      if (card.name === picked.name) continue;
+      const m = marginBetween(ctx, target, card);
+      if (m != null && targetValue - contextValue(card, ctx).value <= m) band.push(card);
+    }
+  }
+
   let score: number;
   if (isBest || indistinguishable) {
     // A pick the data cannot separate from the best scores as the best, because
@@ -288,6 +323,7 @@ export function scorePick<C extends EngineCard>(
     // never come back marked as a miss.
     isBest,
     indistinguishable,
+    band,
     onColor,
     rankInPack,
   };
