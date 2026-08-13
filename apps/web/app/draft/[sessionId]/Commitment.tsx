@@ -54,6 +54,7 @@ type Pending =
 export function useChallenge({
   pack,
   scoring,
+  needs,
   busy,
   error,
   clearError,
@@ -89,8 +90,14 @@ export function useChallenge({
   // remaining card in the pack for this deck, which when the player has already
   // taken that card is the runner-up -- see challengeFor for why that rule is
   // what keeps the screen from being its own answer.
+  //
+  // `needs` only decides which card gets put up when the win rates cannot tell
+  // the top of the pack apart. Nothing about it reaches THIS screen: the reason
+  // it produces is held on the outcome and shown after the choice, because a
+  // screen built to show the printed cards and nothing else must not start
+  // hinting at which one the app prefers.
   const argue = (proposal: Proposal, reason: string, confidence: Confidence) => {
-    const challenge = scoring ? challengeFor(pack, proposal.card, scoring) : undefined;
+    const challenge = scoring ? challengeFor(pack, proposal.card, scoring, needs) : undefined;
 
     // Nothing to argue with -- a pack of one, or a context we could not read.
     // The defense still stands and still reaches the coach; only the second

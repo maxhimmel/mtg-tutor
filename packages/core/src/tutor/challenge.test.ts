@@ -11,7 +11,9 @@ import {
   clampReason,
   confidenceLevel,
   resolveChallenge,
+  tiebreakLine,
 } from "./challenge.js";
+import { deckNeeds } from "../scoring/tiebreak.js";
 
 function card(name: string, over: Partial<Card> = {}): Card {
   return {
@@ -94,9 +96,128 @@ describe("challengeFor", () => {
   });
 });
 
+// The principle tiebreak is confined to the band the error bars cannot see
+// inside, and these are the two ways that confinement could fail: firing on a
+// pair the data CAN separate, and silently changing the challenger when nobody
+// asked for it.
+describe("challengeFor with deck needs", () => {
+  const spell = (name: string, over: Partial<Card> = {}) =>
+    card(name, { colors: ["R"], colorIdentity: ["R"], ...over });
+
+  // 5,000 games each puts the error bars at roughly ±1pp.
+  const bomb = spell("Big Bomb", { value: 0.62, gihWinRate: 0.62, cmc: 5, manaCost: "{5}" });
+  const twoDrop = spell("Cheap Body", {
+    value: 0.575,
+    gihWinRate: 0.575,
+    cmc: 2,
+    manaCost: "{2}",
+    typeLine: "Creature — Goblin",
+  });
+  const fiveDrop = spell("Expensive Body", {
+    value: 0.578,
+    gihWinRate: 0.578,
+    cmc: 5,
+    manaCost: "{5}",
+    typeLine: "Creature — Giant",
+  });
+  const mine = spell("Mine", { value: 0.5, gihWinRate: 0.5 });
+
+  // A pool ahead on bodies and cheap cards, so `toppedOut` is the live need and
+  // the two candidates differ only on it.
+  const pool = [
+    ...Array.from({ length: 12 }, (_, i) =>
+      spell(`C${i}`, { cmc: (i % 3) + 1, manaCost: `{${(i % 3) + 1}}`, typeLine: "Creature — Goblin" }),
+    ),
+    ...Array.from({ length: 5 }, (_, i) =>
+      spell(`Big${i}`, { cmc: 6, manaCost: "{6}", typeLine: "Creature — Giant" }),
+    ),
+  ];
+  const needs = deckNeeds(pool, 21, 42);
+
+  it("breaks a tie at the top of the pack by the deck, and says which principle", () => {
+    // 0.578 vs 0.575 is a 0.3pp gap against ±1pp bars: the same card, on the
+    // evidence. The float prefers the five-drop; the deck is already topped out.
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx, needs);
+
+    expect(ch?.challenger.name).toBe("Cheap Body");
+    expect(ch?.reasons.map((r) => r.principle)).toContain("CURVE-03");
+  });
+
+  // The guard. A 4.2pp gap is far outside the bars, so there is no band and no
+  // principle gets a vote however much the deck would prefer the other card.
+  it("never reaches past a gap the data can actually see", () => {
+    const ch = challengeFor([mine, bomb, twoDrop], mine, ctx, needs);
+
+    expect(ch?.challenger.name).toBe("Big Bomb");
+    expect(ch?.reasons).toEqual([]);
+  });
+
+  // Without needs the old behaviour has to stand exactly, because the server
+  // and the CLI have no hydrated pool to derive them from.
+  it("is unchanged when no needs are supplied", () => {
+    expect(challengeFor([mine, fiveDrop, twoDrop], mine, ctx)?.challenger.name).toBe(
+      "Expensive Body",
+    );
+  });
+
+  // The gap and the margin have to describe the pair actually shown, or the
+  // calibration line grades a comparison the player never saw.
+  it("measures the gap against the card it puts up", () => {
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx, needs);
+
+    expect(ch?.challenger.name).toBe("Cheap Body");
+    expect(ch?.gap).toBeCloseTo(0.075, 6);
+  });
+});
+
+describe("tiebreakLine", () => {
+  const outcome = (reasons: Challenge["reasons"]) =>
+    resolveChallenge(
+      {
+        challenger: card("Cheap Body", { value: 0.575 }),
+        reasons,
+        gap: 0.01,
+        margin: 0.01,
+        separable: false,
+      },
+      true,
+    );
+
+  // Silence is the ordinary case, and it has to be: an explanation offered on
+  // every pick stops being read by the third one.
+  it("says nothing when no principle was consulted", () => {
+    expect(tiebreakLine(outcome([]))).toBeUndefined();
+  });
+
+  it("names the card, the reason and the principle it cites", () => {
+    const line = tiebreakLine(
+      outcome([{ principle: "CURVE-04", note: "nothing in your deck comes down on turn 3" }]),
+    );
+
+    expect(line).toBe(
+      "Cheap Body was the card put up because nothing in your deck comes down on turn 3 [CURVE-04].",
+    );
+  });
+
+  // One reason, not a list. Two would read as a case being built, and the
+  // tiebreak counted its reasons rather than weighing them.
+  it("gives one reason even when several applied", () => {
+    const line = tiebreakLine(
+      outcome([
+        { principle: "DECK-06", note: "your deck is light on creatures" },
+        { principle: "CURVE-01", note: "your curve is thin at the cheap end" },
+      ]),
+    );
+
+    expect(line).toContain("[DECK-06]");
+    expect(line).not.toContain("CURVE-01");
+  });
+});
+
 describe("resolveChallenge", () => {
   const challenge: Challenge = {
     challenger: card("Big Bomb", { value: 0.62 }),
+    reasons: [],
     gap: 0.04,
     margin: 0.01,
     separable: true,
