@@ -1,6 +1,7 @@
 import type { Card } from "../model/card.js";
 import { gapMargin } from "../scoring/score.js";
 import { type ScoringContext, contextValue } from "../scoring/context.js";
+import { type DeckNeeds, type TiebreakReason, indistinguishable, tiebreak } from "../scoring/tiebreak.js";
 import { pp } from "./cardLine.js";
 
 // Making the player commit to a position before they are shown the answer.
@@ -59,6 +60,16 @@ export const confidenceLevel = (id: Confidence): ConfidenceLevel =>
 export interface Challenge<C extends Card = Card> {
   challenger: C;
   /**
+   * Why THIS card, when more than one was equally good.
+   *
+   * Empty in the ordinary case, where the challenger is the best remaining card
+   * by a margin the data can see and there was nothing to choose. Non-empty only
+   * when several cards were statistically indistinguishable and a principle
+   * settled it -- see `tiebreak`. Carried rather than recomputed by the screen,
+   * because the reason has to be the one that actually picked the card.
+   */
+  reasons: TiebreakReason[];
+  /**
    * `contextValue(challenger) - contextValue(proposed)`, in win-rate points.
    * Positive means the challenger is genuinely the better card for this deck.
    */
@@ -83,12 +94,28 @@ export interface Challenge<C extends Card = Card> {
  * this rule the challenger wins exactly as often as the player is wrong, which
  * is a rate they cannot read anything off.
  *
+ * WHEN SEVERAL CARDS ARE EQUALLY BEST, WHICH IS OFTEN
+ *
+ * `contextValue` returns a float, so it always has a strict maximum -- but the
+ * gaps at the top of a pack are routinely smaller than the error bars on them,
+ * and then "the best remaining card" is a card the data picked by coin flip. It
+ * was still a defensible challenger; it was just an arbitrary one, and it went
+ * on the screen with no way to say why.
+ *
+ * Given `needs`, the choice inside that band is made by `tiebreak` instead and
+ * the reason comes with it. This is the only place in the app a principle
+ * decides anything, and it is confined to where the measurement has abstained --
+ * see the header of `scoring/tiebreak.ts` for why that confinement is the whole
+ * argument. Without `needs` the old behaviour stands exactly: no pool, no
+ * principle, the float wins.
+ *
  * Undefined when there is nothing to argue with -- a pack down to one card.
  */
 export function challengeFor<C extends Card>(
   pack: readonly C[],
   proposed: C,
   ctx: ScoringContext,
+  needs?: DeckNeeds,
 ): Challenge<C> | undefined {
   const others = pack.filter((c) => c.name !== proposed.name);
   if (others.length === 0) return undefined;
@@ -96,10 +123,28 @@ export function challengeFor<C extends Card>(
   const valued = others.map((c) => ({ card: c, value: contextValue(c, ctx).value }));
   const top = valued.reduce((a, b) => (b.value > a.value ? b : a));
 
-  const gap = top.value - contextValue(proposed, ctx).value;
-  const margin = gapMargin(top.card, proposed);
+  let challenger = top.card;
+  let reasons: TiebreakReason[] = [];
+  if (needs) {
+    // Ranked before banding, because `indistinguishable` measures every
+    // candidate against the top one and needs to know which that is.
+    const ranked = [...valued].sort((a, b) => b.value - a.value);
+    const band = indistinguishable(ranked, gapMargin);
+    if (band.length > 1) {
+      const broken = tiebreak(band, needs);
+      challenger = broken.card;
+      reasons = broken.reasons;
+    }
+  }
+
+  // Against the card actually put up, never against the float's winner -- the
+  // gap, the margin and the separability all have to describe the pair the
+  // player is shown, or the calibration line grades a comparison nobody saw.
+  const gap = contextValue(challenger, ctx).value - contextValue(proposed, ctx).value;
+  const margin = gapMargin(challenger, proposed);
   return {
-    challenger: top.card,
+    challenger,
+    reasons,
     gap,
     margin,
     // An unmeasurable margin is not a tie. Saying two cards are

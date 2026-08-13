@@ -145,53 +145,58 @@ export interface Tiebreak<C extends Card = Card> {
 }
 
 /**
- * Which needs a card meets. The count is the whole ranking; the notes are what
- * makes it explicable.
+ * What a card does for this deck: the needs it meets, and the ones it makes
+ * worse.
+ *
+ * The two are kept apart because they explain from opposite ends. A card is
+ * preferred FOR what it meets, and preferred over a rival for what the RIVAL
+ * costs -- so a winner with no merits of its own still has something true to
+ * say, and it is a fact about the card it beat.
  *
  * Evasion counts as a creature and not as a second thing, because EVAL-04 values
  * it as a property of a body rather than as a role of its own -- counting it
  * twice would let a flier beat a better-fitting card on a technicality.
  */
-function meets(card: Card, needs: DeckNeeds): TiebreakReason[] {
-  const reasons: TiebreakReason[] = [];
-  if (isLand(card)) return reasons;
+interface CardFit {
+  met: TiebreakReason[];
+  penalties: TiebreakReason[];
+}
+
+function fitOf(card: Card, needs: DeckNeeds): CardFit {
+  const met: TiebreakReason[] = [];
+  const penalties: TiebreakReason[] = [];
+  if (isLand(card)) return { met, penalties };
 
   const role = detectRole(card);
   const turn = turnOf(card);
 
   if (needs.creatures && (role === "creature" || role === "evasion")) {
-    reasons.push({
+    met.push({
       principle: "DECK-06",
       note: "your deck is light on creatures for this stage of the draft",
     });
   }
   if (needs.removal && role === "removal") {
-    reasons.push({ principle: "DECK-08", note: "you are short of removal" });
+    met.push({ principle: "DECK-08", note: "you are short of removal" });
   }
   if (needs.emptyTurns.has(turn)) {
-    reasons.push({
-      principle: "CURVE-04",
-      note: `nothing in your deck comes down on turn ${turn}`,
-    });
+    met.push({ principle: "CURVE-04", note: `nothing in your deck comes down on turn ${turn}` });
   } else if (needs.cheap && turn <= 2) {
-    reasons.push({ principle: "CURVE-01", note: "your curve is thin at the cheap end" });
+    met.push({ principle: "CURVE-01", note: "your curve is thin at the cheap end" });
   }
   if (needs.toppedOut && turn >= 5) {
-    reasons.push({
+    penalties.push({
       principle: "CURVE-03",
-      note: `you already have ${DECK_TARGETS.expensive} cards at five or more`,
+      note: `you already have ${DECK_TARGETS.expensive} cards at five or more mana`,
     });
   }
-  return reasons;
+  return { met, penalties };
 }
 
-// A card that meets a need scores +1; one that adds to a top end already at its
-// limit scores -1. Counting, not weighting: every principle in the corpus is
-// stated as a rule rather than as a quantity, so treating one as worth 1.4 of
-// another would be inventing the very number this module exists to avoid.
-function tally(reasons: readonly TiebreakReason[]): number {
-  return reasons.reduce((n, r) => n + (r.principle === "CURVE-03" ? -1 : 1), 0);
-}
+// Counting, not weighting: every principle in the corpus is stated as a rule
+// rather than as a quantity, so treating one as worth 1.4 of another would be
+// inventing the very number this module exists to avoid.
+const tally = (fit: CardFit) => fit.met.length - fit.penalties.length;
 
 /**
  * The card to prefer out of a band the data cannot separate.
@@ -210,36 +215,47 @@ function tally(reasons: readonly TiebreakReason[]): number {
 export function tiebreak<C extends Card>(band: readonly C[], needs: DeckNeeds): Tiebreak<C> {
   if (band.length === 0) throw new Error("tiebreak needs at least one card");
 
-  let best = band[0];
-  let bestReasons = meets(best, needs);
-  let bestScore = tally(bestReasons);
+  const scored = band.map((card) => ({ card, fit: fitOf(card, needs) }));
 
-  for (const card of band.slice(1)) {
-    const reasons = meets(card, needs);
-    const score = tally(reasons);
+  let best = scored[0];
+  for (const entry of scored.slice(1)) {
     const better =
-      score > bestScore ||
+      tally(entry.fit) > tally(best.fit) ||
       // CURVE-07, and only once the deck has said nothing to separate them.
-      (score === bestScore && castingValue(card) < castingValue(best));
-    if (better) {
-      best = card;
-      bestReasons = reasons;
-      bestScore = score;
-    }
+      (tally(entry.fit) === tally(best.fit) &&
+        castingValue(entry.card) < castingValue(best.card));
+    if (better) best = entry;
   }
 
-  // Cheapness only gets to be a REASON when it actually did the deciding: a card
-  // that won on deck needs did not win for being cheap, and citing CURVE-07 for
-  // it would credit a principle that had no part in the answer. The condition is
-  // that something in the band was dearer -- if everything costs the same, being
-  // cheapest decided nothing either.
-  if (bestReasons.length === 0 && band.some((c) => castingValue(c) > castingValue(best))) {
-    bestReasons = [
+  // The explanation is assembled from whatever actually did the deciding, and
+  // that is not always a property of the winner. Three cases, in the order they
+  // can be true.
+  let reasons = best.fit.met;
+
+  // A card can win purely because its rivals were penalised -- it fills no need,
+  // it simply does not deepen a top end that is already full. The true sentence
+  // there is about the card it BEAT, and without this the winner arrived with
+  // nothing to say and CURVE-07 took credit for a decision it did not make.
+  if (reasons.length === 0) {
+    const rivalPenalties = scored
+      .filter((e) => e.card.name !== best.card.name)
+      .flatMap((e) => e.fit.penalties);
+    const own = new Set(best.fit.penalties.map((p) => p.principle));
+    const decided = rivalPenalties.filter((p) => !own.has(p.principle));
+    if (decided.length > 0) reasons = [decided[0]];
+  }
+
+  // And cheapness last, cited only when it did decide: a card that won on deck
+  // needs did not win for being cheap. The condition is that something in the
+  // band was dearer -- if everything costs the same, being cheapest decided
+  // nothing either.
+  if (reasons.length === 0 && band.some((c) => castingValue(c) > castingValue(best.card))) {
+    reasons = [
       { principle: "CURVE-07", note: "nothing else separates these, so take the cheaper one" },
     ];
   }
 
-  return { card: best, reasons: bestReasons };
+  return { card: best.card, reasons };
 }
 
 /**

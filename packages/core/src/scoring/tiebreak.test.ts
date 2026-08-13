@@ -126,14 +126,23 @@ describe("tiebreak", () => {
     expect(reasons.map((r) => r.principle)).not.toContain("CURVE-07");
   });
 
-  it("charges a card that deepens a top end already at its limit", () => {
+  // A card can win purely because its rival was penalised: it meets nothing, it
+  // simply does not deepen a top end that is already full. The only true thing
+  // to say there is about the card it BEAT, so the reason has to come off the
+  // loser -- otherwise the winner arrives with nothing and CURVE-07 takes credit
+  // for a decision cheapness did not make.
+  it("explains a win that came from the rival's penalty, not its own merits", () => {
     const heavy = [
       ...Array.from({ length: DECK_TARGETS.expensive }, (_, i) => creature(`Big${i}`, 6)),
       ...Array.from({ length: 10 }, (_, i) => creature(`Mid${i}`, (i % 4) + 1)),
     ];
-    const { card: chosen } = tiebreak([creature("Sixth Big", 6), trick("Modest", 3)], needsOf(heavy));
+    const { card: chosen, reasons } = tiebreak(
+      [creature("Sixth Big", 6), trick("Modest", 3)],
+      needsOf(heavy),
+    );
 
     expect(chosen.name).toBe("Modest");
+    expect(reasons.map((r) => r.principle)).toEqual(["CURVE-03"]);
   });
 
   it("holds the incoming order when nothing separates the band at all", () => {
