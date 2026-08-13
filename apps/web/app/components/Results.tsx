@@ -132,6 +132,9 @@ export function Results({
       sameColors: diff.colors.built.join("") === diff.colors.suggested.join(""),
       landsBuilt: diff.lands.built,
       landsSuggested: diff.lands.suggested,
+      ...(results.deck && results.deck.uncastable.length > 0
+        ? { uncastable: results.deck.uncastable.join("") }
+        : {}),
     });
   }, [results, sessionId]);
 

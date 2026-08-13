@@ -252,6 +252,19 @@ export function buildCompared(p: {
   sameColors: boolean;
   landsBuilt: number;
   landsSuggested: number;
+  /**
+   * Colours the suggested forty cannot reach a reliable source count for, as a
+   * colour string, and absent when there are none.
+   *
+   * A property here rather than an event, because the question it answers is
+   * whether the warning should exist at all: `splitBasics` pays every source
+   * floor it can afford, so this is meant to be rare, and an advisory that
+   * turns out to fire on a quarter of decks is not warning anybody about
+   * anything -- it is describing the format. `landsSuggested` on the same row
+   * says which land count it happened at, which is the first thing anybody
+   * would ask next.
+   */
+  uncastable?: string;
 }): void {
   if (!on()) return;
   posthog.capture("build_compared", p);
