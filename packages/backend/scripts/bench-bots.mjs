@@ -315,7 +315,7 @@ function walkDraft(rowsOfDraft, draftId) {
       continue;
     }
     if (pack.length < 2) {
-      memory.see(pack);
+      memory.see(pack, picked);
       memory.take(picked);
       continue;
     }
@@ -343,7 +343,9 @@ function walkDraft(rowsOfDraft, draftId) {
       if (packHasBomb && isBomb(took)) bombs[name]++;
     }
 
-    memory.see(pack);
+    // Named for the same reason `Bot.pick` names it: the drafter's own card is
+    // not a signal to the drafter. See BotMemory.see.
+    memory.see(pack, picked);
     memory.take(picked);
   }
   if (rows % 100_000 < rowsOfDraft.length) log(`  ${rows.toLocaleString()} picks scored...`);

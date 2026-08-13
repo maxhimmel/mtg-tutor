@@ -96,6 +96,61 @@ describe("openness", () => {
   });
 });
 
+// The respecification of `openness`, and the three properties its derivation
+// rests on. Each is a way the old feature was wrong, so each is worth a test:
+// it must ignore your own picks (SIG-03), it must weight a late sighting above
+// an early one (SIG-05), and it must read ZERO on a colour that is merely
+// abundant, which is the whole failure `openness` could not avoid.
+describe("signal", () => {
+  it("is zero before any pack has been seen", () => {
+    expect(new BotMemory().signal(blue("A"))).toBe(0);
+  });
+
+  it("ignores the card you took, because a signal is one somebody passed you", () => {
+    const mine = blue("Mine");
+    const m = new BotMemory();
+    m.see([mine, red("A"), red("B")], mine);
+    m.take(mine);
+
+    // Blue was in the pack and is not in the signal: the only blue card there
+    // was the one this bot removed.
+    expect(m.signal(blue("X"))).toBe(0);
+    expect(m.laneFit(blue("X"))).toBeGreaterThan(0);
+  });
+
+  // The property that makes it a signal rather than a census. Same cards, same
+  // count, different pack sizes -- and only the late one is evidence.
+  it("rates a colour that arrives late above one that arrives early", () => {
+    const early = new BotMemory();
+    early.see([blue("A"), red("B"), red("C"), ...Array.from({ length: 12 }, (_, i) => red(`F${i}`))]);
+
+    const late = new BotMemory();
+    // The same blue-to-red ratio, seen on the dregs instead of a full pack.
+    late.see([blue("A"), red("B"), red("C")]);
+    for (let i = 0; i < 12; i++) late.see([red(`F${i}`)]);
+
+    expect(late.signal(blue("X"))).toBeGreaterThan(early.signal(blue("X")));
+  });
+
+  // What `openness` could not do. A colour the set simply prints more of arrives
+  // in every pack at every size, so its lateness-weighted share and its overall
+  // share are the same number and the difference is zero. `openness` reports the
+  // abundance itself, which is a fact about the set and not about this seat.
+  it("reads zero on a colour that is merely abundant", () => {
+    const m = new BotMemory();
+    // Blue is exactly four fifths of everything, at every pack size -- so the
+    // sizes are multiples of five and the ratio does not drift with the dregs.
+    for (const size of [15, 10, 5]) {
+      const pack: EngineCard[] = [];
+      for (let i = 0; i < size; i++) pack.push(i % 5 === 0 ? red(`R${i}`) : blue(`B${i}`));
+      m.see(pack);
+    }
+
+    expect(m.openness(blue("X"))).toBeCloseTo(4 / 5, 5);
+    expect(m.signal(blue("X"))).toBeCloseTo(0, 2);
+  });
+});
+
 describe("valueOpen", () => {
   // The term that fixes bomb-passing. Confidence should track how much choice is
   // left in the pack, and it must RESET each pack -- which is exactly what
