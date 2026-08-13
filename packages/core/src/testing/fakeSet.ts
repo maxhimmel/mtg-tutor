@@ -1,3 +1,4 @@
+import type { DeckNeeds } from "../scoring/tiebreak.js";
 // Synthetic set data for tests. Lives outside the build (see tsconfig exclude)
 // so it never ships in dist.
 
@@ -140,3 +141,18 @@ export function fakeMixedSet(): SetData {
 
   return buildSetData("mix", withPackSlots("mix", cards));
 }
+
+/**
+ * A deck that wants nothing, for the tests that are not about the tiebreak.
+ *
+ * Written out rather than taken from `deckNeeds([], 0, 42)`, which is NOT this:
+ * an empty pool has every turn empty, so CURVE-04 fires for any card at turns
+ * one to four and a fixture meant to be silent starts deciding things.
+ */
+export const NO_NEEDS: DeckNeeds = {
+  creatures: false,
+  removal: false,
+  cheap: false,
+  toppedOut: false,
+  emptyTurns: new Set<number>(),
+};

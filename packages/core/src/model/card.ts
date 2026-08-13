@@ -2,6 +2,9 @@ export type Rarity = "common" | "uncommon" | "rare" | "mythic" | "special" | "bo
 
 export type ColorCode = "W" | "U" | "B" | "R" | "G";
 
+import type { CardRole } from "./role.js";
+export type { CardRole };
+
 // The kinds of slot a booster draws from. `bonus` covers whatever sheet the set
 // pairs with (Mystical Archive, Special Guests); `land` is the Play Booster land
 // slot, which is a real pick and not filler.
@@ -38,6 +41,49 @@ export interface EngineCard {
   // about seven times too often. Absent for sets built before this was measured,
   // which keep drawing uniformly and so keep replaying identically.
   packRate?: number;
+
+  /**
+   * The curve bucket this card comes down in, 1..CURVE_TOP, and what it does.
+   *
+   * WHY THE ENGINE'S HALF CARRIES THESE AT ALL
+   *
+   * Everything else here is read by dealing a pack or scoring a pick, and these
+   * are the exception that proves the rule rather than a lapse: they are read by
+   * scoring a pick, and they could not be until now.
+   *
+   * The draft principles a pick is judged against are about the DECK -- how the
+   * curve is filling, whether there are enough bodies, whether the removal is
+   * there (DECK-06, DECK-08, CURVE-01/03/04). Answering any of those needs a
+   * mana value and a role, which live on the text half. So the tiebreak that
+   * reads them could only ever run in the browser, where cards are hydrated,
+   * while the grade ran on the server -- and the two disagreed about the same
+   * pack three separate times before anybody traced it to this type.
+   *
+   * Settling both at ingest is what makes the two sides symmetric. Not a new
+   * request path and not a query: the browser already holds the pack and the
+   * pool as EngineCards, the server already holds the maindeck as EngineCards,
+   * and once the cards carry these, both run the same code over the same data.
+   * The CLI gets it for nothing, which it did not have before at all.
+   *
+   * WHAT IT COSTS, MEASURED
+   *
+   * fdn's pool document goes 20.6KB -> 27.7KB, and it is read on all 42 picks:
+   * +297KB a draft, about +9.7% of the 2.98MB a draft and its review move today.
+   * A single packed integer would have been +3.1%, and was declined -- an opaque
+   * field is a precedent this codebase has not set, and the I/O picture is worth
+   * a pass of its own rather than being paid for here in unreadability.
+   *
+   * Optional because a pool ingested before they existed has neither, and a
+   * Convex push validates every stored document. A card without them contributes
+   * to no deck need and meets none, which is the honest reading of "not known"
+   * and never "meets nothing".
+   *
+   * NOT read by any bot. `POLICY_FEATURES` does not mention them and
+   * `BOT_FINGERPRINT` does not move, so no deal changes and no draft is
+   * stranded -- `corpus.test.ts` is the tripwire.
+   */
+  turn?: number;
+  role?: CardRole;
 
   // What `cardValue` resolves to, settled once at ingest.
   //

@@ -1,7 +1,4 @@
-import type { Card } from "../model/card.js";
-import { isLand } from "../model/card.js";
-import { CURVE_TOP, castingValue } from "../model/mana.js";
-import { detectRole } from "./explain.js";
+import type { EngineCard } from "../model/card.js";
 
 // What to prefer when the data has run out of opinions.
 //
@@ -62,9 +59,6 @@ export const DECK_TARGETS = {
   expensive: 5,
 } as const;
 
-/** Which curve bucket a card lands in, by the turn you can cast it. */
-const turnOf = (card: Card) => Math.min(CURVE_TOP, Math.max(1, Math.ceil(castingValue(card))));
-
 /**
  * What the deck still wants, as a set of unmet needs.
  *
@@ -91,11 +85,16 @@ export interface DeckNeeds {
 }
 
 export function deckNeeds(
-  maindeck: readonly Card[],
+  maindeck: readonly EngineCard[],
   picksMade: number,
   totalPicks: number,
 ): DeckNeeds {
-  const spells = maindeck.filter((c) => !isLand(c));
+  // `turn` and `role` are settled at ingest, so this reads them rather than the
+  // rules text -- which is the whole reason it can run on the pick path at all.
+  // A card from a pool ingested before those existed has neither and is skipped:
+  // it contributes to no need and meets none, which is "not known" rather than
+  // "meets nothing".
+  const spells = maindeck.filter((c) => c.role != null && c.role !== "land" && c.turn != null);
   const pace = totalPicks > 0 ? Math.min(1, picksMade / totalPicks) : 0;
   // What the finished deck aims at, discounted to where this draft has got to.
   const onPace = (target: number) => target * pace;
@@ -107,13 +106,12 @@ export function deckNeeds(
   const filled = new Set<number>();
 
   for (const c of spells) {
-    const turn = turnOf(c);
+    const turn = c.turn!;
     filled.add(turn);
     if (turn <= 2) cheap++;
     if (turn >= 5) expensive++;
-    const role = detectRole(c);
-    if (role === "creature" || role === "evasion") creatures++;
-    if (role === "removal") removal++;
+    if (c.role === "creature" || c.role === "evasion") creatures++;
+    if (c.role === "removal") removal++;
   }
 
   // Only the turns a deck is actually built on. Six-plus is where a curve tapers
@@ -138,7 +136,7 @@ export interface TiebreakReason {
   note: string;
 }
 
-export interface Tiebreak<C extends Card = Card> {
+export interface Tiebreak<C extends EngineCard = EngineCard> {
   card: C;
   /** Empty when nothing separated the band and the first card simply stood. */
   reasons: TiebreakReason[];
@@ -162,13 +160,15 @@ interface CardFit {
   penalties: TiebreakReason[];
 }
 
-function fitOf(card: Card, needs: DeckNeeds): CardFit {
+function fitOf(card: EngineCard, needs: DeckNeeds): CardFit {
   const met: TiebreakReason[] = [];
   const penalties: TiebreakReason[] = [];
-  if (isLand(card)) return { met, penalties };
+  // A land, or a card from a pool that predates these fields. Neither can be
+  // argued for on deck shape.
+  if (card.role == null || card.role === "land" || card.turn == null)
+    return { met, penalties };
 
-  const role = detectRole(card);
-  const turn = turnOf(card);
+  const { role, turn } = card;
 
   if (needs.creatures && (role === "creature" || role === "evasion")) {
     met.push({
@@ -198,6 +198,12 @@ function fitOf(card: Card, needs: DeckNeeds): CardFit {
 // inventing the very number this module exists to avoid.
 const tally = (fit: CardFit) => fit.met.length - fit.penalties.length;
 
+// What CURVE-07 compares, in curve buckets rather than exact mana values. The
+// bucket is the number the chart and the deck builder already read, and this was
+// the last thing here still reaching for a printed mana cost. A card with no
+// stored turn sorts last, so an unknown can never win on being cheap.
+const cost = (card: EngineCard) => card.turn ?? Number.POSITIVE_INFINITY;
+
 /**
  * The card to prefer out of a band the data cannot separate.
  *
@@ -212,7 +218,7 @@ const tally = (fit: CardFit) => fit.met.length - fit.penalties.length;
  * Ties past that hold the incoming order, so the caller's own ranking survives
  * and this is never the reason two runs disagree.
  */
-export function tiebreak<C extends Card>(band: readonly C[], needs: DeckNeeds): Tiebreak<C> {
+export function tiebreak<C extends EngineCard>(band: readonly C[], needs: DeckNeeds): Tiebreak<C> {
   if (band.length === 0) throw new Error("tiebreak needs at least one card");
 
   const scored = band.map((card) => ({ card, fit: fitOf(card, needs) }));
@@ -222,8 +228,7 @@ export function tiebreak<C extends Card>(band: readonly C[], needs: DeckNeeds): 
     const better =
       tally(entry.fit) > tally(best.fit) ||
       // CURVE-07, and only once the deck has said nothing to separate them.
-      (tally(entry.fit) === tally(best.fit) &&
-        castingValue(entry.card) < castingValue(best.card));
+      (tally(entry.fit) === tally(best.fit) && cost(entry.card) < cost(best.card));
     if (better) best = entry;
   }
 
@@ -249,7 +254,7 @@ export function tiebreak<C extends Card>(band: readonly C[], needs: DeckNeeds): 
   // needs did not win for being cheap. The condition is that something in the
   // band was dearer -- if everything costs the same, being cheapest decided
   // nothing either.
-  if (reasons.length === 0 && band.some((c) => castingValue(c) > castingValue(best.card))) {
+  if (reasons.length === 0 && band.some((c) => cost(c) > cost(best.card))) {
     reasons = [
       { principle: "CURVE-07", note: "nothing else separates these, so take the cheaper one" },
     ];
@@ -268,7 +273,7 @@ export function tiebreak<C extends Card>(band: readonly C[], needs: DeckNeeds): 
  * indistinguishable is a claim about data, and there is none there to make it
  * with. `challengeFor` already draws that line the same way.
  */
-export function indistinguishable<C extends Card>(
+export function indistinguishable<C extends EngineCard>(
   ranked: readonly { card: C; value: number }[],
   marginBetween: (a: C, b: C) => number | undefined,
 ): C[] {

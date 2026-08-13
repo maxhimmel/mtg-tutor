@@ -15,6 +15,7 @@ import {
   contextValue,
   marginBetween,
 } from "./context.js";
+import { deckNeeds, tiebreak } from "./tiebreak.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -193,6 +194,10 @@ export function packScoringContext(
     commitment: commitment(maindeck, colors, picksMade, totalPicks),
     archetypes,
     contextFor,
+    // From the same maindeck, at the same moment, by the one function both the
+    // grade and the challenge already call. That is the whole of the fix: two
+    // callers can no longer hold different needs, because neither builds them.
+    needs: deckNeeds(maindeck, picksMade, totalPicks),
   };
 }
 

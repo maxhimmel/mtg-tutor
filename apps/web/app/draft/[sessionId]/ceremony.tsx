@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Card, ChallengeOutcome, Confidence, DeckNeeds, ScoringContext } from "@mtg-tutor/core";
+import type { Card, ChallengeOutcome, Confidence, ScoringContext } from "@mtg-tutor/core";
 
 // The card taken and the pile it is going to, carried from the moment it is
 // chosen to the moment the pick is spent. `carried` means the player pulled it
@@ -61,19 +61,6 @@ export interface CeremonyBoard {
    * for a card the server then does not grade against.
    */
   scoring: ScoringContext | undefined;
-  /**
-   * What the deck is still short of -- curve holes, bodies, removal.
-   *
-   * Separate from `scoring` because the two answer different questions with
-   * different evidence. `scoring` is measured win rates and decides what a card
-   * is WORTH; this is the corpus's own deck-shape rules and may only break a tie
-   * the win rates could not. Folding it into the context would put an unpriced
-   * judgement next to priced ones and invite somebody to add them together.
-   *
-   * Undefined wherever the cards are not hydrated, which is every caller outside
-   * the browser.
-   */
-  needs: DeckNeeds | undefined;
   /** A pick is in flight. Every control that would spend another must be off. */
   busy: boolean;
   /** The last pick that would not go through, for the ceremony to show. */

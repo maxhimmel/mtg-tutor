@@ -28,7 +28,6 @@ import {
   PACK,
   applyBench,
   calibrationLine,
-  deckNeeds,
   claimOutcome,
   explainPick,
   hydrate,
@@ -473,20 +472,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     );
   }, [state, pool, packContext]);
 
-  // What the deck is still short of, which is the other half of judging a pack
-  // and the half no server can compute: `EngineCard` carries no mana value and
-  // no type line, so a curve and a creature count only exist where the cards
-  // have been hydrated. That is here.
-  //
-  // Read off the same maindeck as the scoring context above, at the same moment,
-  // so the card the challenge puts up and the deck it claims to be serving are
-  // describing one pool.
-  const needs = useMemo(() => {
-    if (!state) return undefined;
-    const maindeck = splitPool(pool, state.sideboard, pool.length).maindeck;
-    return deckNeeds(maindeck, pool.length, state.totalPicks);
-  }, [state, pool]);
-
   /**
    * The one thing the two ways of drafting do not share.
    *
@@ -500,7 +485,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const board: CeremonyBoard = {
     pack,
     scoring: scoringContext,
-    needs,
     busy: picking,
     error: commitError,
     clearError: () => setCommitError(null),

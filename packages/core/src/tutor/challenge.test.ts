@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { NO_NEEDS } from "../testing/fakeSet.js";
 import type { Card, ColorWinRate } from "../model/card.js";
 import type { ScoringContext } from "../scoring/context.js";
 import { packScoringContext, scorePick } from "../scoring/score.js";
@@ -43,6 +44,7 @@ const ctx: ScoringContext = {
   commitment: 0,
   archetypes,
   contextFor: () => undefined,
+  needs: NO_NEEDS,
 };
 
 describe("challengeFor", () => {
@@ -101,15 +103,19 @@ describe("challengeFor", () => {
 // pair the data CAN separate, and silently changing the challenger when nobody
 // asked for it.
 describe("challengeFor with deck needs", () => {
+  // `turn` and `role` are set explicitly because that is what the scorer reads
+  // now -- both are settled at ingest so the pick path can see them, and a
+  // fixture carrying only a type line describes a card it cannot judge.
   const spell = (name: string, over: Partial<Card> = {}) =>
-    card(name, { colors: ["R"], colorIdentity: ["R"], ...over });
+    card(name, { colors: ["R"], colorIdentity: ["R"], turn: 2, role: "creature", ...over });
 
   // 5,000 games each puts the error bars at roughly ±1pp.
-  const bomb = spell("Big Bomb", { value: 0.62, gihWinRate: 0.62, cmc: 5, manaCost: "{5}" });
+  const bomb = spell("Big Bomb", { value: 0.62, gihWinRate: 0.62, cmc: 5, turn: 5, manaCost: "{5}" });
   const twoDrop = spell("Cheap Body", {
     value: 0.575,
     gihWinRate: 0.575,
     cmc: 2,
+    turn: 2,
     manaCost: "{2}",
     typeLine: "Creature — Goblin",
   });
@@ -117,6 +123,7 @@ describe("challengeFor with deck needs", () => {
     value: 0.578,
     gihWinRate: 0.578,
     cmc: 5,
+    turn: 5,
     manaCost: "{5}",
     typeLine: "Creature — Giant",
   });
@@ -126,18 +133,26 @@ describe("challengeFor with deck needs", () => {
   // the two candidates differ only on it.
   const pool = [
     ...Array.from({ length: 12 }, (_, i) =>
-      spell(`C${i}`, { cmc: (i % 3) + 1, manaCost: `{${(i % 3) + 1}}`, typeLine: "Creature — Goblin" }),
+      spell(`C${i}`, {
+        cmc: (i % 3) + 1,
+        turn: (i % 3) + 1,
+        manaCost: `{${(i % 3) + 1}}`,
+        typeLine: "Creature — Goblin",
+      }),
     ),
     ...Array.from({ length: 5 }, (_, i) =>
-      spell(`Big${i}`, { cmc: 6, manaCost: "{6}", typeLine: "Creature — Giant" }),
+      spell(`Big${i}`, { cmc: 6, turn: 6, manaCost: "{6}", typeLine: "Creature — Giant" }),
     ),
   ];
   const needs = deckNeeds(pool, 21, 42);
+  // The needs ride the context now, which is the point: there is no way to hand
+  // `challengeFor` a different set from the one the grade will use.
+  const needy: ScoringContext = { ...ctx, needs };
 
   it("breaks a tie at the top of the pack by the deck, and says which principle", () => {
     // 0.578 vs 0.575 is a 0.3pp gap against ±1pp bars: the same card, on the
     // evidence. The float prefers the five-drop; the deck is already topped out.
-    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx, needs);
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, needy);
 
     expect(ch?.challenger.name).toBe("Cheap Body");
     expect(ch?.reasons.map((r) => r.principle)).toContain("CURVE-03");
@@ -157,7 +172,7 @@ describe("challengeFor with deck needs", () => {
       manaCost: "{2}",
       typeLine: "Creature — Goblin",
     });
-    const ch = challengeFor([mine, better, fiveDrop], mine, ctx, needs);
+    const ch = challengeFor([mine, better, fiveDrop], mine, needy);
 
     expect(ch?.challenger.name).toBe("Cheap Best");
     expect(ch?.reasons).toEqual([]);
@@ -166,24 +181,43 @@ describe("challengeFor with deck needs", () => {
   // The guard. A 4.2pp gap is far outside the bars, so there is no band and no
   // principle gets a vote however much the deck would prefer the other card.
   it("never reaches past a gap the data can actually see", () => {
-    const ch = challengeFor([mine, bomb, twoDrop], mine, ctx, needs);
+    const ch = challengeFor([mine, bomb, twoDrop], mine, needy);
 
     expect(ch?.challenger.name).toBe("Big Bomb");
     expect(ch?.reasons).toEqual([]);
   });
 
-  // Without needs the old behaviour has to stand exactly, because the server
-  // and the CLI have no hydrated pool to derive them from.
-  it("is unchanged when no needs are supplied", () => {
-    expect(challengeFor([mine, fiveDrop, twoDrop], mine, ctx)?.challenger.name).toBe(
-      "Expensive Body",
+  // A deck that wants nothing does not silence the tiebreak, and should not:
+  // CURVE-07 is a claim about two cards rather than about a deck, so it still
+  // applies to a band nothing else separates. This is a real widening -- when
+  // needs were an optional argument, a caller that omitted them got no tiebreak
+  // at all, so the server and the CLI never took the cheaper of two equal cards.
+  it("still takes the cheaper card when the deck wants nothing", () => {
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx);
+
+    expect(ch?.challenger.name).toBe("Cheap Body");
+    expect(ch?.reasons.map((r) => r.principle)).toEqual(["CURVE-07"]);
+  });
+
+  // And a pool with no stored turns or roles -- everything ingested before this
+  // shipped -- cannot be cheaper than anything, so the float stands.
+  it("falls back to the float on a pool that predates turn and role", () => {
+    const old = (name: string, value: number) =>
+      card(name, { value, gihWinRate: value, colors: ["R"], colorIdentity: ["R"] });
+    const ch = challengeFor(
+      [old("Mine", 0.5), old("Dearer", 0.578), old("Cheaper", 0.575)],
+      old("Mine", 0.5),
+      ctx,
     );
+
+    expect(ch?.challenger.name).toBe("Dearer");
+    expect(ch?.reasons).toEqual([]);
   });
 
   // The gap and the margin have to describe the pair actually shown, or the
   // calibration line grades a comparison the player never saw.
   it("measures the gap against the card it puts up", () => {
-    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx, needs);
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, needy);
 
     expect(ch?.challenger.name).toBe("Cheap Body");
     expect(ch?.gap).toBeCloseTo(0.075, 6);
@@ -201,21 +235,21 @@ describe("challengeFor with deck needs", () => {
    * the tiebreak sentence together. Which is what it did.
    */
   it("reports the float's whole-pack best even when it puts up another card", () => {
-    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, ctx, needs);
+    const ch = challengeFor([mine, fiveDrop, twoDrop], mine, needy);
 
     expect(ch?.challenger.name).toBe("Cheap Body");
     expect(ch?.contextBestName).toBe("Expensive Body");
   });
 
   it("reports the proposed card when that is the best in the pack", () => {
-    const ch = challengeFor([bomb, twoDrop], bomb, ctx, needs);
+    const ch = challengeFor([bomb, twoDrop], bomb, needy);
     expect(ch?.contextBestName).toBe("Big Bomb");
   });
 
   // The same answer the caller used to reconstruct, so a pack with no tiebreak
   // in it is unaffected by any of this.
   it("agrees with the old derivation whenever no principle was consulted", () => {
-    const ch = challengeFor([mine, bomb, twoDrop], mine, ctx, needs);
+    const ch = challengeFor([mine, bomb, twoDrop], mine, needy);
 
     expect(ch?.reasons).toEqual([]);
     expect(ch?.contextBestName).toBe(ch?.challenger.name);

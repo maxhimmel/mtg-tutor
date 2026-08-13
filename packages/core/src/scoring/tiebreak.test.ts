@@ -21,23 +21,38 @@ function card(name: string, over: Partial<Card> = {}): Card {
     collectorNumber: "1",
     gihWinRate: 0.55,
     gihGames: 5000,
+    turn: 2,
+    role: "creature",
     ...over,
   };
 }
 
+// `turn` and `role` are stated rather than derived from the type line, because
+// that is now what the code reads: both are settled at ingest so the pick path
+// can see them at all. A fixture that set only `typeLine` would be describing a
+// card the scorer cannot judge.
 const creature = (name: string, cmc: number) =>
-  card(name, { cmc, manaCost: `{${cmc}}`, typeLine: "Creature — Goblin" });
+  card(name, { cmc, turn: cmc, manaCost: `{${cmc}}`, typeLine: "Creature — Goblin", role: "creature" });
 
 const removal = (name: string, cmc: number) =>
   card(name, {
     cmc,
+    turn: cmc,
     manaCost: `{${cmc}}`,
     typeLine: "Instant",
     oracleText: "Destroy target creature.",
+    role: "removal",
   });
 
 const trick = (name: string, cmc: number) =>
-  card(name, { cmc, manaCost: `{${cmc}}`, typeLine: "Instant", oracleText: "Target creature gets +2/+2." });
+  card(name, {
+    cmc,
+    turn: cmc,
+    manaCost: `{${cmc}}`,
+    typeLine: "Instant",
+    oracleText: "Target creature gets +2/+2.",
+    role: "other",
+  });
 
 // Half a draft gone, so the on-pace targets are half the finished-deck ones and
 // a pool can be genuinely ahead or behind rather than trivially behind.

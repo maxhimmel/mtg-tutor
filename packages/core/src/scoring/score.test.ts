@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { NO_NEEDS } from "../testing/fakeSet.js";
 import type { Card, ColorCode, IngestCard } from "../model/card.js";
 import type { ScoringContext } from "./context.js";
 import {
@@ -143,6 +144,7 @@ describe("scorePick with a scoring context", () => {
       { colors: "WUR", n: 4000, wr: 0.5 },
     ],
     contextFor: () => undefined,
+    needs: NO_NEEDS,
   };
 
   it("answers rawBest when it is given no context, rather than guessing", () => {
@@ -281,6 +283,7 @@ describe("scorePick inside the margin of error", () => {
       const s = rated.get(c.name);
       return withSe && s != null ? { se: s } : undefined;
     },
+    needs: NO_NEEDS,
   });
 
   it("scores a pick the data cannot separate from the best as the best", () => {
@@ -356,6 +359,7 @@ describe("scorePick and the band it could not separate", () => {
       const s = ses.get(c.name);
       return s != null ? { se: s } : undefined;
     },
+    needs: NO_NEEDS,
   };
 
   it("names every card the data could not separate, not just the argmax", () => {
