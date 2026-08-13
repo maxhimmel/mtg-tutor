@@ -25,6 +25,7 @@
     "build-set-stats": "node scripts/build-set-stats.mjs",
     "challenge-fixture": "node scripts/challenge-fixture.mjs",
     "check-access": "node scripts/check-access.mjs",
+    "claude-bridge": "node scripts/claude-bridge.mjs",
     "check-availability": "node scripts/check-set-availability.mjs",
     "deploy": "convex deploy",
     "dev": "node scripts/dev.mjs",

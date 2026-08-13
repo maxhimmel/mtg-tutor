@@ -19,6 +19,7 @@
     "challenge": "pnpm --filter @mtg-tutor/cli challenge",
     "challenge-fixture": "pnpm --filter @mtg-tutor/backend challenge-fixture",
     "check-availability": "pnpm --filter @mtg-tutor/backend check-availability",
+    "claude-bridge": "pnpm --filter @mtg-tutor/backend claude-bridge",
     "dev": "pnpm --filter @mtg-tutor/cli dev",
     "dev:web": "turbo run dev --filter=@mtg-tutor/backend... --filter=@mtg-tutor/web...",
     "draft": "pnpm --filter @mtg-tutor/cli draft",
