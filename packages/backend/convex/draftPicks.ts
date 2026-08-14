@@ -7,7 +7,7 @@ import type {
   RecordedPick,
   TextIndex,
 } from "@mtg-tutor/core";
-import { gapMargin, hydrate, hydrateCard } from "@mtg-tutor/core";
+import { hydrate, hydrateCard } from "@mtg-tutor/core";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 
@@ -183,20 +183,13 @@ export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): Recorde
       contextBestValue: row.score.contextBestValue,
       terms: row.score.terms ?? [],
       isBest: row.score.isBest,
-      // Stored since the grade learned to read a margin; recomputed from the
-      // hydrated cards for rows written before that, which is the same
-      // measurement by the route the browser has always used. Never invented:
-      // an unrated pair returns undefined and stays separable.
-      indistinguishable:
-        row.score.indistinguishable ??
-        (() => {
-          if (row.score.isBest) return false;
-          const best = hydrateCard(inPack(stored, row.score.contextBestName), text);
-          const mine = hydrateCard(inPack(stored, row.score.pickedName), text);
-          const margin = gapMargin(best, mine);
-          const gap = row.score.contextBestValue - (row.score.pickedContextValue ?? row.score.pickedValue);
-          return margin != null && gap <= margin;
-        })(),
+      // Read, never recomputed. This used to derive it from the hydrated cards
+      // for rows written before the grade could see a margin -- which put a
+      // FIFTH copy of "is this gap real" in the codebase, in the one place whose
+      // job is to report what a player was actually shown. A row from before the
+      // field existed simply did not have that verdict, and inventing one now
+      // would show them a screen they never saw.
+      indistinguishable: row.score.indistinguishable ?? false,
       // Names rather than cards on the row, hydrated back out of the pack it was
       // stored beside -- the same shape `pickedName` and `contextBestName` take.
       // A row written before the band existed has none and renders as it always

@@ -91,10 +91,9 @@ export function deckNeeds(
 ): DeckNeeds {
   // `turn` and `role` are settled at ingest, so this reads them rather than the
   // rules text -- which is the whole reason it can run on the pick path at all.
-  // A card from a pool ingested before those existed has neither and is skipped:
-  // it contributes to no need and meets none, which is "not known" rather than
-  // "meets nothing".
-  const spells = maindeck.filter((c) => c.role != null && c.role !== "land" && c.turn != null);
+  // Both are required on the card, so the only thing filtered here is a land,
+  // which the deck counts in a different total.
+  const spells = maindeck.filter((c) => c.role !== "land");
   const pace = totalPicks > 0 ? Math.min(1, picksMade / totalPicks) : 0;
   // What the finished deck aims at, discounted to where this draft has got to.
   const onPace = (target: number) => target * pace;
@@ -106,7 +105,7 @@ export function deckNeeds(
   const filled = new Set<number>();
 
   for (const c of spells) {
-    const turn = c.turn!;
+    const turn = c.turn;
     filled.add(turn);
     if (turn <= 2) cheap++;
     if (turn >= 5) expensive++;
@@ -163,10 +162,9 @@ interface CardFit {
 function fitOf(card: EngineCard, needs: DeckNeeds): CardFit {
   const met: TiebreakReason[] = [];
   const penalties: TiebreakReason[] = [];
-  // A land, or a card from a pool that predates these fields. Neither can be
-  // argued for on deck shape.
-  if (card.role == null || card.role === "land" || card.turn == null)
-    return { met, penalties };
+  // A land cannot be argued for on deck shape -- it is not in the curve and the
+  // deck counts it elsewhere.
+  if (card.role === "land") return { met, penalties };
 
   const { role, turn } = card;
 
@@ -200,9 +198,8 @@ const tally = (fit: CardFit) => fit.met.length - fit.penalties.length;
 
 // What CURVE-07 compares, in curve buckets rather than exact mana values. The
 // bucket is the number the chart and the deck builder already read, and this was
-// the last thing here still reaching for a printed mana cost. A card with no
-// stored turn sorts last, so an unknown can never win on being cheap.
-const cost = (card: EngineCard) => card.turn ?? Number.POSITIVE_INFINITY;
+// the last thing here still reaching for a printed mana cost.
+const cost = (card: EngineCard) => card.turn;
 
 /**
  * The card to prefer out of a band the data cannot separate.
