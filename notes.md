@@ -405,27 +405,36 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
 12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely and definitely more interestingly/eye-catching/cool when they're referenced (i.e. by the coach/"your call on the gap")
 
+13. It'd be kinda cool if we removed all mention of mana char references (UWBRG) and instead used the mana font/symbols. Here's an example from the coach:
+
+```
+Coach
+Spectacular Skywhale fits your spells-matter UR shell fine — flying and instant/sorcery synergy
+```
+
+But I'd like further research into all parts of the app.
+
 17. **A static page for what `detectRole` calls things** (2026-08-14). The
-   classifier is a handful of regexes over rules text, and since it moved to
-   ingest its answer is STORED -- so it decides which deck need a pick can meet
-   (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
-   re-ingest rather than a deploy.
+    classifier is a handful of regexes over rules text, and since it moved to
+    ingest its answer is STORED -- so it decides which deck need a pick can meet
+    (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
+    re-ingest rather than a deploy.
 
-   `scripts/show-roles.mjs` prints the distribution, examples with the phrase
-   that matched, and the arguable lists. It is a terminal dump, and the thing
-   actually wanted is a page: every card in a set, its role, the matched
-   phrase, filterable by role, so a wrong call is spotted by scrolling rather
-   than by grepping. Static HTML written to disk and opened directly -- no
-   route, no auth, no deployment, because this is a tool for whoever is editing
-   the regexes and not a feature of the app.
+`scripts/show-roles.mjs` prints the distribution, examples with the phrase
+that matched, and the arguable lists. It is a terminal dump, and the thing
+actually wanted is a page: every card in a set, its role, the matched
+phrase, filterable by role, so a wrong call is spotted by scrolling rather
+than by grepping. Static HTML written to disk and opened directly -- no
+route, no auth, no deployment, because this is a tool for whoever is editing
+the regexes and not a feature of the app.
 
-   **The measured reasons it is worth having**, over 17 sets and 5,119 cards:
-   56 of 282 cards called removal by "deals N damage to" (19.9%) are aiming at
-   a PLAYER rather than a creature; 98 of 923 evasion cards (10.6%) GRANT
-   flying or trample rather than have it; and 44 fight/bite spells sit in
-   `other` because "deals damage equal to its power to target creature" matches
-   nothing. Fixing those is its own re-ingest, so seeing them first is the
-   cheap half.
+**The measured reasons it is worth having**, over 17 sets and 5,119 cards:
+56 of 282 cards called removal by "deals N damage to" (19.9%) are aiming at
+a PLAYER rather than a creature; 98 of 923 evasion cards (10.6%) GRANT
+flying or trample rather than have it; and 44 fight/bite spells sit in
+`other` because "deals damage equal to its power to target creature" matches
+nothing. Fixing those is its own re-ingest, so seeing them first is the
+cheap half.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -727,7 +736,7 @@ to the data work.
     decision has one, it is usually large, and reading the raw number without it
     invites paying for headroom that does not exist.
 
-10. **A computation that proceeds with less information than it needs is
+9.  **A computation that proceeds with less information than it needs is
     indistinguishable from the feature not existing.** Nine bugs in the
     `expert-principles` week, and not one of them threw, crashed or failed a
     typecheck. Every single one returned a well-formed, plausible answer that
@@ -735,13 +744,13 @@ to the data work.
 
     The mechanism was always a fallback with a good reason behind it:
 
-    | the fallback | the reason | what it did |
-    | --- | --- | --- |
-    | `turn?: number` optional | old pools lack it | scorer ran with its deck-shape half off |
-    | `bandNames ?? []` | old rows lack it | verdict named one card instead of three |
-    | `role != null` guard | might not be ingested | every card met zero needs |
-    | `engineHalf`'s field list | a deliberate which-side choice | dropped two fields at storage, silently |
-    | a harness deriving absent inputs | be robust to stale caches | reported 0.0% for a working feature, twice |
+    | the fallback                     | the reason                     | what it did                                |
+    | -------------------------------- | ------------------------------ | ------------------------------------------ |
+    | `turn?: number` optional         | old pools lack it              | scorer ran with its deck-shape half off    |
+    | `bandNames ?? []`                | old rows lack it               | verdict named one card instead of three    |
+    | `role != null` guard             | might not be ingested          | every card met zero needs                  |
+    | `engineHalf`'s field list        | a deliberate which-side choice | dropped two fields at storage, silently    |
+    | a harness deriving absent inputs | be robust to stale caches      | reported 0.0% for a working feature, twice |
 
     **Why it bites here in particular.** This app's outputs are numbers that look
     fine. A scorer missing half its inputs still returns a grade; a harness
@@ -752,7 +761,6 @@ to the data work.
 
     **The distinction that makes it actionable**, because the answer is not
     "throw everywhere":
-
     - **Absence that is an ANSWER** should be modelled and kept. An unrated card
       genuinely has no error bars, so `gapMargin` returning undefined is
       information and refusing to invent a margin is correct.
