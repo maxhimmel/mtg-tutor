@@ -67,6 +67,14 @@ export async function engineCards(client, api, setCode, format, log = () => {}) 
     value: c.value,
     ...(c.slot === undefined ? {} : { slot: c.slot }),
     ...(c.packRate === undefined ? {} : { packRate: c.packRate }),
+    // The curve bucket and the role, which scoring reads to judge a card against
+    // the deck. Dropped here at first, which made every cached card look like it
+    // had no cost and no role -- so every harness reading this file measured a
+    // scorer with its deck-shape half switched off and reported it as zero.
+    // This projection has to be the whole of EngineCard, not a subset somebody
+    // curated once.
+    ...(c.turn === undefined ? {} : { turn: c.turn }),
+    ...(c.role === undefined ? {} : { role: c.role }),
   }));
 
   mkdirSync(CACHE_DIR, { recursive: true });
