@@ -110,16 +110,21 @@ for (const c of artifact.cards) {
 
 // Whole cards, the way the browser makes them: engine half joined to text half.
 const index = { get: (name) => textByKey.get(normalizeName(name)) };
-// Ingest settles `turn` and `role` on the card; `datasets/` was cached before it
-// did, so they are derived here from the same two functions ingest calls. Not a
-// convenience: without them every card looks like a two-drop with no role, no
-// need is ever met, and the sweep reports a confident zero for a working
-// feature. It did that twice -- once for `gapMargin`, once for these.
-const shaped = (card, text) => ({
-  ...card,
-  turn: curveTurn(text ?? card),
-  role: detectRole(text ?? { oracleText: "", typeLine: "" }),
-});
+// `turn` and `role` come off the cached card, which is the whole of EngineCard
+// since `engineCards.mjs` stopped projecting five fields by hand. Derived only
+// when the cache predates them -- and LOUDLY, because a silent fallback here is
+// how this sweep twice reported 0.0% for a feature that was working: cards with
+// no role meet no need, every band ties, and the harness calls that an answer.
+let derived = 0;
+const shaped = (card, text) => {
+  if (card.turn != null && card.role != null) return card;
+  derived++;
+  return {
+    ...card,
+    turn: curveTurn(text ?? card),
+    role: detectRole(text ?? { oracleText: "", typeLine: "" }),
+  };
+};
 
 const whole = (engineCards) =>
   engineCards.map((c) => {
@@ -199,6 +204,13 @@ for (const draft of cache.drafts) {
 }
 
 log(`walked ${walked.toLocaleString()} drafts${missingText ? `, ${missingText} picks with no text row` : ""}`);
+if (derived > 0) {
+  log(
+    `WARNING: ${derived.toLocaleString()} cards had no stored turn/role and were derived here.\n` +
+      `         Run 'pnpm cache-cards' after a re-ingest, or this measures a shape\n` +
+      `         the app does not actually store.`,
+  );
+}
 
 const pct = (n) => `${((100 * n) / decisions).toFixed(1)}%`;
 

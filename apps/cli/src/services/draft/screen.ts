@@ -111,9 +111,16 @@ async function showPickFeedback(
   signal: string | undefined,
   cardsInPack: number,
 ) {
+  // Three states, not two. A pick inside the error bars scores 100 and is not a
+  // miss, but it did not top the pack either -- calling it "best pick" would be
+  // as wrong as showing it a rank, and the rank is what it used to show.
   const head =
     `${gradeColor(score.grade)} ${pc.bold(String(score.score))}/100` +
-    (score.isBest ? pc.green("  ✓ best pick") : pc.dim(`  (rank ${score.rankInPack})`));
+    (score.isBest
+      ? pc.green("  ✓ best pick")
+      : score.indistinguishable
+        ? pc.green("  ✓ nothing measurably better")
+        : pc.dim(`  (rank ${score.rankInPack})`));
 
   // The tail of a pack is forced, so it gets the deterministic explanation and
   // no LLM call. The web app makes this adjustable; the CLI has no settings

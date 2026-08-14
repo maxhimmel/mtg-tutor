@@ -58,15 +58,48 @@ describe("explainPick on a pick that was not the best", () => {
   });
 
   // At 5000 games each the error bars run to roughly ±1pp, so a 0.4pp gap is
-  // not a gap -- and this must not read as a miss.
+  // not a gap -- and this must not read as a miss. The SCORE says whether it is
+  // one; this used to decide for itself, which made four places in the app hold
+  // an opinion about a single question.
   it("says outright when the gap is inside the margin", () => {
-    const line = explainPick(score({ contextBestValue: 0.582 })).join("\n");
-    expect(line).toContain("inside the");
-    expect(line).toContain("cannot tell these two apart");
+    const line = explainPick(
+      score({ contextBestValue: 0.582, indistinguishable: true, band: [better] }),
+    ).join("\n");
+    // It names the tie rather than a card that beat it, and says the pick was
+    // not marked down -- which is now true of the grade as well as the prose.
+    expect(line).toContain("Nothing measurably better");
+    expect(line).toContain("cannot separate it from Big Bomb");
+    expect(line).toContain("not marked down");
+    expect(line).not.toContain("You took");
   });
 
   it("does not claim a tie when the gap is real", () => {
-    expect(explainPick(score()).join("\n")).not.toContain("cannot tell these two apart");
+    expect(explainPick(score()).join("\n")).not.toContain("cannot separate it from");
+  });
+
+  // The corpus id the app itself acted on, so the fallback panel and the CLI
+  // say the same thing the coach and the verdict do.
+  it("names the card the deck wanted out of the tie, and the principle", () => {
+    const line = explainPick(
+      score({
+        contextBestValue: 0.582,
+        indistinguishable: true,
+        band: [better],
+        preferred: better,
+        reasons: [{ principle: "CURVE-04", note: "nothing comes down on turn 3" }],
+      }),
+    ).join("\n");
+
+    expect(line).toContain("Big Bomb is the one this deck wanted");
+    expect(line).toContain("[CURVE-04]");
+  });
+
+  it("says nothing about a preference when no principle decided one", () => {
+    const line = explainPick(
+      score({ contextBestValue: 0.582, indistinguishable: true, band: [better] }),
+    ).join("\n");
+
+    expect(line).not.toContain("this deck wanted");
   });
 
   // An unrated card is scored off a rarity baseline, which has no sample to have

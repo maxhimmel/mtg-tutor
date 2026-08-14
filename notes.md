@@ -197,6 +197,9 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 12. When a card is hovered and the enlarged version is shown and then I click/select the card the hover disappears. That feels incorrect because I didn't STOP hovering over the card.
 
+- It also disappears when i scroll even tho the card is still being hovered upon
+- be thorough w/this fix because we've already improved/fixed other bugs regarding similar mechanics and I don't want a spaghetti mess w/all these fixes.
+
 13. Love that the coach noticed the incongruency here:
 
 ```
@@ -682,7 +685,7 @@ to the data work.
     decision has one, it is usually large, and reading the raw number without it
     invites paying for headroom that does not exist.
 
-17. **A static page for what `detectRole` calls things** (2026-08-14). The
+9.  **A static page for what `detectRole` calls things** (2026-08-14). The
     classifier is a handful of regexes over rules text, and since it moved to
     ingest its answer is STORED -- so it decides which deck need a pick can meet
     (DECK-06, DECK-08) for the life of a pool, and correcting it costs a

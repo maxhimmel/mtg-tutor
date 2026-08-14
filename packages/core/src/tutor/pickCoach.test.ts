@@ -197,11 +197,64 @@ describe("buildPickContext showing the verdict's working", () => {
   });
 
   // The 98/100 case. Both cards are sampled at 5000 games, so the error bars run
-  // to roughly ±1pp and a 0.2pp gap is not a gap the data can see.
+  // to roughly ±1pp and a 0.2pp gap is not a gap the data can see -- and the
+  // SCORE is what says so, which is the change. This used to recompute the
+  // margin here, making three places in the app decide one question.
   it("says outright when the gap is inside the margin, so the pick stands", () => {
-    const out = buildPickContext(base({ isBest: false, contextBest: other, contextBestValue: 0.582 }), []);
+    const out = buildPickContext(
+      base({
+        isBest: false,
+        contextBest: other,
+        contextBestValue: 0.582,
+        indistinguishable: true,
+      }),
+      [],
+    );
     expect(out).toContain("INSIDE the margin");
     expect(out).toContain("cannot tell these two cards apart");
+  });
+
+  // The anti-regression for the whole three-opinions problem: the prompt must
+  // follow the grade even where its own arithmetic would say otherwise, because
+  // a coach explaining a verdict the app did not reach is the failure mode that
+  // put "the data cannot tell these apart" under a 94/100.
+  it("follows the score rather than recomputing the margin", () => {
+    const out = buildPickContext(
+      base({
+        isBest: false,
+        contextBest: other,
+        contextBestValue: 0.582,
+        indistinguishable: false,
+      }),
+      [],
+    );
+    expect(out).not.toContain("INSIDE the margin");
+  });
+
+  // The corpus id the app itself acted on. Without it the model is asked to
+  // explain a pick the app preferred for a reason it was never told.
+  it("passes on which card the deck wanted, and why", () => {
+    const out = buildPickContext(
+      base({
+        isBest: false,
+        contextBest: other,
+        contextBestValue: 0.582,
+        indistinguishable: true,
+        preferred: other,
+        reasons: [{ principle: "DECK-08", note: "you are short of removal" }],
+      }),
+      [],
+    );
+    expect(out).toContain("Big Bomb is the one this deck wanted");
+    expect(out).toContain("[DECK-08]");
+  });
+
+  it("says nothing about a preference when no principle decided one", () => {
+    const out = buildPickContext(
+      base({ isBest: false, contextBest: other, contextBestValue: 0.582, indistinguishable: true }),
+      [],
+    );
+    expect(out).not.toContain("this deck wanted");
   });
 
   it("does not claim a tie when the gap is real", () => {
