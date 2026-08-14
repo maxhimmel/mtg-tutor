@@ -52,6 +52,7 @@ import {
   BotMemory,
   CURVE_TOP,
   POLICY_FEATURES,
+  deckNeeds,
   draftProgress,
   policyFeatures,
 } from "@mtg-tutor/core";
@@ -113,6 +114,21 @@ const log = (...a) => console.error(...a);
 // every card is identified only up to a constant. The gradient along that
 // direction is exactly zero and the weights stay balanced around it, which makes
 // the differences meaningful and the absolute heights arbitrary.
+//
+// AND DO NOT ABLATE A BANK ONE COLUMN AT A TIME. That follows from the same
+// invariance and it is not obvious: `--shape turn --ablate` prices all seven of
+// its columns at +0.00pp while the bank as a whole is worth +0.45pp. Nothing is
+// broken. The columns PARTITION the pack, so removing one lets the other six
+// re-level and re-express every difference that mattered -- the ablation drops a
+// column without dropping any information. To price a bank, compare it against a
+// plain run; to price one column, drop the rest with `--drop` and see whether
+// what is left still pays.
+//
+// A probe reads one card at a `Pick`: the memory as the drafter had it, where
+// the draft had got to, and whatever the bank chose to work out once for the
+// whole pack. That last part is `shared`, and it exists because the deck-shape
+// bank asks what the pool is short of -- an O(pool) question that must be
+// answered per pick and not per candidate.
 const SHAPES = {
   // CURVE-01 and CURVE-03 say a Limited deck wants seven-plus cards at 1-2 mana
   // and five-or-fewer at 5+, which is a claim about a preference over the curve
@@ -123,12 +139,71 @@ const SHAPES = {
   // Nothing is dropped: the question is what curve preference is LEFT once raw
   // win rate, the lane and openness have been paid, which is exactly the part a
   // `cheapness` feature would be claiming to add.
+  //
+  // LANDS GET THEIR OWN COLUMN, and they have to. `curveTurn` floors at one, so
+  // every land in the Play Booster land slot is a `turn` of 1 -- 40% of the
+  // turn-1 cards on both fdn and dsk -- and every other reader of this field
+  // drops them first: `manaCurve` leaves them out of the chart, `deckNeeds`
+  // filters them before it counts, `fitOf` refuses to argue about them. Left in,
+  // the one bucket a `cheapness` feature exists to speak for would be a blend of
+  // "a one-drop spell" and "a dual land", which are not the same pick and are
+  // not taken at the same time.
   turn: {
     drop: [],
-    probes: Array.from({ length: CURVE_TOP }, (_, i) => ({
-      label: `turn${i + 1}${i + 1 === CURVE_TOP ? "+" : ""}`,
-      value: (card) => (card.turn === i + 1 ? 1 : 0),
-    })),
+    probes: [
+      ...Array.from({ length: CURVE_TOP }, (_, i) => ({
+        label: `turn${i + 1}${i + 1 === CURVE_TOP ? "+" : ""}`,
+        value: (card) => (card.role !== "land" && card.turn === i + 1 ? 1 : 0),
+      })),
+      { label: "land", value: (card) => (card.role === "land" ? 1 : 0) },
+    ],
+  },
+  // Whether a drafter answers to the deck they are actually holding.
+  //
+  // `deckNeeds` is the whole of what this app thinks a Limited deck is short of
+  // -- creatures by DECK-06, removal by DECK-08, the cheap half of the curve by
+  // CURVE-01, and a top end that has stopped being a need and become a cost by
+  // CURVE-03 -- and the pick scorer already grades a person against it. Nothing
+  // has ever checked whether real drafters visibly do.
+  //
+  // MAIN EFFECT AND INTERACTION TOGETHER, because they are separate claims and
+  // only the second one is `creatureNeed`. "Humans take bodies above their win
+  // rate" is a fact about cards; "humans take a body WHEN THEY ARE SHORT of
+  // bodies" is a fact about attention, and a bank carrying only the interaction
+  // would credit the first to the second. If the paired weights come back with a
+  // live main effect and a dead interaction, the answer is that drafters have a
+  // standing preference and are not counting.
+  //
+  // `deckNeeds` is imported rather than restated. It is the same function, over
+  // the same fields, that decides what the tiebreak may argue -- so a finding
+  // here is about the rule the app ships and not about a paraphrase of it.
+  //
+  // The pool it is asked about is the DRAFTER'S OWN, rebuilt pick by pick by the
+  // same `BotMemory` the fit feeds: `memory.take(picked)` is the human's card,
+  // so this reads a real deck taking shape and not a bot's.
+  need: {
+    drop: [],
+    perPick: (at) => deckNeeds(at.memory.pool, at.picksMade, at.totalPicks),
+    probes: [
+      { label: "body", value: (c) => (c.role === "creature" || c.role === "evasion" ? 1 : 0) },
+      {
+        label: "bodyShort",
+        value: (c, at) =>
+          at.shared.creatures && (c.role === "creature" || c.role === "evasion") ? 1 : 0,
+      },
+      { label: "removal", value: (c) => (c.role === "removal" ? 1 : 0) },
+      { label: "removalShort", value: (c, at) => (at.shared.removal && c.role === "removal" ? 1 : 0) },
+      { label: "cheap", value: (c) => (c.role !== "land" && c.turn <= 2 ? 1 : 0) },
+      {
+        label: "cheapShort",
+        value: (c, at) => (at.shared.cheap && c.role !== "land" && c.turn <= 2 ? 1 : 0),
+      },
+      { label: "top", value: (c) => (c.role !== "land" && c.turn >= 5 ? 1 : 0) },
+      {
+        label: "topFull",
+        value: (c, at) => (at.shared.toppedOut && c.role !== "land" && c.turn >= 5 ? 1 : 0),
+      },
+    ],
   },
   // `laneFitLate` is `laneFit * progress`: a linear ramp from nothing at P1P1 to
   // everything at the last pick. The principles describe a STEP instead --
@@ -156,8 +231,10 @@ const SHAPES = {
     probes: [0, 1, 2].flatMap((packNo) =>
       ["early", "mid", "late"].map((third, t) => ({
         label: `P${packNo + 1}${third}`,
-        value: (card, memory, _progress, _packSize, atPack, atPick) =>
-          atPack === packNo && Math.min(2, Math.floor(atPick / 5)) === t ? memory.laneFit(card) : 0,
+        value: (card, at) =>
+          at.packNo === packNo && Math.min(2, Math.floor(at.pickNo / 5)) === t
+            ? at.memory.laneFit(card)
+            : 0,
       })),
     ),
   },
@@ -250,6 +327,23 @@ function walkDraft(rows, into) {
     const progress = draftProgress(i, totalPicks);
     const chosen = pack.indexOf(picked);
     if (chosen >= 0) {
+      // Where this pick is, for the probes. `picksMade` is the pool's own size
+      // rather than `i`, because a row the pool could not resolve was skipped
+      // above without taking anything -- so the two drift apart on exactly the
+      // drafts where a need would be miscounted.
+      const at = {
+        memory,
+        progress,
+        packSize: pack.length,
+        packNo,
+        pickNo,
+        picksMade: memory.pool.length,
+        totalPicks,
+      };
+      // Once per pick, never per candidate: the deck-shape bank asks what the
+      // pool is short of, which is O(pool) and identical for all 14 cards.
+      at.shared = shape.perPick ? shape.perPick(at) : undefined;
+
       for (const card of pack) {
         // The shipped row comes from core, never restated here -- weights fitted
         // against a local copy of `policyFeatures` would be weights no bot ever
@@ -257,9 +351,7 @@ function walkDraft(rows, into) {
         // run agree column for column on everything they share.
         const f = policyFeatures(card, memory, progress, pack.length);
         for (let k = 0; k < POLICY_FEATURES.length; k++) into.feat.push(f[k]);
-        for (const probe of shape.probes) {
-          into.feat.push(probe.value(card, memory, progress, pack.length, packNo, pickNo));
-        }
+        for (const probe of shape.probes) into.feat.push(probe.value(card, at));
       }
       into.size.push(pack.length);
       into.chosen.push(chosen);
