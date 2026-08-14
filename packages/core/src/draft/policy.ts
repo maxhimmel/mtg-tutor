@@ -48,6 +48,48 @@ import type { BotMemory } from "./bots.js";
 // was for. Signal-reading is real -- `opennessLate` is worth +0.50pp -- but only
 // as an interaction. What has flowed says nothing about a pick in pack 1 and
 // quite a lot by pack 3, so the main effect is dead weight beside it.
+//
+// AND NOTHING ABOUT THE DECK, WHICH WAS MEASURED RATHER THAN OVERLOOKED
+//
+// `turn` and `role` have been on `EngineCard` since the principles work, so a
+// bot can read a mana value and a role at pick time and two obvious features
+// come for free: a `cheapness` that says drafters favour the cheap end, and a
+// `creatureNeed` that says they take a body when their deck is short of bodies.
+// Neither is here. `fit-bot-policy --shape` fitted a free indicator per bucket
+// instead of asserting a formula, over fdn+dsk, 75,646 train / 36,145 held-out:
+//
+//   the seven below                        52.52%
+//   + one indicator per curve turn + land  53.0%    (+0.45pp, and see below)
+//   + every `deckNeeds` need, paired with
+//     its own main effect                  52.8%
+//
+// THE DECK IS INVISIBLE. All four need interactions came back at zero, two of
+// them with the wrong sign -- `bodyShort` -0.015, `removalShort` -0.026,
+// `cheapShort` +0.035, `topFull` +0.110 -- while their main effects are alive,
+// `removal` at +0.319 the largest. Drafters have standing preferences about what
+// a card DOES and do not visibly count what they are holding. Since `deckNeeds`
+// is imported here rather than restated, that is a finding about the exact rule
+// the pick scorer grades a person against, not about a paraphrase of it. It does
+// not make the tiebreak wrong -- that one is normative and fires only where the
+// win rates have already run out -- but it is the third time now that a
+// principle has described a good drafter without predicting a real one.
+//
+// AND `cheapness` DOES NOT EXIST; THE OBVIOUS EVIDENCE FOR IT WAS LANDS. The
+// first curve probe found exactly the gradient the feature wanted -- turn1
+// +0.155, turn2 +0.083, turn3 +0.032, turn4 -0.302 -- and it was an artifact.
+// `curveTurn` floors at one, so every land is a `turn` of 1, and lands are 40%
+// of the turn-1 cards on both sets. Given a column of their own, turns 1, 2 and
+// 3 fit to +0.013, +0.050 and -0.007: indistinguishable from each other and from
+// nothing. Every other reader of this field drops lands first -- `manaCurve`,
+// `deckNeeds`, `fitOf` all do -- and a feature that had not would have fitted
+// cleanly, ablated positive and measured nothing about the curve.
+//
+// What is left of that +0.45pp is one contrast and not a curve: a four-drop is
+// taken LESS than its win rate says, at -0.34 against the rest. `land` alone is
+// worth +0.00pp, `turn4` alone carries nearly all of it. Not shipped, because it
+// was chosen by looking at the held-out set and has not been confirmed anywhere
+// else -- and because a new feature means a new pod name, which is a thing a
+// person has to pick between, for four tenths of a point.
 export const POLICY_FEATURES = [
   // Raw power, centred on the format's rough midpoint so the coefficient is
   // "how much a point of win rate is worth" rather than an offset.
@@ -97,6 +139,34 @@ export const POLICY_FEATURES = [
   "rareOpen",
   // The two interactions, and between them the finding. A lane is worth more
   // late; a signal is worth NOTHING until late and then a great deal.
+  //
+  // A LINEAR RAMP, AND THE PRINCIPLES SAY IT SHOULD BE A STEP. THE RAMP WINS.
+  //
+  // `laneFit * progress` climbs evenly from nothing at P1P1 to everything at the
+  // last pick, and the corpus describes something else entirely: SIG-01 and
+  // SIG-02 say the first few picks are expendable and to commit around pick
+  // five, SIG-11 that the plan is settled by the middle of pack 2, SIG-12 that
+  // pack 2 is where you stop switching. That is a step onto a plateau, and it is
+  // a different claim from a line that is still rising at pick 42.
+  //
+  // `--shape lane` replaced both lane terms with nine free stage weights and let
+  // the data choose. It chose the ramp:
+  //
+  //          P1early  P1mid  P1late  P2early  P2mid  P2late  P3early  P3mid  P3late
+  //   free      2.12   3.43    4.04     5.73   5.94    6.52     7.42   7.54    8.69
+  //   shipped   2.39   3.30    4.12     4.94   5.84    6.65     7.47   8.38    9.19
+  //
+  // Monotone across all nine, no plateau, still climbing at the end, and within
+  // 0.27 of the shipped line at six of the nine stages. Held-out top-1 is 52.5%
+  // either way: nine free parameters buy nothing over two. The one visible
+  // deviation is a +0.80 bump at P2early, which is where SIG-11 points -- but a
+  // bump is not a plateau, and pack 3 goes on climbing straight past it.
+  //
+  // So the refit this was queued for does not happen. Note what the probe DID
+  // establish: the axis is right. That is the failure `valueOpen` had, where
+  // confidence resets every pack and `progress` cannot express it at any weight
+  // -- commitment really does accumulate monotonically across a draft, so the
+  // one interaction term can carry it.
   "laneFitLate",
   "opennessLate",
 ] as const;
