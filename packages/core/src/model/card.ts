@@ -73,17 +73,23 @@ export interface EngineCard {
    * field is a precedent this codebase has not set, and the I/O picture is worth
    * a pass of its own rather than being paid for here in unreadability.
    *
-   * Optional because a pool ingested before they existed has neither, and a
-   * Convex push validates every stored document. A card without them contributes
-   * to no deck need and meets none, which is the honest reading of "not known"
-   * and never "meets nothing".
+   * REQUIRED, and that is the point rather than a tidy-up. While they were
+   * optional a card without them contributed to no deck need and met none, so a
+   * pool that had not been re-ingested produced a scorer that ran, returned, and
+   * silently had its deck-shape half switched off. That is the exact failure
+   * this week kept hitting from three directions -- a projection that dropped
+   * them, a cache that dropped them, a harness that derived them -- and every
+   * time the symptom was a confident zero rather than an error.
+   *
+   * A push validates every stored document, so this deploying at all is the
+   * proof that every ingested pool carries both.
    *
    * NOT read by any bot. `POLICY_FEATURES` does not mention them and
    * `BOT_FINGERPRINT` does not move, so no deal changes and no draft is
    * stranded -- `corpus.test.ts` is the tripwire.
    */
-  turn?: number;
-  role?: CardRole;
+  turn: number;
+  role: CardRole;
 
   // What `cardValue` resolves to, settled once at ingest.
   //
@@ -241,15 +247,20 @@ export interface CardContext {
 export type Card = EngineCard & CardText;
 
 /**
- * A card between the Scryfall/17Lands merge and ingest settling its `value`.
+ * A card between the Scryfall/17Lands merge and ingest settling what it derives.
  *
- * `value` depends on the set's measured rarity baselines, which cannot be
- * computed until every card has been merged -- so there is a real stage where a
- * card is complete except for that one field. Naming it stops the alternative,
- * which is making `value` optional on EngineCard and letting every reader
- * downstream wonder whether a card might not have one.
+ * Three fields, all computed in the same pass and none of them available before
+ * it. `value` depends on the set's measured rarity baselines, which cannot be
+ * known until every card has been merged; `turn` and `role` are read off the
+ * text half, which the pick path does not carry and so must be settled once.
+ *
+ * Naming this stage is what stops the alternative -- making the three optional
+ * on `EngineCard` and letting every reader downstream wonder whether a card
+ * might not have them. It is the same choice made twice: a field that is always
+ * there after ingest should be required after ingest, and the type for "before"
+ * is this one.
  */
-export type UnvaluedCard = Omit<Card, "value">;
+export type UnvaluedCard = Omit<Card, "value" | "turn" | "role">;
 
 /**
  * What ingest works with: a card that definitely knows its rarity.

@@ -63,11 +63,12 @@ export const engineCard = v.object({
   // card does not carry. See core's EngineCard for what the split cost before
   // this and what these two fields cost instead.
   //
-  // Optional because a pool ingested before they existed has neither, and a push
-  // validates every stored document. Narrowing them to required is a separate
-  // change, after every set has been re-ingested.
-  turn: v.optional(v.number()),
-  role: v.optional(cardRole),
+  // Required, not optional. While they were optional a card missing them met no
+  // deck need and contributed to none, so an un-ingested pool produced a scorer
+  // that ran and quietly did half its job -- and a push validates every stored
+  // document, so this deploying is the proof that no pool is missing either.
+  turn: v.number(),
+  role: cardRole,
   // Required, not optional -- see EngineCard.value. The formula's inputs are on
   // cardText now, so a card without this cannot be scored at all, and a push
   // validates every stored document: this deploying is the proof that no pool

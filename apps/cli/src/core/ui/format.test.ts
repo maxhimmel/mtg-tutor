@@ -16,6 +16,8 @@ function card(over: Partial<Card> = {}): Card {
     manaCost: "{1}{G}",
     cmc: 2,
     typeLine: "Creature — Bear",
+    turn: 2,
+    role: "creature",
     oracleText: "Vigilance",
     power: "2",
     toughness: "2",

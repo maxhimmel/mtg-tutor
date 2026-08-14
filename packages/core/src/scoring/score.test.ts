@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { NO_NEEDS } from "../testing/fakeSet.js";
-import type { Card, ColorCode, IngestCard } from "../model/card.js";
+import type { Card, CardRole, ColorCode, IngestCard, Rarity } from "../model/card.js";
 import type { ScoringContext } from "./context.js";
 import {
   scorePick,
@@ -13,11 +13,11 @@ import {
 import { computeCardValue } from "./value.js";
 
 // Settles `value` the way ingest does, so a fixture reads the number its stats
-// imply rather than one written by hand beside them.
-// Returns a card that definitely knows its rarity, so it can be handed to
-// computeCardValue -- the same distinction IngestCard draws for the pipeline.
-function card(name: string, over: Partial<Card> = {}): IngestCard & { value: number } {
-  const base: IngestCard = {
+// imply rather than one written by hand beside them. Returns a whole `Card`:
+// `IngestCard` is the shape BEFORE ingest derives value, turn and role, and a
+// fixture standing in for a stored card has been through all three.
+function card(name: string, over: Partial<Card> = {}): Card & { rarity: Rarity } {
+  const base: IngestCard & { turn: number; role: CardRole } = {
     name,
     rarity: "common",
     colors: [],
@@ -25,6 +25,8 @@ function card(name: string, over: Partial<Card> = {}): IngestCard & { value: num
     manaCost: "",
     cmc: 1,
     typeLine: "Creature",
+    turn: 2,
+    role: "creature",
     oracleText: "",
     collectorNumber: "1",
     gihWinRate: 0.5,

@@ -12,6 +12,8 @@ import type {
 } from "../model/card.js";
 import { buildSetData, withPackSlots } from "../model/setData.js";
 import { computeCardValue } from "../scoring/value.js";
+import { curveTurn } from "../model/mana.js";
+import { detectRole } from "../model/role.js";
 
 export function mkCard(
   name: string,
@@ -19,7 +21,10 @@ export function mkCard(
   colors: ColorCode[],
   gih: number,
   overrides: Partial<Card> = {},
-): IngestCard & { value: number } {
+  // A whole `Card`, which is what a fixture wants: `IngestCard` is the shape
+  // BEFORE ingest settles value, turn and role, and every caller here is
+  // standing in for a card that has been through it.
+): Card & { rarity: Rarity } {
   const base: IngestCard = {
     name,
     rarity,
@@ -35,15 +40,26 @@ export function mkCard(
     alsa: 8,
     ...overrides,
   };
-  // Settled the same way ingest settles it, and after the overrides, so a
+  // Settled the same way ingest settles them, and after the overrides, so a
   // fixture that sets rarityBaseline or a thin gihGames gets the value that
-  // implies rather than the default's.
-  return { ...base, value: overrides.value ?? computeCardValue(base) };
+  // implies rather than the default's -- and one that sets a type line or rules
+  // text gets the role that implies.
+  //
+  // Deriving `turn` and `role` here rather than making every fixture state them
+  // is what keeps a test describing a CARD instead of a row: a fixture that says
+  // `typeLine: "Instant", oracleText: "Destroy target creature."` should be
+  // removal without having to also say so.
+  return {
+    ...base,
+    value: overrides.value ?? computeCardValue(base),
+    turn: overrides.turn ?? curveTurn(base),
+    role: overrides.role ?? detectRole(base),
+  };
 }
 
 // A set with enough cards in every rarity pool to generate real packs.
 export function fakeSet(): SetData {
-  const cards: (IngestCard & { value: number })[] = [];
+  const cards: (Card & { rarity: Rarity })[] = [];
   const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
 
   for (let i = 0; i < 60; i++) {
@@ -70,7 +86,7 @@ export function fakeSet(): SetData {
 // and an observed composition. Mirrors what SOS ingestion produces.
 export function fakePlayBoosterSet(composition?: PackComposition): SetData {
   const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
-  const cards: (IngestCard & { value: number })[] = [];
+  const cards: (Card & { rarity: Rarity })[] = [];
 
   for (let i = 0; i < 60; i++)
     cards.push(mkCard(`C${i}`, "common", [colors[i % 5]], 0.48, { setCode: "tst" }));
@@ -113,7 +129,7 @@ export function fakePlayBoosterSet(composition?: PackComposition): SetData {
 // Roughly FDN's shape: ~73% of cards rated, the rest unrated or thin.
 export function fakeMixedSet(): SetData {
   const colors: ColorCode[] = ["W", "U", "B", "R", "G"];
-  const cards: (IngestCard & { value: number })[] = [];
+  const cards: (Card & { rarity: Rarity })[] = [];
 
   // Spread across the pivot (8) in both directions so the nudge is signed, and
   // past the clamp at both ends so saturation is covered too.
