@@ -682,7 +682,55 @@ to the data work.
     decision has one, it is usually large, and reading the raw number without it
     invites paying for headroom that does not exist.
 
+17. **A static page for what `detectRole` calls things** (2026-08-14). The
+    classifier is a handful of regexes over rules text, and since it moved to
+    ingest its answer is STORED -- so it decides which deck need a pick can meet
+    (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
+    re-ingest rather than a deploy.
+
+    `scripts/show-roles.mjs` prints the distribution, examples with the phrase
+    that matched, and the arguable lists. It is a terminal dump, and the thing
+    actually wanted is a page: every card in a set, its role, the matched
+    phrase, filterable by role, so a wrong call is spotted by scrolling rather
+    than by grepping. Static HTML written to disk and opened directly -- no
+    route, no auth, no deployment, because this is a tool for whoever is editing
+    the regexes and not a feature of the app.
+
+    **The measured reasons it is worth having**, over 17 sets and 5,119 cards:
+    56 of 282 cards called removal by "deals N damage to" (19.9%) are aiming at
+    a PLAYER rather than a creature; 98 of 923 evasion cards (10.6%) GRANT
+    flying or trample rather than have it; and 44 fight/bite spells sit in
+    `other` because "deals damage equal to its power to target creature" matches
+    nothing. Fixing those is its own re-ingest, so seeing them first is the
+    cheap half.
+
 # Deferred trade-offs (revisit when the premise changes):
+
+0. **What the client may compute, now that scoring says "nothing".** Three bugs
+   in a week came from one shape: `EngineCard` is deliberately thin because
+   `setCards` is read on every pick, so anything needing a mana value or a type
+   line could only run in the browser -- and the principle tiebreak did, while
+   the grade ran on the server. The two then disagreed about the same pack on
+   screen, three times, and each was patched where it surfaced before anyone
+   traced it to the type.
+
+   **Resolved for scoring** on 2026-08-14: `turn` and `role` are settled at
+   ingest, and `needs` lives on `ScoringContext` built by `packScoringContext`,
+   so a context without needs is unrepresentable and two callers cannot hold
+   different ones. `diagnose-tiebreak.mjs` asserts the grade and the challenge
+   name one card and holds at zero divergences.
+
+   **The general rule is not written down anywhere and should be.** The working
+   version: a client may compute what is CHEAPER to recompute than to send, and
+   must not compute anything the server also decides. The second half is the one
+   that was violated -- not by putting logic in the browser, but by putting it
+   ONLY there, which made the server's answer a different answer rather than the
+   same one arrived at twice.
+
+   The premise changes if a rule ever needs data too big for `EngineCard`. Then
+   the choice is a query before the pick rather than a field on the card, and
+   the round trip is the thing to weigh -- not whether the browser is allowed to
+   think.
 
 1. **The draft board no longer live-syncs — and it is now cheap enough to
    reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
