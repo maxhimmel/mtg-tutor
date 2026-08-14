@@ -3,7 +3,7 @@
 //   pnpm fit-bot-policy [--sets fdn,dsk,woe] [--format TradDraft]
 //                       [--train-per-mille 50] [--test-per-mille 100] [--tier all|strong]
 //                       [--epochs 300] [--drop openness,opennessLate]
-//                       [--out weights.json] [--refresh]
+//                       [--shape turn|lane] [--out weights.json] [--refresh]
 //
 // WHAT IS BEING FITTED
 //
@@ -48,7 +48,13 @@
 
 import { ConvexHttpClient } from "convex/browser";
 import { writeFileSync } from "node:fs";
-import { BotMemory, POLICY_FEATURES, draftProgress, policyFeatures } from "@mtg-tutor/core";
+import {
+  BotMemory,
+  CURVE_TOP,
+  POLICY_FEATURES,
+  draftProgress,
+  policyFeatures,
+} from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { draftPicks } from "./lib/draftCache.mjs";
 
@@ -79,7 +85,99 @@ const outPath = flag("out");
 const dropped = new Set((flag("drop", "") || "").split(",").filter(Boolean));
 const log = (...a) => console.error(...a);
 
-const F = POLICY_FEATURES.length;
+// ---------------------------------------------------------------- shape probes
+//
+// WHAT SHAPE DOES THE FIT WANT ALONG THIS AXIS, BEFORE ANYBODY PICKS A FORMULA
+//
+// Every interaction term in `POLICY_FEATURES` is a guess about a shape as well
+// as about an axis, and the two failures are not the same. `valueOpen` cost
+// three fits by getting the AXIS wrong -- confidence resets every pack and
+// `progress` climbs across all 42 picks, so no weight could express it. What
+// found that was not another ablation but fitting a free multiplier per stage of
+// the draft and reading the answer off it, and that measurement was thrown away
+// afterwards and has had to be re-derived here.
+//
+// So this is that diagnostic, kept. A probe replaces one shipped term with a
+// bank of INDICATORS over the axis it claims to vary on, and the fitted weights
+// are the shape -- a ramp, a step, or nothing, without anybody having asserted
+// which in advance. It answers a question an ablation cannot: `--drop` says
+// whether a term is worth having, and this says whether it is the right term.
+//
+// A probed fit is a MEASUREMENT AND NOT A CANDIDATE POLICY. The indicators are
+// deliberately more parameters than anything that should ship -- nine free
+// numbers where a shipped model has one -- so its held-out accuracy is an upper
+// bound on what the axis could pay, not a policy to fit and store.
+//
+// READ THE DIFFERENCES, NOT THE LEVELS. A conditional logit is invariant to
+// anything added to every candidate in a pack, so a bank of indicators covering
+// every card is identified only up to a constant. The gradient along that
+// direction is exactly zero and the weights stay balanced around it, which makes
+// the differences meaningful and the absolute heights arbitrary.
+const SHAPES = {
+  // CURVE-01 and CURVE-03 say a Limited deck wants seven-plus cards at 1-2 mana
+  // and five-or-fewer at 5+, which is a claim about a preference over the curve
+  // that no shipped feature carries at all. One indicator per curve bucket, the
+  // same 1..CURVE_TOP partition the deck chart and `deckNeeds` already count in,
+  // so the shape comes back in the app's own buckets rather than in a new one.
+  //
+  // Nothing is dropped: the question is what curve preference is LEFT once raw
+  // win rate, the lane and openness have been paid, which is exactly the part a
+  // `cheapness` feature would be claiming to add.
+  turn: {
+    drop: [],
+    probes: Array.from({ length: CURVE_TOP }, (_, i) => ({
+      label: `turn${i + 1}${i + 1 === CURVE_TOP ? "+" : ""}`,
+      value: (card) => (card.turn === i + 1 ? 1 : 0),
+    })),
+  },
+  // `laneFitLate` is `laneFit * progress`: a linear ramp from nothing at P1P1 to
+  // everything at the last pick. The principles describe a STEP instead --
+  // SIG-01/02 say the first few picks are expendable and to commit around pick
+  // five, SIG-11 says the plan is settled by the middle of pack 2, and SIG-12
+  // says pack 2 is where you stop switching. A ramp still climbing through pack
+  // 3 and a step that plateaus mid-pack-2 are different claims and the data can
+  // separate them.
+  //
+  // Both lane terms come out, so the nine indicators carry the whole lane effect
+  // and each weight reads directly as "what a point of `laneFit` is worth at
+  // this stage". Leaving the main effect in would make the bank collinear with
+  // it and split the same quantity across two places.
+  //
+  // Thirds of a pack, three packs: the same partition the sharpness probe used,
+  // so the two shapes are readable side by side.
+  //
+  // `packNo` and `pickNo` come off the 17Lands file 0-BASED and are stored raw
+  // (draftCache transcribes and decides nothing), so the arithmetic here is too.
+  // Getting that wrong costs nothing loud: every indicator would simply be zero
+  // for a pack that never matches, the fit would converge, and the shape would
+  // come back flat and be believed.
+  lane: {
+    drop: ["laneFit", "laneFitLate"],
+    probes: [0, 1, 2].flatMap((packNo) =>
+      ["early", "mid", "late"].map((third, t) => ({
+        label: `P${packNo + 1}${third}`,
+        value: (card, memory, _progress, _packSize, atPack, atPick) =>
+          atPack === packNo && Math.min(2, Math.floor(atPick / 5)) === t ? memory.laneFit(card) : 0,
+      })),
+    ),
+  },
+};
+
+const shapeName = flag("shape");
+if (shapeName !== undefined && !(shapeName in SHAPES)) {
+  throw new Error(`--shape must be one of ${Object.keys(SHAPES).join(", ")}`);
+}
+const shape = shapeName ? SHAPES[shapeName] : { drop: [], probes: [] };
+for (const name of shape.drop) dropped.add(name);
+// Refused rather than documented as unwise. A probe bank is over-parameterised
+// on purpose, so its weights are a picture of an axis and never a pod -- and a
+// `weights.json` naming columns no `policyFeatures` produces is a file that
+// could only mislead whoever picked it up next.
+if (shapeName && outPath) throw new Error("--shape is a measurement; it cannot be written with --out");
+
+/** Every column in the fit, shipped then probed, in weight-vector order. */
+const FEATURE_NAMES = [...POLICY_FEATURES, ...shape.probes.map((p) => p.label)];
+const F = FEATURE_NAMES.length;
 
 if (tier !== "all" && tier !== "strong") throw new Error(`--tier must be all or strong`);
 
@@ -140,7 +238,7 @@ function walkDraft(rows, into) {
   const totalPicks = rows.length;
 
   for (let i = 0; i < rows.length; i++) {
-    const { pack, picked } = rows[i];
+    const { pack, picked, packNo, pickNo } = rows[i];
     // A pick naming a card the ingested pool does not have. Rare (83 of 149k on
     // fdn) and unrecoverable, and it must not silently become "chose index 0".
     if (!picked || pack.length < 2) {
@@ -153,8 +251,15 @@ function walkDraft(rows, into) {
     const chosen = pack.indexOf(picked);
     if (chosen >= 0) {
       for (const card of pack) {
+        // The shipped row comes from core, never restated here -- weights fitted
+        // against a local copy of `policyFeatures` would be weights no bot ever
+        // sees. Probe columns are appended AFTER it, so a probed run and a plain
+        // run agree column for column on everything they share.
         const f = policyFeatures(card, memory, progress, pack.length);
-        for (let k = 0; k < F; k++) into.feat.push(f[k]);
+        for (let k = 0; k < POLICY_FEATURES.length; k++) into.feat.push(f[k]);
+        for (const probe of shape.probes) {
+          into.feat.push(probe.value(card, memory, progress, pack.length, packNo, pickNo));
+        }
       }
       into.size.push(pack.length);
       into.chosen.push(chosen);
@@ -227,9 +332,25 @@ const scale = new Float64Array(F).fill(1);
 // A dropped feature is scaled to infinity rather than skipped in the loops, so
 // the ablation runs the identical arithmetic on identical data and the only
 // thing that changed is the feature.
-const live = POLICY_FEATURES.map((f) => !dropped.has(f));
+const live = FEATURE_NAMES.map((f) => !dropped.has(f));
+
+// A column that never varies cannot move the fit, and it does not announce
+// itself: the gradient along it is exactly zero, so the weight stays at zero,
+// the run converges, and the term reports as worth nothing. That is
+// indistinguishable from the honest answer, which is what makes it worth a
+// throw -- a probe indexed off the wrong base, or a feature reading a field the
+// cached cards do not carry, would both arrive here as a confident flat shape.
+for (let k = 0; k < F; k++) {
+  if (!live[k] || scale[k] > 1e-6) continue;
+  throw new Error(
+    `${FEATURE_NAMES[k]} is constant across all ${(trainFeat.length / F).toLocaleString()} ` +
+      `candidate rows, so nothing can be fitted to it. It would otherwise come back as a ` +
+      `weight of zero, which reads the same as a term that earns nothing.`,
+  );
+}
+
 for (const f of dropped) {
-  if (!POLICY_FEATURES.includes(f)) throw new Error(`--drop names no such feature: ${f}`);
+  if (!FEATURE_NAMES.includes(f)) throw new Error(`--drop names no such feature: ${f}`);
 }
 if (dropped.size) log(`dropped: ${[...dropped].join(", ")}`);
 
@@ -330,7 +451,7 @@ if (has("ablate") && testFinal) {
     const ablated = evaluate(test, testFeat, fit(mask, false), null, mask);
     const delta = (testFinal.accuracy - ablated.accuracy) * 100;
     console.log(
-      `  ${POLICY_FEATURES[k].padEnd(14)} ${(ablated.accuracy * 100).toFixed(2)}%   ` +
+      `  ${FEATURE_NAMES[k].padEnd(14)} ${(ablated.accuracy * 100).toFixed(2)}%   ` +
         `costs ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}pp`,
     );
   }
@@ -351,7 +472,7 @@ if (testFinal) {
 console.log();
 console.log("weights (on raw features)");
 for (let k = 0; k < F; k++) {
-  console.log(`  ${POLICY_FEATURES[k].padEnd(14)} ${weights[k].toFixed(4)}`);
+  console.log(`  ${FEATURE_NAMES[k].padEnd(14)} ${weights[k].toFixed(4)}`);
 }
 
 if (outPath) {
@@ -362,7 +483,7 @@ if (outPath) {
         tier,
         sets: setCodes,
         format,
-        features: [...POLICY_FEATURES],
+        features: [...FEATURE_NAMES],
         weights,
         trainPicks: train.size.length,
         testPicks: test.size.length,
