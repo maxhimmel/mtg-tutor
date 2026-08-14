@@ -405,6 +405,28 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
 12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely and definitely more interestingly/eye-catching/cool when they're referenced (i.e. by the coach/"your call on the gap")
 
+17. **A static page for what `detectRole` calls things** (2026-08-14). The
+   classifier is a handful of regexes over rules text, and since it moved to
+   ingest its answer is STORED -- so it decides which deck need a pick can meet
+   (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
+   re-ingest rather than a deploy.
+
+   `scripts/show-roles.mjs` prints the distribution, examples with the phrase
+   that matched, and the arguable lists. It is a terminal dump, and the thing
+   actually wanted is a page: every card in a set, its role, the matched
+   phrase, filterable by role, so a wrong call is spotted by scrolling rather
+   than by grepping. Static HTML written to disk and opened directly -- no
+   route, no auth, no deployment, because this is a tool for whoever is editing
+   the regexes and not a feature of the app.
+
+   **The measured reasons it is worth having**, over 17 sets and 5,119 cards:
+   56 of 282 cards called removal by "deals N damage to" (19.9%) are aiming at
+   a PLAYER rather than a creature; 98 of 923 evasion cards (10.6%) GRANT
+   flying or trample rather than have it; and 44 fight/bite spells sit in
+   `other` because "deals damage equal to its power to target creature" matches
+   nothing. Fixing those is its own re-ingest, so seeing them first is the
+   cheap half.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
@@ -705,27 +727,48 @@ to the data work.
     decision has one, it is usually large, and reading the raw number without it
     invites paying for headroom that does not exist.
 
-9.  **A static page for what `detectRole` calls things** (2026-08-14). The
-    classifier is a handful of regexes over rules text, and since it moved to
-    ingest its answer is STORED -- so it decides which deck need a pick can meet
-    (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
-    re-ingest rather than a deploy.
+10. **A computation that proceeds with less information than it needs is
+    indistinguishable from the feature not existing.** Nine bugs in the
+    `expert-principles` week, and not one of them threw, crashed or failed a
+    typecheck. Every single one returned a well-formed, plausible answer that
+    meant less than it claimed.
 
-    `scripts/show-roles.mjs` prints the distribution, examples with the phrase
-    that matched, and the arguable lists. It is a terminal dump, and the thing
-    actually wanted is a page: every card in a set, its role, the matched
-    phrase, filterable by role, so a wrong call is spotted by scrolling rather
-    than by grepping. Static HTML written to disk and opened directly -- no
-    route, no auth, no deployment, because this is a tool for whoever is editing
-    the regexes and not a feature of the app.
+    The mechanism was always a fallback with a good reason behind it:
 
-    **The measured reasons it is worth having**, over 17 sets and 5,119 cards:
-    56 of 282 cards called removal by "deals N damage to" (19.9%) are aiming at
-    a PLAYER rather than a creature; 98 of 923 evasion cards (10.6%) GRANT
-    flying or trample rather than have it; and 44 fight/bite spells sit in
-    `other` because "deals damage equal to its power to target creature" matches
-    nothing. Fixing those is its own re-ingest, so seeing them first is the
-    cheap half.
+    | the fallback | the reason | what it did |
+    | --- | --- | --- |
+    | `turn?: number` optional | old pools lack it | scorer ran with its deck-shape half off |
+    | `bandNames ?? []` | old rows lack it | verdict named one card instead of three |
+    | `role != null` guard | might not be ingested | every card met zero needs |
+    | `engineHalf`'s field list | a deliberate which-side choice | dropped two fields at storage, silently |
+    | a harness deriving absent inputs | be robust to stale caches | reported 0.0% for a working feature, twice |
+
+    **Why it bites here in particular.** This app's outputs are numbers that look
+    fine. A scorer missing half its inputs still returns a grade; a harness
+    missing a field still prints a percentage. There is no null to trip over.
+    `validate-pack-model` already has the phrase for it one layer up — "this
+    pipeline fails by succeeding plausibly" — and this is the same disease in the
+    scoring code.
+
+    **The distinction that makes it actionable**, because the answer is not
+    "throw everywhere":
+
+    - **Absence that is an ANSWER** should be modelled and kept. An unrated card
+      genuinely has no error bars, so `gapMargin` returning undefined is
+      information and refusing to invent a margin is correct.
+    - **Absence that is a GAP** should be loud. An un-ingested pool has no roles
+      because the pipeline did not run; that is not "no needs", it is "no
+      answer", and it must fail rather than score.
+
+    An optional field collapses those two into one shape, which is why narrowing
+    `turn`/`role` to required mattered more than it looked: it turned a quiet
+    degradation into a push failure.
+
+    **The review question**: if this input were missing, would anything say so?
+    `VALUE_FINGERPRINT`, `BOT_FINGERPRINT` and `corpus.test` each answer it for
+    one known failure. Nothing answers it for a new one — which is how the
+    "a card field needs five edits" note got read at the start of the session
+    and the trap got walked into anyway.
 
 # Deferred trade-offs (revisit when the premise changes):
 
