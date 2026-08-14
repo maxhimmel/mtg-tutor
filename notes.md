@@ -108,6 +108,8 @@ left empty rather than renumbering everything under it.
    up the findings listed here. Let's also present a few different solutions
    focused on the user's experience as this app grows/develops.
 
+   The next time I tell you to clean up these notes, please tell me why this insanely long and overexplained issue #3 is still in this doc. After reading all of this it seems done to me. Please explain because clearly I don't understand.
+
 4. **Show the tokens a card makes.** A card that reads "create a Map token"
    is asking you to know what a Map is, and nothing in the app says.
 
@@ -191,13 +193,11 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 10. The "//" separator on the card placard's mana section is white and hard to read.
 
-11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to spend overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual mana-cost for this card?
+11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine/whatever. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to SPEND -- overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual colors of mana-cost for this card?
 
 12. When a card is hovered and the enlarged version is shown and then I click/select the card the hover disappears. That feels incorrect because I didn't STOP hovering over the card.
 
-13. This might be a dupe: i want the "your call on the gap" section to have the same highlighting behavior the coach section has.
-
-14. Love that the coach noticed the incongruency here:
+13. Love that the coach noticed the incongruency here:
 
 ```
 Last pick
@@ -400,7 +400,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 - Title: P1P1
 - Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
 
-12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely when they're referenced (i.e. by the coach/"your call on the gap")
+12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely and definitely more interestingly/eye-catching/cool when they're referenced (i.e. by the coach/"your call on the gap")
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
