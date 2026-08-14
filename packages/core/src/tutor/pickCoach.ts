@@ -98,6 +98,15 @@ export function buildPickContext(
   // divergence as a rout. A 98/100 pick came back as "take the other card
   // instead" over 0.3pp, against error bars three times that wide on the two
   // win rates it was the difference of.
+  //
+  // WHETHER THE GAP IS REAL COMES OFF THE SCORE, NOT FROM A THIRD OPINION
+  //
+  // This recomputed it with `gapMargin`, which made three places in the app
+  // deciding one question: the grade (server, from `CardContext.se`), the
+  // verdict panel, and here. Two of those disagreeing is what put a "the data
+  // cannot tell these apart" sentence under a 94/100 -- so the prompt now reads
+  // `score.indistinguishable` and the size of the bars is all `gapMargin` is
+  // still asked for.
   const gap = score.contextBestValue - score.pickedContextValue;
   const margin = gapMargin(score.contextBest, picked);
   const gapLine = score.isBest
@@ -106,16 +115,33 @@ export function buildPickContext(
       `${picked.name}` +
       (margin == null
         ? "."
-        : gap <= margin
+        : score.indistinguishable
           ? `, against a ±${pp(margin)} margin of error on those win rates. The gap is ` +
-            `INSIDE the margin: the data cannot tell these two cards apart.`
+            `INSIDE the margin: the data cannot tell these two cards apart, and the ` +
+            `pick is not marked down for it.`
           : `, against a ±${pp(margin)} margin of error on those win rates.`);
+
+  // What the deck wanted out of a tie the data could not settle, in the corpus's
+  // own terms. The model already cites principle ids in its answers and is given
+  // the whole corpus to cite from, so handing it the one the app itself acted on
+  // keeps the two from arguing -- the alternative is a coach explaining a pick
+  // the app preferred for a reason it was never told.
+  //
+  // Only when a principle actually decided something. `reasons` is empty when
+  // the float and the deck agreed, and a citation there would credit a rule that
+  // had no part in it.
+  const deckWanted =
+    score.preferred && score.reasons.length > 0
+      ? `Of the cards the data cannot separate here, ${score.preferred.name} is the one ` +
+        `this deck wanted: ${score.reasons[0].note} [${score.reasons[0].principle}].`
+      : null;
 
   const verdict = [
     score.isBest
       ? `${score.score}/100 (${score.grade}) — you took the best card for this deck.`
       : `${score.score}/100 (${score.grade}), rank ${score.rankInPack} of ${pack.length} on raw power.`,
     gapLine,
+    deckWanted,
     divergence,
     // Only the reasons that moved this pick, so the model is not handed a
     // column of zeroes to read meaning into.
