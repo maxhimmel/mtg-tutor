@@ -542,6 +542,33 @@ carries it — improving bots means ADDING a name, never re-fitting one in place
 still unbuilt, and the expensive part it was waiting on — a draft-data pass that
 reads `pool_*` and `draft_id` — now exists and is fast.
 
+**Both queued bot items are answered, and both answers are no** (2026-08-14).
+`fit-bot-policy --shape` fits a free indicator per bucket along an axis instead
+of asserting a formula, which is the sharpness diagnostic from trap #7 kept
+rather than thrown away. Over fdn+dsk, 75,646 train / 36,145 held-out, against a
+52.52% baseline:
+
+- **The lane ramp is right and the principles are wrong about it.** Nine free
+  stage weights reproduce the shipped `laneFit + laneFitLate × progress` line
+  within 0.27 at six of nine stages, monotone throughout, still climbing at
+  P3late, and score 52.5% — nine parameters buying nothing over two. SIG-02/11/12
+  describe a step onto a plateau by mid-pack-2; drafters do a ramp. **No refit.**
+- **`cheapness` does not exist, and the evidence for it was lands.** Turns 1, 2
+  and 3 fit to +0.013, +0.050, −0.007. The gradient that looked like cheapness in
+  the first probe was `curveTurn` flooring lands at turn 1 — see trap #10.
+- **`creatureNeed` does not exist, and neither does any other need.** All four
+  `deckNeeds` interactions came back at zero, two with the wrong sign, while
+  their main effects are alive (`removal` +0.319). Drafters have standing
+  preferences about what a card does and do not visibly count what they hold.
+
+What did turn up, unasked for: a four-drop is taken **less** than its win rate
+says (−0.34, +0.4pp held-out, carrying nearly the whole curve-bank gain on its
+own), and `removal` is the largest role main effect. Both are free — `turn` and
+`role` are already on `EngineCard`. Neither is shipped: both were chosen by
+looking at the held-out set and confirmed nowhere else, and a new feature means a
+new pod name, which is a thing a person has to choose between. The reasoning is
+in `policy.ts` beside the features it is about.
+
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
    Also what `contextValue`'s speed term is waiting on: the axis is stored and
@@ -777,6 +804,41 @@ to the data work.
     one known failure. Nothing answers it for a new one — which is how the
     "a card field needs five edits" note got read at the start of the session
     and the trap got walked into anyway.
+
+10. **A bucket that pools two populations will fit cleanly and mean nothing**
+    (2026-08-14). The queued `cheapness` bot feature had an obvious prior — of
+    course drafters favour the cheap end — and the first probe agreed with it
+    precisely: turn1 +0.155, turn2 +0.083, turn3 +0.032, turn4 −0.302, a clean
+    monotone gradient any reviewer would have accepted. It was lands. `curveTurn`
+    floors at one, so every card in the Play Booster land slot is a turn-1 card,
+    and lands are **40% of the turn-1 cards on both fdn and dsk**. Given a column
+    of their own, turns 1, 2 and 3 fit to +0.013, +0.050 and −0.007 — no cheap-end
+    preference at all, and the feature would have shipped on a coefficient that
+    was really "people take the dual land".
+
+    **The tell was available and nobody had to measure anything to see it.** Every
+    other reader of `turn` drops lands before counting: `manaCurve` leaves them
+    out of the chart, `deckNeeds` filters them, `fitOf` refuses to argue about
+    them. Three call sites had already made the same correction, and a fourth
+    reader inherited the field without it. **When a field has an established
+    convention at every existing call site, a new reader that skips it is the
+    thing to check first** — the divergence is in the reader, not in the data.
+
+    **And this is the class of failure a nice fit cannot rule out**, which is why
+    it goes here rather than in a commit message. The contaminated feature was not
+    noisy or unstable; it was strong, monotone, correctly signed, and it improved
+    held-out accuracy. Everything that would normally be taken as confirmation was
+    present. What separated it from a real effect was splitting the bucket, which
+    only happens if somebody asks what is actually IN it.
+
+    **A corollary about ablation, learned the same afternoon.** Do not ablate a
+    bank of indicators one column at a time. The columns partition the pack and a
+    conditional logit is invariant to a constant added to every candidate, so
+    dropping one lets the rest re-level and re-express every difference that
+    mattered: `--shape turn --ablate` prices all seven of its columns at +0.00pp
+    while the bank as a whole is worth +0.45pp. Read that as "the ablation is the
+    wrong instrument for a partition", never as "the axis is worthless" — to price
+    a bank, compare it against a plain run.
 
 # Deferred trade-offs (revisit when the premise changes):
 
