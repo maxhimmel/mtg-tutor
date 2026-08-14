@@ -95,6 +95,44 @@ export const engineCard = v.object({
 // today is absent from every row ever stored, and requiring it makes the SCHEMA
 // PUSH fail on historical data.
 //
+// "AS SOON AS THE PIPELINE RUNS" IS THE WHOLE PROBLEM, AND IT COST A DEPLOY.
+//
+// That paragraph is right about the steady state and silent about the only
+// moment it matters. The deploy command is `convex deploy && seed-set-stats &&
+// ingest-sets`, so the SCHEMA PUSH COMES FIRST and the pipeline that would fill
+// the new field is queued behind it. On the deploy that introduces the
+// requirement -- and only that one -- the push validates documents the pipeline
+// has not reached yet, fails, and takes the pipeline down with it. Ingest can
+// never run, because the push it is behind can never pass.
+//
+// This deployed fine locally and died on production, which is the shape to
+// expect: a dev deployment has usually been re-ingested by hand already, so its
+// rows are conformant before the strict schema ever arrives. Prod's are not.
+// `turn` and `role` were narrowed here, passed dev, and stopped the first
+// production deploy dead on an "Air Response Unit" carrying only
+// {colors, name, slot, value}.
+//
+// So the rule is about ORDER and not only about a table's lifecycle. Pipeline
+// data can be required EVENTUALLY; it cannot be required on the same deploy
+// that introduces it. Two ways through, and the second is the one that was
+// taken:
+//
+//   widen, deploy so ingest backfills, narrow, deploy again -- no downtime, but
+//   `_EngineShapeMatchesCore` below binds this validator to core's EngineCard,
+//   so widening breaks the typecheck in about five places and the scoring path
+//   gets edited twice to ship no behaviour change; or
+//
+//   CLEAR THE TABLE and deploy once. A strict schema validates an empty table
+//   trivially, and `setCards` is the one table defined as rebuildable -- ingest
+//   restores it from Scryfall plus the committed artifact. It costs the minutes
+//   ingest takes, with the app showing no sets throughout, and it changes no
+//   code.
+//
+// If you clear it, watch that ingest logs a re-crawl rather than "unchanged,
+// skipped". A POOL_REVISION that still matches the stored `sourceHash` would
+// skip every set against a table you just emptied, and the deploy would SUCCEED
+// with prod holding no cards at all.
+//
 // That is what happened when `turn` and `role` were narrowed to required: the
 // pool validated (5,445 cards, all present) and the push died on a Juggernaut
 // inside a draftPicks row from before the fields existed.

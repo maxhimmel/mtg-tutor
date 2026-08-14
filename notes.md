@@ -1313,3 +1313,39 @@ The architecture, the data pipeline and the deploy story are all documented in
     of that hash on purpose — a cache that hashed centrally would quietly become
     the shared helper both of those comments forbid. The only thing it is allowed
     to decide is when it is stale.
+
+21. **A required field on pipeline data cannot be required on the deploy that
+    introduces it** (2026-08-14, the failed `expert-principles` production
+    deploy). `validators.ts` had the distinction almost right: `draftPicks.pack`
+    is a snapshot written once and never rewritten, so a new field is absent from
+    every historical row and cannot be required; `setCards.cards` is rebuilt by
+    ingest, so it can. True in the steady state, and silent about the only moment
+    it matters.
+
+    The deploy command is `convex deploy && seed-set-stats && ingest-sets`. **The
+    schema push comes first and the pipeline that fills the new field is queued
+    behind it.** So on the one deploy that introduces the requirement, the push
+    validates rows the pipeline has not reached, fails, and takes the pipeline
+    down with it — ingest can never run, because the push it sits behind can
+    never pass. Not a transient; retrying is retrying the same deadlock.
+
+    **It passed dev and died on prod, which is the shape to expect.** A dev
+    deployment has usually been re-ingested by hand long before the strict schema
+    lands, so its rows are already conformant and the push sails through. Prod's
+    are whatever the last successful deploy left. Any check that "the schema is
+    fine" run against dev is answering a different question.
+
+    The fix taken was to **clear `setCards` and deploy once**: a strict schema
+    validates an empty table trivially, and that table is the one thing in the
+    database defined as rebuildable. It changes no code, at the cost of the app
+    showing no sets for the minutes ingest takes. The alternative — widen,
+    deploy, narrow, deploy — has no downtime and was rejected because
+    `_EngineShapeMatchesCore` deliberately binds the validator to core's
+    `EngineCard`, so widening breaks the typecheck in about five places and edits
+    the live scoring path twice to ship no behaviour change.
+
+    **The trap inside the fix**: after emptying the table, confirm ingest logs a
+    re-crawl and not `unchanged, skipped`. A `POOL_REVISION` still matching the
+    stored `sourceHash` would skip every set against a table that was just
+    emptied, and the deploy would report SUCCESS with production holding no cards
+    at all. `--force` is the way back in.
