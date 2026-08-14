@@ -21,11 +21,16 @@ const as = (t: ReturnType<typeof harness>, subject: string) =>
 
 const SET = { code: "tst", format: "TradDraft" };
 
+// `turn` and `role` are required on a stored card, so a fixture omitting them is
+// refused by the validator -- which is the point of narrowing them: an
+// un-ingested pool fails loudly instead of scoring with its deck-shape half off.
 const engineCard = (name: string, value: number) => ({
   name,
   colors: ["U" as const],
   slot: "common" as const,
   value,
+  turn: 2,
+  role: "creature" as const,
 });
 
 const textRow = (name: string) => ({

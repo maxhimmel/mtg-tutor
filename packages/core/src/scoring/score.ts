@@ -8,7 +8,14 @@ import type {
 } from "../model/card.js";
 import { SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
-import { type ScoringContext, type ValueTerm, commitment, contextValue } from "./context.js";
+import {
+  type ScoringContext,
+  type ValueTerm,
+  commitment,
+  contextValue,
+  marginBetween,
+} from "./context.js";
+import { type TiebreakReason, bandOf, deckNeeds, tiebreak } from "./tiebreak.js";
 
 /**
  * Generic in the card, because scoring runs on both halves of one.
@@ -48,6 +55,66 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   terms: ValueTerm[];
 
   isBest: boolean; // took the card the grade was measured against
+  /**
+   * The gap to that card is inside one standard error of it, so the data cannot
+   * say the pick was worse.
+   *
+   * NOT THE SAME AS `isBest`, AND DELIBERATELY NOT FOLDED INTO IT
+   *
+   * `isBest` means "took the card the grade was measured against" and is what
+   * "Nothing scored higher" is rendered from. A pick inside the margin did NOT
+   * score higher -- something else scored a fraction more, and the fraction is
+   * smaller than the error bars on it. Making `isBest` true for that would put a
+   * true-sounding sentence over a false statement, and would quietly change what
+   * every stored row and every chart on that field already means.
+   *
+   * The SCORE follows this rather than `isBest`, which is the point: 19.5% of
+   * graded misses on fdn and 13.0% on dsk are inside the margin, and the app was
+   * docking them on the same screen whose prose says the two cards cannot be
+   * told apart. Measured by `scripts/diagnose-margin.mjs`.
+   *
+   * False when no margin could be computed -- an unrated card has no error bars,
+   * and "we cannot measure this" must not read as "these are the same".
+   */
+  indistinguishable: boolean;
+  /**
+   * Every card the data cannot separate from the one this was graded against,
+   * the picked card excluded.
+   *
+   * WHY A SET AND NOT A CARD
+   *
+   * `contextBest` is an argmax over floats, so it always names exactly one card
+   * -- and when the top of a pack is inside its own error bars, WHICH one is a
+   * coin flip. Reporting that single name as "the closest alternative" claims a
+   * precision the same panel has just denied, and it is what let the verdict
+   * name one card while the challenge, which breaks that tie by the deck's
+   * needs, argued with another. Two blocks, two names, one pack.
+   *
+   * Naming the whole band instead makes both true at once: the verdict says
+   * these were the same, and the challenge says which of them your deck wanted
+   * and why. There is no disagreement left to have, because the verdict has
+   * stopped picking a winner it never had grounds for.
+   *
+   * Empty unless the pick is `indistinguishable` -- when the data CAN separate
+   * the pack there is a single better card and it should be named as one.
+   */
+  band: C[];
+  /**
+   * Which of the band this deck actually wanted, and why -- the server's own
+   * answer to the question the challenge screen asks.
+   *
+   * Undefined unless a principle decided something, which needs a band of more
+   * than one and a reason that changed the answer.
+   *
+   * This is the field the whole parity exercise was for. The challenge picks a
+   * card out of the band by the deck's needs; before `turn` and `role` reached
+   * the pick path, the grade could not do that and named the float's argmax
+   * instead, so the two panels named two cards off one pack. Both now run the
+   * same `tiebreak` over the same `ctx.needs`, so this IS the challenger.
+   */
+  preferred?: C;
+  /** Why `preferred` was preferred. Empty when nothing was. */
+  reasons: TiebreakReason[];
   onColor: boolean;
   rankInPack: number; // 1 = best available, by raw power
 }
@@ -143,6 +210,10 @@ export function packScoringContext(
     commitment: commitment(maindeck, colors, picksMade, totalPicks),
     archetypes,
     contextFor,
+    // From the same maindeck, at the same moment, by the one function both the
+    // grade and the challenge already call. That is the whole of the fix: two
+    // callers can no longer hold different needs, because neither builds them.
+    needs: deckNeeds(maindeck, picksMade, totalPicks),
   };
 }
 
@@ -220,8 +291,52 @@ export function scorePick<C extends EngineCard>(
   const targetValue = ctx ? contextBestValue : rawBestValue;
   const mine = ctx ? pickedInContext : pickedValue;
 
+  const isBest = picked.name === target.name;
+  // Whether the data can separate the pick from what it is being graded against.
+  // Only with a context, because the margin comes off `CardContext.se` -- the
+  // engine replaying a draft with no set to read has no error bars and must not
+  // invent any.
+  const margin = ctx ? marginBetween(ctx, target, picked) : undefined;
+  const indistinguishable = !isBest && margin != null && targetValue - mine <= margin;
+
+  // The other cards the data cannot separate from the target either. Measured
+  // against the TARGET rather than against the picked card, because that is what
+  // the band is a band around -- "cards as good as the best one here", which is
+  // the set the pick turned out to belong to.
+  // Assembled by the shared helper, best-first, because `tiebreak` holds the
+  // incoming order on a tie -- so a band built in pack order here and in value
+  // order in `challengeFor` is two different answers to one question. It was.
+  const band: C[] =
+    indistinguishable && ctx
+      ? bandOf(
+          pack
+            .filter((c) => c.name !== picked.name)
+            .map((c) => ({ card: c, value: contextValue(c, ctx).value })),
+          (a, b) => marginBetween(ctx, a, b),
+        )
+      : [];
+
+  // Which of them the deck wanted. Only when a principle actually changed the
+  // answer -- a tiebreak that lands on the card the float had already chosen
+  // agreed with it rather than deciding anything, and "preferred BECAUSE your
+  // curve is thin" is not true of that. Same rule `challengeFor` applies, which
+  // is the point: it is the same call.
+  let preferred: C | undefined;
+  let reasons: TiebreakReason[] = [];
+  if (ctx && band.length > 1) {
+    const broken = tiebreak(band, ctx.needs);
+    if (broken.card.name !== target.name) {
+      preferred = broken.card;
+      reasons = broken.reasons;
+    }
+  }
+
   let score: number;
-  if (picked.name === target.name) {
+  if (isBest || indistinguishable) {
+    // A pick the data cannot separate from the best scores as the best, because
+    // any number below 100 asserts a difference the data denies -- and the
+    // verdict beside it already says so in words. The two disagreeing is the
+    // thing this closes; the score is the half people believe.
     score = 100;
   } else {
     const gap = targetValue - mine; // in win-rate points (0-1)
@@ -246,7 +361,11 @@ export function scorePick<C extends EngineCard>(
     terms,
     // Tracks whatever the grade was measured against, so a 100/100 pick can
     // never come back marked as a miss.
-    isBest: picked.name === target.name,
+    isBest,
+    indistinguishable,
+    band,
+    ...(preferred ? { preferred } : {}),
+    reasons,
     onColor,
     rankInPack,
   };

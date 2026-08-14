@@ -1,9 +1,8 @@
 import { v } from "convex/values";
 import {
-  commitment,
-  committedColors,
   normalizeBench,
   normalizeName,
+  packScoringContext,
   replayDraft,
   splitPool,
 } from "@mtg-tutor/core";
@@ -93,14 +92,19 @@ export const overview = query({
       const bench = normalizeBench(session.sideboard ?? []);
       const scoring = (engine: DraftEngine) => {
         const made = engine.history.length;
-        const maindeck = splitPool(engine.humanPool, bench, made).maindeck;
-        const colors = committedColors(maindeck);
-        return {
-          colors,
-          commitment: commitment(maindeck, colors, made, engine.totalPicks()),
-          archetypes: set.colorWinRates,
-          contextFor: (c: EngineCard) => context.get(normalizeName(c.name)),
-        };
+        // Through the shared builder, not assembled here. This was a hand-rolled
+        // copy of the same five fields, and the moment `ScoringContext` grew a
+        // sixth -- the deck's needs -- it silently became a context that ranks
+        // packs by a different rule from the one the app grades with. Which is
+        // the exact divergence `packScoringContext` was written to make
+        // impossible; a second copy of it just moves the seam somewhere quieter.
+        return packScoringContext(
+          splitPool(engine.humanPool, bench, made).maindeck,
+          made,
+          engine.totalPicks(),
+          set.colorWinRates,
+          (c) => context.get(normalizeName(c.name)),
+        );
       };
 
       let engine;

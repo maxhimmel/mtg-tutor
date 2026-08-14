@@ -1,7 +1,7 @@
 "use client";
 
 import type { Card, PickScore } from "@mtg-tutor/core";
-import { gapMargin } from "@mtg-tutor/core";
+import { gapMargin, tiebreakLine } from "@mtg-tutor/core";
 import { gradeColor, points } from "../lib/format";
 import { CardPlacard } from "./CardPlacard";
 
@@ -41,8 +41,17 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
   // being told they were wrong by an amount the data cannot see is the one way
   // this flow could teach something false. Undefined when either card is
   // unrated, and then it says so rather than inventing one.
+  // Read off the SCORE rather than recomputed here, so the words and the number
+  // cannot disagree: `scorePick` is what decided the grade, and it decided it
+  // with the margin. `gapMargin` is still called for the size of the bars, which
+  // is a display detail and not a verdict.
   const margin = gapMargin(score.contextBest, score.picked);
-  const unresolved = margin != null && gap <= margin;
+  const unresolved = score.indistinguishable;
+
+  // How many cards this row is actually about: the band plus the pick itself.
+  // One number for the label and the sentence under it, so they cannot count
+  // differently.
+  const tied = unresolved && score.band.length > 0 ? score.band.length + 1 : 2;
 
   return (
     <div className="flex items-start gap-4">
@@ -62,7 +71,17 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
       <div className="flex min-w-0 flex-1 flex-col gap-2.5">
         <div>
           <div className="eyebrow mb-1.5">
-            {score.isBest ? "Nothing scored higher" : "You took"}
+            {/* Three states, not two. "Nothing scored higher" is a claim about
+                the numbers and stays reserved for when it is literally true;
+                a pick inside the error bars is a different and weaker claim --
+                something did score higher, by less than the data can measure --
+                and saying the strong one over it would be the same conflation
+                the score just stopped making. */}
+            {score.isBest
+              ? "Nothing scored higher"
+              : score.indistinguishable
+                ? "Nothing measurably better"
+                : "You took"}
           </div>
           <CardPlacard card={score.picked} />
         </div>
@@ -70,7 +89,18 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
         {!score.isBest && (
           <div>
             <div className="eyebrow mb-1.5 flex items-baseline justify-between gap-2">
-              <span>Graded against</span>
+              {/* Three labels for three different claims. "Graded against" is
+                  what the grade was measured against and is only true when the
+                  data could measure it. Inside the margin there is no single
+                  better card -- there is a set of cards nothing can separate --
+                  so the label says so and the cards below are all of them. */}
+              <span>
+                {!score.indistinguishable
+                  ? "Graded against"
+                  : score.band.length > 1
+                    ? `The ${tied} the data cannot separate`
+                    : "Just as good"}
+              </span>
               <span className="tabular-nums normal-case tracking-normal">
                 {lost}
                 <span className="text-base-content/45">
@@ -78,16 +108,46 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                 </span>
               </span>
             </div>
-            <CardPlacard card={score.contextBest} />
+            {/* Every card in the tie, not the float's winner. Which of them
+                `contextBest` happens to name is a coin flip at this margin, and
+                printing that one name is what let this panel and the challenge
+                below it argue about a pack neither could rank. */}
+            <div className="flex flex-col gap-1.5">
+              {(score.indistinguishable && score.band.length > 0
+                ? score.band
+                : [score.contextBest]
+              ).map((c) => (
+                <div key={c.name} className="flex flex-col gap-0.5">
+                  <CardPlacard card={c} />
+                  {/* The one the deck wanted, marked inside the set rather than
+                      shown instead of it. Same card the challenge put up, from
+                      the same `tiebreak` over the same needs -- which is what
+                      the whole parity change bought, and what stops this panel
+                      and the one below it naming two cards off one pack. */}
+                  {score.preferred?.name === c.name && (
+                    <p className="text-xs leading-relaxed text-base-content/60">
+                      {tiebreakLine(c.name, score.reasons)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
             {/* Said in words, not left to be read off two numbers. The whole
                 point of carrying the margin is that a gap smaller than it is not
                 a gap, and a grade sitting above this row is about to imply
-                otherwise. */}
+                otherwise.
+
+                Counts the cards it is talking about rather than assuming two.
+                The row above can be a band of seven, and following it with "the
+                data cannot tell these two apart" reads as a sentence written for
+                a different pack than the one on screen. */}
             <p className="mt-1.5 text-xs leading-relaxed text-base-content/60">
               {margin == null
                 ? "One of these cards is unrated, so there are no error bars on this gap."
                 : unresolved
-                  ? "That is inside the margin of error: the data cannot tell these two apart."
+                  ? tied > 2
+                    ? `That is inside the margin of error: the data cannot separate these ${tied}, so this pick is not marked down for it.`
+                    : "That is inside the margin of error: the data cannot tell these two apart, so this pick is not marked down for it."
                   : "That gap is larger than the margin of error on the two win rates."}
             </p>
           </div>

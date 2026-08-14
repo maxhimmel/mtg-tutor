@@ -6,6 +6,7 @@ export * from "./config.js";
 export * from "./model/card.js";
 export * from "./model/keywords.js";
 export * from "./model/mana.js";
+export * from "./model/role.js";
 export * from "./model/typeLine.js";
 export * from "./model/setData.js";
 export * from "./model/hydrate.js";
@@ -21,6 +22,7 @@ export * from "./scoring/score.js";
 export * from "./scoring/value.js";
 export * from "./scoring/explain.js";
 export * from "./scoring/context.js";
+export * from "./scoring/tiebreak.js";
 
 export * from "./util/rng.js";
 

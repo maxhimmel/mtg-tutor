@@ -2,6 +2,9 @@ export type Rarity = "common" | "uncommon" | "rare" | "mythic" | "special" | "bo
 
 export type ColorCode = "W" | "U" | "B" | "R" | "G";
 
+import type { CardRole } from "./role.js";
+export type { CardRole };
+
 // The kinds of slot a booster draws from. `bonus` covers whatever sheet the set
 // pairs with (Mystical Archive, Special Guests); `land` is the Play Booster land
 // slot, which is a real pick and not filler.
@@ -38,6 +41,55 @@ export interface EngineCard {
   // about seven times too often. Absent for sets built before this was measured,
   // which keep drawing uniformly and so keep replaying identically.
   packRate?: number;
+
+  /**
+   * The curve bucket this card comes down in, 1..CURVE_TOP, and what it does.
+   *
+   * WHY THE ENGINE'S HALF CARRIES THESE AT ALL
+   *
+   * Everything else here is read by dealing a pack or scoring a pick, and these
+   * are the exception that proves the rule rather than a lapse: they are read by
+   * scoring a pick, and they could not be until now.
+   *
+   * The draft principles a pick is judged against are about the DECK -- how the
+   * curve is filling, whether there are enough bodies, whether the removal is
+   * there (DECK-06, DECK-08, CURVE-01/03/04). Answering any of those needs a
+   * mana value and a role, which live on the text half. So the tiebreak that
+   * reads them could only ever run in the browser, where cards are hydrated,
+   * while the grade ran on the server -- and the two disagreed about the same
+   * pack three separate times before anybody traced it to this type.
+   *
+   * Settling both at ingest is what makes the two sides symmetric. Not a new
+   * request path and not a query: the browser already holds the pack and the
+   * pool as EngineCards, the server already holds the maindeck as EngineCards,
+   * and once the cards carry these, both run the same code over the same data.
+   * The CLI gets it for nothing, which it did not have before at all.
+   *
+   * WHAT IT COSTS, MEASURED
+   *
+   * fdn's pool document goes 20.6KB -> 27.7KB, and it is read on all 42 picks:
+   * +297KB a draft, about +9.7% of the 2.98MB a draft and its review move today.
+   * A single packed integer would have been +3.1%, and was declined -- an opaque
+   * field is a precedent this codebase has not set, and the I/O picture is worth
+   * a pass of its own rather than being paid for here in unreadability.
+   *
+   * REQUIRED, and that is the point rather than a tidy-up. While they were
+   * optional a card without them contributed to no deck need and met none, so a
+   * pool that had not been re-ingested produced a scorer that ran, returned, and
+   * silently had its deck-shape half switched off. That is the exact failure
+   * this week kept hitting from three directions -- a projection that dropped
+   * them, a cache that dropped them, a harness that derived them -- and every
+   * time the symptom was a confident zero rather than an error.
+   *
+   * A push validates every stored document, so this deploying at all is the
+   * proof that every ingested pool carries both.
+   *
+   * NOT read by any bot. `POLICY_FEATURES` does not mention them and
+   * `BOT_FINGERPRINT` does not move, so no deal changes and no draft is
+   * stranded -- `corpus.test.ts` is the tripwire.
+   */
+  turn: number;
+  role: CardRole;
 
   // What `cardValue` resolves to, settled once at ingest.
   //
@@ -162,21 +214,53 @@ export interface CardContext {
   speed?: number;
   iwd?: number;
   maindeckRate?: number;
+  /**
+   * One standard error on this card's GIH win rate: sqrt(p(1-p)/n).
+   *
+   * Settled at ingest, exactly like `value`, and for the same reason -- the
+   * inputs are on the text half of a card and the pick path has neither.
+   *
+   * WHY IT LIVES HERE AND NOT ON EngineCard
+   *
+   * `gapMargin` has always existed and has always run in the BROWSER, over
+   * hydrated cards, which is why the verdict can say "the data cannot tell these
+   * two apart" while the grade behind it -- computed server-side in `draft.pick`
+   * -- charges for the difference anyway. Closing that needed the margin on the
+   * pick path.
+   *
+   * The obvious home was EngineCard, and it is the expensive one: `setCards` is
+   * a single document read on all 42 picks, so a number per card costs
+   * ~3.4-4.4KB x 42, about +5.1% of a draft's total I/O. `setCardContext` is
+   * already read for the PACK on every pick -- fourteen rows -- so the same
+   * number rides a read that is happening regardless, at ~180 bytes a pick and
+   * +0.3%. Nineteen times cheaper, and this is the table whose whole definition
+   * is "what scoring reads to judge a card".
+   *
+   * Absent for an unrated card, and that absence is load-bearing: a rarity
+   * baseline is not a measurement and has no error bars, so there is no margin
+   * and no claim that two cards are the same. See `marginBetween`.
+   */
+  se?: number;
 }
 
 /** A whole card: what the engine reads, plus what a person reads. */
 export type Card = EngineCard & CardText;
 
 /**
- * A card between the Scryfall/17Lands merge and ingest settling its `value`.
+ * A card between the Scryfall/17Lands merge and ingest settling what it derives.
  *
- * `value` depends on the set's measured rarity baselines, which cannot be
- * computed until every card has been merged -- so there is a real stage where a
- * card is complete except for that one field. Naming it stops the alternative,
- * which is making `value` optional on EngineCard and letting every reader
- * downstream wonder whether a card might not have one.
+ * Three fields, all computed in the same pass and none of them available before
+ * it. `value` depends on the set's measured rarity baselines, which cannot be
+ * known until every card has been merged; `turn` and `role` are read off the
+ * text half, which the pick path does not carry and so must be settled once.
+ *
+ * Naming this stage is what stops the alternative -- making the three optional
+ * on `EngineCard` and letting every reader downstream wonder whether a card
+ * might not have them. It is the same choice made twice: a field that is always
+ * there after ingest should be required after ingest, and the type for "before"
+ * is this one.
  */
-export type UnvaluedCard = Omit<Card, "value">;
+export type UnvaluedCard = Omit<Card, "value" | "turn" | "role">;
 
 /**
  * What ingest works with: a card that definitely knows its rarity.

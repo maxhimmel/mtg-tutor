@@ -38,11 +38,18 @@ export function hydrate(cards: readonly EngineCard[], text: TextIndex): Card[] {
 }
 
 export function hydrateScore(score: PickScore, text: TextIndex): PickScore<Card> {
+  // `preferred` is stripped before the spread and put back after, because
+  // spreading an optional EngineCard field leaves it typed as one -- and a Card
+  // score holding an un-hydrated card is exactly the mistake this function is
+  // here to prevent.
+  const { preferred, ...rest } = score;
   return {
-    ...score,
+    ...rest,
     picked: hydrateCard(score.picked, text),
     rawBest: hydrateCard(score.rawBest, text),
     contextBest: hydrateCard(score.contextBest, text),
+    band: hydrate(score.band, text),
+    ...(preferred ? { preferred: hydrateCard(preferred, text) } : {}),
   };
 }
 

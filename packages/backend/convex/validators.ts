@@ -36,6 +36,18 @@ export const packSlot = v.union(
 // Five fields per card, and every one of them is read by dealing a pack or
 // scoring a pick. This document is retrieved 42 times a draft and Convex bills
 // the whole of it, so anything a reader only wants to SHOW belongs in cardText.
+// What a card does, in the categories a Limited deck is counted in. Mirrors
+// core's CardRole exactly; a value here that core does not know is a card the
+// tiebreak would silently score as nothing.
+export const cardRole = v.union(
+  v.literal("removal"),
+  v.literal("evasion"),
+  v.literal("card advantage"),
+  v.literal("creature"),
+  v.literal("land"),
+  v.literal("other"),
+);
+
 export const engineCard = v.object({
   name: v.string(),
   colors: v.array(colorCode),
@@ -45,6 +57,18 @@ export const engineCard = v.object({
   // existed, which a re-ingest fills in.
   slot: v.optional(packSlot),
   packRate: v.optional(v.number()),
+  // The curve bucket and the role, settled at ingest so the pick path can judge
+  // a card against the DECK -- which the draft principles are almost entirely
+  // about, and which needed a mana value and a type line the engine's half of a
+  // card does not carry. See core's EngineCard for what the split cost before
+  // this and what these two fields cost instead.
+  //
+  // Required, not optional. While they were optional a card missing them met no
+  // deck need and contributed to none, so an un-ingested pool produced a scorer
+  // that ran and quietly did half its job -- and a push validates every stored
+  // document, so this deploying is the proof that no pool is missing either.
+  turn: v.number(),
+  role: cardRole,
   // Required, not optional -- see EngineCard.value. The formula's inputs are on
   // cardText now, so a card without this cannot be scored at all, and a push
   // validates every stored document: this deploying is the proof that no pool
@@ -134,6 +158,14 @@ export const cardContext = v.object({
   speed: v.optional(v.number()),
   iwd: v.optional(v.number()),
   maindeckRate: v.optional(v.number()),
+  // One standard error on the card's GIH win rate, so the GRADE can tell whether
+  // a gap is real. `gapMargin` has always run in the browser over hydrated
+  // cards; the pick path has neither `gihWinRate` nor `gihGames` since the pool
+  // split, which is why the verdict could say two cards were indistinguishable
+  // while the score behind it docked the player anyway. See core's CardContext
+  // for why it rides this row rather than EngineCard -- it is a read that is
+  // already happening, at a nineteenth of the cost.
+  se: v.optional(v.number()),
 });
 
 // One archetype's own win rate, no card dimension. Same shape setStats stores,
@@ -244,6 +276,23 @@ export const storedPickScore = v.object({
   // replaying and the reasons are part of what the pick actually saw.
   terms: v.optional(v.array(v.object({ label: v.string(), delta: v.number() }))),
   isBest: v.boolean(),
+  // Whether the data could separate this pick from the card it was graded
+  // against. Optional because rows written before the grade could see a margin
+  // have none, and `toRecordedPick` recomputes those from the hydrated cards --
+  // the same route the browser's verdict has always taken.
+  indistinguishable: v.optional(v.boolean()),
+  // The other cards in the pack the data could not separate from the one this
+  // was graded against. Stored by name like every other card on this row, and
+  // absent on rows written before the verdict stopped naming a single winner
+  // out of a tie -- those render the way they always did.
+  bandNames: v.optional(v.array(v.string())),
+  // Which of the band the deck wanted, and the principles that say why. Stored
+  // so the review shows what the player was shown rather than recomputing it
+  // against a deck that has since been rebuilt.
+  preferredName: v.optional(v.string()),
+  reasons: v.optional(
+    v.array(v.object({ principle: v.string(), note: v.string() })),
+  ),
   onColor: v.boolean(),
   rankInPack: v.number(),
 });

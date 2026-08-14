@@ -33,16 +33,22 @@ const SET = { code: "tst", format: "TradDraft" };
  * anyway -- `setCards.cards` is `engineCard[]` -- so building it directly is
  * closer to what the mutation reads than a SetData would be.
  */
+// `turn` and `role` are stated because the stored card requires them -- a pool
+// that omits either is refused by the validator, which is what makes an
+// un-ingested set a loud failure rather than a scorer quietly running with its
+// deck-shape half switched off.
+const SHAPE = { turn: 2, role: "creature" as const };
+
 function pool() {
   const cards = [];
   for (let i = 0; i < 60; i++)
-    cards.push({ name: `C${i}`, colors: [COLORS[i % 5]], slot: "common" as const, value: 40 + (i % 10) });
+    cards.push({ name: `C${i}`, colors: [COLORS[i % 5]], slot: "common" as const, value: 40 + (i % 10), ...SHAPE });
   for (let i = 0; i < 30; i++)
-    cards.push({ name: `U${i}`, colors: [COLORS[i % 5]], slot: "uncommon" as const, value: 50 + (i % 10) });
+    cards.push({ name: `U${i}`, colors: [COLORS[i % 5]], slot: "uncommon" as const, value: 50 + (i % 10), ...SHAPE });
   for (let i = 0; i < 20; i++)
-    cards.push({ name: `R${i}`, colors: [COLORS[i % 5]], slot: "rare" as const, value: 60 });
+    cards.push({ name: `R${i}`, colors: [COLORS[i % 5]], slot: "rare" as const, value: 60, ...SHAPE });
   for (let i = 0; i < 10; i++)
-    cards.push({ name: `M${i}`, colors: [COLORS[i % 5]], slot: "mythic" as const, value: 70 });
+    cards.push({ name: `M${i}`, colors: [COLORS[i % 5]], slot: "mythic" as const, value: 70, ...SHAPE });
   return cards;
 }
 
@@ -339,7 +345,9 @@ describe("challenges.diff", () => {
       onColor: true,
       rankInPack: 1,
     });
-    const card = (name: string) => ({ name, colors: ["U" as const], value: 50 });
+    // A stored pack snapshot is an engine card, so it carries the same required
+    // shape the pool does -- `packSnapshot` IS `engineCard`, deliberately.
+    const card = (name: string) => ({ name, colors: ["U" as const], value: 50, ...SHAPE });
 
     await t.run(async (ctx) => {
       for (const [sid, picks] of [

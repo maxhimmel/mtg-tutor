@@ -747,6 +747,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         benched: bench ?? false,
         carried,
         msDeliberating: Date.now() - packArrivedAt.current,
+        // Off the SCORE, not off the challenge. It used to be read from the
+        // defense, so it could only ever be recorded for a player who had been
+        // argued with -- which made the passive ceremony's rate structurally
+        // unmeasurable rather than merely unmeasured. One id, matching the one
+        // sentence shown; a list would break into a property PostHog cannot
+        // group on.
+        ...(score.reasons[0] ? { tiebroken: score.reasons[0].principle } : {}),
         ...(defense
           ? {
               confidence: defense.confidence,

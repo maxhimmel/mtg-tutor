@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 import type { Card, CardContext, CardText, EngineCard, RecordedPick } from "@mtg-tutor/core";
 import { normalizeName } from "@mtg-tutor/core";
 import type { StoredCard, StoredCardText, StoredEngineCard } from "./validators.js";
+import { cardText, engineCard } from "./validators.js";
 import type { QueryCtx } from "./_generated/server.js";
 
 // Putting the rules text back on cards the engine dealt.
@@ -64,46 +65,40 @@ function defined<T extends object>(o: T): T {
   return Object.fromEntries(Object.entries(o).filter(([, val]) => val !== undefined)) as T;
 }
 
-// Where a whole card comes apart. Both halves are spelled out field by field
-// rather than by spreading and deleting, because a card gains fields over time
-// and this is the one place that has to decide which side a new one belongs on.
+// Where a whole card comes apart, and the one place that decides which side a
+// new field belongs on.
+//
+// TAKEN FROM THE VALIDATORS, NOT WRITTEN OUT AGAIN
+//
+// Both halves used to be spelled out field by field, on the reasoning that a
+// deliberate list is where the which-side decision should live. The decision
+// does live here -- but the LIST does not have to, and while it did, the two
+// were free to disagree with the schema they claim to project.
+//
+// They did. `turn` and `role` were added to `engineCard`, computed at ingest and
+// written onto the card, and then dropped on the way to storage by a projection
+// that had never heard of them. Nothing failed: the push validated, the ingest
+// reported success, and every card came back with both fields absent. It cost
+// two re-ingests and a long detour through "the deployment must be stale"
+// before anyone read this function.
+//
+// Deriving the keys from `engineCard.fields` and `cardText.fields` makes the
+// schema the single statement of which side a field is on, so adding one to a
+// validator is the whole change rather than the first of five.
+const ENGINE_KEYS = Object.keys(engineCard.fields) as (keyof StoredEngineCard)[];
+const TEXT_KEYS = Object.keys(cardText.fields) as (keyof StoredCardText)[];
+
+const project = <T extends object>(c: StoredCard, keys: readonly (keyof T)[]): T =>
+  defined(Object.fromEntries(keys.map((k) => [k, (c as never as T)[k]])) as T);
+
 export function engineHalf(c: StoredCard): StoredEngineCard {
-  return defined({
-    name: c.name,
-    colors: c.colors,
-    slot: c.slot,
-    packRate: c.packRate,
-    value: c.value,
-  });
+  return project<StoredEngineCard>(c, ENGINE_KEYS);
 }
 
 export function textHalf(c: StoredCard): StoredCardText {
-  return defined({
-    name: c.name,
-    rarity: c.rarity,
-    colorIdentity: c.colorIdentity,
-    gihWinRate: c.gihWinRate,
-    gihGames: c.gihGames,
-    alsa: c.alsa,
-    rarityBaseline: c.rarityBaseline,
-    manaCost: c.manaCost,
-    cmc: c.cmc,
-    typeLine: c.typeLine,
-    oracleText: c.oracleText,
-    power: c.power,
-    toughness: c.toughness,
-    loyalty: c.loyalty,
-    imageUrl: c.imageUrl,
-    layout: c.layout,
-    backImageUrl: c.backImageUrl,
-    collectorNumber: c.collectorNumber,
-    setCode: c.setCode,
-    avgPick: c.avgPick,
-    winRate: c.winRate,
-    iwd: c.iwd,
-    maindeckRate: c.maindeckRate,
-  });
+  return project<StoredCardText>(c, TEXT_KEYS);
 }
+
 
 export function textIndex(cards: readonly CardText[]): TextIndex {
   return new Map(cards.map((c) => [normalizeName(c.name), c]));
@@ -141,6 +136,10 @@ export function hydratePick(rec: RecordedPick, index: TextIndex): RecordedPick<C
       picked: hydrateCard(rec.score.picked, index),
       rawBest: hydrateCard(rec.score.rawBest, index),
       contextBest: hydrateCard(rec.score.contextBest, index),
+      band: hydrate(rec.score.band, index),
+      ...(rec.score.preferred
+        ? { preferred: hydrateCard(rec.score.preferred, index) }
+        : { preferred: undefined }),
     },
   };
 }

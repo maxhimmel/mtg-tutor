@@ -13,6 +13,8 @@ function card(name: string, over: Partial<Card> = {}): Card {
     manaCost: "",
     cmc: 2,
     typeLine: "Creature",
+    turn: 2,
+    role: "creature",
     oracleText: "",
     collectorNumber: "1",
     gihWinRate: 0.55,

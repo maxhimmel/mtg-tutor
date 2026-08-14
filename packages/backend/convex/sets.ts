@@ -9,6 +9,8 @@ import {
   isBasicLand,
   mergeCards,
   normalizeName,
+  curveTurn,
+  detectRole,
   observedRarityBaselines,
   packSize,
   withPackSlots,
@@ -85,11 +87,22 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // "5-value-precomputed" settled cardValue at ingest and sent the four statistics
 // it was computed from after them, "6-rarity-off-pool" sent the fifth, and
 // "9-card-shape" put Scryfall's layout and the back face's art on the text half
-// so a two-in-one card can be explained and a double-faced one turned over.
+// so a two-in-one card can be explained and a double-faced one turned over,
+// and "10-context-se" put one standard error per card on the CONTEXT row so the
+// grade can tell a real gap from one inside the error bars -- which the verdict
+// beside it has always been able to do and the score never could, and
+// "11-turn-role" put the curve bucket and the role on the card so the pick path
+// can judge it against the DECK at all, which had been browser-only and so a
+// second opinion rather than the app's.
 // The tag names what changed; the fingerprint makes a change to how a card is
 // VALUED invalidate every pool without anyone remembering to say so. See
 // VALUE_FINGERPRINT.
-const POOL_REVISION = `9-card-shape.${VALUE_FINGERPRINT}`;
+//
+// `se` is written by the same pass that writes the contexts, so it needs a
+// re-ingest rather than a migration -- and until one runs, a set simply has no
+// stored margins and grades exactly as it always has. That is the safe
+// direction: absent means "cannot say these are the same", never "they are".
+const POOL_REVISION = `11-turn-role.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -465,7 +478,17 @@ export const ingest = action({
       // After the baseline is on, never before: computing it against the raw
       // card would bake in RARITY_BASELINE's fixed guess for every unrated card
       // and quietly undo what observedRarityBaselines just measured.
-      return { ...rated, value: computeCardValue(rated) };
+      //
+      // `turn` and `role` are settled here for the same reason `value` is: both
+      // read the text half of a card, and the pick path has only the engine
+      // half. Doing it once at ingest is what lets the browser and the server
+      // judge a pack against the same deck rather than two.
+      return {
+        ...rated,
+        value: computeCardValue(rated),
+        turn: curveTurn(rated),
+        role: detectRole(rated),
+      };
     });
 
     // Every archetype the format actually produced, at every colour count. The
@@ -500,6 +523,14 @@ export const ingest = action({
       // between them to mean anything; the artifact writes undefined otherwise.
       const speed =
         c.ohWr != null && c.gdWr != null ? Math.round((c.ohWr - c.gdWr) * 1e4) / 1e4 : undefined;
+      // sqrt(p(1-p)/n) -- the error bars on this card's win rate, settled here
+      // for the same reason `value` is: the inputs are on the text half of a
+      // card and the pick path has neither. Absent for an unrated card, and that
+      // absence is what stops the grade calling two unmeasured cards the same.
+      const se =
+        c.gihWr != null && c.gihN > 0
+          ? Math.round(Math.sqrt((c.gihWr * (1 - c.gihWr)) / c.gihN) * 1e5) / 1e5
+          : undefined;
       return {
         key,
         context: {
@@ -507,6 +538,7 @@ export const ingest = action({
           ...(speed != null ? { speed } : {}),
           ...(c.iwd != null ? { iwd: c.iwd } : {}),
           ...(c.maindeckRate != null ? { maindeckRate: c.maindeckRate } : {}),
+          ...(se != null ? { se } : {}),
         },
       };
     });

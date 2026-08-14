@@ -128,6 +128,29 @@ export function pickMade(p: {
   challenged?: boolean;
   stood?: boolean;
   separable?: boolean;
+
+  /**
+   * The principle id that chose the challenger, when the win rates could not.
+   *
+   * A property here rather than an event of its own, because the question it
+   * has to answer is not "how often does this fire" -- it is whether it fires
+   * and TEACHES, and the evidence for that is `stood` on the same row. A player
+   * who switches more often when a principle picked the card than when the float
+   * did is a player the tiebreak is reaching; the same rate either way means it
+   * chose a different card and changed nothing. A separate event would need a
+   * join to say that, and would say it worse.
+   *
+   * Absent on every pick where the top of the pack was separable, which is most
+   * of them -- so its rate is also the answer to whether the band forms often
+   * enough for any of this to be worth keeping.
+   *
+   * Read off the score rather than the challenge, so it is recorded under BOTH
+   * ceremonies. While it came off the defense it could only exist for a player
+   * who had been argued with, which made the passive rate unmeasurable rather
+   * than merely unmeasured -- and the passive half is where "does a citation
+   * help somebody who was never challenged" is answered.
+   */
+  tiebroken?: string;
 }): void {
   if (!on()) return;
   posthog.capture("pick_made", p);
@@ -235,6 +258,19 @@ export function buildCompared(p: {
   sameColors: boolean;
   landsBuilt: number;
   landsSuggested: number;
+  /**
+   * Colours the suggested forty cannot reach a reliable source count for, as a
+   * colour string, and absent when there are none.
+   *
+   * A property here rather than an event, because the question it answers is
+   * whether the warning should exist at all: `splitBasics` pays every source
+   * floor it can afford, so this is meant to be rare, and an advisory that
+   * turns out to fire on a quarter of decks is not warning anybody about
+   * anything -- it is describing the format. `landsSuggested` on the same row
+   * says which land count it happened at, which is the first thing anybody
+   * would ask next.
+   */
+  uncastable?: string;
 }): void {
   if (!on()) return;
   posthog.capture("build_compared", p);

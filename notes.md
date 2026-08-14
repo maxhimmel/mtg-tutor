@@ -108,6 +108,8 @@ left empty rather than renumbering everything under it.
    up the findings listed here. Let's also present a few different solutions
    focused on the user's experience as this app grows/develops.
 
+   The next time I tell you to clean up these notes, please tell me why this insanely long and overexplained issue #3 is still in this doc. After reading all of this it seems done to me. Please explain because clearly I don't understand.
+
 4. **Show the tokens a card makes.** A card that reads "create a Map token"
    is asking you to know what a Map is, and nothing in the app says.
 
@@ -191,7 +193,33 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 
 10. The "//" separator on the card placard's mana section is white and hard to read.
 
-11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to spend overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual mana-cost for this card?
+11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine/whatever. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to SPEND -- overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual colors of mana-cost for this card?
+
+12. When a card is hovered and the enlarged version is shown and then I click/select the card the hover disappears. That feels incorrect because I didn't STOP hovering over the card.
+
+- It also disappears when i scroll even tho the card is still being hovered upon
+- be thorough w/this fix because we've already improved/fixed other bugs regarding similar mechanics and I don't want a spaghetti mess w/all these fixes.
+
+13. Love that the coach noticed the incongruency here:
+
+```
+Last pick
+A+
+100/100
+Nothing scored higher
+Forum of Amity
+Your call on the gap
+read it right
+You took the card worth 2.7pp more than Burrog Barrage, against a ±1.0pp margin of error. You said it was clear, and it was.
+
+Coach
+Wait — Forum of Amity taps for White/Black, not Blue/Red, and it's committed as "on those colors" here, but the text clearly makes W/B mana. That's an off-color land for a UR deck; it doesn't fix anything you're actually casting. Grading the pick as printed: since it produces the wrong colors for your pool, it's a near-blank here despite the eye-popping stats (which reflect a totally different archetype's love of it).
+
+Their reasoning "staying open, not committed to anything" doesn't hold up either — you're 9 picks in with a Blue/Red pool already flagged as committed, so the open-drafting window per has closed, and taking an off-color land isn't "staying open," it's just not advancing your deck. Burrog Barrage is also off your colors (green), so neither pack option actually served this UR pool — but between them you'd rather take a card you might splash or that at least does something (removal-ish) than a land that produces neither of your colors.
+```
+
+- I had 6 cards in my main deck that were blue(U) and red(R). And only 2 cards that were white(W) in my sideboard.
+- I think the problem is that the coach seems to not have known that I picked that card directly into my sideboard.
 
 # Ideas:
 
@@ -370,10 +398,12 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
 
-12. New app title:
+11. New app title:
 
 - Title: P1P1
 - Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
+
+12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely and definitely more interestingly/eye-catching/cool when they're referenced (i.e. by the coach/"your call on the gap")
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -655,7 +685,55 @@ to the data work.
     decision has one, it is usually large, and reading the raw number without it
     invites paying for headroom that does not exist.
 
+9.  **A static page for what `detectRole` calls things** (2026-08-14). The
+    classifier is a handful of regexes over rules text, and since it moved to
+    ingest its answer is STORED -- so it decides which deck need a pick can meet
+    (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
+    re-ingest rather than a deploy.
+
+    `scripts/show-roles.mjs` prints the distribution, examples with the phrase
+    that matched, and the arguable lists. It is a terminal dump, and the thing
+    actually wanted is a page: every card in a set, its role, the matched
+    phrase, filterable by role, so a wrong call is spotted by scrolling rather
+    than by grepping. Static HTML written to disk and opened directly -- no
+    route, no auth, no deployment, because this is a tool for whoever is editing
+    the regexes and not a feature of the app.
+
+    **The measured reasons it is worth having**, over 17 sets and 5,119 cards:
+    56 of 282 cards called removal by "deals N damage to" (19.9%) are aiming at
+    a PLAYER rather than a creature; 98 of 923 evasion cards (10.6%) GRANT
+    flying or trample rather than have it; and 44 fight/bite spells sit in
+    `other` because "deals damage equal to its power to target creature" matches
+    nothing. Fixing those is its own re-ingest, so seeing them first is the
+    cheap half.
+
 # Deferred trade-offs (revisit when the premise changes):
+
+0. **What the client may compute, now that scoring says "nothing".** Three bugs
+   in a week came from one shape: `EngineCard` is deliberately thin because
+   `setCards` is read on every pick, so anything needing a mana value or a type
+   line could only run in the browser -- and the principle tiebreak did, while
+   the grade ran on the server. The two then disagreed about the same pack on
+   screen, three times, and each was patched where it surfaced before anyone
+   traced it to the type.
+
+   **Resolved for scoring** on 2026-08-14: `turn` and `role` are settled at
+   ingest, and `needs` lives on `ScoringContext` built by `packScoringContext`,
+   so a context without needs is unrepresentable and two callers cannot hold
+   different ones. `diagnose-tiebreak.mjs` asserts the grade and the challenge
+   name one card and holds at zero divergences.
+
+   **The general rule is not written down anywhere and should be.** The working
+   version: a client may compute what is CHEAPER to recompute than to send, and
+   must not compute anything the server also decides. The second half is the one
+   that was violated -- not by putting logic in the browser, but by putting it
+   ONLY there, which made the server's answer a different answer rather than the
+   same one arrived at twice.
+
+   The premise changes if a rule ever needs data too big for `EngineCard`. Then
+   the choice is a query before the pick rather than a field on the card, and
+   the round trip is the thing to weigh -- not whether the browser is allowed to
+   think.
 
 1. **The draft board no longer live-syncs — and it is now cheap enough to
    reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
@@ -952,49 +1030,50 @@ The architecture, the data pipeline and the deploy story are all documented in
     challenge feature). Five rulings, and the first is the one everything else
     is downstream of.
 
-        **Live pod, not replayed packs.** Dealing the friend a recording of your
-        forty-two packs aligns every row and makes their picks inert — nothing they
-        take changes what wheels back — so signal-reading and wheeling, which is
-        most of what a draft teaches, are switched off. It looks like a draft and is
-        a multiple-choice quiz with your answer key. Prototyped and rejected on the
-        merits, and it will keep looking like an obvious simplification, because the
-        thing it costs is invisible in the diff it produces.
+            **Live pod, not replayed packs.** Dealing the friend a recording of your
+            forty-two packs aligns every row and makes their picks inert — nothing they
+            take changes what wheels back — so signal-reading and wheeling, which is
+            most of what a draft teaches, are switched off. It looks like a draft and is
+            a multiple-choice quiz with your answer key. Prototyped and rejected on the
+            merits, and it will keep looking like an obvious simplification, because the
+            thing it costs is invisible in the diff it produces.
 
-        **`samePack` is per row and computed, never a constant.** The prototype's
-        `DRIFTS_AFTER = 7` is an artifact of `DRAFT.seats`, and worse it assumes
-        drift is monotonic. Swept over 1000 seed/divergence combinations on
-        `fakeSet`: the delay between diverging and seeing a different pack is never
-        less than 8 and 8 exactly is reachable — that is the wheel, and it holds for
-        a divergence at ANY index — **339 combinations never drift at all**, and 657
-        drift and then re-converge. Two people can take different cards and still
-        see all forty-two packs identical. The first seed I picked for the tests was
-        one of the 339, so the drift assertions passed by never being exercised: a
-        fixture too uniform to reproduce the phenomenon is trap #4 in a new costume.
+            **`samePack` is per row and computed, never a constant.** The prototype's
+            `DRIFTS_AFTER = 7` is an artifact of `DRAFT.seats`, and worse it assumes
+            drift is monotonic. Swept over 1000 seed/divergence combinations on
+            `fakeSet`: the delay between diverging and seeing a different pack is never
+            less than 8 and 8 exactly is reachable — that is the wheel, and it holds for
+            a divergence at ANY index — **339 combinations never drift at all**, and 657
+            drift and then re-converge. Two people can take different cards and still
+            see all forty-two packs identical. The first seed I picked for the tests was
+            one of the 339, so the drift assertions passed by never being exercised: a
+            fixture too uniform to reproduce the phenomenon is trap #4 in a new costume.
 
-        **Their score is their stored score.** A replay grades on raw power, and the
-        whole point of comparing two people rather than two attempts is that each
-        was graded against their own pool. That is why the diff reads `draftPicks`
-        rather than replaying — which also makes it the one full-draft reader that a
-        re-ingest cannot strand, and it costs 138.5KB against `review.load`'s 218KB.
+            **Their score is their stored score.** A replay grades on raw power, and the
+            whole point of comparing two people rather than two attempts is that each
+            was graded against their own pool. That is why the diff reads `draftPicks`
+            rather than replaying — which also makes it the one full-draft reader that a
+            re-ingest cannot strand, and it costs 138.5KB against `review.load`'s 218KB.
 
-        **The comparison is a braid, not a tree.** A tree fans out and never
-        rejoins; two drafts run a fixed forty-two picks in parallel and re-converge
-        constantly, so every fork drawn as a branch claims two futures that never
-        happened. And the branch point is where the PACKS first differed, not where
-        the picks did — at least eight picks apart — so a diagram drawn on
-        disagreements puts the fork where the effect is and gets the causation
-        backwards. The arc between the two is the one claim the drawing exists to
-        make.
+            **The comparison is a braid, not a tree.** A tree fans out and never
+            rejoins; two drafts run a fixed forty-two picks in parallel and re-converge
+            constantly, so every fork drawn as a branch claims two futures that never
+            happened. And the branch point is where the PACKS first differed, not where
+            the picks did — at least eight picks apart — so a diagram drawn on
+            disagreements puts the fork where the effect is and gets the causation
+            backwards. The arc between the two is the one claim the drawing exists to
+            make.
 
-        **"Challenge" means two things in this repo on purpose.** The friend invite
-        (plural: `challenges`, `convex/challenges.ts`, `/challenge/*`) and the
-        counter-argument the commitment ceremony puts to a pick (singular:
-        `core/src/tutor/challenge.ts`, `TheChallenge`, `draftPicks.defense
+            **"Challenge" means two things in this repo on purpose.** The friend invite
+            (plural: `challenges`, `convex/challenges.ts`, `/challenge/*`) and the
+            counter-argument the commitment ceremony puts to a pick (singular:
+            `core/src/tutor/challenge.ts`, `TheChallenge`, `draftPicks.defense
 
-    .challengedName`, decision #11). Renaming either was considered: the
-ceremony's sense is load-bearing in the validators, and the invite's is the
-word the feature is called by everywhere outside the code. The comparison
-logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
+        .challengedName`, decision #11). Renaming either was considered: the
+
+    ceremony's sense is load-bearing in the validators, and the invite's is the
+    word the feature is called by everywhere outside the code. The comparison
+    logic is therefore `core/src/draft/diff.ts`and not a second`challenge.ts`.
 
 18. **The row is the grant, and `ownedSession` never learned about it**
     (2026-08-09). A challenge names both drafts, so "may I read this one"

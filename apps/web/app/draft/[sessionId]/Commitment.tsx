@@ -89,6 +89,12 @@ export function useChallenge({
   // remaining card in the pack for this deck, which when the player has already
   // taken that card is the runner-up -- see challengeFor for why that rule is
   // what keeps the screen from being its own answer.
+  //
+  // The deck's needs ride the scoring context now, so this screen no longer
+  // supplies them and no longer can supply different ones from the grade. What
+  // they decide is which card gets put up when the win rates cannot tell the top
+  // of the pack apart; nothing about it reaches THIS screen, because the reason
+  // is held on the outcome and shown after the choice.
   const argue = (proposal: Proposal, reason: string, confidence: Confidence) => {
     const challenge = scoring ? challengeFor(pack, proposal.card, scoring) : undefined;
 
@@ -131,10 +137,15 @@ export function useChallenge({
         challengedName: challenge.challenger.name,
         proposedName: proposal.card.name,
         outcome,
-        // The better of the pair by the browser's own ranking, which is what the
-        // whole pack's context-best must be: the challenger was the best card
-        // that was not the proposed one.
-        expectedBestName: outcome.edge > 0 ? proposal.card.name : challenge.challenger.name,
+        // The browser's own whole-pack context-best, BY VALUE, which is the
+        // question the server answers too. Read off the challenge rather than
+        // reconstructed from the pair: once `tiebreak` can put up a card that is
+        // inside the margin but not the float's maximum, "the better of the two
+        // cards shown" and "the best card in the pack" stop being the same
+        // sentence -- and reconstructing it named a card the server never would,
+        // which failed the check below and dropped the whole calibration block
+        // exactly when a principle had just decided something.
+        expectedBestName: challenge.contextBestName,
       },
     );
   };

@@ -1,4 +1,5 @@
 import type { CardContext, ColorCode, ColorWinRate, EngineCard } from "../model/card.js";
+import type { DeckNeeds } from "./tiebreak.js";
 import { SCORING } from "../config.js";
 import { cardValue } from "./value.js";
 
@@ -124,6 +125,23 @@ export interface ScoringContext {
   archetypes: readonly ColorWinRate[];
   /** Per-card context, by the same normalised key `setCardContext` is keyed on. */
   contextFor: (card: EngineCard) => CardContext | undefined;
+  /**
+   * What the deck is still short of, and the reason this interface is the right
+   * place for it.
+   *
+   * This began as a separate argument to `challengeFor`, supplied by the browser
+   * and impossible for anyone else -- the needs read a curve and a set of roles,
+   * which lived on the text half of a card. The result was two authorities over
+   * one pack: the grade computed one answer without needs, the challenge another
+   * with them, and they disagreed on screen three times.
+   *
+   * `packScoringContext` exists to stop exactly that, and says so in its own
+   * comment. Putting needs anywhere else left it telling half the truth. Here,
+   * there is no way to build a context without them and therefore no way for two
+   * callers to hold different ones -- the divergence is not fixed, it is
+   * unrepresentable.
+   */
+  needs: DeckNeeds;
 }
 
 /** One named contribution, in win-rate points. */
@@ -206,6 +224,38 @@ function trapCorrection(
   if (value <= baseline) return 0;
   const distrust = (SCORING.maindeckTrustFloor - rate) / SCORING.maindeckTrustFloor;
   return (baseline - value) * distrust;
+}
+
+/**
+ * One standard error on the gap between two cards, from the pick path's own
+ * data -- the same quantity `gapMargin` computes in the browser, reachable by
+ * the engine.
+ *
+ * `gapMargin` takes whole `Card`s and reads `gihWinRate` and `gihGames`, which
+ * left the engine's half of a card when the pool was split. So the verdict could
+ * say "the data cannot tell these two apart" while the grade underneath it,
+ * computed where those fields do not exist, charged for the difference anyway.
+ * This is that number where the grade can reach it.
+ *
+ * Undefined when either card is unrated, and that is the whole rule rather than
+ * an edge case: a rarity baseline has no sample to have error bars over, so
+ * there is no margin -- and therefore no claim that the two cards are the same.
+ * Saying nothing is honest where inventing a margin is not.
+ *
+ * One standard error and not two, for the reason `gapMargin` gives: the question
+ * is whether the data can separate the cards at all, not whether it can at 95%
+ * confidence, and a 2-sigma band would call almost every pick in the format a
+ * tie.
+ */
+export function marginBetween(
+  ctx: ScoringContext,
+  a: EngineCard,
+  b: EngineCard,
+): number | undefined {
+  const sa = ctx.contextFor(a)?.se;
+  const sb = ctx.contextFor(b)?.se;
+  if (sa == null || sb == null) return undefined;
+  return Math.sqrt(sa * sa + sb * sb);
 }
 
 export function contextValue(card: EngineCard, ctx: ScoringContext): ContextValue {

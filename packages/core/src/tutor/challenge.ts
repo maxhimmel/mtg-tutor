@@ -1,6 +1,7 @@
 import type { Card } from "../model/card.js";
 import { gapMargin } from "../scoring/score.js";
 import { type ScoringContext, contextValue } from "../scoring/context.js";
+import { type TiebreakReason, bandOf, tiebreak } from "../scoring/tiebreak.js";
 import { pp } from "./cardLine.js";
 
 // Making the player commit to a position before they are shown the answer.
@@ -59,6 +60,34 @@ export const confidenceLevel = (id: Confidence): ConfidenceLevel =>
 export interface Challenge<C extends Card = Card> {
   challenger: C;
   /**
+   * Why THIS card, when more than one was equally good.
+   *
+   * Empty in the ordinary case, where the challenger is the best remaining card
+   * by a margin the data can see and there was nothing to choose. Non-empty only
+   * when several cards were statistically indistinguishable and a principle
+   * settled it -- see `tiebreak`. Carried rather than recomputed by the screen,
+   * because the reason has to be the one that actually picked the card.
+   */
+  reasons: TiebreakReason[];
+  /**
+   * The whole pack's context-best BY VALUE ALONE, which is not always the card
+   * put up.
+   *
+   * Its only job is to be checked against the card the server graded against, so
+   * the reveal can drop a calibration reading rather than score a player's stated
+   * certainty over a pair the server has since contradicted.
+   *
+   * It has to be carried rather than derived from `challenger`, and that is the
+   * whole reason it exists. The caller used to reconstruct it -- "the challenger
+   * was the best card that was not the proposed one, so the whole-pack best is
+   * whichever of those two is higher" -- which was true until `tiebreak` could
+   * put up a card that is inside the band but not the float's maximum. Then the
+   * reconstruction named a card the server would never name, the check failed,
+   * and the reveal silently dropped the very block it had just gained a sentence
+   * in. Computed here, beside the values it is about.
+   */
+  contextBestName: string;
+  /**
    * `contextValue(challenger) - contextValue(proposed)`, in win-rate points.
    * Positive means the challenger is genuinely the better card for this deck.
    */
@@ -83,6 +112,26 @@ export interface Challenge<C extends Card = Card> {
  * this rule the challenger wins exactly as often as the player is wrong, which
  * is a rate they cannot read anything off.
  *
+ * WHEN SEVERAL CARDS ARE EQUALLY BEST, WHICH IS OFTEN
+ *
+ * `contextValue` returns a float, so it always has a strict maximum -- but the
+ * gaps at the top of a pack are routinely smaller than the error bars on them,
+ * and then "the best remaining card" is a card the data picked by coin flip. It
+ * was still a defensible challenger; it was just an arbitrary one, and it went
+ * on the screen with no way to say why.
+ *
+ * The choice inside that band is made by `tiebreak` against `ctx.needs`, and the
+ * reason comes with it. This is the only place in the app a principle decides
+ * anything, and it is confined to where the measurement has abstained -- see the
+ * header of `scoring/tiebreak.ts` for why that confinement is the whole
+ * argument.
+ *
+ * The needs come off the CONTEXT rather than a parameter, and that is not tidying.
+ * As an argument they were the browser's to supply and nobody else's, so the
+ * grade and the challenge ranked the same pack by two different rules and said
+ * so on screen three times. `packScoringContext` builds one context for both
+ * sides; needs living on it is what makes the two answers the same answer.
+ *
  * Undefined when there is nothing to argue with -- a pack down to one card.
  */
 export function challengeFor<C extends Card>(
@@ -96,10 +145,41 @@ export function challengeFor<C extends Card>(
   const valued = others.map((c) => ({ card: c, value: contextValue(c, ctx).value }));
   const top = valued.reduce((a, b) => (b.value > a.value ? b : a));
 
-  const gap = top.value - contextValue(proposed, ctx).value;
-  const margin = gapMargin(top.card, proposed);
+  let challenger = top.card;
+  let reasons: TiebreakReason[] = [];
+  {
+    // Through the shared assembler, which sorts best-first -- an order
+    // `tiebreak` depends on and which the grade must build the same way.
+    const band = bandOf(valued, gapMargin);
+    if (band.length > 1) {
+      const broken = tiebreak(band, ctx.needs);
+      challenger = broken.card;
+      // Only when the principle actually CHANGED the answer. Measured over
+      // 35,916 real challenged picks on fdn, a band forms and a principle has
+      // something to say on 42.5% of them -- but on 20.4% it names the card the
+      // float had already chosen, and there "put up BECAUSE your curve is thin"
+      // is not true. The principle agreed; it did not decide.
+      //
+      // The same rule `tiebreak` applies to CURVE-07 internally, one level out:
+      // a reason is only worth stating when it did the deciding.
+      if (broken.card.name !== top.card.name) reasons = broken.reasons;
+    }
+  }
+
+  // Against the card actually put up, never against the float's winner -- the
+  // gap, the margin and the separability all have to describe the pair the
+  // player is shown, or the calibration line grades a comparison nobody saw.
+  const proposedValue = contextValue(proposed, ctx).value;
+  const gap = contextValue(challenger, ctx).value - proposedValue;
+  const margin = gapMargin(challenger, proposed);
   return {
-    challenger: top.card,
+    challenger,
+    reasons,
+    // By value alone and over the whole pack, which is the one question the
+    // server also answers -- so it stays keyed to `top` rather than to whatever
+    // the tiebreak put up. Ties go to the card that is not the proposed one,
+    // which is what the caller's own derivation did before this moved here.
+    contextBestName: proposedValue > top.value ? proposed.name : top.card.name,
     gap,
     margin,
     // An unmeasurable margin is not a tie. Saying two cards are
@@ -137,6 +217,14 @@ export interface ChallengeOutcome {
   edge: number;
   margin?: number;
   separable: boolean;
+  /**
+   * Why this card was the one put up, when the data had no preference.
+   *
+   * Carried for the same reason `challengerName` is: the reveal is the only
+   * place that describes this pair, and a reason looked up beside it could
+   * describe a different band. Empty in the ordinary case -- see `Challenge`.
+   */
+  reasons: TiebreakReason[];
 }
 
 export function resolveChallenge<C extends Card>(
@@ -146,6 +234,7 @@ export function resolveChallenge<C extends Card>(
   return {
     stood,
     challengerName: challenge.challenger.name,
+    reasons: challenge.reasons,
     // The gap is measured challenger-minus-proposed, and the claim was about the
     // proposed card, so this is that one subtraction read from the other end.
     // Deliberately independent of `stood` -- see the field's note.
@@ -254,6 +343,44 @@ export function calibrationLine(confidence: Confidence, o: ChallengeOutcome): st
   return o.stood
     ? `${stated} You said you were guessing, and this one was there to be read.`
     : `${stated} You said you were guessing, and switching found it.`;
+}
+
+/**
+ * Why that card and not another, when the data could not choose.
+ *
+ * A SECOND SENTENCE, AND ONLY EVER AFTER THE REVEAL
+ *
+ * The challenge screen is deliberately statistics-free -- the printed cards and
+ * the player's own pool, nothing 17Lands knows -- because turning the numbers on
+ * there would make the higher win rate the answer. A principle citation is not a
+ * statistic, but it is still the app having an opinion, and the one thing that
+ * screen must not do is hint at one. So this belongs where `calibrationLine`
+ * already is: after the choice, in the reveal, which is what the reveal is FOR.
+ *
+ * It is also the only moment the sentence is worth anything. Told beforehand
+ * that their curve is thin at two, a player is being coached; told afterwards
+ * that the card they were argued with was chosen BECAUSE their curve is thin at
+ * two, they have learned what the app was looking at -- and can disagree with
+ * it, which the deterministic path has never let anybody do.
+ *
+ * Undefined in the ordinary case, where the winner won on a gap the data can see
+ * and no principle was consulted. Silence is right there: an explanation offered
+ * on every pick stops being read by the third one.
+ *
+ * Takes a name and reasons rather than a `ChallengeOutcome`, because the same
+ * sentence is now true of a pick nobody was challenged over. `scorePick` runs
+ * the same tiebreak against the same `ctx.needs`, so the passive ceremony, the
+ * review and the CLI all have a preferred card and a reason -- and until this
+ * took its arguments loose, only a player who had been argued with could read
+ * one.
+ */
+export function tiebreakLine(named: string, reasons: readonly TiebreakReason[]): string | undefined {
+  if (reasons.length === 0) return undefined;
+  // One reason, not a list. Two would read as a case being built, and the
+  // tiebreak did not weigh them -- it counted them, and any one of them is the
+  // whole of what it can honestly claim.
+  const [{ principle, note }] = reasons;
+  return `${named} is the one your deck wanted, because ${note} [${principle}].`;
 }
 
 /**

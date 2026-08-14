@@ -47,6 +47,10 @@ export async function recordPick(
       contextBestValue: rec.score.contextBestValue,
       ...(rec.score.terms.length > 0 ? { terms: rec.score.terms } : {}),
       isBest: rec.score.isBest,
+      indistinguishable: rec.score.indistinguishable,
+      bandNames: rec.score.band.map((c) => c.name),
+      ...(rec.score.preferred ? { preferredName: rec.score.preferred.name } : {}),
+      reasons: rec.score.reasons,
       onColor: rec.score.onColor,
       rankInPack: rec.score.rankInPack,
     },
@@ -179,6 +183,22 @@ export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): Recorde
       contextBestValue: row.score.contextBestValue,
       terms: row.score.terms ?? [],
       isBest: row.score.isBest,
+      // Read, never recomputed. This used to derive it from the hydrated cards
+      // for rows written before the grade could see a margin -- which put a
+      // FIFTH copy of "is this gap real" in the codebase, in the one place whose
+      // job is to report what a player was actually shown. A row from before the
+      // field existed simply did not have that verdict, and inventing one now
+      // would show them a screen they never saw.
+      indistinguishable: row.score.indistinguishable ?? false,
+      // Names rather than cards on the row, hydrated back out of the pack it was
+      // stored beside -- the same shape `pickedName` and `contextBestName` take.
+      // A row written before the band existed has none and renders as it always
+      // did: one card, which is what it was shown with.
+      band: (row.score.bandNames ?? []).map((n) => hydrateCard(inPack(stored, n), text)),
+      ...(row.score.preferredName
+        ? { preferred: hydrateCard(inPack(stored, row.score.preferredName), text) }
+        : {}),
+      reasons: row.score.reasons ?? [],
       onColor: row.score.onColor,
       rankInPack: row.score.rankInPack,
     },
