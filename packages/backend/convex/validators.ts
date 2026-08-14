@@ -86,7 +86,30 @@ export const engineCard = v.object({
 // statistics left EngineCard: `engineHalf` no longer writes them, so there is
 // nothing for a snapshot to preserve. The idea is recoverable if it is ever
 // wanted; it would mean writing more than the engine half here on purpose.
-export const packSnapshot = engineCard;
+// AND IT IS NO LONGER IDENTICAL, BECAUSE THE TWO HAVE OPPOSITE LIFECYCLES
+//
+// `setCards.cards` is pipeline data: ingest rewrites every card of every set on
+// a POOL_REVISION bump, so a field added there is present everywhere as soon as
+// the pipeline runs, and can be required. `draftPicks.pack` is a snapshot
+// written once when a pick was made and never rewritten -- so a field added
+// today is absent from every row ever stored, and requiring it makes the SCHEMA
+// PUSH fail on historical data.
+//
+// That is what happened when `turn` and `role` were narrowed to required: the
+// pool validated (5,445 cards, all present) and the push died on a Juggernaut
+// inside a draftPicks row from before the fields existed.
+//
+// So the two fields are optional here and required there, and that asymmetry is
+// the honest description rather than a concession. Nothing reads them off a
+// stored snapshot: `review.load` re-renders those packs and reports the score as
+// it was recorded, and never rebuilds a `ScoringContext` -- the deck needs that
+// would want them are computed from the LIVE pool during a draft, not from a
+// pick row afterwards. Their absence here is "not needed", not "missing".
+export const packSnapshot = v.object({
+  ...engineCard.fields,
+  turn: v.optional(v.number()),
+  role: v.optional(cardRole),
+});
 
 // The half a person reads, and the half a prompt writes. One row per card in
 // `setCardText`, not an array on the pool document, because its readers want

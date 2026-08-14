@@ -7,7 +7,7 @@ import type {
   RecordedPick,
   TextIndex,
 } from "@mtg-tutor/core";
-import { hydrate, hydrateCard } from "@mtg-tutor/core";
+import { curveTurn, detectRole, hydrate, hydrateCard, normalizeName } from "@mtg-tutor/core";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 
@@ -149,7 +149,10 @@ export async function storedPool(
   return row ? poolFromLastPick(row) : null;
 }
 
-function inPack(pack: EngineCard[], name: string): EngineCard {
+// Generic in the card, because finding one by name needs nothing else -- and
+// the two callers hold different shapes: a stored snapshot, which may predate
+// `turn`/`role`, and a snapshot already brought up to a whole EngineCard.
+function inPack<C extends { name: string }>(pack: readonly C[], name: string): C {
   const card = pack.find((c) => c.name === name);
   if (!card) {
     // The picked card and the best card are both chosen FROM the pack stored
@@ -160,9 +163,33 @@ function inPack(pack: EngineCard[], name: string): EngineCard {
   return card;
 }
 
+/**
+ * A stored snapshot brought up to a whole `EngineCard`.
+ *
+ * `turn` and `role` are optional on `packSnapshot` and required on the pool --
+ * see `validators.ts` for why the two lifecycles differ -- so a pack stored
+ * before those existed is short of both, and everything downstream wants a card
+ * that is not.
+ *
+ * DERIVED, NOT DEFAULTED. They are computed from the text half being joined on
+ * in the same breath, by the same two functions ingest calls, so the answer is
+ * the one ingest would have written rather than a placeholder standing in for
+ * it. A default would be measurement trap #10 exactly: a card that scores as
+ * though it had no cost and no role, indistinguishable from one that does.
+ */
+function asEngineCard(stored: Doc<"draftPicks">["pack"][number], text: TextIndex): EngineCard {
+  if (stored.turn != null && stored.role != null) return stored as EngineCard;
+  const half = text.get(normalizeName(stored.name));
+  return {
+    ...stored,
+    turn: stored.turn ?? (half ? curveTurn(half) : 1),
+    role: stored.role ?? (half ? detectRole(half) : "other"),
+  };
+}
+
 /** The stored row as the engine would have handed it over, cards and all. */
 export function toRecordedPick(row: Doc<"draftPicks">, text: TextIndex): RecordedPick<Card> {
-  const stored = row.pack;
+  const stored = row.pack.map((c) => asEngineCard(c, text));
   const pack = hydrate(stored, text);
   const picked = hydrateCard(inPack(stored, row.pickedName), text);
 
