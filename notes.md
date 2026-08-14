@@ -463,6 +463,26 @@ Ordered by value × readiness. Each is a candidate feature branch. Cite these by
 NAME rather than number — the numbers have drifted from what cites them twice
 already.
 
+`expert-principles` shipped 2026-08-14, in eight phases. The draft principles now
+decide exactly one thing — which card is put up against you when the win rates
+cannot separate the top of a pack — confined to the `gapMargin` band where there
+is no measurement to overrule, and firing on 21.6% of challenged picks. The grade
+stopped docking a pick for a difference it cannot see (13.0% of real fdn picks
+move to 100, all A→A+). The deck builder answers to `/principles`: land count by
+DECK-03/04, mana base from pip counts with MANA-02's floors before MANA-01's
+proportions. `turn` and `role` are settled at ingest so the browser and the server
+judge one deck, with parity asserted over 23,940 real picks at zero divergences.
+
+**Two things it left.** I/O is +18% per draft against a ~2.1MB baseline, which
+overran the +12% it was gated at — the gate cited the 2.98MB figure from decision
+#3, which predates the `draft.pick` split and was already stale. That promotes
+the macro I/O review to the next phase. And the signal feature the principles
+themselves argue for (SIG-03/04/05) was built, fitted over 75,646 picks and
+priced at −0.04pp beside `openness`, 1.1pp worse in its place: being closer to
+how a strong drafter DESCRIBES signal-reading did not make it a better predictor
+of what drafters DO. Reverted; the harness and the finding are in
+`policy.ts` and `diagnose-openness.mjs`.
+
 `deck-builder` shipped 2026-08-05, and half of it did not. Three-colour decks
 priced from measured `splashCost`, the interactive build step and the
 side-by-side comparison all landed. **Real winning-deck land counts did not, and
