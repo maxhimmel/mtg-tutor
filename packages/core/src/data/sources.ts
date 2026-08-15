@@ -23,6 +23,16 @@ export interface ScryfallFace {
 // and one type line -- `tdsk` has a 1/1 Insect and a 2/1 Insect, made by
 // Broodspinner and Overlord of the Mistmoors respectively -- and matching by
 // name would hand both cards whichever of them the crawl saw first.
+//
+// THERE IS NOTHING ELSE IN HERE WORTH READING, which is worth stating because
+// the array looks like it should be full of relationships to mine. Counted over
+// all 18 sets in the pool: 910 `token`, 1,852 `combo_piece`, and no `meld_part`
+// or `meld_result` at all. Of 622 combo pieces sampled across five of those
+// sets, 438 are the card pointing at ITSELF and most of the rest point at
+// "Manifest", which is a Scryfall helper object and not a card anybody drafts.
+// What survives is about a dozen genuine "this card names that card" links
+// across eighteen sets -- Altanak, the Thrice-Called and Say Its Name -- which
+// is not enough to build anything on.
 export interface ScryfallRelatedCard {
   id: string;
   component: string;

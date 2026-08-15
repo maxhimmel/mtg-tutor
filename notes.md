@@ -1,18 +1,9 @@
 # Issues:
 
 Numbering is stable and therefore gappy, for the same reason the ideas below
-are: `corpus.test.ts` cites issue #4. A fixed issue is deleted and its number
-left empty rather than renumbering everything under it.
-
-1. Room type cards and battle cards have text that is sideways and hard to read when they're enlarged. Can we rotate them or see if there's an alternate image to render in their enlarged state that has the text rotated so it's easier to read.
-
-   Both are findable without guessing now: `CardText.layout` is stored, Rooms are
-   Duskmourn's 23 `split` cards and battles are `transform`. Scryfall does publish
-   the rotated art — a battle's `card_faces[0].image_uris` is the sideways one, so
-   "is there an alternate image" is a question about which URI to ask for rather
-   than about rotating in CSS. Careful: `layout` alone does not separate a Room
-   from an ordinary split card (both are `split`) — `cardShapeOf` already tells
-   them apart by printed subtype and is the thing to reuse.
+are: `corpus.test.ts` cites issue #3. A fixed issue is deleted and its number
+left empty rather than renumbering everything under it. 1, 4, 6, 9 and 10
+shipped on 2026-08-15.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -29,109 +20,26 @@ left empty rather than renumbering everything under it.
    this is picked up. `pnpm backtest-scoring` is the harness, with the caveat
    below about what it can and cannot judge.
 
-3. **Re-ingesting a set strands every draft taken against the old data.** A
-   session is `{seed, pickedNames}` replayed against whatever the set says
-   today, so when a set's card pool or pack model changes the seed deals
-   different packs and `replayDraft` throws
-   (`Replay diverged at P1P1: "X" is not in the pack`). Hit for real on
-   2026-07-27 with EOE, after the bonus-sheet odds rebuild changed `packRate`
-   for six sets. It is not repairable — the packs that draft saw no longer
-   exist.
+3. **A re-ingest can strand a draft, and the fingerprint that warns about it
+   cannot be trusted to guard one.** The failure itself is closed: a session is
+   `{seed, pickedNames}`, so a set whose pool or pack model changed deals
+   different packs and the replay throws — but nothing replays any more.
+   `draftPicks` stores the pack every pick saw, `review.load` and
+   `challenges.diff` rebuild from those rows, and `review.list` badges a stale
+   draft before you click it. Hit for real once, on 2026-07-27 with EOE.
 
-   `loadBoard` says so in human terms instead of leaking the engine's message.
+   **What is actually left is one sentence.** `draftSessions.sourceHash` is a
+   hint and not a guard, so `challenges.accept` replays instead of comparing —
+   because `ingest-sets --force` re-crawls Scryfall and writes a new pool under
+   the SAME hash, and a set ingested with no artifact to hand (the CLI's
+   on-demand path) gets no hash at all. Getting an accept wrong is silent: both
+   drafts work and the comparison is nonsense. Both blind spots are fixable —
+   perturb the hash on `--force`, write one on the on-demand path — and then the
+   hash could guard and the replay could go.
 
-   **`draftPicks` (2026-07-29) shrinks this from "unreadable" to "unreplayable".**
-   Every pick now stores the pack it saw, so a stranded draft keeps its own
-   history: `coachContext` and `verdictContext` read the row and never replay,
-   and work fine on a session whose set has moved on. Sessions drafted before
-   that date have rows only if the backfill could replay them, which by
-   definition excludes the stranded ones.
-
-   Worth knowing: the 2026-07-29 `POOL_REVISION` bump re-ingested all 17 sets on
-   both deployments and stranded **nothing** — the backfill replayed every prod
-   session successfully. A re-crawl from unchanged artifacts is safe; it was the
-   `packRate` rebuild that broke EOE, not re-ingestion as such. The 2026-08-05
-   `9-card-shape` bump behaved the same way on the two sets it was run against.
-
-   `/review/[id]/deck` (2026-08-05) was the third reader to hit this and the
-   first to handle it deliberately: it catches the `ConvexError` and renders the
-   message in place with a way back, rather than a blank page. Containment, not
-   the fix.
-
-   **The fingerprint is built (2026-08-09), so the list no longer sends you into
-   a wall.** `draftSessions.sourceHash` is stamped at creation from the `sets`
-   row `setDocFor` had already read, so it costs nothing, and `review.list`
-   compares it against the set's hash today — one ~433-byte row per distinct set
-   on the page, against 25 replays of ~46KB apiece. A stale draft is badged
-   before you click. Forward-looking only, as expected: sessions from before the
-   stamp carry no hash.
-
-   **It answers three ways, not two, and that is the part worth keeping.**
-   `staleAgainst` returns `undefined` when either side has no hash, and that must
-   never collapse to "fine" — a draft from before the stamp might be either, and
-   the two answers send a reader in opposite directions. `undefined === undefined`
-   is true, so a naive comparison calls a draft fresh precisely when it knows
-   least about it.
-
-   **It is a hint and cannot be a guard**, which is why `challenges.accept`
-   replays rather than comparing hashes. Two blind spots, both real:
-   `ingest-sets --force` re-crawls Scryfall and writes a new pool under the SAME
-   hash, and the hash is absent entirely when a set is ingested with no artifact
-   to hand — the CLI's on-demand path. Only a replay answers "would this seed
-   still deal those packs", and that is the one question an accept has to get
-   right, because getting it wrong is silent: both drafts work and the comparison
-   is nonsense.
-
-   **`review.load` stopped replaying on 2026-08-11, and nothing replays now.** A
-   stranded draft opens: it rebuilds from `draftPicks` rows, which cannot strand
-   because every pick recorded the pack it saw. It also fixed something that had
-   been wrong quietly — a replay has no context rows, so the walkthrough had been
-   grading picks by RAW-POWER scores the player was never shown.
-
-   **It costs more, and the expectation that it would be cheaper was wrong.**
-   `pnpm bench-io`, fdn seed 42: 218.0KB replaying against 262.7KB reading rows.
-   The rows are an ADDITION and the replay itself was free — the comment in that
-   function had said exactly this for months and was right about bytes and wrong
-   only about bytes being the question. A draft that cannot be opened costs
-   infinity. It would have been 287.6KB but for `colorWinRates`, which that query
-   had been returning to no reader at all.
-
-   The old note, kept because the number is still the right comparison for the
-   NEXT reader that wants a whole draft: `challenges.diff` reads two
-   whole drafts out of `draftPicks` for a measured 138.5KB, against
-   `review.load`'s old 218KB — cheaper than what it replaced, and immune to this
-   issue by construction.
-
-   Another suggestion could be to compare the dates of ingested sets with drafts.
-
-   Before going ahead with the rest of this, let's do some more research and back
-   up the findings listed here. Let's also present a few different solutions
-   focused on the user's experience as this app grows/develops.
-
-   The next time I tell you to clean up these notes, please tell me why this insanely long and overexplained issue #3 is still in this doc. After reading all of this it seems done to me. Please explain because clearly I don't understand.
-
-4. **Show the tokens a card makes.** A card that reads "create a Map token"
-   is asking you to know what a Map is, and nothing in the app says.
-
-   The data supports it and costs one extra request per set. Scryfall's
-   `all_parts` names each related piece with a `component`, so filtering to
-   `component === "token"` gives the tokens a card makes — and the field is
-   absent entirely on a card that makes none, so it costs nothing on the many
-   that don't. The art is not in there, but every set publishes its tokens as
-   their own set under `t` + the code (`twoe`, `tdsk`): 15-19 cards each,
-   ordinary `image_uris`, resolvable by name in one `set:t<code>` search. Same
-   shape as the release-day bonus-sheet crawl `fetchScryfallPool` already does.
-
-   Two things to get right. `all_parts` also lists `combo_piece` entries and the
-   card itself — Kellan, Daring Traveler's three parts are two combo pieces and
-   one token — so it has to be filtered rather than taken whole. And the hover
-   already draws three boxes on a double-faced card with a stats panel, so where
-   a token goes is a layout question before it is a data one.
-
-   These findings bring up an interesting tangent: what else does `all_parts`
-   and `components` return for us? I'm curious if there's anything else you
-   think we could use to enhance the user's experience from that data. Also,
-   what the heck is a `combo_piece`?
+   `staleAgainst` must keep answering three ways. `undefined` means "cannot
+   say", and `undefined === undefined` is true, so a naive comparison calls a
+   draft fresh exactly when it knows least about it.
 
 5. **The coach still manufactures a fault when it cannot find one — prompt
    changed, not yet observed.** Reported on draft-v2: a Room dealing 4 damage to
@@ -155,14 +63,6 @@ left empty rather than renumbering everything under it.
    read as "how obvious is this to me" — the one question the data cannot grade;
    and the panel's eyebrow says "Your call on the gap", so a `misread` badge
    under an A+ is not read as a second opinion on the card.
-
-6. I noticed the "your call on the gap" doesn't have name highlighting as seen here (Embermouth Sentinel wasn't highlighted) and it should - just like the coach does:
-
-```
-Your call on the gap
-misread
-The gap to Embermouth Sentinel is 0.5pp, against a ±0.9pp margin of error: the data cannot tell the two apart. Being certain was not available here — whichever you took, it was not the clear call you said it was.
-```
 
 8. This coaching feels so offbase to me:
 
@@ -188,10 +88,6 @@ Stickytongue Sentinel is a solid 3‑mana 3/3 with reach and a bounce effect, bu
 I could understand the misread based purely off stats - sure. But this happened at P2P1. I had 9 cards in my main deck that were all blue and green and the coach telling me a black mana card was what I was meant to take feels crazy.
 
 Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
-
-9. See deck builder UI w/Progenitus. The mana pips on the card placard bleed over the edge and the card's name isn't visible at all.
-
-10. The "//" separator on the card placard's mana section is white and hard to read.
 
 11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine/whatever. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to SPEND -- overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual colors of mana-cost for this card?
 
@@ -235,7 +131,10 @@ so anything outside this file that cares should cite by name rather than number.
 delete-and-leave-empty rule: 8b and 8c are follow-ons that cite it, so it keeps
 a one-line stub rather than orphaning them. 11 (coach from the local Claude Code
 CLI) shipped on 2026-08-13; what it can and cannot be trusted for is in
-`README.md`, and the roads not taken are decision #19.
+`README.md`, and the roads not taken are decision #19. 11 again — the app title,
+which is live in `apps/web/app/layout.tsx` as "P1P1 — Draft on instinct. Leave
+with reasons." — and 12 (principle marks) and 13 (mana symbols in prose) shipped
+on 2026-08-15.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -397,22 +296,6 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
-
-11. New app title:
-
-- Title: P1P1
-- Taglines: ["Where every draft starts.", "Draft on instinct. Leave with reasons."]
-
-12. Could we experiment with adding some kinda icons to all the principle types (SIG, EVAL, MISTAKE, CURVE, MANA, etc etc) and then render them slightly more concisely and definitely more interestingly/eye-catching/cool when they're referenced (i.e. by the coach/"your call on the gap")
-
-13. It'd be kinda cool if we removed all mention of mana char references (UWBRG) and instead used the mana font/symbols. Here's an example from the coach:
-
-```
-Coach
-Spectacular Skywhale fits your spells-matter UR shell fine — flying and instant/sorcery synergy
-```
-
-But I'd like further research into all parts of the app.
 
 17. **A static page for what `detectRole` calls things** (2026-08-14). The
     classifier is a handful of regexes over rules text, and since it moved to
