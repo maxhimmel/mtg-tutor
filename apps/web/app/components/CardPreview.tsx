@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
-import { type Card, cardShapeOf, keywordsOf } from "@mtg-tutor/core";
+import { type Card, cardShapeOf, frontIsSideways, keywordsOf } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
 import { useHeldKey } from "../lib/useHeldKey";
 import { CardStats, hasStats } from "./CardStats";
@@ -78,9 +78,24 @@ const PREVIEW_H = Math.round((PREVIEW_W * 680) / 488);
 const PANEL_W = 260;
 const GAP = 12;
 
+interface Box {
+  w: number;
+  h: number;
+}
+
+// A card lying on its side is the same card: the 63mm edge is still drawn at
+// PREVIEW_W, so it is the box that turns and not the scale.
+const UPRIGHT: Box = { w: PREVIEW_W, h: PREVIEW_H };
+const TURNED: Box = { w: PREVIEW_H, h: PREVIEW_W };
+const boxFor = (sideways: boolean) => (sideways ? TURNED : UPRIGHT);
+
 interface Placement {
   left: number;
   top: number;
+  // The tallest face in the block. A Battle is a landscape front beside an
+  // upright back, so the two are no longer the same shape and neither one can
+  // stand for the block on its own.
+  height: number;
   // Where the back face's own popup goes. Null when the card has no back face,
   // and also when there is no room for two cards side by side -- the face the
   // player hovered is the one they asked for, so the back yields first.
@@ -102,15 +117,17 @@ function rightEdge(anchor: DOMRect): number {
   return box && box.left > anchor.right ? box.left : window.innerWidth;
 }
 
-function place(anchor: DOMRect, wantsPanel: boolean, wantsBack: boolean): Placement {
+function place(anchor: DOMRect, wantsPanel: boolean, front: Box, back: Box | null): Placement {
   const right = rightEdge(anchor);
   const vh = window.innerHeight;
 
   // Two cards where a double-faced one has room for both, one otherwise. Decided
   // before the horizontal placement because everything below positions against
-  // the block as a whole.
-  const showBack = wantsBack && PREVIEW_W * 2 + GAP * 3 <= right;
-  const width = showBack ? PREVIEW_W * 2 + GAP : PREVIEW_W;
+  // the block as a whole. Measured off the two faces rather than off PREVIEW_W
+  // twice, because a Battle's front is landscape and its back is not.
+  const showBack = back != null && front.w + GAP + back.w + GAP * 2 <= right;
+  const width = showBack ? front.w + GAP + back!.w : front.w;
+  const height = showBack ? Math.max(front.h, back!.h) : front.h;
 
   // Prefer the right of the anchor; flip left when it would overflow.
   let left = anchor.right + GAP;
@@ -118,8 +135,8 @@ function place(anchor: DOMRect, wantsPanel: boolean, wantsBack: boolean): Placem
   left = Math.max(GAP, Math.min(left, right - GAP - width));
 
   // Vertically center on the anchor, clamped to the viewport.
-  let top = anchor.top + anchor.height / 2 - PREVIEW_H / 2;
-  top = Math.max(GAP, Math.min(top, vh - GAP - PREVIEW_H));
+  let top = anchor.top + anchor.height / 2 - height / 2;
+  top = Math.max(GAP, Math.min(top, vh - GAP - height));
 
   // The panel sits beyond the preview, so the image never has to move to make
   // room for it.
@@ -131,7 +148,7 @@ function place(anchor: DOMRect, wantsPanel: boolean, wantsBack: boolean): Placem
     else if (before >= GAP) panelLeft = before;
   }
 
-  return { left, top, backLeft: showBack ? left + PREVIEW_W + GAP : null, panelLeft };
+  return { left, top, height, backLeft: showBack ? left + front.w + GAP : null, panelLeft };
 }
 
 // A Magic card is 63mm across with a 3mm corner, and Scryfall's art is the whole
@@ -157,29 +174,62 @@ const CARD_CORNER = (PREVIEW_W * 3) / 63;
 // where WOE's adventures are VP8X -- and an opaque image has to put a colour in
 // those corners, which is white. Clipping at the card's real radius means there
 // is no gap to fill either way.
+//
+// A SIDEWAYS CARD IS TURNED HERE, because there is nowhere else to turn it.
+// Scryfall serves a Battle's front and a split card's whole card as portrait
+// 488x680 files with the card lying on its side inside them, and a Room's faces
+// carry no image_uris at all -- so there is no upright URL to ask for instead.
+// See `frontIsSideways`. The picture rotates and the box turns with it; the
+// clip radius does not change, because the card's 3mm corner is still 3mm on a
+// card whose 63mm edge is still drawn at PREVIEW_W.
+//
+// Rotating about the centre rather than a corner is what keeps this to one
+// number: a portrait image spun 90 degrees around its own middle lands exactly
+// inside a box of its own dimensions swapped, with no offset to compute.
 function Face({
   src,
   alt,
   left,
   top,
+  sideways = false,
 }: {
   src: string;
   alt: string;
   left: number | null;
   top: number | null;
+  sideways?: boolean;
 }) {
+  const box = boxFor(sideways);
   return (
     <div
       className="popup-surface pointer-events-none fixed z-50 overflow-hidden transition-opacity"
       style={{
         left: left ?? -9999,
         top: top ?? -9999,
-        width: PREVIEW_W,
+        width: box.w,
+        // Only when turned. An upright box has always hugged its image, and
+        // stating a rounded height for it would open a sub-pixel band under the
+        // bottom edge -- the exact defect the three rules above exist to close.
+        height: sideways ? box.h : undefined,
         opacity: left != null ? 1 : 0,
         borderRadius: CARD_CORNER,
       }}
     >
-      <img src={webpImage(src)} alt={alt} className="block w-full" draggable={false} />
+      <img
+        src={webpImage(src)}
+        alt={alt}
+        className={sideways ? "absolute left-1/2 top-1/2 block" : "block w-full"}
+        style={
+          sideways
+            ? {
+                width: PREVIEW_W,
+                height: PREVIEW_H,
+                transform: "translate(-50%, -50%) rotate(90deg)",
+              }
+            : undefined
+        }
+        draggable={false}
+      />
     </div>
   );
 }
@@ -206,6 +256,12 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // click because the panel is pointer-events:none -- it sits under the cursor
   // and must stay unclickable, or moving toward it would dismiss the hover.
   const explain = useHeldKey("Shift") && stats;
+
+  // Only the front. A Battle's back is an ordinary upright creature, and there
+  // is no card in the pool printed sideways on both sides.
+  const turned = hover != null && frontIsSideways(hover.card);
+  const frontBox = boxFor(turned);
+  const backBox = back != null ? UPRIGHT : null;
 
   // A ref, not state: suspending must not re-render every card on the page, and
   // nothing renders differently for it -- `show` simply declines.
@@ -285,8 +341,8 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // useEffect (not layout) keeps this off the server render; the box stays at
   // opacity 0 until a position is set, so there is no visible flash.
   useEffect(() => {
-    if (hover) setPos(place(hover.anchor, panel, back != null));
-  }, [hover, panel, back]);
+    if (hover) setPos(place(hover.anchor, panel, frontBox, backBox));
+  }, [hover, panel, frontBox, backBox]);
 
   // Memoised because every hoverable card on the page consumes this context, and
   // a fresh object here would re-render all of them each time a preview opens.
@@ -297,11 +353,17 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
       {children}
       {hover?.card.imageUrl && (
         <>
+          {/* Each face centred in the block rather than both hung from its top,
+              which only started to matter once the two could be different
+              shapes: a Battle's landscape front against its upright back is a
+              126px difference, and top-aligning them reads as one of the two
+              having slipped. */}
           <Face
             src={hover.card.imageUrl}
             alt={hover.card.name}
             left={pos?.left ?? null}
-            top={pos?.top ?? null}
+            top={pos ? pos.top + (pos.height - frontBox.h) / 2 : null}
+            sideways={turned}
           />
 
           {/* The back of a double-faced card, beside the front rather than
@@ -314,7 +376,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
               src={back}
               alt={hover.card.name.split("//").at(-1)?.trim() ?? hover.card.name}
               left={pos.backLeft}
-              top={pos.top}
+              top={pos.top + (pos.height - UPRIGHT.h) / 2}
             />
           )}
 
@@ -325,7 +387,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                 left: pos.panelLeft,
                 top: pos.top,
                 width: PANEL_W,
-                maxHeight: PREVIEW_H,
+                maxHeight: pos.height,
               }}
             >
               {/* Data first: it is what the player is hovering to check. The
