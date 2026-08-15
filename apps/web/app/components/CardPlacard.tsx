@@ -132,17 +132,29 @@ export function CardPlacard({
               headings: it is the closest licensable stand-in for Beleren, the
               face Magic prints card names in. */}
           <span
-            className={`truncate font-display text-[15px] font-bold leading-4.5 tracking-tight ${
+            className={`min-w-0 truncate font-display text-[15px] font-bold leading-4.5 tracking-tight ${
               ghost ? "text-base-content/60" : PLATE_INK
             }`}
             title={card.name}
           >
             {card.name}
           </span>
+          {/* At most half the plate, which is what keeps the name on it.
+              Progenitus costs ten pips -- about 150px at this size, wider on its
+              own than the ~140px plate a curve well gives it. The name is
+              `truncate`, so its automatic minimum size is zero and it gave up all
+              of that width without complaint: the row printed a mana cost, no
+              name at all, and the pips over the edge of the frame.
+
+              The cap is on the cost rather than a floor under the name because a
+              deck list is scanned by name -- when the two compete for the row,
+              the identifier is the half that should win. ManaCost wraps within
+              whatever it is given, so nothing is dropped; a ten-pip card is
+              simply twice as tall a fact as a two-pip one. */}
           <ManaCost
             cost={card.manaCost}
             shadow={!ghost}
-            className={`shrink-0 whitespace-nowrap text-[11px] ${ghost ? "opacity-60" : PLATE_INK}`}
+            className={`max-w-[50%] shrink-0 text-[11px] ${ghost ? "opacity-60" : PLATE_INK}`}
           />
         </div>
       </div>

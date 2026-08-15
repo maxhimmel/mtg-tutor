@@ -88,7 +88,26 @@ export function ManaCost({
   if (halves.length === 0) return null;
 
   return (
-    <span className={className} role="img" aria-label={`Mana cost ${manaText(cost)}`}>
+    // A flex row rather than a run of inline pips, so that a cost too wide for
+    // the space it is given wraps instead of running out of it. Adjacent inline
+    // elements carry no whitespace between them and so offer the browser nowhere
+    // to break: Progenitus' ten pips left a deck-list row with no line to wrap
+    // onto, and simply drew themselves past the edge of the frame.
+    //
+    // The pips are printed touching, which reads as one wide shape at a glance --
+    // {1}{W}{W} and {3}{W} take about the same room and the difference between
+    // them is the whole point. A hair of air between them is enough to count
+    // them, and in em so it stays a hair at the 2xl the card frames print these
+    // at. It is the container's gap now rather than a margin on each pip, because
+    // a margin survives the wrap and indents the second row.
+    //
+    // Right-aligned because every caller prints this at the end of a line, so a
+    // short second row belongs under the end of the first.
+    <span
+      className={`inline-flex flex-wrap items-center justify-end gap-x-[0.14em] align-middle ${className ?? ""}`}
+      role="img"
+      aria-label={`Mana cost ${manaText(cost)}`}
+    >
       {halves.map((symbols, half) => (
         <Fragment key={half}>
           {half > 0 && (
@@ -98,20 +117,14 @@ export function ManaCost({
           )}
           {symbols.map((symbol, i) => {
             const code = codeFor(symbol);
-            // The pips are printed touching, which reads as one wide shape at a
-            // glance -- {1}{W}{W} and {3}{W} take about the same room and the
-            // difference between them is the whole point. A hair of air between
-            // them is enough to count them, and in em so it stays a hair at the
-            // 2xl the card frames print these at.
-            const gap = i > 0 ? " ml-[0.14em]" : "";
             return code ? (
               <i
                 key={i}
-                className={`ms ms-${code} ms-cost${gap}${shadow ? " ms-shadow" : ""}`}
+                className={`ms ms-${code} ms-cost${shadow ? " ms-shadow" : ""}`}
                 aria-hidden="true"
               />
             ) : (
-              <span key={i} className={`font-mono text-xs${gap}`} aria-hidden="true">
+              <span key={i} className="font-mono text-xs" aria-hidden="true">
                 {symbol}
               </span>
             );
