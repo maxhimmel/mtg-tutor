@@ -8,7 +8,29 @@ import "./app/env";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
+// What makes a file a page, and the whole of how a dev-only screen is kept out
+// of production.
+//
+// `page.dev.tsx` is a page when `next dev` compiles the app and is not a page at
+// all when `next build` does -- so the route does not 404 in production, it does
+// not EXIST: never matched, never compiled, never bundled, and nothing it
+// imports is either. That is the property worth having. The playground reads
+// `sets.get`, the whole-pool query the app is told never to call, and a runtime
+// `if (production) notFound()` would still have shipped that call to every
+// visitor and left one edit away from being reachable.
+//
+// `next build` forces NODE_ENV=production and `next dev` sets development, so
+// this is decided by which command ran, not by anything anyone remembers to
+// configure -- a preview deploy is a build too, and gets the same answer as
+// production.
+//
+// The convention for the next one: name it `page.dev.tsx` and it is dev-only.
+// `app/dev/devOnly.test.ts` is the tripwire for naming it anything else.
+const DEV_ONLY_PAGES = process.env.NODE_ENV === "development" ? ["dev.tsx"] : [];
+
 const nextConfig: NextConfig = {
+  pageExtensions: ["tsx", "ts", "jsx", "js", ...DEV_ONLY_PAGES],
+
   // Workspace packages ship TypeScript source, so Next has to compile them.
   transpilePackages: ["@mtg-tutor/core", "@mtg-tutor/backend"],
 
