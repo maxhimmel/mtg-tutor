@@ -107,6 +107,34 @@ export interface EngineCard {
 }
 
 /**
+ * A token a card creates.
+ *
+ * Three fields, and the third is the reason the other two are not enough: a
+ * card that says "create a Map token" is asking the reader to already know what
+ * a Map is, and the only complete answer is its picture -- the token's own
+ * rules text is printed on it and nowhere in `all_parts`. The name and the type
+ * line are what remain readable when there is no picture.
+ *
+ * Deliberately not the Scryfall object it came from. That carries an oracle id,
+ * a set, a collector number, a rarity, legalities and eight image sizes for a
+ * thing that is never dealt, never scored and never picked.
+ */
+export interface CardToken {
+  name: string;
+  // Scryfall's own, and it says "Token" first: "Token Creature — Insect". Kept
+  // because it is the only thing that separates two tokens of one name, and
+  // because it is the whole label when `imageUrl` is absent.
+  typeLine: string;
+  // Absent when the set's token sheet does not print this token. That is an
+  // ANSWER for exactly one token -- "Copy", which every set makes and no set
+  // prints -- and a GAP for anything else, which is why `ingest` returns the
+  // names it could not illustrate rather than dropping those tokens on the
+  // floor. A token with no picture still says what it is; a token that was
+  // never stored says nothing and nothing says it is missing.
+  imageUrl?: string;
+}
+
+/**
  * What a person reads: rules text, art, and the statistics that make a win rate
  * legible next to it. Read when a card is rendered or written into a prompt,
  * which is a handful of cards at a time -- never the whole set on a pick.
@@ -147,6 +175,12 @@ export interface CardText {
   // single picture the player is already looking at, so a "see the back" popup
   // for those would show a second copy of the front.
   backImageUrl?: string;
+  // The tokens this card creates, and absent rather than empty on a card that
+  // creates none -- 68-93% of the pool, measured across all eighteen ingested
+  // sets. Costs ~165-190 bytes on a card that does have them: 2.8KB (ktk) to
+  // 16.0KB (woe) per set, mean 8.0KB, spread over that set's text rows and
+  // adding nothing at all to the pool document the pick path reads.
+  tokens?: CardToken[];
   collectorNumber: string;
   // Scryfall set code. Differs from the set being drafted for bonus-sheet and
   // Special Guest cards, which appear in packs without belonging to the set.

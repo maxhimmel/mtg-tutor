@@ -54,6 +54,14 @@ export interface IngestResult {
   // the shapes were counted from. Absent on the cached paths, which fetch
   // nothing.
   missingPackCards?: number;
+  // Distinct tokens the set's token sheet had no printing of, named rather than
+  // counted -- because the honest reading differs by name and a number cannot
+  // say which one it got. "Copy" is expected: every format makes one and no set
+  // prints one, and across all eighteen ingested sets it is the ONLY name that
+  // failed to resolve -- so its absence is an ANSWER. Any other name is a GAP,
+  // and naming it here is the only way anybody would notice one. Absent on the
+  // cached paths, which fetch nothing.
+  tokensWithoutArt?: string[];
 }
 
 const USER_AGENT =
@@ -93,7 +101,10 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // beside it has always been able to do and the score never could, and
 // "11-turn-role" put the curve bucket and the role on the card so the pick path
 // can judge it against the DECK at all, which had been browser-only and so a
-// second opinion rather than the app's.
+// second opinion rather than the app's,
+// and "12-tokens" put the tokens a card creates on the text half, because a card
+// that says "create a Map token" asks the reader to already know what a Map is
+// and nothing in the app said.
 // The tag names what changed; the fingerprint makes a change to how a card is
 // VALUED invalidate every pool without anyone remembering to say so. See
 // VALUE_FINGERPRINT.
@@ -102,7 +113,7 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // re-ingest rather than a migration -- and until one runs, a set simply has no
 // stored margins and grades exactly as it always has. That is the safe
 // direction: absent means "cannot say these are the same", never "they are".
-const POOL_REVISION = `11-turn-role.${VALUE_FINGERPRINT}`;
+const POOL_REVISION = `12-tokens.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -192,12 +203,24 @@ async function fetchSetMeta(setCode: string): Promise<ScryfallSet> {
 // the metadata, so a full ingest gets both without paying twice.
 async function fetchScryfallPool(
   setCode: string,
-): Promise<{ cards: ScryfallCard[]; meta: ScryfallSet }> {
+): Promise<{ cards: ScryfallCard[]; tokens: ScryfallCard[]; meta: ScryfallSet }> {
   const main = await scryfallSearch(`set:${setCode}`);
-  if (main.length === 0) return { cards: main, meta: {} };
+  if (main.length === 0) return { cards: main, tokens: [], meta: {} };
+
+  await sleep(SCRYFALL_DELAY_MS);
+  // Every set publishes its tokens as their own set, `t` plus the code -- 12 to
+  // 43 cards across the eighteen ingested, with ordinary `image_uris`. One crawl
+  // for the whole set: a card's `all_parts` names the tokens it makes and gives
+  // each one's Scryfall id, but carries no art at all, so the alternative is a
+  // request per card that makes something, which is 17 to 84 of them per set.
+  //
+  // Swallowed like the bonus-sheet crawl below, and for a stronger reason: a set
+  // with no token sheet is a set whose cards make no tokens, which is a fine
+  // thing to be and not a reason for the ingest to fail.
+  const tokens = await scryfallSearch(`set:t${setCode}`).catch(() => [] as ScryfallCard[]);
 
   const meta = await fetchSetMeta(setCode);
-  if (!meta.released_at) return { cards: main, meta };
+  if (!meta.released_at) return { cards: main, tokens, meta };
 
   await sleep(SCRYFALL_DELAY_MS);
   // Bonus sheets ship on the set's release day, so this finds them without a
@@ -207,7 +230,7 @@ async function fetchScryfallPool(
     `game:arena date=${meta.released_at} -set:${setCode}`,
   ).catch(() => [] as ScryfallCard[]);
 
-  return { cards: [...main, ...sameDay], meta };
+  return { cards: [...main, ...sameDay], tokens, meta };
 }
 
 // Scryfall's /cards/collection cap.
@@ -433,7 +456,7 @@ export const ingest = action({
     // Leftovers go last so pickDraftable's first-print-wins dedupe still lets a
     // name that is in both the main set and a bonus sheet keep its main rarity.
     const draftable = pickDraftable(
-      mergeCards([...scryfall.cards, ...leftovers], ratings),
+      mergeCards([...scryfall.cards, ...leftovers], ratings, scryfall.tokens),
       ratings,
       packCards,
     );
@@ -505,6 +528,18 @@ export const ingest = action({
       (p) => !pooled.has(normalizeName(p.name)),
     ).length;
 
+    // Counted over the pool that is actually being stored, so a promo dropped by
+    // pickDraftable cannot report a token nobody will ever see. A card fetched
+    // by printing from an older set -- MKM's List sheet -- makes tokens this
+    // set's sheet was never going to print, and those land here too.
+    const tokensWithoutArt = [
+      ...new Set(
+        cards.flatMap((c) =>
+          (c.tokens ?? []).filter((t) => !t.imageUrl).map((t) => t.name),
+        ),
+      ),
+    ];
+
     // The context rows. Built here rather than in `store` because this is where
     // the stats artifact is already open, and written as a whole row per card so
     // scoring reads a pack's worth and not a set's.
@@ -557,7 +592,7 @@ export const ingest = action({
       metaRevision: META_REVISION,
     });
 
-    return { ...stored, missingPackCards };
+    return { ...stored, missingPackCards, tokensWithoutArt };
   },
 });
 

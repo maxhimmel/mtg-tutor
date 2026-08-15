@@ -89,6 +89,13 @@ for (const file of files) {
         `  WARNING: ${result.missingPackCards} pack card(s) missing from the pool\n`,
       );
     }
+    // Named and not counted, and not a WARNING, because "Copy" is here for
+    // nearly every set -- every format makes one and no set prints one. A count
+    // would be a warning that is always on and therefore never read; the names
+    // are what let a new one stand out from the one that is always there.
+    if (result.tokensWithoutArt?.length) {
+      process.stderr.write(`  no token art: ${result.tokensWithoutArt.join(", ")}\n`);
+    }
   }
 }
 
