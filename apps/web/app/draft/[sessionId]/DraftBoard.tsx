@@ -1145,8 +1145,19 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                             </span>
                           )}
                         </div>
+                        {/* Through CardText for the same reason the coach's
+                            answer is. This sentence names the card the pick was
+                            argued AGAINST -- the one thing on the panel that is
+                            not already drawn above it -- so it is the name a
+                            reader is most likely to want to look at, and it was
+                            the only card name in the whole rail they could not.
+                            `boardCards` carries `lastView.pack`, so the
+                            challenger is in the match set. */}
                         <p className="text-sm leading-relaxed text-base-content/80">
-                          {calibrationLine(lastView.call.confidence, lastView.call.outcome)}
+                          <CardText
+                            text={calibrationLine(lastView.call.confidence, lastView.call.outcome)}
+                            cards={boardCards}
+                          />
                         </p>
                       </div>
                     )}
