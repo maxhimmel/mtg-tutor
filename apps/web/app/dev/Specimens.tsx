@@ -68,6 +68,19 @@ function Well({ children }: { children: ReactNode }) {
   );
 }
 
+// A sentence in the coach's own idiom, built from whatever is on the stage: it
+// names cards, and it says a colour pair the way the coach says one.
+function coachSentence(cards: Card[]): string {
+  const [first, second] = cards;
+  const shell = [...new Set(cards.flatMap((card) => card.colorIdentity))].join("") || "WU";
+  const over = second ? ` over ${second.name}` : "";
+  return (
+    `Taking ${first.name}${over} keeps you in the ${shell} shell. ` +
+    `${first.name} is the pick if the deck is already ${shell}; if it is not, ` +
+    `you are paying a colour for it.`
+  );
+}
+
 export const SPECIMENS: Specimen[] = [
   {
     id: "placard-widths",
@@ -199,11 +212,21 @@ export const SPECIMENS: Specimen[] = [
   {
     id: "text",
     title: "Rules text",
-    note: "Oracle text with the names of staged cards linked",
+    note: "The card's own text, and the coach's prose about it",
     render: ({ card, cards }) => (
-      <Bay label={card.typeLine} width="w-[34rem] max-w-full">
-        <CardText text={card.oracleText} cards={cards} />
-      </Bay>
+      <div className="flex flex-wrap items-start gap-8">
+        <Bay label={card.typeLine} width="w-[30rem] max-w-full">
+          <CardText text={card.oracleText} cards={cards} />
+        </Bay>
+        {/* The other half of what CardText is for. Oracle text names a card
+            rarely; the coach names one in every other sentence, and says
+            colours in shorthand while it does -- which is the pair of
+            substitutions this component makes and the reason a sentence
+            nobody's card carries belongs on the stage. */}
+        <Bay label="Coach prose" width="w-[30rem] max-w-full">
+          <CardText text={coachSentence(cards)} cards={cards} />
+        </Bay>
+      </div>
     ),
   },
   {
