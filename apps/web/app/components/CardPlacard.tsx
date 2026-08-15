@@ -37,6 +37,16 @@ import { ManaCost } from "./ManaCost";
 // is here to catch the next one that would.
 const NATURAL_W = "max-w-[17rem]";
 
+// The one ink everything printed on the filled plate is drawn in.
+//
+// It was on the name only, and the mana cost inherited `base-content` instead --
+// which is near-white under this theme, on a plate mixed toward white. The pips
+// survived that because `.ms-cost` paints its own disc and sets its own colour;
+// the `//` a two-in-one card's cost is divided by does not, so it was white on
+// cream and effectively unprinted. Anything added to this plate later that draws
+// itself in `currentColor` would have arrived invisible the same way.
+const PLATE_INK = "text-[#0d0b06]";
+
 export function CardPlacard({
   card,
   ghost = false,
@@ -122,17 +132,29 @@ export function CardPlacard({
               headings: it is the closest licensable stand-in for Beleren, the
               face Magic prints card names in. */}
           <span
-            className={`truncate font-display text-[15px] font-bold leading-4.5 tracking-tight ${
-              ghost ? "text-base-content/60" : "text-[#0d0b06]"
+            className={`min-w-0 truncate font-display text-[15px] font-bold leading-4.5 tracking-tight ${
+              ghost ? "text-base-content/60" : PLATE_INK
             }`}
             title={card.name}
           >
             {card.name}
           </span>
+          {/* At most half the plate, which is what keeps the name on it.
+              Progenitus costs ten pips -- about 150px at this size, wider on its
+              own than the ~140px plate a curve well gives it. The name is
+              `truncate`, so its automatic minimum size is zero and it gave up all
+              of that width without complaint: the row printed a mana cost, no
+              name at all, and the pips over the edge of the frame.
+
+              The cap is on the cost rather than a floor under the name because a
+              deck list is scanned by name -- when the two compete for the row,
+              the identifier is the half that should win. ManaCost wraps within
+              whatever it is given, so nothing is dropped; a ten-pip card is
+              simply twice as tall a fact as a two-pip one. */}
           <ManaCost
             cost={card.manaCost}
             shadow={!ghost}
-            className={`shrink-0 whitespace-nowrap text-[11px] ${ghost ? "opacity-60" : ""}`}
+            className={`max-w-[50%] shrink-0 text-[11px] ${ghost ? "opacity-60" : PLATE_INK}`}
           />
         </div>
       </div>
