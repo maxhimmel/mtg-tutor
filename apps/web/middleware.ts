@@ -28,6 +28,13 @@ export default authkitMiddleware({
       "/sign-in",
       "/sign-up",
       "/callback",
+      // The component playground, which 404s in production -- so this line
+      // exempts nothing there. What it buys in development is a second dev
+      // server on a second port: WorkOS knows the redirect URI for :3000 only,
+      // so a page behind the gate cannot be signed into anywhere else, and the
+      // use of the playground is having it open BESIDE the app being changed.
+      // The set queries it reads take no identity either way.
+      "/dev",
     ],
   },
 });
