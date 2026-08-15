@@ -28,6 +28,23 @@ const NAME_RULE = [
   "  and a shortened one is left as plain text.",
 ];
 
+// Colour shorthand is the one thing in an answer besides a card name that a
+// client redraws: the web client turns "UR" into the game's own two pips, which
+// is what the letters were standing in for. Finding letters inside a sentence is
+// only safe if their spelling is known in advance, so it is asked for here
+// rather than guessed at there. WUBRG order because "BUG" and "RUG" are colour
+// nicknames and English words both, and a word rather than a letter for a single
+// colour because "B" is also a grade.
+//
+// The model was already writing letters unprompted -- the archetype win rates in
+// the review frame are keyed "WU", "BRG" -- so this settles a spelling rather
+// than introducing one, and the terminal client reads the same either way.
+const COLOR_RULE = [
+  '- Write a combination of colors as its letters in WUBRG order — "UR", "WUB" —',
+  '  never in another order and never as a guild or wedge nickname ("Izzet", "BUG").',
+  '  Write a SINGLE color as its word: "blue", not "U".',
+];
+
 // Every card is written with its rules text now. Before that the model had a
 // type line and a name, and answered from the name — calling a removal
 // enchantment "not removal" and a five-colour mana rock "a generic mid-range
@@ -117,6 +134,7 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     // player actually said is worth more than a third sentence about the card.
     "- Keep it to 1-3 sentences. No preamble, no restating the situation.",
     ...NAME_RULE,
+    ...COLOR_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
     "  Only cite ids that appear in the list below; never invent one. Put a citation",
     "  at the end of the sentence it supports, never mid-clause as part of the",
@@ -166,6 +184,7 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "Rules:",
     "- Be concrete and specific; no filler or restating the situation back.",
     ...NAME_RULE,
+    ...COLOR_RULE,
     ...CARD_TEXT_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
     "  Only cite ids that appear in the list below; never invent one. Put a citation",

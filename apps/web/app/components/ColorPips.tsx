@@ -14,7 +14,22 @@ import { ManaCost } from "./ManaCost";
  * Through ManaCost rather than a second symbol renderer, because there is already
  * one and two of them would drift on the day a hybrid or a snow symbol turns up.
  */
-export function ColorPips({ colors, className }: { colors: string; className?: string }) {
+export function ColorPips({
+  colors,
+  label,
+  className,
+}: {
+  colors: string;
+  /**
+   * What to call them, for a caller drawing these inside a sentence.
+   *
+   * The default is a list -- "White Blue" -- which is right for a readout with a
+   * word beside it and wrong read aloud mid-clause, where the colours are one
+   * name for one deck. See `spokenColors`.
+   */
+  label?: string;
+  className?: string;
+}) {
   const letters = [...colors];
   if (letters.length === 0) return <span className={className}>—</span>;
 
@@ -24,7 +39,7 @@ export function ColorPips({ colors, className }: { colors: string; className?: s
     <span
       className={className}
       role="img"
-      aria-label={letters.map((c) => COLOR_NAMES[c] ?? c).join(" ")}
+      aria-label={label ?? letters.map((c) => COLOR_NAMES[c] ?? c).join(" ")}
     >
       <ManaCost cost={letters.map((c) => `{${c}}`).join("")} />
     </span>
