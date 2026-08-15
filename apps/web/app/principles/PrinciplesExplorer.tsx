@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Principle, PrincipleSource, PrinciplesDoc } from "@mtg-tutor/core";
 import { PageShell } from "../components/PageShell";
+import { PrincipleIcon } from "../components/PrincipleIcon";
 
 const label = (category: string) => category.replace(/-/g, " ");
 
@@ -114,6 +115,7 @@ export function PrinciplesExplorer({
             href={`#${category}`}
             className="capitalize text-base-content/60 hover:text-primary"
           >
+            <PrincipleIcon category={category} className="inline size-3.5 align-[-0.2em]" />{" "}
             {label(category)}{" "}
             <span className="tabular-nums text-base-content/40">{list.length}</span>
           </a>
@@ -130,7 +132,14 @@ export function PrinciplesExplorer({
       <div className="flex flex-col gap-8">
         {groups.map(([category, list]) => (
           <section key={category} id={category} className="scroll-mt-6">
-            <h2 className="eyebrow mb-3">{label(category)}</h2>
+            {/* This page is the legend for the marks the coach's citations are
+                badged with, so the mark and the category's name have to appear
+                together somewhere a reader will actually land -- and this is
+                where every one of those badges links to. */}
+            <h2 className="eyebrow mb-3 flex items-center gap-1.5">
+              <PrincipleIcon category={category} className="size-4 shrink-0 text-primary" />
+              {label(category)}
+            </h2>
             <div className="flex flex-col gap-3">
               {list.map((p) => (
                 <article

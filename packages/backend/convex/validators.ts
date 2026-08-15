@@ -149,6 +149,15 @@ export const packSnapshot = v.object({
   role: v.optional(cardRole),
 });
 
+// A token a card creates. Three fields and no more: see core's CardToken for
+// why the Scryfall object it came from is not stored, and why `imageUrl` is the
+// one that can be absent.
+export const cardToken = v.object({
+  name: v.string(),
+  typeLine: v.string(),
+  imageUrl: v.optional(v.string()),
+});
+
 // The half a person reads, and the half a prompt writes. One row per card in
 // `setCardText`, not an array on the pool document, because its readers want
 // SUBSETS: buildPickContext describes the picked card and the four best it
@@ -182,6 +191,20 @@ export const cardText = v.object({
   // the type line already on this row.
   layout: v.optional(v.string()),
   backImageUrl: v.optional(v.string()),
+  // What the card creates, on the row a reader already opens to see the card.
+  //
+  // Never on `setCards`, and the numbers are not close. Measured across all
+  // eighteen ingested sets, a set's tokens are 2.8KB (ktk) to 16.0KB (woe),
+  // mean 8.0KB -- and `setCards` is retrieved whole on all 42 picks, so that is
+  // ~336KB a draft against the 2.98MB a draft and its review move today, for
+  // something never dealt, never scored and never picked. Here it rides a row
+  // that is read a handful at a time, by exactly the reader that wants it.
+  //
+  // Optional, and required in neither direction. Most cards make no tokens, and
+  // on the deploy that introduces this the schema push runs BEFORE the ingest
+  // that would fill it -- see decision #21 in notes.md, which cost a production
+  // deploy the last time a pipeline field was narrowed on the way in.
+  tokens: v.optional(v.array(cardToken)),
   collectorNumber: v.string(),
   setCode: v.optional(v.string()),
   avgPick: v.optional(v.number()),

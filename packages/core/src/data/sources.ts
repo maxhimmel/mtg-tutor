@@ -12,7 +12,26 @@ export interface ScryfallFace {
   image_uris?: { normal?: string };
 }
 
+// One entry in a card's `all_parts`. Scryfall uses the same array for four
+// unrelated relationships -- `token` for what the card creates, `combo_piece`
+// for a card it names or is named by, `meld_part`/`meld_result` for the two
+// halves of a meld -- and it lists the card ITSELF as well, so it has to be
+// filtered by `component` rather than taken whole.
+//
+// `id` is the token's own Scryfall card id, which is what makes resolving its
+// art exact: a set's token sheet can print two different tokens under one name
+// and one type line -- `tdsk` has a 1/1 Insect and a 2/1 Insect, made by
+// Broodspinner and Overlord of the Mistmoors respectively -- and matching by
+// name would hand both cards whichever of them the crawl saw first.
+export interface ScryfallRelatedCard {
+  id: string;
+  component: string;
+  name: string;
+  type_line: string;
+}
+
 export interface ScryfallCard {
+  id: string;
   name: string;
   rarity: string;
   colors?: string[];
@@ -32,6 +51,9 @@ export interface ScryfallCard {
   collector_number: string;
   booster: boolean;
   set: string; // Scryfall set code; a bonus-sheet card's differs from the set drafted.
+  // Every related piece Scryfall knows of, and absent entirely on a card with
+  // none -- which is 68-91% of a set, so the majority pay nothing for this.
+  all_parts?: ScryfallRelatedCard[];
 }
 
 export interface SeventeenLandsCard {

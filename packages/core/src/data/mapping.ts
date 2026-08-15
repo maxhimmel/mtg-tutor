@@ -2,7 +2,7 @@
 // fetchers so the CLI and the server produce identical cards from identical
 // responses, regardless of how they got them.
 
-import type { Card, ColorCode, IngestCard, Rarity } from "../model/card.js";
+import type { Card, CardToken, ColorCode, IngestCard, Rarity } from "../model/card.js";
 import { normalizeName } from "../model/card.js";
 import type { ColorRating, ScryfallCard, SeventeenLandsCard } from "./sources.js";
 
@@ -31,6 +31,41 @@ function backImageOf(sc: ScryfallCard): string | undefined {
 // field on every row of a table that is read whole to review a draft.
 function layoutOf(sc: ScryfallCard): string | undefined {
   return sc.layout === "normal" ? undefined : sc.layout;
+}
+
+// The tokens a card creates, with the art the set's token sheet prints for
+// them.
+//
+// `all_parts` is four relationships sharing one array and it lists the card
+// ITSELF -- Broodspinner's two parts are the Insect it makes and Broodspinner as
+// a `combo_piece` -- so filtering by `component` is not tidying, it is the
+// difference between "makes an Insect" and "makes an Insect and a Broodspinner".
+//
+// KEYED BY SCRYFALL ID, WHICH IS THE WHOLE ACCURACY OF THIS FUNCTION.
+//
+// A token sheet prints several tokens under one name: `tdsk` has 19 cards and
+// 17 distinct names, `twoe` 18 and 15. Resolving by name picks whichever
+// printing the crawl saw first, and measured against the id it is wrong for 6 of
+// dsk's 45 token references and 27 of woe's 125 -- a fifth of them, silently,
+// showing Broodspinner's 1/1 Insect on Overlord of the Mistmoors, which makes
+// the 2/1. The id is in `all_parts` for free.
+//
+// Deduped by name within a card rather than by id, because two entries that
+// differ only by printing are one thing to a person reading the card.
+function tokensOf(sc: ScryfallCard, art: Map<string, string>): CardToken[] | undefined {
+  const byName = new Map<string, CardToken>();
+
+  for (const part of sc.all_parts ?? []) {
+    if (part.component !== "token" || byName.has(part.name)) continue;
+    const imageUrl = art.get(part.id);
+    byName.set(part.name, {
+      name: part.name,
+      typeLine: part.type_line,
+      ...(imageUrl ? { imageUrl } : {}),
+    });
+  }
+
+  return byName.size > 0 ? [...byName.values()] : undefined;
 }
 
 // Oracle text lives at the top level for single-faced cards, or split across
@@ -69,8 +104,17 @@ function combatOf(sc: ScryfallCard) {
 export function mergeCards(
   scryfall: ScryfallCard[],
   ratings: SeventeenLandsCard[],
+  // The set's own token sheet, `set:t<code>`, as one crawl for the whole set
+  // rather than a lookup per card. Omitted by a caller with no tokens to hand,
+  // which leaves every token nameable and none of them illustrated.
+  tokenSheet: ScryfallCard[] = [],
 ): IngestCard[] {
   const ratingByName = new Map(ratings.map((r) => [normalizeName(r.name), r]));
+  const art = new Map<string, string>();
+  for (const t of tokenSheet) {
+    const image = imageOf(t);
+    if (image) art.set(t.id, image);
+  }
 
   return scryfall.map((sc) => {
     const r = ratingByName.get(normalizeName(sc.name));
@@ -91,6 +135,7 @@ export function mergeCards(
       imageUrl: imageOf(sc),
       layout: layoutOf(sc),
       backImageUrl: backImageOf(sc),
+      tokens: tokensOf(sc, art),
       collectorNumber: sc.collector_number,
       setCode: sc.set,
       gihWinRate: r?.ever_drawn_win_rate ?? undefined,
