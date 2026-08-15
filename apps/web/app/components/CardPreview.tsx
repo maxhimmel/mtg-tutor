@@ -90,16 +90,15 @@ const TURNED: Box = { w: PREVIEW_H, h: PREVIEW_W };
 const boxFor = (sideways: boolean) => (sideways ? TURNED : UPRIGHT);
 
 interface Placement {
-  left: number;
+  // One x per face that fits, in the order they were asked for, and SHORTER
+  // than that list when they do not all fit -- the front is what the player
+  // pointed at, so everything after it yields to the viewport in turn.
+  lefts: number[];
   top: number;
-  // The tallest face in the block. A Battle is a landscape front beside an
-  // upright back, so the two are no longer the same shape and neither one can
-  // stand for the block on its own.
+  // The tallest face that is actually being drawn. A Battle is a landscape
+  // front beside an upright back, so the faces are no longer all one shape and
+  // none of them can stand for the block on its own.
   height: number;
-  // Where the back face's own popup goes. Null when the card has no back face,
-  // and also when there is no room for two cards side by side -- the face the
-  // player hovered is the one they asked for, so the back yields first.
-  backLeft: number | null;
   // Null when there is no room for the keyword panel on either side of the
   // preview; the card image is what the player asked for and always wins.
   panelLeft: number | null;
@@ -117,22 +116,38 @@ function rightEdge(anchor: DOMRect): number {
   return box && box.left > anchor.right ? box.left : window.innerWidth;
 }
 
-function place(anchor: DOMRect, wantsPanel: boolean, front: Box, back: Box | null): Placement {
+// `faces` is the front, then whatever else is worth drawing beside it -- a back,
+// and the tokens the card makes. Ordered by claim on the space: the front is
+// what the player pointed at and is never dropped, and each one after it is
+// taken only if the whole of it still fits between the anchor and the wall.
+function place(anchor: DOMRect, wantsPanel: boolean, faces: Box[]): Placement {
   const right = rightEdge(anchor);
   const vh = window.innerHeight;
 
-  // Two cards where a double-faced one has room for both, one otherwise. Decided
-  // before the horizontal placement because everything below positions against
-  // the block as a whole. Measured off the two faces rather than off PREVIEW_W
-  // twice, because a Battle's front is landscape and its back is not.
-  const showBack = back != null && front.w + GAP + back.w + GAP * 2 <= right;
-  const width = showBack ? front.w + GAP + back!.w : front.w;
-  const height = showBack ? Math.max(front.h, back!.h) : front.h;
+  // How many fit, decided before the horizontal placement because everything
+  // below positions against the block as a whole. Measured face by face rather
+  // than as a multiple of PREVIEW_W, because a Battle's front is landscape, its
+  // back is not, and a token is a third width again.
+  let width = faces[0].w;
+  let shown = 1;
+  while (shown < faces.length && width + GAP + faces[shown].w + GAP * 2 <= right) {
+    width += GAP + faces[shown].w;
+    shown += 1;
+  }
+  const drawn = faces.slice(0, shown);
+  const height = Math.max(...drawn.map((f) => f.h));
 
   // Prefer the right of the anchor; flip left when it would overflow.
   let left = anchor.right + GAP;
   if (left + width > right - GAP) left = anchor.left - GAP - width;
   left = Math.max(GAP, Math.min(left, right - GAP - width));
+
+  const lefts: number[] = [];
+  let x = left;
+  for (const face of drawn) {
+    lefts.push(x);
+    x += face.w + GAP;
+  }
 
   // Vertically center on the anchor, clamped to the viewport.
   let top = anchor.top + anchor.height / 2 - height / 2;
@@ -148,7 +163,7 @@ function place(anchor: DOMRect, wantsPanel: boolean, front: Box, back: Box | nul
     else if (before >= GAP) panelLeft = before;
   }
 
-  return { left, top, height, backLeft: showBack ? left + front.w + GAP : null, panelLeft };
+  return { lefts, top, height, panelLeft };
 }
 
 // A Magic card is 63mm across with a 3mm corner, and Scryfall's art is the whole
@@ -250,7 +265,11 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // still has draft data worth reading -- so placement has to count them too, or
   // the panel gets no position and never appears.
   const stats = hover != null && hover.showStats && hasStats(hover.card);
-  const panel = notes.length > 0 || stats;
+  // Named in the panel whether or not there was room to draw them. This is the
+  // half of the token feature that cannot be squeezed out by a narrow viewport,
+  // and it is why the pictures are allowed to yield.
+  const tokens = hover?.card.tokens ?? [];
+  const panel = notes.length > 0 || stats || tokens.length > 0;
   const back = hover?.card.backImageUrl;
   // Hold Shift to swap the stat rows for what they mean. A key rather than a
   // click because the panel is pointer-events:none -- it sits under the cursor
@@ -260,8 +279,50 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // Only the front. A Battle's back is an ordinary upright creature, and there
   // is no card in the pool printed sideways on both sides.
   const turned = hover != null && frontIsSideways(hover.card);
-  const frontBox = boxFor(turned);
-  const backBox = back != null ? UPRIGHT : null;
+
+  // What a card makes, drawn as the cards they are.
+  //
+  // The question "create a Map token" asks is what a Map DOES, and the only
+  // complete answer to that is the token's own picture -- its rules text is
+  // printed on it and is in no field we store. So a token earns a box beside
+  // the card rather than a line in the panel, at the same size, because
+  // shrinking the one thing the hover was opened for would defeat it.
+  //
+  // Behind the back face in the queue, and so the first thing to yield on a
+  // narrow screen. It never yields SILENTLY: the panel names every token the
+  // card makes whether or not there was room to draw it, which is the whole of
+  // what a reader loses when the picture does not fit.
+  const drawable = useMemo(
+    () => (hover?.card.tokens ?? []).filter((t) => t.imageUrl != null),
+    [hover],
+  );
+
+  const faces = useMemo(() => {
+    const list: { src: string; alt: string; box: Box; sideways: boolean }[] = [];
+    if (!hover?.card.imageUrl) return list;
+    list.push({
+      src: hover.card.imageUrl,
+      alt: hover.card.name,
+      box: boxFor(turned),
+      sideways: turned,
+    });
+    if (back) {
+      list.push({
+        // The back of a double-faced card, beside the front rather than instead
+        // of it: the two sides are one card and the question the player is
+        // asking is what it turns INTO, which needs both. Named by the second
+        // half of "Front // Back", which is what the back face is called.
+        src: back,
+        alt: hover.card.name.split("//").at(-1)?.trim() ?? hover.card.name,
+        box: UPRIGHT,
+        sideways: false,
+      });
+    }
+    for (const token of drawable) {
+      list.push({ src: token.imageUrl!, alt: `${token.name} token`, box: UPRIGHT, sideways: false });
+    }
+    return list;
+  }, [hover, back, turned, drawable]);
 
   // A ref, not state: suspending must not re-render every card on the page, and
   // nothing renders differently for it -- `show` simply declines.
@@ -341,8 +402,8 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // useEffect (not layout) keeps this off the server render; the box stays at
   // opacity 0 until a position is set, so there is no visible flash.
   useEffect(() => {
-    if (hover) setPos(place(hover.anchor, panel, frontBox, backBox));
-  }, [hover, panel, frontBox, backBox]);
+    if (hover && faces.length > 0) setPos(place(hover.anchor, panel, faces.map((f) => f.box)));
+  }, [hover, panel, faces]);
 
   // Memoised because every hoverable card on the page consumes this context, and
   // a fresh object here would re-render all of them each time a preview opens.
@@ -353,32 +414,25 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
       {children}
       {hover?.card.imageUrl && (
         <>
-          {/* Each face centred in the block rather than both hung from its top,
-              which only started to matter once the two could be different
+          {/* Each face centred in the block rather than all of them hung from
+              its top, which only started to matter once they could be different
               shapes: a Battle's landscape front against its upright back is a
-              126px difference, and top-aligning them reads as one of the two
-              having slipped. */}
-          <Face
-            src={hover.card.imageUrl}
-            alt={hover.card.name}
-            left={pos?.left ?? null}
-            top={pos ? pos.top + (pos.height - frontBox.h) / 2 : null}
-            sideways={turned}
-          />
+              126px difference, and top-aligning them reads as one having
+              slipped.
 
-          {/* The back of a double-faced card, beside the front rather than
-              instead of it: the two sides are one card and the question the
-              player is asking is what it turns INTO, which needs both. Named by
-              the second half of "Front // Back", which is what the back face is
-              actually called. */}
-          {back && pos?.backLeft != null && (
+              Every face is rendered, including the ones `place` found no room
+              for: `lefts` comes back short of `faces`, and those fall through
+              to the same offscreen parking an unplaced face already used. */}
+          {faces.map((face, i) => (
             <Face
-              src={back}
-              alt={hover.card.name.split("//").at(-1)?.trim() ?? hover.card.name}
-              left={pos.backLeft}
-              top={pos.top + (pos.height - UPRIGHT.h) / 2}
+              key={`${face.src}-${i}`}
+              src={face.src}
+              alt={face.alt}
+              left={pos?.lefts[i] ?? null}
+              top={pos && pos.lefts[i] != null ? pos.top + (pos.height - face.box.h) / 2 : null}
+              sideways={face.sideways}
             />
-          )}
+          ))}
 
           {panel && pos?.panelLeft != null && (
             <div
@@ -407,11 +461,37 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                 </div>
               )}
 
+              {/* What the card makes, above the keyword reminders because it is
+                  about THIS card where a reminder is about the game. Two lines
+                  each and no picture: the picture is the box beside the card,
+                  and repeating it here at panel width would be the smaller copy
+                  of the two.
+
+                  Every token, including any the row had no room to draw. A
+                  feature that disappears on a narrow screen and says nothing is
+                  indistinguishable from one that was never built. */}
+              {!explain && tokens.length > 0 && (
+                <>
+                  {stats && <hr className="border-base-300" />}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="eyebrow">Makes</span>
+                    <ul className="flex flex-col gap-1">
+                      {tokens.map((t) => (
+                        <li key={t.name} className="leading-snug">
+                          <span className="text-sm font-semibold">{t.name}</span>
+                          <p className="text-xs text-base-content/70">{t.typeLine}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              )}
+
               {/* Explaining costs about the height the keywords occupy, and the
                   panel cannot be scrolled (pointer-events:none). Someone holding
                   Shift is asking what the numbers mean, not what Flying does, so
                   the reminders yield rather than overflow out of reach. */}
-              {!explain && stats && notes.length > 0 && (
+              {!explain && (stats || tokens.length > 0) && notes.length > 0 && (
                 <hr className="border-base-300" />
               )}
 

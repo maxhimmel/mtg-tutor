@@ -28,6 +28,7 @@ const complete: StoredCard = {
   imageUrl: "https://example.invalid/front.jpg",
   layout: "adventure",
   backImageUrl: "https://example.invalid/back.jpg",
+  tokens: [{ name: "Insect", typeLine: "Token Creature — Insect" }],
   collectorNumber: "51",
   setCode: "woe",
   avgPick: 4.07,
