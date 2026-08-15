@@ -297,6 +297,26 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
 
+14. **The coach cannot see what a Map is either** (2026-08-15, fell out of
+    shipping the token feature). Decision #9 is that every card written into a
+    prompt carries its rules text, because a type line cannot say whether a card
+    kills something and a model asked to judge from the name answers from the
+    name. "Create a Map token" is exactly that failure one level down: the coach
+    is handed a card whose text names a thing it has never been told the rules
+    of, and Map, Junk, Blood, Clue and Incubator are all set-specific enough
+    that recall is the worst place to get them from.
+
+    The data is now stored, which is the whole reason this is worth writing
+    down: `setCardText.tokens` carries a name and a type line per token, and the
+    token's own rules text is the one thing it does NOT carry — that lives only
+    in the picture. So this is not free. It is either a fourth Scryfall field to
+    ingest (`oracle_text` off the token sheet, which the crawl already fetches
+    and throws away) or nothing.
+
+    Price it before building it: roadmap #4 measured rules text at +947 input
+    tokens per coached pick, and a token's text on the ~6 cards a pick shows is
+    the same shape of cost for a much rarer payoff.
+
 17. **A static page for what `detectRole` calls things** (2026-08-14). The
     classifier is a handful of regexes over rules text, and since it moved to
     ingest its answer is STORED -- so it decides which deck need a pick can meet

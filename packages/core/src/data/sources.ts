@@ -62,7 +62,8 @@ export interface ScryfallCard {
   booster: boolean;
   set: string; // Scryfall set code; a bonus-sheet card's differs from the set drafted.
   // Every related piece Scryfall knows of, and absent entirely on a card with
-  // none -- which is 68-91% of a set, so the majority pay nothing for this.
+  // none -- which is 68-93% of the pool, measured across all eighteen ingested
+  // sets, so the large majority pay nothing for this.
   all_parts?: ScryfallRelatedCard[];
 }
 
