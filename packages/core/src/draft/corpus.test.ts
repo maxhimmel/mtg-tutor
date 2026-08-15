@@ -12,7 +12,7 @@ import type { PodPolicy } from "./bots.js";
 // long as the same seed deals the same packs. Bots pick by `cardValue`, and what
 // a bot takes decides what wheels back -- so a change to card storage that moves
 // `cardValue` by a float moves the deal, and every draft anyone has taken stops
-// replaying. That failure has happened for real (notes.md issue #4) and it is
+// replaying. That failure has happened for real (notes.md issue #3) and it is
 // not repairable: the packs the draft saw no longer exist.
 //
 // Nothing else asserts this. `replay.test.ts` compares a live draft against its
