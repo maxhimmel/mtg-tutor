@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import { type Card, normalizeName } from "@mtg-tutor/core";
+import { env } from "../env";
 import { PageHeading } from "../components/PageHeading";
 import { PageShell } from "../components/PageShell";
 import { Panel } from "../components/Panel";
@@ -40,6 +41,23 @@ function parseKey(raw: string | null): SetKey | null {
   return code ? { code, format: format || "PremierDraft" } : null;
 }
 
+// Long enough that a cold local backend answering slowly is not accused of
+// being down, short enough to beat somebody's own guess at what is wrong.
+const STALL_MS = 4000;
+
+function useStalled(waiting: boolean): boolean {
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (!waiting) {
+      setStalled(false);
+      return;
+    }
+    const timer = setTimeout(() => setStalled(true), STALL_MS);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+  return stalled;
+}
+
 export function Playground() {
   const router = useRouter();
   const params = useSearchParams();
@@ -48,6 +66,12 @@ export function Playground() {
   const [selected, setSelected] = useState<string | null>(null);
 
   const sets = useQuery(api.sets.list, {});
+  // A query that never resolves and a set with no cards look identical from
+  // here: an empty dropdown and a search box that finds nothing. Convex retries
+  // a dead socket forever without surfacing anything, so the first time this
+  // page was opened against a stack whose backend was not running, the screen
+  // said nothing at all and the guess was that the playground was broken.
+  const stalled = useStalled(sets === undefined);
   // Whichever set is newest, so opening the page bare still shows something.
   // Every set is one dropdown away, and the URL wins over both.
   const chosen: SetKey | null =
@@ -208,7 +232,19 @@ export function Playground() {
         </div>
       </PageHeading>
 
-      {subject == null ? (
+      {stalled ? (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
+          <p className="font-semibold">Convex has not answered.</p>
+          <p className="mt-1 text-base-content/70">
+            Nothing has come back from <code>{env.NEXT_PUBLIC_CONVEX_URL}</code>, which is
+            almost always the local backend not running. Start it in the main checkout and
+            this page picks up on its own:
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded bg-base-300 px-3 py-2 text-xs">
+            pnpm --filter @mtg-tutor/backend dev
+          </pre>
+        </div>
+      ) : subject == null ? (
         <p className="text-base-content/60">
           Search a card to put it on the stage. Everything below is the app&apos;s own
           components, drawn with the card you picked — hover works, so does the preview.
