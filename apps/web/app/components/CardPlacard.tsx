@@ -37,6 +37,16 @@ import { ManaCost } from "./ManaCost";
 // is here to catch the next one that would.
 const NATURAL_W = "max-w-[17rem]";
 
+// The one ink everything printed on the filled plate is drawn in.
+//
+// It was on the name only, and the mana cost inherited `base-content` instead --
+// which is near-white under this theme, on a plate mixed toward white. The pips
+// survived that because `.ms-cost` paints its own disc and sets its own colour;
+// the `//` a two-in-one card's cost is divided by does not, so it was white on
+// cream and effectively unprinted. Anything added to this plate later that draws
+// itself in `currentColor` would have arrived invisible the same way.
+const PLATE_INK = "text-[#0d0b06]";
+
 export function CardPlacard({
   card,
   ghost = false,
@@ -123,7 +133,7 @@ export function CardPlacard({
               face Magic prints card names in. */}
           <span
             className={`truncate font-display text-[15px] font-bold leading-4.5 tracking-tight ${
-              ghost ? "text-base-content/60" : "text-[#0d0b06]"
+              ghost ? "text-base-content/60" : PLATE_INK
             }`}
             title={card.name}
           >
@@ -132,7 +142,7 @@ export function CardPlacard({
           <ManaCost
             cost={card.manaCost}
             shadow={!ghost}
-            className={`shrink-0 whitespace-nowrap text-[11px] ${ghost ? "opacity-60" : ""}`}
+            className={`shrink-0 whitespace-nowrap text-[11px] ${ghost ? "opacity-60" : PLATE_INK}`}
           />
         </div>
       </div>
