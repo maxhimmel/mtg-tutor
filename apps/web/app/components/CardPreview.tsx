@@ -11,6 +11,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { type Card, cardShapeOf, frontIsSideways, keywordsOf } from "@mtg-tutor/core";
+import { tokensPreviewed } from "../lib/analytics";
 import { webpImage } from "../lib/cardImage";
 import { useHeldKey } from "../lib/useHeldKey";
 import { CardStats, hasStats } from "./CardStats";
@@ -404,6 +405,26 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (hover && faces.length > 0) setPos(place(hover.anchor, panel, faces.map((f) => f.box)));
   }, [hover, panel, faces]);
+
+  // Reported from here rather than from `place`, because the question is how
+  // many token pictures a REAL screen had room for and only the placement that
+  // actually happened knows that. A ref so it is once per provider: see
+  // `tokensPreviewed` for why the same answer repeated per hover is not worth
+  // the quota.
+  const counted = useRef(false);
+  useEffect(() => {
+    if (counted.current || !pos || tokens.length === 0) return;
+    counted.current = true;
+    // `lefts` is a prefix of `faces` and the tokens are its tail, so what fitted
+    // is whatever is left of the prefix once the card's own faces are paid for.
+    const cardFaces = faces.length - drawable.length;
+    tokensPreviewed({
+      named: tokens.length,
+      withArt: drawable.length,
+      drawn: Math.max(0, pos.lefts.length - cardFaces),
+      viewport: window.innerWidth,
+    });
+  }, [pos, tokens, drawable, faces]);
 
   // Memoised because every hoverable card on the page consumes this context, and
   // a fresh object here would re-render all of them each time a preview opens.

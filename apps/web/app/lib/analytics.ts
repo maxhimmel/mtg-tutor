@@ -615,6 +615,43 @@ export function feedbackRefused(p: {
 }
 
 /**
+ * The first card in this session whose tokens the hover had something to say
+ * about.
+ *
+ * TWO SILENCES IT EXISTS TO BREAK, and neither of them looks like a failure
+ * from the inside.
+ *
+ * The tokens only exist on a set that has been re-ingested since the field was
+ * added -- POOL_REVISION 12-tokens. Until that runs against production every
+ * card carries no tokens, the panel section never renders, and the app looks
+ * exactly as it did before. This event never firing is the only thing that
+ * would say so.
+ *
+ * And the pictures are the first thing to yield when the row runs out of width.
+ * Three counts rather than two, because a token that is not drawn has two quite
+ * different causes and they lead opposite ways. `named` minus `withArt` is a
+ * token the set's sheet had no printing of, which is an ingest question.
+ * `withArt` minus `drawn` is a picture there was no room for, which is a layout
+ * one -- and if that is the normal case rather than the occasional one, then
+ * drawing a token at card size beside the card is the wrong design and it
+ * belongs shrunk into the panel. Both outcomes render something plausible, so
+ * nothing else would ever say which.
+ *
+ * Once per provider, not once per hover. A draft is hundreds of hovers and the
+ * answer does not move between them; sending it every time would spend the
+ * quota on the same fact repeatedly.
+ */
+export function tokensPreviewed(p: {
+  named: number;
+  withArt: number;
+  drawn: number;
+  viewport: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("tokens_previewed", p);
+}
+
+/**
  * Where a setting was reached from.
  *
  * "menu" is the account dropdown, which no longer carries any setting at all --

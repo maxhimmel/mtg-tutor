@@ -10,6 +10,7 @@ import {
   pickMade,
   settingChanged,
   signedOut,
+  tokensPreviewed,
 } from "./analytics";
 
 // The seam's whole contract is "call the SDK, or do nothing at all", so the SDK
@@ -58,6 +59,7 @@ describe("without a project token", () => {
       feedbackRefused({ surface: "coach", reason: "rate", message: "no" });
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
+      tokensPreviewed({ named: 1, withArt: 1, drawn: 1, viewport: 1440 });
     }).not.toThrow();
 
     expect(capture).not.toHaveBeenCalled();
@@ -108,6 +110,15 @@ describe("with a project token", () => {
     const refused = { surface: "general" as const, reason: "rate" as const, message: "tomorrow" };
     feedbackRefused(refused);
     expect(capture).toHaveBeenCalledWith("feedback_refused", refused);
+  });
+
+  // Read by subtraction in two directions -- named minus withArt is an ingest
+  // problem, withArt minus drawn is a layout one -- so all three counts have to
+  // arrive under the names the differences are computed from.
+  it("names the token event and keeps all three counts apart", () => {
+    const seen = { named: 2, withArt: 1, drawn: 0, viewport: 1280 };
+    tokensPreviewed(seen);
+    expect(capture).toHaveBeenCalledWith("tokens_previewed", seen);
   });
 
   // These two are read by subtraction -- stalls minus recoveries is the number
