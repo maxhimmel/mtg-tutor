@@ -1,9 +1,37 @@
 "use client";
 
 import type { Card, PickScore } from "@mtg-tutor/core";
-import { gapMargin, tiebreakLine } from "@mtg-tutor/core";
+import { gapMargin, loadPrinciples, splitCitations, tiebreakLine } from "@mtg-tutor/core";
 import { gradeColor, points } from "../lib/format";
 import { CardPlacard } from "./CardPlacard";
+import { PrincipleBadge } from "./PrincipleBadge";
+
+const PRINCIPLES = loadPrinciples();
+
+// Why that card and not another, with its ground cited the way every other
+// citation in the app is cited.
+//
+// `tiebreakLine` ends in a bracketed id -- "[MANA-02]" -- because it is a
+// sentence and the CLI has to be able to print it. On the web that left the one
+// principle reference in the app rendered as raw text: not a link, not
+// explainable on hover, and not even recognisable as the same thing the badges
+// under the coach are. It goes through `splitCitations`, which is what already
+// turns the coach's own bracketed ids into badges, so both paths now lose the
+// brackets to the same code.
+function TiebreakNote({ name, reasons }: { name: string; reasons: PickScore<Card>["reasons"] }) {
+  const line = tiebreakLine(name, reasons);
+  if (!line) return null;
+
+  const cited = splitCitations(line, PRINCIPLES);
+  return (
+    <p className="text-xs leading-relaxed text-base-content/60">
+      {cited.prose}{" "}
+      {cited.principles.map((p) => (
+        <PrincipleBadge key={p.id} principle={p} />
+      ))}
+    </p>
+  );
+}
 
 // The payoff of the whole app: you picked, and this says how that went. The
 // grade is set large and in the display face because it is the one thing a
@@ -125,9 +153,7 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                       the whole parity change bought, and what stops this panel
                       and the one below it naming two cards off one pack. */}
                   {score.preferred?.name === c.name && (
-                    <p className="text-xs leading-relaxed text-base-content/60">
-                      {tiebreakLine(c.name, score.reasons)}
-                    </p>
+                    <TiebreakNote name={c.name} reasons={score.reasons} />
                   )}
                 </div>
               ))}

@@ -26,4 +26,13 @@ describe("every prompt that gets read as prose", () => {
       expect(sys).toContain("Write every card name out in full");
     }
   });
+
+  // The web client matches colour shorthand in the answer to redraw it as mana
+  // symbols, and it only recognises WUBRG order -- so a prompt that stops asking
+  // for it leaves the letters on screen with nothing said about why.
+  it("asks for colour combinations in WUBRG order", () => {
+    for (const sys of [buildSystemPrompt(doc), buildReviewSystemPrompt(doc)]) {
+      expect(sys).toContain("as its letters in WUBRG order");
+    }
+  });
 });
