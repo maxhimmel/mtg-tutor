@@ -93,7 +93,7 @@ function Popup({ principle, anchor }: { principle: Principle; anchor: DOMRect })
 // The full id is never actually lost: it is the `title`, the accessible name,
 // the popup's first line, and the anchor this links to. Nothing that has to be
 // quoted or searched for is only available as a picture.
-function PrincipleBadge({ principle }: { principle: Principle }) {
+export function PrincipleBadge({ principle }: { principle: Principle }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const open = (e: { currentTarget: HTMLElement }) =>
     setAnchor(e.currentTarget.getBoundingClientRect());
