@@ -10,6 +10,8 @@ export * from "./model/orientation.js";
 export * from "./model/role.js";
 export * from "./model/typeLine.js";
 export * from "./model/setData.js";
+export * from "./model/packedCards.js";
+export * from "./draft/deal.js";
 export * from "./model/hydrate.js";
 
 export * from "./data/sources.js";
