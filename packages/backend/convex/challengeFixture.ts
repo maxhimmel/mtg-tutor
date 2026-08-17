@@ -10,6 +10,7 @@ import {
 } from "@mtg-tutor/core";
 import type { EngineCard, SetData } from "@mtg-tutor/core";
 import { internalMutation } from "./_generated/server.js";
+import { copyDeal, storeDeal } from "./draftPools.js";
 import { internal } from "./_generated/api.js";
 import type { MutationCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -182,6 +183,10 @@ export const inbound = internalMutation({
       createdAt: new Date().toISOString(),
     });
 
+    // The fixture writes sessions by hand rather than through `startSession`, so
+    // it owes them the same pool row -- every reader refuses a draft without one.
+    await storeDeal(ctx, sessionId, set, seed);
+
     const picked = await botDraft(ctx, sessionId, set, seed, args.sloppiness ?? 0.35);
     await complete(ctx, sessionId, picked);
 
@@ -257,7 +262,10 @@ export const outbound = internalMutation({
       challengeId,
     });
 
-    // Same seed, different hand: this is a real second pod, so the packs come
+    // The challenger's own packs, the way `challenges.accept` hands them over.
+    await copyDeal(ctx, mine._id, friendSession);
+
+    // Same packs, different hand: this is a real second pod, so the two come
     // apart exactly where the engine says they do rather than where a fixture
     // decided they should.
     const picked = await botDraft(ctx, friendSession, set, mine.seed, args.sloppiness ?? 0.4);

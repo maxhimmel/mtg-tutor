@@ -14,7 +14,7 @@ import { startSession } from "./draft.js";
 import { storedPicks } from "./draftPicks.js";
 import { requireCaller } from "./roles.js";
 import { challengeInvite, challengeParty, ownedSession, replayFor } from "./sessions.js";
-import { toSetData } from "./setData.js";
+import { dealFor } from "./draftPools.js";
 
 // Daring a friend to draft the packs you just drafted.
 //
@@ -145,30 +145,15 @@ export const accept = mutation({
       throw new ConvexError("This challenge was withdrawn.");
     }
 
-    // THE STALENESS GUARD, and it is a replay rather than a hash comparison.
-    //
-    // A challenge is a seed that outlives the moment it was made, so it meets a
-    // re-ingested set far more often than a same-day draft does. Comparing
-    // `sets.sourceHash` would be cheaper and would miss two real cases: the hash
-    // is absent when a set is ingested with no artifact to hand, and unchanged
-    // by `ingest-sets --force`, which re-crawls Scryfall under the same one.
-    //
-    // Replaying the challenger's own session asks the exact question instead --
-    // would this seed still deal the packs they actually took from -- and it is
-    // one ~46KB read on a path that runs once. Dealing the friend a pod that
-    // cannot be compared to the challenger's is the failure this exists to
-    // prevent, and it is silent: both drafts work, and the diff is nonsense.
+    // No staleness guard, and none is possible to need. It used to replay the
+    // challenger's draft here to ask whether this seed would still deal the
+    // packs they took from -- because the friend was dealt a fresh draft from
+    // the shared seed, and a re-ingested set would quietly give the two of them
+    // different boosters to compare. The friend now INHERITS the challenger's
+    // stored packs, so there is no second deal to drift from the first.
     const challengerSession = await ctx.db.get(challenge.challengerSessionId);
     if (!challengerSession) {
       throw new ConvexError("The draft behind this challenge is gone.");
-    }
-    try {
-      await replayFor(ctx, challengerSession);
-    } catch {
-      throw new ConvexError(
-        `The ${challenge.setCode.toUpperCase()} card data has changed since this challenge ` +
-          `was made, so these packs would no longer deal the same way. Ask for a new one.`,
-      );
     }
 
     // Last, so everything above refuses for free. `startSession` runs the quota
@@ -178,11 +163,13 @@ export const accept = mutation({
       format: challenge.format,
       seed: challenge.seed,
       challengeId: challenge._id,
+      // The challenger's own boosters, card for card. A challenge IS the same
+      // packs, and this is the only shape that cannot drift from saying so.
+      dealFrom: challenge.challengerSessionId,
       // The challenger's pod, not the friend's preference, and not negotiable.
-      // The seed is shared, so a different pod deals a different forty-two --
-      // and `samePack` would then be comparing two people who never saw the same
-      // booster. Exactly the silent failure the staleness guard above exists to
-      // prevent, arriving through a second door.
+      // The packs are shared, so a different pod still plays a different
+      // forty-two -- the bots decide what wheels -- and `samePack` would then be
+      // comparing two people who never saw the same booster.
       pod: challengerSession.pod,
     });
 
@@ -447,26 +434,13 @@ export const forkImpacts = query({
     // is every pick in a draft, so nothing legitimate is refused.
     const forks = args.forks.slice(0, 42);
 
-    const setDoc = await ctx.db
-      .query("sets")
-      .withIndex("by_code_and_format", (q) =>
-        q.eq("code", challenge.setCode).eq("format", challenge.format),
-      )
-      .unique();
-    if (!setDoc) return null;
-
-    const cardsDoc = await ctx.db
-      .query("setCards")
-      .withIndex("by_code_and_format", (q) =>
-        q.eq("code", setDoc.code).eq("format", setDoc.format),
-      )
-      .unique();
-    if (!cardsDoc) return null;
-
+    // The draft's own boosters, not the set's pool. Both walks inside forkImpact
+    // play this same stored deal, which is what makes a swapped pick a
+    // controlled experiment rather than a re-deal -- see core's deal.ts.
     try {
-      const set = toSetData(cardsDoc);
+      const { deal } = await dealFor(ctx, mine);
       return forks.map((f) =>
-        forkImpact(dealDraft(set, challenge.seed), challenge.seed, mineSession.pickedNames, f.pickIndex, f.theirs),
+        forkImpact(deal, challenge.seed, mineSession.pickedNames, f.pickIndex, f.theirs),
       );
     } catch {
       // The set has moved since this was drafted, so the counterfactual cannot

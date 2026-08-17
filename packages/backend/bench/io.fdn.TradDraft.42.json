@@ -8,84 +8,84 @@
   "paths": {
     "draft.state": {
       "sampled": 1,
-      "meanBytesRead": 33972,
+      "meanBytesRead": 14744,
       "meanBytesWritten": 0,
-      "maxBytesRead": 33972,
+      "maxBytesRead": 14744,
       "callsPerDraft": 1,
-      "totalBytesPerDraft": 33972
+      "totalBytesPerDraft": 14744
     },
     "draft.pick": {
       "sampled": 42,
-      "meanBytesRead": 38748,
-      "meanBytesWritten": 2721,
-      "maxBytesRead": 117732,
+      "meanBytesRead": 19425,
+      "meanBytesWritten": 2628,
+      "maxBytesRead": 98278,
       "callsPerDraft": 42,
-      "totalBytesPerDraft": 1741693
+      "totalBytesPerDraft": 926227
     },
     "draft.coachContext": {
       "sampled": 30,
-      "meanBytesRead": 9783,
+      "meanBytesRead": 9678,
       "meanBytesWritten": 0,
-      "maxBytesRead": 14188,
+      "maxBytesRead": 14234,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 293500
+      "totalBytesPerDraft": 290341
     },
     "review.verdictContext": {
       "sampled": 30,
-      "meanBytesRead": 9783,
+      "meanBytesRead": 9678,
       "meanBytesWritten": 0,
-      "maxBytesRead": 14188,
+      "maxBytesRead": 14234,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 293500
+      "totalBytesPerDraft": 290341
     },
     "draft.results": {
       "sampled": 1,
-      "meanBytesRead": 141724,
+      "meanBytesRead": 122099,
       "meanBytesWritten": 0,
-      "maxBytesRead": 141724,
+      "maxBytesRead": 122099,
       "callsPerDraft": 1,
-      "totalBytesPerDraft": 141724
+      "totalBytesPerDraft": 122099
     },
     "review.load": {
       "sampled": 1,
-      "meanBytesRead": 286882,
+      "meanBytesRead": 286894,
       "meanBytesWritten": 0,
-      "maxBytesRead": 286882,
+      "maxBytesRead": 286894,
       "callsPerDraft": 1,
-      "totalBytesPerDraft": 286882
+      "totalBytesPerDraft": 286894
     },
     "review.framePrompt": {
       "sampled": 2,
-      "meanBytesRead": 34847,
+      "meanBytesRead": 15603,
       "meanBytesWritten": 0,
-      "maxBytesRead": 34847,
+      "maxBytesRead": 15603,
       "callsPerDraft": 2,
-      "totalBytesPerDraft": 69694
+      "totalBytesPerDraft": 31206
     },
     "stats.overview": {
       "sampled": 1,
-      "meanBytesRead": 749743,
+      "meanBytesRead": 81358,
       "meanBytesWritten": 0,
-      "maxBytesRead": 749743,
+      "maxBytesRead": 81358,
       "callsPerDraft": null,
       "totalBytesPerDraft": null
     },
     "quota.claimReview": {
       "sampled": 1,
-      "meanBytesRead": 2510,
-      "meanBytesWritten": 1297,
-      "maxBytesRead": 2510,
+      "meanBytesRead": 2290,
+      "meanBytesWritten": 1187,
+      "maxBytesRead": 2290,
       "callsPerDraft": 32,
-      "totalBytesPerDraft": 121824
+      "totalBytesPerDraft": 111264
     },
     "review.saveVerdict": {
       "sampled": 30,
-      "meanBytesRead": 1297,
+      "meanBytesRead": 1187,
       "meanBytesWritten": 215,
-      "maxBytesRead": 1297,
+      "maxBytesRead": 1187,
       "callsPerDraft": 30,
-      "totalBytesPerDraft": 45360
+      "totalBytesPerDraft": 42060
     }
   },
-  "totalBytesPerDraft": 3028149
+  "totalBytesPerDraft": 2115176
 }

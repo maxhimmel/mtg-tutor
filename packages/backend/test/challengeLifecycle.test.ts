@@ -3,6 +3,29 @@ import { describe, expect, it } from "vitest";
 import { harness } from "./convexHarness.js";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { buildSetData, dealDraft, packDeal } from "@mtg-tutor/core";
+
+/**
+ * A session and the boosters it was dealt, which is what `startSession` writes.
+ *
+ * Hand-inserting a session row is no longer enough: a draft carries its own
+ * packs now, and `dealFor` refuses a session without them rather than dealing
+ * fresh ones -- see draftPools.ts for why that refusal is deliberate.
+ */
+async function insertSession(
+  ctx: any,
+  cards: any[],
+  row: any,
+): Promise<any> {
+  const sessionId = await ctx.db.insert("draftSessions", row);
+  await ctx.db.insert("draftPools", {
+    sessionId,
+    ...packDeal(dealDraft(buildSetData(row.setCode, cards, [], undefined), row.seed)),
+    colorWinRates: [],
+  });
+  return sessionId;
+}
+
 
 // The lifecycle, driven through the public mutations rather than through the
 // helpers, because what these assert is the ORDER of the refusals and the
@@ -59,11 +82,10 @@ async function seedWorld(t: ReturnType<typeof harness>) {
       cardCount: 120,
       ratedCardCount: 120,
       ingestedAt: new Date(0).toISOString(),
-      sourceHash: "hash-1",
     });
     await ctx.db.insert("setCards", { ...SET, cards: pool(), colorWinRates: [] });
 
-    const sessionId = await ctx.db.insert("draftSessions", {
+    const sessionId = await insertSession(ctx, pool(), {
       userId: token("alice"),
       setCode: SET.code,
       format: SET.format,
@@ -71,7 +93,6 @@ async function seedWorld(t: ReturnType<typeof harness>) {
       pickedNames: [],
       status: "complete" as const,
       createdAt: new Date(0).toISOString(),
-      sourceHash: "hash-1",
     });
 
     return { set: SET, sessionId };
@@ -83,7 +104,7 @@ describe("challenges.create", () => {
     const t = harness();
     const { set } = await seedWorld(t);
     const unfinished = await t.run(async (ctx) =>
-      ctx.db.insert("draftSessions", {
+      insertSession(ctx, pool(), {
         userId: token("alice"),
         setCode: SET.code,
         format: SET.format,
@@ -192,31 +213,49 @@ describe("challenges.accept", () => {
     ).rejects.toThrow(/withdrawn/);
   });
 
-  it("refuses when the set has moved under the seed", async () => {
-    // The failure this guard exists for is silent: both drafts would work and
-    // the diff would be nonsense. Dropping a card is the cheapest honest way to
-    // make the deal move -- a real re-ingest moves it by reordering pools.
+  it("deals the friend the challenger's own packs even after the set moves", async () => {
+    // The inverse of the guard this replaces. `accept` used to REFUSE here,
+    // because the friend was dealt a fresh draft from the shared seed and a
+    // moved set would silently give the two of them different boosters to
+    // compare. The friend inherits the challenger's stored packs now, so a set
+    // that moves underneath is simply not a question the challenge can ask.
     const t = harness();
     const { set, challengeId } = await open(t);
 
-    await t.run(async (ctx) => {
+    const before = await t.run(async (ctx) => {
       const doc = await ctx.db
         .query("setCards")
         .withIndex("by_code_and_format", (q) => q.eq("code", set.code).eq("format", set.format))
         .unique();
-      // Give the challenger picks that the shrunken pool can no longer deal, so
-      // the replay actually diverges rather than merely reading a smaller set.
-      const session = await ctx.db
+      // Dropping a card is the cheapest honest way to move the deal -- a real
+      // re-ingest moves it by reordering pools.
+      await ctx.db.patch(doc!._id, {
+        cards: doc!.cards.filter((c) => c.name !== doc!.cards[0].name),
+      });
+
+      const mine = await ctx.db
         .query("draftSessions")
         .withIndex("by_user", (q) => q.eq("userId", token("alice")))
         .first();
-      await ctx.db.patch(session!._id, { pickedNames: [doc!.cards[0].name] });
-      await ctx.db.patch(doc!._id, { cards: doc!.cards.filter((c) => c.name !== doc!.cards[0].name) });
+      return await ctx.db
+        .query("draftPools")
+        .withIndex("by_session", (q) => q.eq("sessionId", mine!._id))
+        .unique();
     });
 
-    await expect(
-      as(t, "bob").mutation(api.challenges.accept, { challengeId }),
-    ).rejects.toThrow(/card data has changed/);
+    await as(t, "bob").mutation(api.challenges.accept, { challengeId });
+
+    const theirs = await t.run(async (ctx) => {
+      const challenge = await ctx.db.get(challengeId);
+      return await ctx.db
+        .query("draftPools")
+        .withIndex("by_session", (q) => q.eq("sessionId", challenge!.friendSessionId!))
+        .unique();
+    });
+
+    // Card for card and booster for booster, which is what a challenge means.
+    expect(theirs!.cards).toEqual(before!.cards);
+    expect(theirs!.rounds).toEqual(before!.rounds);
   });
 });
 

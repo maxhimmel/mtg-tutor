@@ -7,10 +7,11 @@ import {
   replayDraft,
   splitPool,
 } from "@mtg-tutor/core";
-import type { CardContext, DraftEngine, EngineCard, SetData } from "@mtg-tutor/core";
+import type { CardContext, ColorWinRate, DraftEngine, EngineCard } from "@mtg-tutor/core";
 import { query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
-import { ownSessions, setCardsFor, setDocFor } from "./sessions.js";
+import { ownSessions, setDocFor } from "./sessions.js";
+import { dealFor } from "./draftPools.js";
 import { cardContextFor } from "./cardText.js";
 import { toSetData } from "./setData.js";
 
@@ -41,30 +42,23 @@ export const overview = query({
     const truncated = sessions.length > limit;
     const window = truncated ? sessions.slice(0, limit) : sessions;
 
-    // Cached per SET, not per session, which is what makes this affordable.
-    // A hundred-draft window spans a handful of sets, so the pool and its
-    // context are read a handful of times between them -- against the ~8MB
-    // reading every draft's stored picks would cost, since each of those rows
-    // carries the pack it saw.
-    const setCache = new Map<string, { set: SetData; context: Map<string, CardContext> }>();
-    const setDataFor = async (
-      session: Doc<"draftSessions">,
-    ): Promise<{ set: SetData; context: Map<string, CardContext> } | undefined> => {
+    // The per-card CONTEXT is still per-set, and still cached: a hundred-draft
+    // window spans a handful of sets, so this is read a handful of times.
+    //
+    // The DEAL is not, and cannot be -- it belongs to the session now, not the
+    // set. That makes this query more expensive than it was, on purpose and
+    // temporarily: it reads one ~12KB pool row per draft where it used to share
+    // one pool read across every draft of a set. It is the one path the stored
+    // deal costs rather than saves, and the digest table that removes the replay
+    // here entirely is the next change. Measured before and after, either way.
+    const contextCache = new Map<string, Map<string, CardContext>>();
+    const contextFor = async (session: Doc<"draftSessions">) => {
       const key = `${session.setCode}::${session.format}`;
-      const cached = setCache.get(key);
+      const cached = contextCache.get(key);
       if (cached) return cached;
-      try {
-        const setDoc = await setDocFor(ctx, session.setCode, session.format);
-        const set = toSetData(await setCardsFor(ctx, setDoc));
-        const context = await cardContextFor(ctx, session.setCode, session.format);
-        const entry = { set, context };
-        setCache.set(key, entry);
-        return entry;
-      } catch {
-        // The set was never ingested here, or has since been replaced. That
-        // draft's per-pick detail is unavailable; its summary still counts.
-        return undefined;
-      }
+      const context = await cardContextFor(ctx, session.setCode, session.format);
+      contextCache.set(key, context);
+      return context;
     };
 
     const byPickNo = new Map<number, { total: number; n: number }>();
@@ -82,16 +76,14 @@ export const overview = query({
 
     let replayed = 0;
     for (const session of window) {
-      const loaded = await setDataFor(session);
-      if (!loaded) continue;
-      const { set, context } = loaded;
+      const context = await contextFor(session);
 
       // Scored exactly the way the pick itself was, or this reports grades the
       // player never saw -- and would list picks as misses that the app graded
       // 100. The sideboard is part of that: a pick was judged against the deck
       // minus whatever had been set aside by then.
       const bench = normalizeBench(session.sideboard ?? []);
-      const scoring = (engine: DraftEngine) => {
+      const scoring = (rates: ColorWinRate[]) => (engine: DraftEngine) => {
         const made = engine.history.length;
         // Through the shared builder, not assembled here. This was a hand-rolled
         // copy of the same five fields, and the moment `ScoringContext` grew a
@@ -103,18 +95,24 @@ export const overview = query({
           splitPool(engine.humanPool, bench, made).maindeck,
           made,
           engine.totalPicks(),
-          set.colorWinRates,
+          rates,
           (c) => context.get(normalizeName(c.name)),
         );
       };
 
-      let engine;
-      try {
-        engine = replayDraft(dealDraft(set, session.seed), session.seed, session.pickedNames, scoring, session.pod ?? "legacy");
-      } catch {
-        // Set data changed under a stored draft; skip its detail, keep its summary.
-        continue;
-      }
+      // A draft carries its own boosters, so this can no longer be defeated by
+      // the set moving underneath it -- which is why there is no catch-and-skip
+      // here any more. A session with no pool row is a bug rather than a stale
+      // draft, and it is left to throw as one rather than silently dropping the
+      // draft out of its owner's own statistics.
+      const { deal, colorWinRates } = await dealFor(ctx, session._id);
+      const engine = replayDraft(
+        deal,
+        session.seed,
+        session.pickedNames,
+        scoring(colorWinRates),
+        session.pod ?? "legacy",
+      );
       replayed++;
 
       for (const h of engine.history) {

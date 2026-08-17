@@ -3,6 +3,29 @@ import { describe, expect, it } from "vitest";
 import { harness } from "./convexHarness.js";
 import { challengeInvite, challengeParty } from "../convex/sessions.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { buildSetData, dealDraft, packDeal } from "@mtg-tutor/core";
+
+/**
+ * A session and the boosters it was dealt, which is what `startSession` writes.
+ *
+ * Hand-inserting a session row is no longer enough: a draft carries its own
+ * packs now, and `dealFor` refuses a session without them rather than dealing
+ * fresh ones -- see draftPools.ts for why that refusal is deliberate.
+ */
+async function insertSession(
+  ctx: any,
+  cards: any[],
+  row: any,
+): Promise<any> {
+  const sessionId = await ctx.db.insert("draftSessions", row);
+  await ctx.db.insert("draftPools", {
+    sessionId,
+    ...packDeal(dealDraft(buildSetData(row.setCode, cards, [], undefined), row.seed)),
+    colorWinRates: [],
+  });
+  return sessionId;
+}
+
 
 // The two gates that let one person read another person's draft -- the only
 // exception to ownedSession in the app. Every assertion here is a NEGATIVE one
@@ -26,7 +49,7 @@ const as = (t: ReturnType<typeof harness>, subject: string) =>
 
 async function seed(t: ReturnType<typeof harness>, over: Record<string, unknown> = {}) {
   return await t.run(async (ctx) => {
-    const mine = await ctx.db.insert("draftSessions", {
+    const mine = await insertSession(ctx, [], {
       userId: token("alice"),
       setCode: "fdn",
       format: "TradDraft",

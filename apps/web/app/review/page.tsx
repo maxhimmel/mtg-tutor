@@ -65,11 +65,7 @@ function DraftList() {
   useEffect(() => {
     if (!drafts || counted.current) return;
     counted.current = true;
-    reviewListSeen({
-      shown: drafts.length,
-      stale: drafts.filter((d) => d.stale === true).length,
-      unknown: drafts.filter((d) => d.stale === undefined).length,
-    });
+    reviewListSeen({ shown: drafts.length });
   }, [drafts]);
 
   if (drafts === undefined) {
@@ -139,18 +135,6 @@ function DraftList() {
                           <span className="eyebrow">
                             {draft.setCode.toUpperCase()} · {draft.pickCount} picks
                           </span>
-                          {/* Every action on this row replays, so a re-ingested
-                              set makes the whole row refuse rather than one
-                              button. Said here, once, instead of three times.
-                              Absent when unknowable -- see review.list. */}
-                          {draft.stale === true && (
-                            <span
-                              className="badge badge-sm badge-warning"
-                              title="This set has been re-ingested since you drafted it, so its packs would now deal differently and the draft can no longer be rebuilt."
-                            >
-                              set has changed
-                            </span>
-                          )}
                         </span>
                       </span>
                     </span>

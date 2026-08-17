@@ -48,6 +48,30 @@ export const cardRole = v.union(
   v.literal("other"),
 );
 
+/**
+ * A card pool stored as columns, which is what `packCards` in core produces.
+ *
+ * Deliberately NOT `v.array(engineCard)`. That shape writes every field NAME
+ * once per card, and across the 18 ingested sets those six strings are
+ * 34.8%-44.5% of the document -- read whole on every pick of every draft. See
+ * core's model/packedCards.ts for the measurement and for the guarantee this
+ * costs: six arrays of equal length is not a shape a validator can express, so
+ * the check that every card has a turn and a role lives in `unpackCards` now
+ * and runs on every read instead of once per deploy.
+ *
+ * Optional columns carry `null` holes so index `i` still lines up, and are
+ * omitted entirely when no card in the pool uses them.
+ */
+export const packedCards = v.object({
+  names: v.array(v.string()),
+  colors: v.array(v.array(colorCode)),
+  turns: v.array(v.number()),
+  roles: v.array(cardRole),
+  values: v.array(v.number()),
+  slots: v.optional(v.array(v.union(packSlot, v.null()))),
+  packRates: v.optional(v.array(v.union(v.number(), v.null()))),
+});
+
 export const engineCard = v.object({
   name: v.string(),
   colors: v.array(colorCode),

@@ -47,3 +47,54 @@ export const stampBenchClock = internalMutation({
     return { ...next, complete: false };
   },
 });
+
+/**
+ * Deletes every draft, its picks, and everything hanging off them.
+ *
+ * ONE-OFF, AND MEANT TO BE DELETED once both deployments have run it. Storing
+ * the deal changed what a seed deals -- see core's deal.ts -- so no session
+ * written before it can be replayed, and the schema that drops
+ * `draftSessions.sourceHash` will not deploy over rows that still carry it.
+ * Migrating them is impossible in principle rather than merely expensive: the
+ * packs those drafts saw were a function of set data plus a shared rng stream,
+ * and both have moved.
+ *
+ * Deliberately NOT touching the ingest-pipeline tables. `sets`, `setCards`,
+ * `setCardText`, `setCardContext`, `setStats` and `setStatsMeta` are rebuilt by
+ * a crawl that costs real time and a Scryfall round trip per set, and nothing
+ * here has any business in them.
+ *
+ * `feedback` is kept too, and that is a judgement rather than an oversight: a
+ * note records what somebody experienced, and its anchor going dangling does
+ * not make the sentence they typed untrue.
+ *
+ * Order matters: rows that point at a session go before the session does, so a
+ * failure part-way leaves no row pointing at nothing.
+ */
+export const wipeDrafts = internalMutation({
+  args: { confirm: v.string() },
+  handler: async (ctx, args) => {
+    if (args.confirm !== "yes-delete-every-draft") {
+      throw new Error(
+        'Refusing: pass {"confirm": "yes-delete-every-draft"} if that is what you mean.',
+      );
+    }
+
+    const tables = [
+      "draftPools",
+      "draftPicks",
+      "reviewVerdicts",
+      "reviewFrames",
+      "challenges",
+      "draftSessions",
+    ] as const;
+
+    const deleted: Record<string, number> = {};
+    for (const table of tables) {
+      const rows = await ctx.db.query(table).collect();
+      for (const row of rows) await ctx.db.delete(row._id);
+      deleted[table] = rows.length;
+    }
+    return deleted;
+  },
+});

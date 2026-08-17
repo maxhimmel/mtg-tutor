@@ -17,6 +17,7 @@ import type * as challengeFixture from "../challengeFixture.js";
 import type * as challenges from "../challenges.js";
 import type * as draft from "../draft.js";
 import type * as draftPicks from "../draftPicks.js";
+import type * as draftPools from "../draftPools.js";
 import type * as feedback from "../feedback.js";
 import type * as http from "../http.js";
 import type * as iobench from "../iobench.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   challenges: typeof challenges;
   draft: typeof draft;
   draftPicks: typeof draftPicks;
+  draftPools: typeof draftPools;
   feedback: typeof feedback;
   http: typeof http;
   iobench: typeof iobench;

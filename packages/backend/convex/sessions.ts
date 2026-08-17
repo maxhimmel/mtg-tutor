@@ -6,7 +6,7 @@ import {
 import type { QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 
-import { toSetData } from "./setData.js";
+import { dealFor } from "./draftPools.js";
 
 // Shared session plumbing. Not Convex functions -- plain helpers, so that every
 // entry point that touches draftSessions goes through the same ownership check
@@ -166,55 +166,31 @@ export async function challengeParty(
  * is deliberately not, and it is not exported to any Convex function.
  */
 export async function replayFor(ctx: QueryCtx, session: Doc<"draftSessions">) {
+  // The set's card pool is NOT read here, and that is the entire point of
+  // `draftPools`. This used to load `setCards` -- ~36KB -- on every one of a
+  // draft's 42 picks, to re-deal boosters that were already decided when the
+  // draft started. The boosters are stored now, so this reads them.
+  const { deal, colorWinRates } = await dealFor(ctx, session._id);
+
+  // Still the small `sets` row, ~440 bytes, for the name and icon a screen puts
+  // on the draft. It is not on the replay path and never was.
   const setDoc = await setDocFor(ctx, session.setCode, session.format);
-  const cardsDoc = await setCardsFor(ctx, setDoc);
 
-  // A session is {seed, pickedNames} replayed against whatever the set data
-  // says today, so re-ingesting a set whose packs changed strands every draft
-  // taken against the old data. Nothing can repair those -- the packs that
-  // draft saw no longer exist -- so this says so, rather than surfacing the
-  // engine's divergence message as an uncaught server error.
-  let engine;
-  try {
-    engine = replayDraft(
-      dealDraft(toSetData(cardsDoc), session.seed),
-      session.seed,
-      session.pickedNames,
-      undefined,
-      // Absent means the original bot, which is what every draft taken before
-      // pods existed was dealt by. See draftSessions.pod.
-      session.pod ?? "legacy",
-    );
-  } catch (e) {
-    throw new ConvexError(
-      `This draft can no longer be rebuilt: the ${session.setCode.toUpperCase()} ` +
-        `card data has changed since it was drafted, so its packs would now deal ` +
-        `differently. (${e instanceof Error ? e.message : String(e)})`,
-    );
-  }
+  // A divergence here can no longer mean "the set data moved": nothing outside
+  // this session can change what its packs held. What is left is a genuine
+  // mismatch -- the wrong pod against a stored deal -- so it is a bug rather
+  // than a hazard, and it is left to throw as one.
+  const engine = replayDraft(
+    deal,
+    session.seed,
+    session.pickedNames,
+    undefined,
+    // Absent means the original bot, which is what every draft taken before
+    // pods existed was played by. See draftSessions.pod.
+    session.pod ?? "legacy",
+  );
 
-  return { session, engine, setDoc, cardsDoc };
-}
-
-/**
- * Whether a draft was dealt from set data that has since moved on.
- *
- * Three answers, not two. `undefined` means the question cannot be answered --
- * the session predates the stamp, or the set was ingested with no artifact to
- * hash -- and it must not collapse to `false`, because "we cannot tell" and
- * "this is fine" lead a reader to opposite conclusions and only one of them is
- * safe. A truthy check on the return value is the bug this shape exists to make
- * visible.
- *
- * A hint for a list, never a guard: see the note on `draftSessions.sourceHash`
- * for the two ways a pool changes without the hash following it.
- */
-export function staleAgainst(
-  sessionHash: string | undefined,
-  liveHash: string | undefined,
-): boolean | undefined {
-  if (sessionHash === undefined || liveHash === undefined) return undefined;
-  return sessionHash !== liveHash;
+  return { session, engine, setDoc, colorWinRates };
 }
 
 /** The caller's sessions, newest first. */
