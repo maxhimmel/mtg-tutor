@@ -524,6 +524,44 @@ export function draftResumed(p: {
 }
 
 /**
+ * A draft that can no longer be played, found by opening it.
+ *
+ * THE ONE WAY A DRAFT CAN STILL STRAND, and it is not the one the schema used
+ * to track. Storing each draft's own boosters (schema.ts, draftPools) put the
+ * packs out of a re-ingest's reach, and `draftSessions.sourceHash` was narrowed
+ * away because of it. The card TEXT was not: `sets.ingest` replaces a set's
+ * text rows wholesale, so a card that leaves the pool loses its row, and a
+ * draft in progress is holding that card in boosters nothing can reach to
+ * update. The board joins the two halves by name and `hydrate` throws on a name
+ * it cannot find -- which before this was a blank screen with a console error
+ * behind it.
+ *
+ * The browser is the only side that can see it. The server sends the engine's
+ * half of a card and never looks the text up; the client reads the set's text
+ * once for the session and does the join. So the failure happens here, and here
+ * is the only place that knows it happened.
+ *
+ * `missing` against `dealt` is what decides what to do about it. One card gone
+ * is a draft that could have been repaired; forty is a set that moved under
+ * everybody, and the answer to that is to stop re-ingesting sets people are
+ * mid-draft on. Zero of these ever firing is the honest answer that the pool
+ * being stored closed the hazard for good, which is worth knowing too.
+ */
+export function draftStranded(p: {
+  sessionId: string;
+  setCode: string;
+  format: string;
+  picks: number;
+  /** Distinct names in the pack and pool that the set no longer has text for. */
+  missing: number;
+  /** How many the draft was holding, so `missing` has a denominator. */
+  dealt: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("draft_stranded", p);
+}
+
+/**
  * How much of a review list a person is actually offered.
  *
  * IT USED TO CARRY `stale` AND `unknown`, AND THEY ARE GONE ON PURPOSE. This

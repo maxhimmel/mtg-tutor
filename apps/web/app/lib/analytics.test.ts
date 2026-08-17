@@ -4,6 +4,8 @@ import posthog from "posthog-js";
 import {
   authRecovered,
   authStalled,
+  draftResumed,
+  draftStranded,
   feedbackOpened,
   feedbackRefused,
   identify,
@@ -60,6 +62,15 @@ describe("without a project token", () => {
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
       tokensPreviewed({ named: 1, withArt: 1, drawn: 1, viewport: 1440 });
+      draftResumed({ sessionId: "s1", setCode: "fdn", format: "TradDraft", picks: 3, agedHours: 2 });
+      draftStranded({
+        sessionId: "s1",
+        setCode: "fdn",
+        format: "TradDraft",
+        picks: 3,
+        missing: 1,
+        dealt: 45,
+      });
     }).not.toThrow();
 
     expect(capture).not.toHaveBeenCalled();
@@ -133,6 +144,34 @@ describe("with a project token", () => {
       route: "/draft/[sessionId]",
       stalledMs: 2400,
     });
+  });
+
+  // The two halves of what happens to an unfinished draft: it is played on, or
+  // it turns out it cannot be. Named here for the reason every other event in
+  // this file is -- `draft_resumed` against `draft_started` is the only evidence
+  // the resume list was worth building, and a rename leaves the old data behind
+  // as an event nothing can be repaired to include.
+  it("names the two events an unfinished draft can produce", () => {
+    const resumed = {
+      sessionId: "s1",
+      setCode: "fdn",
+      format: "TradDraft",
+      picks: 17,
+      agedHours: 40,
+    };
+    draftResumed(resumed);
+    expect(capture).toHaveBeenCalledWith("draft_resumed", resumed);
+
+    const stranded = {
+      sessionId: "s1",
+      setCode: "fdn",
+      format: "TradDraft",
+      picks: 17,
+      missing: 3,
+      dealt: 45,
+    };
+    draftStranded(stranded);
+    expect(capture).toHaveBeenCalledWith("draft_stranded", stranded);
   });
 
   it("resets on sign-out, so the next person is not the last one", () => {
