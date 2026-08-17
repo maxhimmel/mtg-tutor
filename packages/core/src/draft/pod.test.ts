@@ -3,6 +3,7 @@ import type { PodPolicy } from "./bots.js";
 import { fakeSet } from "../testing/fakeSet.js";
 import { cardValue } from "../scoring/value.js";
 import { mulberry32 } from "../util/rng.js";
+import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 import { replayDraft } from "./replay.js";
 
@@ -15,16 +16,25 @@ import { replayDraft } from "./replay.js";
 // exactly one number per card in its hand and the human draws none. Break that
 // and fork weights stop measuring anything, without failing.
 
-/** Drives a whole draft, counting draws, always taking the highest-value card. */
+/**
+ * Drives a whole draft, counting draws, always taking the highest-value card.
+ *
+ * The counter now sees BOT DRAWS ONLY: the deal has its own stream and is
+ * settled before the first pick, so nothing it consumes reaches this rng. That
+ * makes the equal-draws assertion below sharper than it was -- it used to be a
+ * count of dealing plus picking, and it is now a count of picking.
+ */
 function draft(pod: PodPolicy, seed: number) {
   let draws = 0;
-  const rng = mulberry32(seed);
+  // The same stream replayDraft gives the bots, or this helper and a replay
+  // of its own output are two different drafts.
+  const rng = botRng(seed);
   const counted = () => {
     draws++;
     return rng();
   };
 
-  const engine = new DraftEngine(fakeSet(), counted, pod);
+  const engine = new DraftEngine(dealDraft(fakeSet(), seed), counted, pod);
   const picked: string[] = [];
   while (!engine.isComplete()) {
     const best = [...engine.currentPack].sort((a, b) => cardValue(b) - cardValue(a))[0];
@@ -57,7 +67,7 @@ describe("a pod policy", () => {
 
   it("replays exactly under the pod it was dealt with", () => {
     const { picked } = draft("table", 7);
-    const engine = replayDraft(fakeSet(), 7, picked, undefined, "table");
+    const engine = replayDraft(dealDraft(fakeSet(), 7), 7, picked, undefined, "table");
 
     expect(engine.history.map((h) => h.picked.name)).toEqual(picked);
   });
@@ -68,13 +78,13 @@ describe("a pod policy", () => {
   it("refuses to replay under a different pod", () => {
     const { picked } = draft("table", 7);
 
-    expect(() => replayDraft(fakeSet(), 7, picked, undefined, "legacy")).toThrow(/diverged/);
+    expect(() => replayDraft(dealDraft(fakeSet(), 7), 7, picked, undefined, "legacy")).toThrow(/diverged/);
   });
 
   it("defaults to legacy, so every caller written before pods still deals the same", () => {
     const explicit = draft("legacy", 5).picked;
 
-    const engine = new DraftEngine(fakeSet(), mulberry32(5));
+    const engine = new DraftEngine(dealDraft(fakeSet(), 5), botRng(5));
     const implicit: string[] = [];
     while (!engine.isComplete()) {
       const best = [...engine.currentPack].sort((a, b) => cardValue(b) - cardValue(a))[0];

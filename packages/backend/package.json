@@ -27,8 +27,8 @@
     "cache-cards": "node scripts/cache-cards.mjs",
     "challenge-fixture": "node scripts/challenge-fixture.mjs",
     "check-access": "node scripts/check-access.mjs",
-    "claude-bridge": "node scripts/claude-bridge.mjs",
     "check-availability": "node scripts/check-set-availability.mjs",
+    "claude-bridge": "node scripts/claude-bridge.mjs",
     "deploy": "convex deploy",
     "dev": "node scripts/dev.mjs",
     "dev:only": "convex dev",
@@ -48,7 +48,8 @@
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
-    "verify-tiebreak": "node scripts/verify-tiebreak.mjs"
+    "verify-tiebreak": "node scripts/verify-tiebreak.mjs",
+    "wipe-drafts": "node scripts/wipe-drafts.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

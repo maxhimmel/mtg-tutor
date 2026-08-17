@@ -17,7 +17,7 @@ import { action, internalMutation, internalQuery, mutation, query } from "./_gen
 import type { QueryCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
-import { loadBoard, ownSessions, ownedSession, staleAgainst } from "./sessions.js";
+import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
 import {
   poolFromLastPick,
@@ -48,17 +48,6 @@ export const list = query({
     // on either side answers `undefined`, not `true`: a draft from before the
     // field existed might be fine, and saying otherwise would be a warning
     // nobody could act on.
-    const liveHashes = new Map<string, string | undefined>();
-    for (const s of finished) {
-      const key = `${s.setCode}|${s.format}`;
-      if (liveHashes.has(key)) continue;
-      const setDoc = await ctx.db
-        .query("sets")
-        .withIndex("by_code_and_format", (q) => q.eq("code", s.setCode).eq("format", s.format))
-        .unique();
-      liveHashes.set(key, setDoc?.sourceHash);
-    }
-
     return finished
       .map((s) => ({
         id: s._id,
@@ -73,9 +62,6 @@ export const list = query({
         // finished and never built, and the row that links to the deck should
         // say so rather than sending you to a comparison that does not exist.
         built: s.build != null,
-        // True when the set has been re-ingested since this was drafted, so the
-        // walkthrough will refuse it. `undefined` means unknowable, not fine.
-        stale: staleAgainst(s.sourceHash, liveHashes.get(`${s.setCode}|${s.format}`)),
       }));
   },
 });
@@ -423,8 +409,8 @@ export const framePrompt = internalQuery({
     const cached = await storedFrame(ctx, args.sessionId, args.phase);
     if (cached) return { cached: cached.text, userContent: null };
 
-    const { engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
-    const winRates = cardsDoc.colorWinRates;
+    const { engine, colorWinRates } = await loadBoard(ctx, args.sessionId);
+    const winRates = colorWinRates;
     // No card text read at all: a frame lists the pool as names grouped by
     // colour and ranks the set's archetypes, and neither needs rules text.
     return {

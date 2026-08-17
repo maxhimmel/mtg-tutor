@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makePack, packSizeFor } from "./pack.js";
+import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 import { fakePlayBoosterSet, fakeSet } from "../testing/fakeSet.js";
 import { mulberry32 } from "../util/rng.js";
@@ -158,16 +159,16 @@ describe("sets without observed composition", () => {
 
 describe("draft length follows pack size", () => {
   it("runs 42 picks for a 14-card set and 45 for a 15-card one", () => {
-    expect(new DraftEngine(fakePlayBoosterSet(), mulberry32(1)).totalPicks()).toBe(
+    expect(new DraftEngine(dealDraft(fakePlayBoosterSet(), 1), botRng(1)).totalPicks()).toBe(
       PACK.packsPerDraft * 14,
     );
-    expect(new DraftEngine(fakeSet(), mulberry32(1)).totalPicks()).toBe(
+    expect(new DraftEngine(dealDraft(fakeSet(), 1), botRng(1)).totalPicks()).toBe(
       PACK.packsPerDraft * 15,
     );
   });
 
   it("plays a full Play Booster draft to completion", () => {
-    const engine = new DraftEngine(fakePlayBoosterSet(), mulberry32(9));
+    const engine = new DraftEngine(dealDraft(fakePlayBoosterSet(), 9), botRng(9));
     while (!engine.isComplete()) engine.humanPick(engine.currentPack[0]);
     expect(engine.history).toHaveLength(42);
   });

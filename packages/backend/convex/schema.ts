@@ -7,6 +7,8 @@ import {
   cardText,
   colorCode,
   colorWinRate,
+  digestMistake,
+  digestPicks,
   draftSummary,
   engineCard,
   feedbackAnchor,
@@ -16,6 +18,7 @@ import {
   llmCall,
   packCard,
   packComposition,
+  packedCards,
   pickDefense,
   reviewVerdict,
   storedPickScore,
@@ -250,26 +253,6 @@ export default defineSchema({
     // about the session, and because the alternative -- a lookup per verdict --
     // is a read this document was going to do anyway.
     reviewClaimedAt: v.optional(v.string()),
-    // What the set looked like when this draft was dealt, copied from
-    // `sets.sourceHash` at creation.
-    //
-    // A session is {seed, pickedNames} replayed against whatever the set says
-    // TODAY, so re-ingesting a set strands every draft taken against the old
-    // data -- the packs that draft saw no longer exist and nothing can repair
-    // them. `replayFor` says so in human terms, but only once you have already
-    // clicked, because `review.list` reads the denormalized summary and never
-    // replays. It cannot know until it is too late to warn you.
-    //
-    // This is the fingerprint that lets the list mark a stale draft for the
-    // price of reading a ~433-byte `sets` row. Forward-looking only: sessions
-    // created before this existed have no hash and are reported as unknown
-    // rather than as stale, which is honest -- they might be either.
-    //
-    // Deliberately NOT the guard on anything that must be correct. The hash is
-    // absent when a set is ingested with no artifact to hand, and unchanged by
-    // `ingest-sets --force`, which re-crawls Scryfall under the same hash. It
-    // is a cheap hint for a list, and a replay is the only real test.
-    sourceHash: v.optional(v.string()),
     // That this draft was taken in answer to a challenge, and which one.
     //
     // On the session rather than found by an index on `challenges`, because the
@@ -298,7 +281,80 @@ export default defineSchema({
     // mid-draft because nothing session-level depends on it. This decides the
     // deal, so it has to be on the row a replay reads.
     pod: v.optional(v.union(v.literal("table"), v.literal("sharks"))),
+    /**
+     * TRANSITIONAL. Nothing writes this and nothing reads it.
+     *
+     * It named the set data a draft was dealt from, so a list could mark a draft
+     * the walkthrough would refuse. `draftPools` removed the hazard -- a draft
+     * carries its own boosters, so no set can reach one -- and every reader of
+     * this went with it.
+     *
+     * It stays on the schema for exactly one deploy. A push validates every
+     * stored document, so narrowing it away before `reset.wipeDrafts` has run
+     * makes the deploy fail against rows that still carry it. That is the one
+     * ordering mistake this repo has already made once, on dev, when
+     * `setCards.colorPairWinRates` was made required ahead of its backfill.
+     *
+     * Widen, migrate, narrow. This is the widen; the next commit is the narrow.
+     */
+    sourceHash: v.optional(v.string()),
   }).index("by_user", ["userId"]),
+
+  // Every booster this draft will ever open, settled at creation.
+  //
+  // THIS IS WHAT TOOK THE CARD POOL OFF THE REQUEST PATH. A draft used to be
+  // {seed, pickedNames} replayed against `setCards` -- and replay deals, and
+  // dealing samples every rarity pool, so each of the 42 picks read the set's
+  // whole card list. Only 50-64% of a set ever reaches any of the 24 boosters
+  // (measured across all 18 ingested sets), so most of that read was cards this
+  // draft could not contain. Measured: 36.5KB a pick against 11.9KB here.
+  //
+  // AND IT IS WHY A DRAFT CAN NO LONGER STRAND. Replaying against whatever the
+  // set says TODAY made re-ingesting destructive: the packs a stored draft saw
+  // stopped existing and nothing could repair them. `sets.sourceHash`,
+  // `draftSessions.sourceHash`, `staleAgainst` and the "can no longer be
+  // rebuilt" error were all written to cope with that, and all of them go.
+  //
+  // Its own table rather than a field on `draftSessions`, which is read by
+  // `ownedSession` 45 times a draft and REWRITTEN on every pick -- a ~10KB field
+  // there would be ~420KB of writes a draft to store something that never
+  // changes. Written once, at creation, and never patched.
+  //
+  // `rounds[packNo - 1][seat]` indexes into `cards` rather than repeating them:
+  // 24 boosters hold ~336 cards drawn from ~170 distinct ones, so whole cards
+  // per booster would write each popular common a dozen times.
+  //
+  // `colorWinRates` rides along because scoring needs it on every pick, and it
+  // lives on `setCards` -- so leaving it there would drag the whole 36KB
+  // document back onto the path this table exists to clear. ~1KB copied per
+  // draft, and a snapshot rather than a join is the more correct shape anyway:
+  // these are the rates the draft was actually graded against, frozen the way
+  // `reviewVerdicts` is, so a re-ingest cannot silently re-grade old picks.
+  //
+  // ONE ROW PER CARD WAS TRIED HERE AND IS 2.6x WORSE. Measured, not reasoned:
+  // both shapes were written, and each read through the same transaction counter
+  // to produce the identical EngineCard[].
+  //
+  //   packed column     13.8 KB, 1 document      82 B per card
+  //   one row per card  35.4 KB, 172 documents  211 B per card
+  //
+  // A Convex row costs ~129 B before it holds anything -- `_id`,
+  // `_creationTime`, `sessionId`, index entry -- and a card's engine half is
+  // 82 B, so the bookkeeping is 1.6x the card. Over a draft that is 0.57 MB
+  // against 1.45 MB, and creating one would insert 172 rows in place of this.
+  //
+  // The rule, which is NOT "arrays in columns are fine": normalise when readers
+  // want a SUBSET, pack when every reader wants the whole thing. `setCardText`
+  // and `setCardContext` above are row-per-card and are the two biggest wins in
+  // this schema -- the coach wants 5 cards of 285 and scoring wants 14 -- and
+  // they earned -94% each. This pool loses because nobody ever skips any of it:
+  // dealing samples every pool and the bots score every card in every hand.
+  draftPools: defineTable({
+    sessionId: v.id("draftSessions"),
+    cards: packedCards,
+    rounds: v.array(v.array(v.array(v.number()))),
+    colorWinRates: v.array(colorWinRate),
+  }).index("by_session", ["sessionId"]),
 
   // What one pick actually saw and scored, written as it happens.
   //
@@ -337,6 +393,31 @@ export default defineSchema({
     // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
+  // What the statistics screen plots, written once when a draft finishes.
+  //
+  // `stats.overview` used to REPLAY every draft in the window to get its
+  // per-pick scores -- a hundred sessions, each reading its set's pool and
+  // context, 732KB a page view against a real history. It replayed to recompute
+  // numbers that `draftPicks` already stored, and `draftPicks.ts` says plainly
+  // that when the two disagree the stored rows win: a replay has no per-pack
+  // context rows, so it grades on raw power and the player was shown these.
+  // Reading the rows directly instead is both cheaper and the correct answer.
+  //
+  // Not the rows themselves, though. A draft's `draftPicks` are ~92KB, because
+  // each carries the pack it saw and the pool before it -- a hundred drafts is
+  // ~9MB. This is the ~1KB of it that a chart of averages actually plots.
+  //
+  // DELIBERATELY NOT A COPY OF `draftSessions.summary`. The overall score, the
+  // accuracy and the colour pair are answered there already, and a second copy
+  // here would be free to disagree with the first -- the same reason
+  // `accessRequests` has no status field and there is no stored deck list. The
+  // screen reads both, which costs one session row it was reading anyway.
+  draftDigests: defineTable({
+    sessionId: v.id("draftSessions"),
+    picks: digestPicks,
+    mistakes: v.array(digestMistake),
+  }).index("by_session", ["sessionId"]),
 
   // One person daring another to draft the same packs, and the two drafts that
   // came of it.

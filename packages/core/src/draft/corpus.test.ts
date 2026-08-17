@@ -3,6 +3,7 @@ import type { SetData } from "../model/card.js";
 import { fakeMixedSet, fakePlayBoosterSet, fakeSet } from "../testing/fakeSet.js";
 import { cardValue } from "../scoring/value.js";
 import { mulberry32 } from "../util/rng.js";
+import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 import type { PodPolicy } from "./bots.js";
 
@@ -35,7 +36,7 @@ function dealHash(set: SetData, seeds: number, pod: PodPolicy = "legacy"): numbe
   };
 
   for (let seed = 1; seed <= seeds; seed++) {
-    const engine = new DraftEngine(set, mulberry32(seed), pod);
+    const engine = new DraftEngine(dealDraft(set, seed), botRng(seed), pod);
     while (!engine.isComplete()) {
       const pack = engine.currentPack;
       eat(pack.map((c) => c.name).join(","));
@@ -54,16 +55,16 @@ describe("the deal is stable across a corpus of seeds", () => {
   // changed what the seed deals -- do not update the number until you know
   // which change did it and that stranding every existing draft is intended.
   const GOLDEN: [string, () => SetData, number][] = [
-    ["a fixed-shape set", fakeSet, 954436148],
+    ["a fixed-shape set", fakeSet, 179877333],
     // Moved deliberately when basic lands stopped being valued as the median
     // rated common: bots no longer take them, so what wheels changed. Only this
     // fixture has basics, and only this hash moved -- which is what says the
     // change is confined to them.
-    ["a Play Booster set", fakePlayBoosterSet, 3984038120],
+    ["a Play Booster set", fakePlayBoosterSet, 1208041874],
     // The one that matters most for a change to how value is stored: the other
     // two sit entirely on the trusted-win-rate branch, so neither would notice a
     // baseline, blend or ALSA regression.
-    ["a set with rated, thin and unrated cards", fakeMixedSet, 2349056497],
+    ["a set with rated, thin and unrated cards", fakeMixedSet, 2755347920],
   ];
 
   for (const [label, build, golden] of GOLDEN) {
@@ -113,9 +114,9 @@ describe("the deal is stable across a corpus of seeds", () => {
 // fingerprint says "you changed the weights", these say "you changed the deal".
 describe("the fitted pods deal the same way they always have", () => {
   const GOLDEN: [string, () => SetData, number, number][] = [
-    ["a fixed-shape set", fakeSet, 1640807346, 2959471123],
-    ["a Play Booster set", fakePlayBoosterSet, 3163042544, 2619367136],
-    ["a set with rated, thin and unrated cards", fakeMixedSet, 1612751832, 1482762941],
+    ["a fixed-shape set", fakeSet, 3316268996, 2348276992],
+    ["a Play Booster set", fakePlayBoosterSet, 2404736845, 3307669095],
+    ["a set with rated, thin and unrated cards", fakeMixedSet, 1634392860, 166620893],
   ];
 
   for (const [label, build, table, sharks] of GOLDEN) {

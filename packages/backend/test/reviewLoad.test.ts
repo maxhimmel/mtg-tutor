@@ -3,6 +3,29 @@ import { describe, expect, it } from "vitest";
 import { harness } from "./convexHarness.js";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { buildSetData, dealDraft, packDeal } from "@mtg-tutor/core";
+
+/**
+ * A session and the boosters it was dealt, which is what `startSession` writes.
+ *
+ * Hand-inserting a session row is no longer enough: a draft carries its own
+ * packs now, and `dealFor` refuses a session without them rather than dealing
+ * fresh ones -- see draftPools.ts for why that refusal is deliberate.
+ */
+async function insertSession(
+  ctx: any,
+  cards: any[],
+  row: any,
+): Promise<any> {
+  const sessionId = await ctx.db.insert("draftSessions", row);
+  await ctx.db.insert("draftPools", {
+    sessionId,
+    ...packDeal(dealDraft(buildSetData(row.setCode, cards, [], undefined), row.seed)),
+    colorWinRates: [],
+  });
+  return sessionId;
+}
+
 
 // `review.load` was the last reader that replayed (notes.md issue #3), and this
 // is the test that says it no longer does.
@@ -48,12 +71,15 @@ const textRow = (name: string) => ({
 });
 
 /**
- * A finished two-pick draft whose set has since been re-ingested without the
- * cards it was drafted from.
+ * A finished two-pick draft that no replay can rebuild.
  *
- * `setCards` holds only Filler, so a replay of {seed, pickedNames} would deal
- * packs that cannot contain Alpha or Beta and throw at P1P1. The draftPicks rows
- * hold the packs as they were, which is the whole point.
+ * The session's stored pool cannot deal Alpha or Beta, so anything that replays
+ * throws at P1P1. The draftPicks rows hold the packs as they were, which is the
+ * whole point: `review.load` reads them and never replays.
+ *
+ * This used to be arranged by re-ingesting the set out from under the draft --
+ * the hazard `draftPools` removed. It is arranged directly now, because there is
+ * no longer any way for the outside world to do it to a real draft.
  */
 async function strandedDraft(t: ReturnType<typeof harness>) {
   return await t.run(async (ctx) => {
@@ -62,7 +88,6 @@ async function strandedDraft(t: ReturnType<typeof harness>) {
       cardCount: 1,
       ratedCardCount: 1,
       ingestedAt: new Date(0).toISOString(),
-      sourceHash: "hash-2",
     });
     await ctx.db.insert("setCards", {
       ...SET,
@@ -73,7 +98,7 @@ async function strandedDraft(t: ReturnType<typeof harness>) {
       await ctx.db.insert("setCardText", textRow(name));
     }
 
-    const sessionId = await ctx.db.insert("draftSessions", {
+    const sessionId = await insertSession(ctx, [], {
       userId: token("alice"),
       setCode: SET.code,
       format: SET.format,
@@ -82,7 +107,6 @@ async function strandedDraft(t: ReturnType<typeof harness>) {
       status: "complete" as const,
       createdAt: new Date(0).toISOString(),
       // Stamped from the pool it was DEALT from, which is not the pool above.
-      sourceHash: "hash-1",
     });
 
     const rows = [
@@ -132,16 +156,16 @@ async function strandedDraft(t: ReturnType<typeof harness>) {
 describe("review.load on a draft the engine can no longer rebuild", () => {
   // The control, and the reason the four below mean anything. `backfillSummary`
   // is the same fixture through `loadBoard`, which still replays -- so this
-  // proves the draft really is stranded rather than accidentally replayable, and
-  // that `review.load` opening it is a property of the change and not of a
+  // proves the draft really is unreplayable rather than accidentally replayable,
+  // and that `review.load` opening it is a property of the change and not of a
   // fixture that was never hard.
-  it("is genuinely stranded -- a reader that replays still refuses it", async () => {
+  it("is genuinely unreplayable -- a reader that replays still refuses it", async () => {
     const t = harness();
     const sessionId = await strandedDraft(t);
 
     await expect(
       as(t, "alice").mutation(api.review.backfillSummary, { sessionId }),
-    ).rejects.toThrow(/can no longer be rebuilt/);
+    ).rejects.toThrow(/Replay diverged|no stored boosters/);
   });
 
   it("opens it, because the packs came from the rows", async () => {
@@ -200,7 +224,7 @@ describe("review.load on a draft with no stored picks", () => {
         cards: [engineCard("Filler", 40)],
         colorWinRates: [],
       });
-      return await ctx.db.insert("draftSessions", {
+      return await insertSession(ctx, [], {
         userId: token("alice"),
         setCode: SET.code,
         format: SET.format,

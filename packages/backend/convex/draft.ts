@@ -25,13 +25,17 @@ import { internal } from "./_generated/api.js";
 import { enforce } from "./quota.js";
 import { requireCaller } from "./roles.js";
 import type { Caller } from "./roles.js";
-import { loadBoard, ownedSession, setDocFor } from "./sessions.js";
+import { loadBoard, ownedSession, setCardsFor, setDocFor } from "./sessions.js";
+import { copyDeal, storeDeal } from "./draftPools.js";
+import { storeDigest } from "./draftDigests.js";
+import { toSetData } from "./setData.js";
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
 import type { StoredPod } from "@mtg-tutor/core";
 import {
   recordPick,
   storedPick,
+  storedPicks,
   storedPool,
   storedScores,
   toRecordedPick,
@@ -74,6 +78,15 @@ export async function startSession(
     seed?: number;
     challengeId?: Id<"challenges">;
     pod?: StoredPod;
+    /**
+     * Take this session's boosters instead of dealing fresh ones.
+     *
+     * How a challenge is kept honest. Re-dealing from the shared seed is only
+     * the same packs for as long as the set has not been re-ingested, which is
+     * why `accept` used to replay the challenger's draft to check. Inheriting
+     * the row makes "the same packs" true by construction instead of checked.
+     */
+    dealFrom?: Id<"draftSessions">;
   },
 ): Promise<Id<"draftSessions">> {
   const setCode = args.setCode.toLowerCase();
@@ -87,18 +100,18 @@ export async function startSession(
   // transaction -- which is the reason this is a component and not a counter.
   await enforce(ctx, "drafts", caller);
 
+  // Coerced the same way mulberry32 reads it, so a caller cannot pin a seed
+  // that behaves differently from one newSeed would have produced.
+  const seed = args.seed === undefined ? newSeed() : args.seed >>> 0;
+
   const sessionId = await ctx.db.insert("draftSessions", {
     userId: caller.userId,
     setCode,
     format,
-    // Coerced the same way mulberry32 reads it, so a caller cannot pin a seed
-    // that behaves differently from one newSeed would have produced.
-    seed: args.seed === undefined ? newSeed() : args.seed >>> 0,
+    seed,
     pickedNames: [],
     status: "active" as const,
     createdAt: new Date().toISOString(),
-    // Free -- setDocFor already read this row above to prove the set exists.
-    sourceHash: setDoc.sourceHash,
     // Set only when this draft answers a challenge. What `pick` reads on the
     // last pick of the draft to know whether anyone is waiting to be told.
     challengeId: args.challengeId,
@@ -107,6 +120,18 @@ export async function startSession(
     // defaulted to a literal, because absent is what the legacy pod IS.
     pod: args.pod,
   });
+
+  // The one read of the set's card pool in a draft's whole life. Every pick from
+  // here on reads the boosters this deals instead -- ~12KB against the pool's
+  // ~36KB, and 42 times over. It is also what makes the draft independent of the
+  // set from now on: re-ingesting cannot reach a draft that carries its packs.
+  //
+  // After the insert, because the pool row names the session.
+  if (args.dealFrom) {
+    await copyDeal(ctx, args.dealFrom, sessionId);
+  } else {
+    await storeDeal(ctx, sessionId, toSetData(await setCardsFor(ctx, setDoc)), seed);
+  }
 
   // After the insert and after the quota, so nothing is reported that did not
   // happen -- a capture above `enforce` would be rolled back with the refusal
@@ -147,7 +172,7 @@ export const start = mutation({
 export const state = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, colorWinRates } = await loadBoard(ctx, args.sessionId);
     return {
       sessionId: session._id,
       setCode: session.setCode,
@@ -167,7 +192,7 @@ export const state = query({
       // by contextValue needs this plus the pack's context rows, and the pack is
       // already there. Same principle as sending the set's card text once and
       // joining by name.
-      colorWinRates: cardsDoc.colorWinRates,
+      colorWinRates: colorWinRates,
       ...boardView(engine),
     };
   },
@@ -233,7 +258,7 @@ export const pick = mutation({
     defense: v.optional(pickDefenseInput),
   },
   handler: async (ctx, args) => {
-    const { session, engine, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, colorWinRates } = await loadBoard(ctx, args.sessionId);
 
     if (engine.isComplete()) {
       throw new Error("This draft is already finished.");
@@ -279,7 +304,7 @@ export const pick = mutation({
         maindeck,
         session.pickedNames.length,
         engine.totalPicks(),
-        cardsDoc.colorWinRates,
+        colorWinRates,
         (c) => context.get(normalizeName(c.name)),
       ),
     );
@@ -308,6 +333,13 @@ export const pick = mutation({
     // rebuild one pick out of the set's whole card pool.
     await recordPick(ctx, args.sessionId, pickIndex, record, poolBefore, defense);
 
+    // Read ONCE on the last pick, and shared by the two things that want them:
+    // the summary wants every score, the digest wants those and the misses. A
+    // draft's pick rows are ~92KB, because each carries the pack it saw -- so
+    // collecting them twice here would cost more than the digest saves on the
+    // statistics screen it was added for.
+    const storedRows = complete ? await storedPicks(ctx, args.sessionId) : [];
+
     await ctx.db.patch(args.sessionId, {
       pickedNames: [...session.pickedNames, chosen.name],
       ...(args.bench ? { sideboard } : {}),
@@ -323,12 +355,21 @@ export const pick = mutation({
             // The colours here are provisional -- the deck builder is still to
             // come, and cutting a card changes them. `build` recomputes them
             // when the forty is locked in; see `refreshedColors`.
-            summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
+            summary: summarizeDraft(
+              storedRows.map((r) => r.score),
+              maindeck,
+            ),
           }
         : {}),
     });
 
     if (complete) {
+      // What the statistics screen plots, off the rows this pick just finished
+      // writing. After the patch, so a draft is never digested as complete
+      // before it is recorded as complete -- and inside the transaction, so a
+      // throw below takes both back together.
+      await storeDigest(ctx, args.sessionId, storedRows);
+
       await draftCompleted(ctx, {
         sessionId: args.sessionId,
         setCode: session.setCode,
@@ -461,7 +502,7 @@ export const build = mutation({
 export const results = query({
   args: { sessionId: v.id("draftSessions"), mistakeLimit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { session, engine, setDoc, cardsDoc } = await loadBoard(ctx, args.sessionId);
+    const { session, engine, setDoc, colorWinRates } = await loadBoard(ctx, args.sessionId);
     // Once per finished draft, for the pool the deck is built from and the few
     // cards the mistakes name -- not the whole set.
     const text = await cardTextFor(
@@ -521,7 +562,7 @@ export const results = query({
     // The archetype table is what lets it consider three colours at all: it is
     // the only thing that says what the third one costs here.
     const suggested = built
-      ? suggestDeck(drafted, { archetypes: cardsDoc.colorWinRates })
+      ? suggestDeck(drafted, { archetypes: colorWinRates })
       : undefined;
 
     return {

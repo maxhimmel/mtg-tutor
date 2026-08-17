@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { ColorCode } from "../model/card.js";
 import { makePack } from "./pack.js";
 import { Bot } from "./bots.js";
+import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 import { PACK, packSize } from "../config.js";
 import { fakeSet, mkCard } from "../testing/fakeSet.js";
@@ -39,7 +40,7 @@ describe("Bot", () => {
 
 describe("DraftEngine", () => {
   it("runs a full 45-pick draft with correct structure", () => {
-    const engine = new DraftEngine(fakeSet(), rng(42));
+    const engine = new DraftEngine(dealDraft(fakeSet(), 42), botRng(42));
     while (!engine.isComplete()) {
       const pack = engine.currentPack;
       engine.humanPick(pack[0]);

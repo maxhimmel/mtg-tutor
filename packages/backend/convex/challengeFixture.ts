@@ -1,7 +1,16 @@
 import { ConvexError, v } from "convex/values";
-import { DraftEngine, cardValue, mulberry32, splitPool, summarizeDraft } from "@mtg-tutor/core";
+import {
+  DraftEngine,
+  botRng,
+  cardValue,
+  dealDraft,
+  mulberry32,
+  splitPool,
+  summarizeDraft,
+} from "@mtg-tutor/core";
 import type { EngineCard, SetData } from "@mtg-tutor/core";
 import { internalMutation } from "./_generated/server.js";
+import { copyDeal, storeDeal } from "./draftPools.js";
 import { internal } from "./_generated/api.js";
 import type { MutationCtx } from "./_generated/server.js";
 import type { Id } from "./_generated/dataModel.js";
@@ -75,7 +84,7 @@ async function botDraft(
   fromPickIndex = 0,
   existing: readonly string[] = [],
 ): Promise<string[]> {
-  const engine = new DraftEngine(set, mulberry32(seed));
+  const engine = new DraftEngine(dealDraft(set, seed), botRng(seed));
   const wobble = mulberry32(seed ^ 0x5eed);
   const picked: string[] = [];
   const pool: EngineCard[] = [];
@@ -124,7 +133,7 @@ async function complete(
   // today. The loop below skips a name it cannot find, so replaying under the
   // wrong policy would not throw -- it would quietly build the deck out of
   // whichever picks happened to survive, which is the worst available outcome.
-  const engine = new DraftEngine(set, mulberry32(session.seed), session.pod ?? "legacy");
+  const engine = new DraftEngine(dealDraft(set, session.seed), botRng(session.seed), session.pod ?? "legacy");
   for (const name of picked) {
     const card = engine.currentPack.find((c) => c.name === name);
     if (card) engine.humanPick(card);
@@ -173,6 +182,10 @@ export const inbound = internalMutation({
       status: "active" as const,
       createdAt: new Date().toISOString(),
     });
+
+    // The fixture writes sessions by hand rather than through `startSession`, so
+    // it owes them the same pool row -- every reader refuses a draft without one.
+    await storeDeal(ctx, sessionId, set, seed);
 
     const picked = await botDraft(ctx, sessionId, set, seed, args.sloppiness ?? 0.35);
     await complete(ctx, sessionId, picked);
@@ -249,7 +262,10 @@ export const outbound = internalMutation({
       challengeId,
     });
 
-    // Same seed, different hand: this is a real second pod, so the packs come
+    // The challenger's own packs, the way `challenges.accept` hands them over.
+    await copyDeal(ctx, mine._id, friendSession);
+
+    // Same packs, different hand: this is a real second pod, so the two come
     // apart exactly where the engine says they do rather than where a fixture
     // decided they should.
     const picked = await botDraft(ctx, friendSession, set, mine.seed, args.sloppiness ?? 0.4);

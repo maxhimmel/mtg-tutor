@@ -4,6 +4,29 @@ import { describe, expect, it } from "vitest";
 import { harness } from "./convexHarness.js";
 import { api } from "../convex/_generated/api.js";
 import type { Id } from "../convex/_generated/dataModel.js";
+import { buildSetData, dealDraft, packDeal } from "@mtg-tutor/core";
+
+/**
+ * A session and the boosters it was dealt, which is what `startSession` writes.
+ *
+ * Hand-inserting a session row is no longer enough: a draft carries its own
+ * packs now, and `dealFor` refuses a session without them rather than dealing
+ * fresh ones -- see draftPools.ts for why that refusal is deliberate.
+ */
+async function insertSession(
+  ctx: any,
+  cards: any[],
+  row: any,
+): Promise<any> {
+  const sessionId = await ctx.db.insert("draftSessions", row);
+  await ctx.db.insert("draftPools", {
+    sessionId,
+    ...packDeal(dealDraft(buildSetData(row.setCode, cards, [], undefined), row.seed)),
+    colorWinRates: [],
+  });
+  return sessionId;
+}
+
 
 // Proves the harness itself before anything depends on it: that two identities
 // are really two people, and that ownedSession refuses across them. Every
@@ -36,7 +59,7 @@ describe("convex-test harness", () => {
     // Inserted directly: draft.start would spend a quota token and need an
     // ingested set, and neither is what this assertion is about.
     const sessionId = await t.run(async (ctx) =>
-      ctx.db.insert("draftSessions", {
+      insertSession(ctx, [], {
         userId: "https://example.workos.com|user_alice",
         setCode: "fdn",
         format: "PremierDraft",

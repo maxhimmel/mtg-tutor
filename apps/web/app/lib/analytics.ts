@@ -491,21 +491,21 @@ export function forkOpened(p: {
 }
 
 /**
- * How much of somebody's review list is unreadable.
+ * How much of a review list a person is actually offered.
  *
- * Re-ingesting a set strands every draft taken against the old data, and the
- * cost of that has never been measurable: the list could not tell until you
- * clicked, so nothing anywhere counted how often it happens to a real person.
- * That is the number that decides whether issue #3 is worth a real fix or is a
- * theoretical problem we keep describing to each other.
+ * IT USED TO CARRY `stale` AND `unknown`, AND THEY ARE GONE ON PURPOSE. This
+ * event was minted to measure how often re-ingesting a set stranded somebody's
+ * draft -- the list could not tell until you clicked, so nothing counted how
+ * often it happened to a real person. A draft now stores its own boosters
+ * (schema.ts, draftPools), so no set can reach a draft taken against it and the
+ * two properties would report a constant zero forever.
  *
- * Per list render rather than per row, and it carries `shown` so the ratio is
- * readable -- one stale draft out of twenty is a footnote, and eleven out of
- * twenty is the whole review feature quietly not working. `unknown` counts the
- * drafts that predate the stamp, because a metric that folded those into either
- * answer would be reporting a certainty it does not have.
+ * The NAME is kept, deliberately. Renaming would leave the old data as a
+ * different event that no chart can be repaired to include, and `shown` means
+ * exactly what it always did. Series split by `stale` simply stop after the
+ * deploy, which is the truth: the thing they measured stopped existing.
  */
-export function reviewListSeen(p: { shown: number; stale: number; unknown: number }): void {
+export function reviewListSeen(p: { shown: number }): void {
   if (!on()) return;
   posthog.capture("review_list_seen", p);
 }

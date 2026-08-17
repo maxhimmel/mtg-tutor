@@ -48,6 +48,60 @@ export const cardRole = v.union(
   v.literal("other"),
 );
 
+/**
+ * A card pool stored as columns, which is what `packCards` in core produces.
+ *
+ * Deliberately NOT `v.array(engineCard)`. That shape writes every field NAME
+ * once per card, and across the 18 ingested sets those six strings are
+ * 34.8%-44.5% of the document -- read whole on every pick of every draft. See
+ * core's model/packedCards.ts for the measurement and for the guarantee this
+ * costs: six arrays of equal length is not a shape a validator can express, so
+ * the check that every card has a turn and a role lives in `unpackCards` now
+ * and runs on every read instead of once per deploy.
+ *
+ * Optional columns carry `null` holes so index `i` still lines up, and are
+ * omitted entirely when no card in the pool uses them.
+ */
+/**
+ * One pick reduced to what the statistics screen plots.
+ *
+ * Columns rather than a row per pick, for the reason `packedCards` is: 42
+ * objects each repeating "score" "packNo" "pickNo" is mostly field names.
+ */
+export const digestPicks = v.object({
+  scores: v.array(v.number()),
+  packNos: v.array(v.number()),
+  pickNos: v.array(v.number()),
+});
+
+/**
+ * A pick the player would want back, kept whole because the screen names it.
+ *
+ * Only the worst DIGEST_MISTAKES of a draft are stored, which is exact rather
+ * than approximate for the list that reads them: a global top-K can only ever
+ * draw K from any single draft, so keeping each draft's top K is sufficient.
+ * See draftDigests.ts.
+ */
+export const digestMistake = v.object({
+  pickedName: v.string(),
+  bestName: v.string(),
+  pickedValue: v.number(),
+  bestValue: v.number(),
+  score: v.number(),
+  packNo: v.number(),
+  pickNo: v.number(),
+});
+
+export const packedCards = v.object({
+  names: v.array(v.string()),
+  colors: v.array(v.array(colorCode)),
+  turns: v.array(v.number()),
+  roles: v.array(cardRole),
+  values: v.array(v.number()),
+  slots: v.optional(v.array(v.union(packSlot, v.null()))),
+  packRates: v.optional(v.array(v.union(v.number(), v.null()))),
+});
+
 export const engineCard = v.object({
   name: v.string(),
   colors: v.array(colorCode),
@@ -228,6 +282,7 @@ export const card = v.object({ ...engineCard.fields, ...cardText.fields, rarity 
 export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;
 export type StoredCardText = Infer<typeof cardText>;
+export type DigestMistake = Infer<typeof digestMistake>;
 
 // What scoring reads to judge a card in context. One row per card in
 // `setCardContext` -- see core's CardContext for why this is a third table and
