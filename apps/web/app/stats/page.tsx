@@ -9,7 +9,7 @@ import { PageShell } from "../components/PageShell";
 import { Panel } from "../components/Panel";
 import { SetIcon } from "../components/SetIcon";
 import { SignedOut } from "../components/SignedOut";
-import { pct, releaseDate } from "../lib/format";
+import { pct, points, releaseDate } from "../lib/format";
 import { ScorePlot, type ScoreColumn } from "./ScorePlot";
 
 export default function StatsIndex() {
@@ -117,8 +117,19 @@ function Overview() {
         </Panel>
       </div>
 
+      {/* The window is a hundred drafts and nobody has reached it, but a page
+          that quietly averaged a subset and called it "overall" would never say
+          so on the day somebody does. */}
+      {data.truncated && (
+        <p className="text-sm text-base-content/55">
+          Only your {overall.drafts} most recent drafts are counted here — older ones fall
+          outside the window.
+        </p>
+      )}
+
       <Lately recent={data.recent} />
       <Breakdowns data={data} />
+      <Mistakes data={data} />
     </div>
   );
 }
@@ -186,6 +197,23 @@ function Lately({ recent }: { recent: Stats["recent"] }) {
 
 type Stats = FunctionReturnType<typeof api.stats.overview>;
 
+/**
+ * How many drafts the digest-built panels actually cover.
+ *
+ * Absent when it is all of them. The per-pick panels are built on the digest a
+ * draft writes when it finishes, rather than on the summaries the header
+ * averages, and a draft that finished before digests existed has none -- so they
+ * say what they are built on rather than inheriting the header's count.
+ */
+function coverage(data: Stats) {
+  if (data.countedDrafts >= data.overall.drafts) return undefined;
+  return (
+    <span className="text-xs tabular-nums text-base-content/50">
+      {data.countedDrafts} of {data.overall.drafts} drafts
+    </span>
+  );
+}
+
 /** One plot's worth of columns, said as a sentence for anyone who cannot see it. */
 const spoken = (subject: string, columns: ScoreColumn[]): string =>
   `${subject} — ${columns.map((c) => c.title).join("; ")}`;
@@ -196,13 +224,9 @@ const spoken = (subject: string, columns: ScoreColumn[]): string =>
  * They are together because they are a pair of questions about the same slip:
  * whether it happens in a particular pack, or at a particular depth into every
  * pack. Either one alone invites the wrong reading of the other.
- *
- * Both come from the per-draft digests rather than from the summaries above,
- * and a draft that finished before digests existed has none -- so the panels say
- * what they are actually built on rather than inheriting the header's count.
  */
 function Breakdowns({ data }: { data: Stats }) {
-  const { byPackNo, byPickNo, overall, countedDrafts } = data;
+  const { byPackNo, byPickNo, countedDrafts } = data;
 
   if (countedDrafts === 0) {
     return (
@@ -215,12 +239,7 @@ function Breakdowns({ data }: { data: Stats }) {
     );
   }
 
-  const coverage =
-    countedDrafts < overall.drafts ? (
-      <span className="text-xs tabular-nums text-base-content/50">
-        {countedDrafts} of {overall.drafts} drafts
-      </span>
-    ) : undefined;
+  const covers = coverage(data);
 
   const packs: ScoreColumn[] = byPackNo.map((row) => ({
     key: String(row.packNo),
@@ -240,7 +259,7 @@ function Breakdowns({ data }: { data: Stats }) {
     <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch">
       <Panel
         title="By pack"
-        aside={coverage}
+        aside={covers}
         className="lg:w-64 lg:shrink-0"
         bodyClassName="gap-3"
       >
@@ -251,7 +270,7 @@ function Breakdowns({ data }: { data: Stats }) {
         </p>
       </Panel>
 
-      <Panel title="By pick" aside={coverage} className="lg:flex-1" bodyClassName="gap-3">
+      <Panel title="By pick" aside={covers} className="lg:flex-1" bodyClassName="gap-3">
         <ScorePlot
           columns={picks}
           label={spoken("Average score by pick number within a pack", picks)}
@@ -262,5 +281,50 @@ function Breakdowns({ data }: { data: Stats }) {
         </p>
       </Panel>
     </div>
+  );
+}
+
+/**
+ * The picks that cost the most win rate, worst first.
+ *
+ * The one panel here that names a card rather than a number, and the reason the
+ * page is worth opening twice: an average tells somebody they are a B+ drafter
+ * and this tells them which card they keep passing.
+ *
+ * Capped by the query rather than by the page. Each draft keeps only its own
+ * worst DIGEST_MISTAKES, which answers a global worst-N exactly up to that and
+ * silently starts missing picks past it -- so `stats.overview` clamps instead of
+ * serving a wrong list, and asking for more here would get the same ten.
+ */
+function Mistakes({ data }: { data: Stats }) {
+  if (data.topMistakes.length === 0) return null;
+
+  return (
+    <Panel title="Biggest missed picks" aside={coverage(data)}>
+      <ul className="flex flex-col">
+        {/* Keyed by position in the list, because the same miss made twice in
+            two drafts is two identical rows and both belong here. */}
+        {data.topMistakes.map((m, i) => (
+          <li
+            key={`${i}-${m.setCode}-${m.packNo}-${m.pickNo}`}
+            className="flex flex-wrap justify-between gap-x-4 gap-y-1 border-b border-base-300 py-1.5 text-sm last:border-0"
+          >
+            <span>
+              <span className="mr-1.5 tabular-nums text-base-content/60">
+                {m.setCode.toUpperCase()} P{m.packNo}P{m.pickNo}
+              </span>
+              took {m.pickedName}
+            </span>
+            <span className="text-base-content/60">
+              over {m.bestName}{" "}
+              {/* The gap the grade is made of, in the percentage points cards
+                  are compared in -- the same subtraction, said the way the
+                  glossary's ruler says it. */}
+              <span className="tabular-nums">{points(m.bestValue - m.pickedValue)}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
