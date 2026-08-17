@@ -491,6 +491,39 @@ export function forkOpened(p: {
 }
 
 /**
+ * Somebody went back into a draft they had walked away from.
+ *
+ * The one measurement the resume list exists to earn. Nothing was BUILT to make
+ * resuming work -- the board has always rebuilt itself from a session id, and
+ * `/draft/<id>` always put you back where you stopped. What was built is the
+ * list that says an unfinished draft is there at all, and the only evidence it
+ * was worth building is somebody clicking one.
+ *
+ * `picks` and `agedHours` together say which product this is. Coming back at
+ * pick 3 an hour later is an interrupted sitting, and the list is a
+ * convenience; coming back at pick 30 a week later is somebody who wanted to
+ * finish and had no way to reach it, and if that is the common case then how a
+ * draft is left and returned to is worth much more work than a list.
+ *
+ * NO PAIRED IMPRESSION EVENT, deliberately. Whether a person has an unfinished
+ * draft at all is `draft_started` minus `draft_completed` minus `draft_deleted`
+ * for that person, and this file's own rule is that an event you can subtract is
+ * an event you should not send -- doubly so on the screen the app opens on,
+ * where it would fire on every visit forever.
+ */
+export function draftResumed(p: {
+  sessionId: string;
+  setCode: string;
+  format: string;
+  picks: number;
+  /** How long the draft sat before they came back to it. */
+  agedHours: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("draft_resumed", p);
+}
+
+/**
  * How much of a review list a person is actually offered.
  *
  * IT USED TO CARRY `stale` AND `unknown`, AND THEY ARE GONE ON PURPOSE. This

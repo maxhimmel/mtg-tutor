@@ -9,6 +9,7 @@ import { PageShell } from "./components/PageShell";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
 import { SignedOut } from "./components/SignedOut";
+import { UnfinishedDrafts } from "./components/UnfinishedDrafts";
 import { accessBlocked, draftRefused } from "./lib/analytics";
 import { PODS, useSettings, type Pod, type SetView } from "./lib/useSettings";
 import { humanError } from "./lib/humanError";
@@ -185,6 +186,12 @@ function SetPicker() {
 
   return (
     <>
+      {/* Above the picker rather than below it: the draft you already started
+          is a better answer to "what do you want to draft" than any set on the
+          grid, and it is the one answer that used to be reachable only by
+          remembering the URL. It draws nothing when there is nothing open. */}
+      <UnfinishedDrafts sets={sets} />
+
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
           Pick a set to draft
