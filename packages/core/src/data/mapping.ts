@@ -87,6 +87,23 @@ function oracleOf(sc: ScryfallCard): string {
   return "";
 }
 
+// The colours of the face a drafter casts.
+//
+// Top level for a normal card, and the FRONT face for a two-faced one, where
+// Scryfall omits `colors` on the card entirely -- `transform` and `modal_dfc`
+// state it per face because the faces can differ. Left unhandled this returned
+// [] for every double-faced card in the pool, which is 116 cards across the
+// eighteen ingested sets and, on mh3, every planeswalker in the set.
+//
+// The FRONT face rather than a union of both, for the same reason `manaCost`
+// one line below already takes the front: that is the half you have to pay for,
+// so it is the half that decides whether you can play the card. What the back
+// adds is in `colorIdentity`, which Scryfall DOES state at the top level for
+// these -- so the union is not lost, it is on the field that means union.
+function colorsOf(sc: ScryfallCard): string[] | undefined {
+  return sc.colors ?? sc.card_faces?.[0]?.colors;
+}
+
 // P/T and loyalty come from the top level, falling back to the front face.
 function combatOf(sc: ScryfallCard) {
   const front = sc.card_faces?.[0];
@@ -123,7 +140,7 @@ export function mergeCards(
     return {
       name: sc.name,
       rarity: toRarity(sc.rarity),
-      colors: asColorCodes(sc.colors),
+      colors: asColorCodes(colorsOf(sc)),
       colorIdentity: asColorCodes(sc.color_identity),
       manaCost: sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost ?? "",
       cmc: sc.cmc ?? 0,

@@ -67,6 +67,48 @@ describe("mergeCards", () => {
     expect(card.imageUrl).toBe(IMAGE);
     expect(card.backImageUrl).toBe(BACK);
   });
+
+  // Ajani, Nacatl Pariah: Scryfall omits `colors` on the card and states it per
+  // face, so reading only the top level made every double-faced card colourless.
+  // The two faces differ here on purpose -- a fixture whose faces matched would
+  // pass against the union just as happily as against the front.
+  it("takes a two-faced card's colours from the front face", () => {
+    const card = merge(
+      scryfall({
+        name: "Ajani, Nacatl Pariah // Ajani, Nacatl Avenger",
+        layout: "transform",
+        type_line: "Legendary Creature — Cat Warrior // Legendary Planeswalker — Ajani",
+        color_identity: ["R", "W"],
+        card_faces: [
+          { name: "Ajani, Nacatl Pariah", mana_cost: "{1}{W}", colors: ["W"] },
+          { name: "Ajani, Nacatl Avenger", colors: ["R", "W"] },
+        ],
+      }),
+    );
+    expect(card.colors).toEqual(["W"]);
+    expect(card.colorIdentity).toEqual(["R", "W"]);
+  });
+
+  it("keeps a single-faced card's own colours", () => {
+    const card = merge(
+      scryfall({ name: "Lightning Bolt", colors: ["R"], color_identity: ["R"] }),
+    );
+    expect(card.colors).toEqual(["R"]);
+  });
+
+  // Devoid is not this bug and must not be swept up by the fix: the card really
+  // is colourless, and Scryfall says so at the top level.
+  it("leaves a devoid card colourless", () => {
+    const card = merge(
+      scryfall({
+        name: "Emrakul's Messenger",
+        mana_cost: "{1}{U}",
+        colors: [],
+        color_identity: ["U"],
+      }),
+    );
+    expect(card.colors).toEqual([]);
+  });
 });
 
 // dsk prints two Insect tokens under one name, a 1/1 and a 2/1, and two cards in
