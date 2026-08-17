@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { Authenticated, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
 import { PageShell } from "../components/PageShell";
 import { Panel } from "../components/Panel";
+import { SetIcon } from "../components/SetIcon";
 import { SignedOut } from "../components/SignedOut";
-import { pct } from "../lib/format";
+import { pct, releaseDate } from "../lib/format";
 import { ScorePlot, type ScoreColumn } from "./ScorePlot";
 
 export default function StatsIndex() {
@@ -115,8 +117,70 @@ function Overview() {
         </Panel>
       </div>
 
+      <Lately recent={data.recent} />
       <Breakdowns data={data} />
     </div>
+  );
+}
+
+/**
+ * The last few drafts in the order they happened.
+ *
+ * The one thing on this page that is not an average, and the only one that can
+ * answer "am I getting better" -- which is the question somebody opens a stats
+ * screen with. The averages above are a standing, and a standing cannot show a
+ * direction.
+ *
+ * Deliberately not a second copy of the drafts table on /review. That list is
+ * for finding a particular draft; this is for the shape of a run of them, and
+ * the columns are links so it is still a way into any one of them.
+ */
+function Lately({ recent }: { recent: Stats["recent"] }) {
+  // Only for the symbol. `stats.overview` carries the set code and not its
+  // icon, and the rest of the app names a set by its symbol first. Keyed by code
+  // alone, unlike the review list: this row has no format on it, and the symbol
+  // is a property of the set rather than of the format it was drafted in.
+  const sets = useQuery(api.sets.list);
+  const icons = useMemo(() => {
+    const byCode = new Map<string, { name?: string; iconUri?: string }>();
+    for (const set of sets ?? []) if (!byCode.has(set.code)) byCode.set(set.code, set);
+    return byCode;
+  }, [sets]);
+
+  if (recent.length === 0) return null;
+
+  // The query answers newest first, which is right for a list and backwards for
+  // a run of time.
+  const columns: ScoreColumn[] = [...recent].reverse().map((draft) => {
+    const set = icons.get(draft.setCode);
+    const name = set?.name ?? draft.setCode.toUpperCase();
+    const on = releaseDate(draft.createdAt.slice(0, 10)) ?? draft.createdAt.slice(0, 10);
+
+    return {
+      key: draft.id,
+      label: set?.iconUri ? (
+        <SetIcon uri={set.iconUri} className="mx-auto size-3.5" />
+      ) : (
+        draft.setCode.toUpperCase()
+      ),
+      score: draft.overallScore,
+      href: `/review/${draft.id}`,
+      title: `${name}${draft.colorPair ? ` ${draft.colorPair}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
+    };
+  });
+
+  return (
+    <Panel
+      title={`Your last ${columns.length} draft${columns.length === 1 ? "" : "s"}`}
+      aside={<span className="text-xs text-base-content/50">oldest first</span>}
+      bodyClassName="gap-3"
+    >
+      <ScorePlot columns={columns} label={spoken("Score by draft, oldest first", columns)} />
+      <p className="text-xs leading-relaxed text-base-content/50">
+        One column per finished draft. Open any of them to step back through the picks it is
+        made of.
+      </p>
+    </Panel>
   );
 }
 
