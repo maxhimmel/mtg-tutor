@@ -281,6 +281,23 @@ export default defineSchema({
     // mid-draft because nothing session-level depends on it. This decides the
     // deal, so it has to be on the row a replay reads.
     pod: v.optional(v.union(v.literal("table"), v.literal("sharks"))),
+    /**
+     * TRANSITIONAL. Nothing writes this and nothing reads it.
+     *
+     * It named the set data a draft was dealt from, so a list could mark a draft
+     * the walkthrough would refuse. `draftPools` removed the hazard -- a draft
+     * carries its own boosters, so no set can reach one -- and every reader of
+     * this went with it.
+     *
+     * It stays on the schema for exactly one deploy. A push validates every
+     * stored document, so narrowing it away before `reset.wipeDrafts` has run
+     * makes the deploy fail against rows that still carry it. That is the one
+     * ordering mistake this repo has already made once, on dev, when
+     * `setCards.colorPairWinRates` was made required ahead of its backfill.
+     *
+     * Widen, migrate, narrow. This is the widen; the next commit is the narrow.
+     */
+    sourceHash: v.optional(v.string()),
   }).index("by_user", ["userId"]),
 
   // Every booster this draft will ever open, settled at creation.

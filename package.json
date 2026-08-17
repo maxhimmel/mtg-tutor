@@ -40,7 +40,8 @@
     "typecheck": "turbo run typecheck",
     "validate-pack-model": "pnpm --filter @mtg-tutor/backend validate-pack-model",
     "validate-set-stats": "pnpm --filter @mtg-tutor/backend validate-set-stats",
-    "verify-data": "pnpm --filter @mtg-tutor/cli verify-data"
+    "verify-data": "pnpm --filter @mtg-tutor/cli verify-data",
+    "wipe-drafts": "pnpm --filter @mtg-tutor/backend wipe-drafts"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
