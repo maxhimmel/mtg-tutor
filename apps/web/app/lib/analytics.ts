@@ -511,6 +511,42 @@ export function reviewListSeen(p: { shown: number }): void {
 }
 
 /**
+ * The stats screen was opened, and whether it had anything on it.
+ *
+ * ONE EVENT COVERING BOTH THE FULL PAGE AND THE EMPTY ONE, because `drafts: 0`
+ * IS the empty state. A `stats_empty` beside it would be exactly this event
+ * filtered, and an event you can derive from another is an event that should not
+ * be sent -- the same call `feedback_opened` makes about the abandonment it does
+ * not name.
+ *
+ * The page is a screen nothing else in the app leads to except one nav link, so
+ * the first thing it has to answer is whether anybody goes there at all. The
+ * counts answer the second: a stats page opened by somebody with nothing to
+ * average is a dead end wearing a heading, and if that is most of the views then
+ * the link is in the wrong place rather than the page being unloved.
+ *
+ * `detailed` is the quieter of the two empty states and the one nothing else
+ * would report. It is the drafts that finished with a digest -- everything below
+ * the header is built on those -- so `drafts` high and `detailed` zero is a page
+ * with a score at the top and nothing underneath it, which reads as broken
+ * rather than as unfilled.
+ *
+ * Once per visit, not once per render: `stats.overview` is a live subscription
+ * and re-answers whenever any draft in the window is written to.
+ */
+export function statsViewed(p: {
+  drafts: number;
+  picks: number;
+  detailed: number;
+  mistakes: number;
+  /** The window clipped their history, so the averages are of a subset. */
+  truncated: boolean;
+}): void {
+  if (!on()) return;
+  posthog.capture("stats_viewed", p);
+}
+
+/**
  * A signed-in account that may do nothing at all.
  *
  * Read off quota.mine's role rather than by matching the refusal prose, because

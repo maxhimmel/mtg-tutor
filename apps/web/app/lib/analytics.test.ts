@@ -10,6 +10,7 @@ import {
   pickMade,
   settingChanged,
   signedOut,
+  statsViewed,
   tokensPreviewed,
 } from "./analytics";
 
@@ -60,6 +61,7 @@ describe("without a project token", () => {
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
       tokensPreviewed({ named: 1, withArt: 1, drawn: 1, viewport: 1440 });
+      statsViewed({ drafts: 0, picks: 0, detailed: 0, mistakes: 0, truncated: false });
     }).not.toThrow();
 
     expect(capture).not.toHaveBeenCalled();
@@ -133,6 +135,15 @@ describe("with a project token", () => {
       route: "/draft/[sessionId]",
       stalledMs: 2400,
     });
+  });
+
+  // The empty view is the half of this measurement worth having -- whether the
+  // screen is opened by people with nothing on it -- so the guard has to be
+  // "was it viewed", never "was there anything to view".
+  it("reports a stats view with nothing in it", () => {
+    const empty = { drafts: 0, picks: 0, detailed: 0, mistakes: 0, truncated: false };
+    statsViewed(empty);
+    expect(capture).toHaveBeenCalledWith("stats_viewed", empty);
   });
 
   it("resets on sign-out, so the next person is not the last one", () => {

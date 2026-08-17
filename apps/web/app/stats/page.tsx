@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Authenticated, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
@@ -10,6 +10,7 @@ import { Panel } from "../components/Panel";
 import { SetIcon } from "../components/SetIcon";
 import { SignedOut } from "../components/SignedOut";
 import { pct, points, releaseDate } from "../lib/format";
+import { statsViewed } from "../lib/analytics";
 import { ScorePlot, type ScoreColumn } from "./ScorePlot";
 
 export default function StatsIndex() {
@@ -49,6 +50,23 @@ export default function StatsIndex() {
 
 function Overview() {
   const data = useQuery(api.stats.overview, {});
+
+  // Once per visit, not once per render, the way the review list counts itself:
+  // `stats.overview` is a live subscription and re-answers whenever any draft in
+  // the window is written to. Above the empty branch below on purpose -- a view
+  // with nothing to show is the half of this measurement worth having.
+  const counted = useRef(false);
+  useEffect(() => {
+    if (!data || counted.current) return;
+    counted.current = true;
+    statsViewed({
+      drafts: data.overall.drafts,
+      picks: data.overall.totalPicks,
+      detailed: data.countedDrafts,
+      mistakes: data.topMistakes.length,
+      truncated: data.truncated,
+    });
+  }, [data]);
 
   if (data === undefined) {
     return <p className="text-base-content/60">Tallying up…</p>;
