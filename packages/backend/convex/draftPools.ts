@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
-import type { ColorWinRate, Deal, SetData } from "@mtg-tutor/core";
-import { dealDraft, packDeal, unpackDeal } from "@mtg-tutor/core";
+import type { ColorWinRate, Deal, EngineCard, SetData } from "@mtg-tutor/core";
+import { dealDraft, packDeal, unpackCards, unpackDeal } from "@mtg-tutor/core";
 import type { Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 
@@ -26,11 +26,59 @@ export async function storeDeal(
   set: SetData,
   seed: number,
 ): Promise<void> {
+  const packed = packDeal(dealDraft(set, seed));
+
   await ctx.db.insert("draftPools", {
     sessionId,
-    ...packDeal(dealDraft(set, seed)),
+    ...packed,
     colorWinRates: set.colorWinRates,
   });
+
+  // THE EXPERIMENT, written beside it -- see `draftCards` in schema.ts. Delete
+  // both once the benchmark has answered.
+  const cards = unpackCards(packed.cards);
+  for (let idx = 0; idx < cards.length; idx++) {
+    const c = cards[idx];
+    await ctx.db.insert("draftCards", {
+      sessionId,
+      idx,
+      name: c.name,
+      colors: c.colors,
+      turn: c.turn,
+      role: c.role,
+      value: c.value,
+      ...(c.slot === undefined ? {} : { slot: c.slot }),
+      ...(c.packRate === undefined ? {} : { packRate: c.packRate }),
+    });
+  }
+}
+
+/**
+ * The same pool, read back out of one row per card.
+ *
+ * The experiment's read side. Reconstructs exactly what `unpackCards` returns
+ * from `draftPools.cards`, so the two are billed for producing the same thing.
+ */
+export async function poolFromRows(
+  ctx: QueryCtx,
+  sessionId: Id<"draftSessions">,
+): Promise<EngineCard[]> {
+  const rows = await ctx.db
+    .query("draftCards")
+    .withIndex("by_session_and_idx", (q) => q.eq("sessionId", sessionId))
+    .collect();
+
+  return rows
+    .sort((a, b) => a.idx - b.idx)
+    .map((r) => ({
+      name: r.name,
+      colors: r.colors,
+      turn: r.turn,
+      role: r.role,
+      value: r.value,
+      ...(r.slot === undefined ? {} : { slot: r.slot }),
+      ...(r.packRate === undefined ? {} : { packRate: r.packRate }),
+    }));
 }
 
 /**

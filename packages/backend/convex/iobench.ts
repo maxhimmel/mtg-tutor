@@ -3,6 +3,7 @@ import type { Bench, EngineCard, PickScore } from "@mtg-tutor/core";
 import { type MutationCtx, type QueryCtx, mutation, query } from "./_generated/server.js";
 import { api, internal } from "./_generated/api.js";
 import { reviewVerdict } from "./validators.js";
+import { dealFor, poolFromRows } from "./draftPools.js";
 
 // What a read path costs the database, measured rather than argued about.
 //
@@ -200,5 +201,32 @@ export const statsOverviewCost = query({
   handler: async (ctx, args) => {
     await ctx.runQuery(api.stats.overview, args);
     return await cost(ctx);
+  },
+});
+
+/**
+ * THE NORMALISATION EXPERIMENT.
+ *
+ * Reads one draft's card pool out of the packed column, and then out of one row
+ * per card, reporting what each cost. Separate probes rather than one, because
+ * `getTransactionMetrics` counts the whole transaction -- measuring both in one
+ * would bill each for the other's reads.
+ *
+ * Both produce the identical EngineCard[], which is the only way the comparison
+ * means anything: same output, two storage shapes, one counter.
+ */
+export const poolPackedCost = query({
+  args: { sessionId: v.id("draftSessions") },
+  handler: async (ctx, args) => {
+    const { deal } = await dealFor(ctx, args.sessionId);
+    return { ...(await cost(ctx)), cards: deal.rounds[0][0].length };
+  },
+});
+
+export const poolRowsCost = query({
+  args: { sessionId: v.id("draftSessions") },
+  handler: async (ctx, args) => {
+    const cards = await poolFromRows(ctx, args.sessionId);
+    return { ...(await cost(ctx)), cards: cards.length };
   },
 });

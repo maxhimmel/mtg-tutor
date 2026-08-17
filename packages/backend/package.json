@@ -48,7 +48,8 @@
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
-    "verify-tiebreak": "node scripts/verify-tiebreak.mjs"
+    "verify-tiebreak": "node scripts/verify-tiebreak.mjs",
+    "bench-normalise": "node scripts/bench-normalise.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4",

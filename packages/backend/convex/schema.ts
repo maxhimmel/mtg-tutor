@@ -4,6 +4,7 @@ import {
   benchEntry,
   cardContext,
   cardStats,
+  cardRole,
   cardText,
   colorCode,
   colorWinRate,
@@ -18,6 +19,7 @@ import {
   llmCall,
   packCard,
   packComposition,
+  packSlot,
   packedCards,
   pickDefense,
   reviewVerdict,
@@ -357,6 +359,27 @@ export default defineSchema({
     // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
+  // THE EXPERIMENT: the same card pool as one row per card.
+  //
+  // Written beside `draftPools.cards` rather than instead of it, so the two can
+  // be read in the same transaction and billed by the same counter. The question
+  // is whether a normalised table beats a packed column for a reader that wants
+  // the WHOLE pool -- which is what dealing and bot scoring want on every pick.
+  //
+  // Delete this and its probe once the number is in. It is here to answer a
+  // question, not to be a second copy of the pool forever.
+  draftCards: defineTable({
+    sessionId: v.id("draftSessions"),
+    idx: v.number(),
+    name: v.string(),
+    colors: v.array(colorCode),
+    turn: v.number(),
+    role: cardRole,
+    value: v.number(),
+    slot: v.optional(packSlot),
+    packRate: v.optional(v.number()),
+  }).index("by_session_and_idx", ["sessionId", "idx"]),
 
   // What the statistics screen plots, written once when a draft finishes.
   //
