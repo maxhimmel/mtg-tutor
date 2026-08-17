@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { Authenticated, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
 import { PageShell } from "../components/PageShell";
 import { Panel } from "../components/Panel";
 import { SignedOut } from "../components/SignedOut";
 import { pct } from "../lib/format";
+import { ScorePlot, type ScoreColumn } from "./ScorePlot";
 
 export default function StatsIndex() {
   return (
@@ -112,6 +114,89 @@ function Overview() {
           </dl>
         </Panel>
       </div>
+
+      <Breakdowns data={data} />
+    </div>
+  );
+}
+
+type Stats = FunctionReturnType<typeof api.stats.overview>;
+
+/** One plot's worth of columns, said as a sentence for anyone who cannot see it. */
+const spoken = (subject: string, columns: ScoreColumn[]): string =>
+  `${subject} — ${columns.map((c) => c.title).join("; ")}`;
+
+/**
+ * The two cuts of the same number, side by side and drawn to one axis.
+ *
+ * They are together because they are a pair of questions about the same slip:
+ * whether it happens in a particular pack, or at a particular depth into every
+ * pack. Either one alone invites the wrong reading of the other.
+ *
+ * Both come from the per-draft digests rather than from the summaries above,
+ * and a draft that finished before digests existed has none -- so the panels say
+ * what they are actually built on rather than inheriting the header's count.
+ */
+function Breakdowns({ data }: { data: Stats }) {
+  const { byPackNo, byPickNo, overall, countedDrafts } = data;
+
+  if (countedDrafts === 0) {
+    return (
+      <Panel title="Pick by pick">
+        <p className="max-w-prose text-sm text-base-content/60">
+          No per-pick detail yet. It is written when a draft finishes, and none of yours
+          finished after that started being recorded — your next one fills these in.
+        </p>
+      </Panel>
+    );
+  }
+
+  const coverage =
+    countedDrafts < overall.drafts ? (
+      <span className="text-xs tabular-nums text-base-content/50">
+        {countedDrafts} of {overall.drafts} drafts
+      </span>
+    ) : undefined;
+
+  const packs: ScoreColumn[] = byPackNo.map((row) => ({
+    key: String(row.packNo),
+    label: `Pack ${row.packNo}`,
+    score: row.avgScore,
+    title: `Pack ${row.packNo}: ${row.avgScore.toFixed(1)} average`,
+  }));
+
+  const picks: ScoreColumn[] = byPickNo.map((row) => ({
+    key: String(row.pickNo),
+    label: String(row.pickNo),
+    score: row.avgScore,
+    title: `Pick ${row.pickNo}: ${row.avgScore.toFixed(1)} average`,
+  }));
+
+  return (
+    <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch">
+      <Panel
+        title="By pack"
+        aside={coverage}
+        className="lg:w-64 lg:shrink-0"
+        bodyClassName="gap-3"
+      >
+        <ScorePlot columns={packs} label={spoken("Average score by pack", packs)} />
+        <p className="text-xs leading-relaxed text-base-content/50">
+          Pack three is drafted with a deck already half-decided, so a slip here is usually a
+          pool that stopped offering anything you can play.
+        </p>
+      </Panel>
+
+      <Panel title="By pick" aside={coverage} className="lg:flex-1" bodyClassName="gap-3">
+        <ScorePlot
+          columns={picks}
+          label={spoken("Average score by pick number within a pack", picks)}
+        />
+        <p className="text-xs leading-relaxed text-base-content/50">
+          How deep into a pack, counted the same way in all three. The late numbers are
+          picking from four cards and then two, where there is not much left to get wrong.
+        </p>
+      </Panel>
     </div>
   );
 }
