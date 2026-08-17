@@ -30,11 +30,10 @@ import { CardStats, hasStats } from "./CardStats";
 
 interface HoverState {
   card: Card;
-  // The element the preview is hanging off, kept alongside the rect it was
-  // measured from. The rect is what `place` needs; the element is what says
-  // whether that rect still describes anything -- see the stranding effect below.
+  // The element the preview is hanging off. The element and not a rect measured
+  // from it: a rect is where the card WAS, and the page moves -- see the
+  // tracking effect below.
   el: HTMLElement;
-  anchor: DOMRect;
   showStats: boolean;
 }
 
@@ -66,29 +65,24 @@ export function useCardHover(card: Card | undefined, showStats = false) {
   };
 }
 
-// Imperative hide, for a caller that knows it is about to strand the preview --
-// e.g. picking a card swaps the whole pack for the next one. No longer the only
-// defence: the provider watches for its anchor leaving the document and closes
-// on its own. This is the earlier of the two, closing before the render that
-// causes the problem rather than after it, which is worth having where the
-// caller already knows.
-export function useHidePreview() {
-  const ctx = useContext(HoverPreviewContext);
-  return ctx?.hide ?? (() => {});
-}
-
-// Hold the preview back for the duration of a gesture. Hiding once is not enough
-// when the cursor is being dragged across the board: every card and every deck
-// row it passes over fires its own onMouseEnter, so the preview would reopen
-// under the hand carrying a card. Turned off again when the gesture ends.
+// Hold the preview back for as long as something else owns the screen. Hiding
+// once is not enough: while the cursor is being dragged across the board every
+// card and every deck row it passes over fires its own onMouseEnter, so the
+// preview would reopen under the hand carrying a card -- and a stage standing
+// over the board is the same problem lasting longer, with the preview free to
+// open on top of the question the player is being asked. Turned off again when
+// the screen goes back to the board.
+//
+// The ONE dismissal that is not "the pointer left the card": everything else the
+// provider works out for itself.
 export function useSuspendPreview() {
   const ctx = useContext(HoverPreviewContext);
   return ctx?.suspend ?? (() => {});
 }
 
-// The viewport as `place` needs it. Read at the moment it is needed rather than
-// held: the window resizes, and the side panel that nominates itself as the
-// preview's wall is not on every screen.
+// The viewport as `place` needs it, read fresh every time rather than held:
+// scrolling, resizing and the side panel appearing all change this, and the
+// preview is only correct while it is describing the page as it is now.
 function viewport(): Viewport {
   const marked = document.querySelector("[data-preview-edge]");
   return {
@@ -258,7 +252,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
 
   const show = useCallback((card: Card, el: HTMLElement, showStats: boolean) => {
     if (suspended.current) return;
-    setHover({ card, el, anchor: el.getBoundingClientRect(), showStats });
+    setHover({ card, el, showStats });
   }, []);
   const hide = useCallback(() => {
     setHover(null);
@@ -275,38 +269,56 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // Clicking a nav link while hovering a card leaves the preview stranded: the
   // element under the cursor unmounts with the page it was on, so onMouseLeave
   // never fires and the image hangs over the route you just navigated to.
+  //
+  // Any suspension goes with it. Whoever was holding the preview back -- a drag,
+  // a stage -- left with the screen it belonged to, and nothing on the new one
+  // will ever turn it off.
   const pathname = usePathname();
-  useEffect(hide, [pathname, hide]);
+  useEffect(() => {
+    hide();
+    suspended.current = false;
+  }, [pathname, hide]);
 
   /**
-   * The preview must not outlive its anchor, and `onMouseLeave` is not enough to
-   * promise that.
+   * One effect owns where the preview is: it follows the card it was opened on,
+   * and closes when there is no longer a card to follow.
    *
-   * `anchor` is a DOMRect in VIEWPORT coordinates, measured once, and the preview
-   * is `fixed`. So the preview is only ever correct while the thing it was
-   * measured from is still where it was. Two ways that stops being true and
-   * neither of them fires a mouse event:
+   * The preview is `fixed` and the card is on a page that moves, so a position
+   * is only ever true of the moment it was measured. That used to be handled by
+   * dismissing on anything that could have moved the page -- which read as the
+   * preview quitting while the player was still pointing at the card, because
+   * they were. So the anchor is re-measured instead, and only two things end it:
    *
-   * SCROLL. The card slides away and the image stays nailed to the screen beside
-   * where it used to be. Hidden rather than repositioned: a hover preview is a
-   * statement about where the pointer is, and once the page has moved under it
-   * that statement has expired -- following the card would also mean deciding
-   * what to do when it leaves the viewport entirely.
+   * SCROLLED OFF. The card left the viewport, so the pointer is not on it. Any
+   * scroll that leaves it partly visible just moves the preview with it.
    *
-   * UNMOUNT. The element under the cursor is destroyed before it can be left, so
-   * no leave event is ever dispatched and the image hangs there. The build screen
-   * is where this shows up worst -- pressing a card moves it to the other list in
-   * its well, which is an unmount and a mount, with the pointer never moving.
+   * UNMOUNTED. The element under the cursor is destroyed before it can be left,
+   * so no leave event is ever dispatched and the image would hang there. Picking
+   * a card swaps the whole pack for the next one; the build screen is worse,
+   * where pressing a card moves it to the other list in its well -- an unmount
+   * and a mount with the pointer never moving.
    *
-   * The observer is what makes this general. `useHidePreview` exists for the same
-   * problem and puts the job on the caller, which means every list that can drop a
-   * row under the cursor has to remember; this one holds regardless of what caused
-   * the DOM to change. Scoped to while a preview is open, and `isConnected` on one
-   * element is the whole of the work it does per mutation.
+   * The observer is what makes the second one general. Nothing has to remember
+   * to tell the preview it is about to be stranded; this holds regardless of
+   * what caused the DOM to change. Scoped to while a preview is open, and
+   * `isConnected` on one element is the whole of the work it does per mutation
+   * -- deliberately not a re-measure, because the coach streams its prose into
+   * this same document a token at a time.
    */
   useEffect(() => {
     if (!hover) return;
     const { el } = hover;
+    const boxes = faces.map((f) => f.box);
+
+    const follow = () => {
+      const next = place(el.getBoundingClientRect(), viewport(), panel, boxes);
+      if (next) setPos(next);
+      else hide();
+    };
+    // Placed after render rather than during it, so the faces the block is made
+    // of are known. The box stays at opacity 0 until a position is set, so there
+    // is no flash where the first render put it.
+    follow();
 
     const stranded = () => {
       if (!el.isConnected) hide();
@@ -317,22 +329,14 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     // Capture, because a scroll event does not bubble -- the draft screen's piles
     // and the review's lists are their own scrollers, and a listener that only
     // heard the window would miss every one of them.
-    window.addEventListener("scroll", hide, { capture: true, passive: true });
-    window.addEventListener("resize", hide);
+    window.addEventListener("scroll", follow, { capture: true, passive: true });
+    window.addEventListener("resize", follow);
     return () => {
       observer.disconnect();
-      window.removeEventListener("scroll", hide, { capture: true });
-      window.removeEventListener("resize", hide);
+      window.removeEventListener("scroll", follow, { capture: true });
+      window.removeEventListener("resize", follow);
     };
-  }, [hover, hide]);
-
-  // Position after render so the box size is known and clamping is accurate.
-  // useEffect (not layout) keeps this off the server render; the box stays at
-  // opacity 0 until a position is set, so there is no visible flash.
-  useEffect(() => {
-    if (hover && faces.length > 0)
-      setPos(place(hover.anchor, viewport(), panel, faces.map((f) => f.box)));
-  }, [hover, panel, faces]);
+  }, [hover, panel, faces, hide]);
 
   // Reported from here rather than from `place`, because the question is how
   // many token pictures a REAL screen had room for and only the placement that

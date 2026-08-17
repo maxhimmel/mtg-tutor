@@ -65,18 +65,36 @@ export interface Placement {
   panelLeft: number | null;
 }
 
+// Any part of the card still on screen. The preview says "the pointer is on
+// THIS card", and a card scrolled entirely out of the viewport is one the
+// pointer cannot be on -- so that is the moment the statement expires, rather
+// than the first pixel of scroll. Partly visible is still visible: the pointer
+// may well be on the half that is left.
+function onScreen(anchor: Anchor, viewport: Viewport): boolean {
+  return (
+    anchor.bottom > 0 &&
+    anchor.top < viewport.height &&
+    anchor.right > 0 &&
+    anchor.left < viewport.width
+  );
+}
+
 /**
  * `faces` is the front, then whatever else is worth drawing beside it -- a back,
  * and the tokens the card makes. Ordered by claim on the space: the front is
  * what the player pointed at and is never dropped, and each one after it is
  * taken only if the whole of it still fits between the anchor and the wall.
+ *
+ * Null means there is nowhere to put it, which is the caller's cue to close.
  */
 export function place(
   anchor: Anchor,
   viewport: Viewport,
   wantsPanel: boolean,
   faces: Box[],
-): Placement {
+): Placement | null {
+  if (faces.length === 0 || !onScreen(anchor, viewport)) return null;
+
   const right =
     viewport.wall != null && viewport.wall > anchor.right ? viewport.wall : viewport.width;
 

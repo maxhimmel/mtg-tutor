@@ -4,7 +4,7 @@ import type { DraggableSyntheticListeners } from "@dnd-kit/core";
 import type { Card } from "@mtg-tutor/core";
 import { webpImage } from "../lib/cardImage";
 import { useSettings } from "../lib/useSettings";
-import { useCardHover, useHidePreview } from "./CardPreview";
+import { useCardHover } from "./CardPreview";
 
 // daisyUI's hover-3d reads the tilt direction from which of eight sibling hover
 // zones the cursor is in -- a 3x3 grid minus the centre. They are part of the
@@ -98,7 +98,6 @@ export function CardTile({
   // worse of the two, being a bare number sitting on the card art with nothing
   // to say what it measured.
   const hover = useCardHover(card, showStats ?? settings.showStats);
-  const hidePreview = useHidePreview();
 
   // A card being carried is selected -- it is the one under consideration -- but
   // it is not half-pulled from the row any more, because it is not in the row.
@@ -112,10 +111,7 @@ export function CardTile({
       // select-none so the double-click shortcut does not also highlight the
       // name on the tiles that have no art to cover it.
       className={`card-focus hover-3d group w-full cursor-pointer bg-transparent p-0 transition-transform select-none perspective-midrange disabled:cursor-not-allowed disabled:opacity-50 ${lifted ? "-translate-y-3" : ""} ${dragging ? "opacity-20" : ""}`}
-      onClick={() => {
-        hidePreview();
-        onPick(card);
-      }}
+      onClick={() => onPick(card)}
       // Fires after the two clicks that make it up, so whatever those did
       // already happened -- which is why a caller can leave selection to
       // onPick and treat this purely as the shortcut.
