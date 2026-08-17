@@ -193,6 +193,38 @@ describe("draft.discard", () => {
     });
   });
 
+  // The case the button is actually for, and the one the seed above does not
+  // cover. A digest is written when a draft COMPLETES, and a verdict or a frame
+  // only when somebody reviews it -- so an abandoned draft has none of the
+  // three, and the delete has to be a no-op over each rather than expecting a
+  // row to be there.
+  it("takes a draft that never got far enough to write a digest", async () => {
+    const t = harness();
+    const sessionId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("draftSessions", {
+        userId: token("alice"),
+        setCode: SET.code,
+        format: SET.format,
+        seed: 42,
+        pickedNames: [],
+        status: "active" as const,
+        createdAt: new Date(0).toISOString(),
+      });
+      await ctx.db.insert("draftPools", {
+        sessionId: id,
+        ...packDeal(dealDraft(buildSetData(SET.code, pool(), [], undefined), 42)),
+        colorWinRates: [],
+      });
+      return id;
+    });
+
+    await as(t, "alice").mutation(api.draft.discard, { sessionId });
+
+    const left = await counts(t);
+    expect(left.draftSessions).toBe(0);
+    expect(left.draftPools).toBe(0);
+  });
+
   it("refuses somebody else's draft", async () => {
     const t = harness();
     const sessionId = await seedDraft(t);
