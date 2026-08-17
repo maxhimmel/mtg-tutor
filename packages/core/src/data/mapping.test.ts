@@ -96,9 +96,10 @@ describe("mergeCards", () => {
     expect(card.colors).toEqual(["R"]);
   });
 
-  // Devoid is not this bug and must not be swept up by the fix: the card really
-  // is colourless, and Scryfall says so at the top level.
-  it("leaves a devoid card colourless", () => {
+  // Scryfall is RIGHT that this card is colourless -- that is what devoid means
+  // -- and the drafter still needs blue mana to cast it, which is the question
+  // `colors` answers here.
+  it("gives a devoid card the colours of its pips", () => {
     const card = merge(
       scryfall({
         name: "Emrakul's Messenger",
@@ -107,7 +108,59 @@ describe("mergeCards", () => {
         color_identity: ["U"],
       }),
     );
+    expect(card.colors).toEqual(["U"]);
+  });
+
+  it("gives a land the colours of its identity", () => {
+    const card = merge(
+      scryfall({
+        name: "Forum of Amity",
+        type_line: "Land",
+        colors: [],
+        color_identity: ["W", "B"],
+      }),
+    );
+    expect(card.colors).toEqual(["W", "B"]);
+  });
+
+  // A fetchland taps for nothing and goes in any deck. The empty array has to
+  // keep meaning that, or the three rules above have just moved the problem.
+  it("leaves a colourless land colourless", () => {
+    const card = merge(
+      scryfall({ name: "Bloodstained Mire", type_line: "Land", colors: [], color_identity: [] }),
+    );
     expect(card.colors).toEqual([]);
+  });
+
+  it("leaves a genuinely colourless spell colourless", () => {
+    const card = merge(
+      scryfall({
+        name: "Kozilek's Unsealing",
+        mana_cost: "{4}",
+        colors: [],
+        color_identity: [],
+      }),
+    );
+    expect(card.colors).toEqual([]);
+  });
+
+  // An MDFC with a land on the back is cast as a spell, so it takes its pips and
+  // not the identity -- `isLand` reads the front face, which is what makes the
+  // difference visible.
+  it("treats a spell with a land on its back as a spell", () => {
+    const card = merge(
+      scryfall({
+        name: "Agadeem's Awakening // Agadeem, the Undercrypt",
+        layout: "modal_dfc",
+        type_line: "Sorcery // Land",
+        color_identity: ["B"],
+        card_faces: [
+          { name: "Agadeem's Awakening", mana_cost: "{X}{B}{B}{B}", colors: ["B"] },
+          { name: "Agadeem, the Undercrypt", type_line: "Land" },
+        ],
+      }),
+    );
+    expect(card.colors).toEqual(["B"]);
   });
 });
 

@@ -3,7 +3,7 @@
 // responses, regardless of how they got them.
 
 import type { Card, CardToken, ColorCode, IngestCard, Rarity } from "../model/card.js";
-import { normalizeName } from "../model/card.js";
+import { isLand, normalizeName } from "../model/card.js";
 import type { ColorRating, ScryfallCard, SeventeenLandsCard } from "./sources.js";
 
 const RARITIES: Rarity[] = ["common", "uncommon", "rare", "mythic", "special", "bonus"];
@@ -104,6 +104,54 @@ function colorsOf(sc: ScryfallCard): string[] | undefined {
   return sc.colors ?? sc.card_faces?.[0]?.colors;
 }
 
+// Every coloured pip in a mana cost, hybrid and phyrexian included -- both are
+// castable off their colour, so both require you to have it.
+function pipColors(manaCost: string | undefined): string[] {
+  const found = new Set<string>();
+  for (const symbol of manaCost?.match(/\{[^}]+\}/g) ?? []) {
+    for (const c of "WUBRG") if (symbol.includes(c)) found.add(c);
+  }
+  return [...found];
+}
+
+/**
+ * THE COLOURS YOU HAVE TO BE IN TO PLAY THIS CARD.
+ *
+ * Which is not Scryfall's `colors`, and the difference is not pedantry -- it is
+ * `colors.length === 0` being a special case in six readers, every one of which
+ * is asking this question and getting Scryfall's answer to a different one.
+ * `scripts/diagnose-colors.mjs` counts the damage: 4.08 cards per pack on mh3.
+ *
+ * Three rules, and the first two are corrections rather than choices:
+ *
+ *   A LAND is its colour identity. A land has no mana cost, so Scryfall says []
+ *   and always will -- while a Boros tapland is playable in exactly one kind of
+ *   deck. `deck.ts` has known this for as long as it has had a `landFitsColors`
+ *   and it was the only reader that did.
+ *
+ *   A DEVOID card is its pips. `{1}{U}` with `colors` [] is precisely what
+ *   devoid MEANS and Scryfall is right; the drafter still cannot cast it
+ *   without blue. This is the one place the app deliberately disagrees with the
+ *   rules of Magic, because the question on a draft screen is never what colour
+ *   a card is.
+ *
+ *   ANYTHING ELSE is Scryfall's answer, which for a normal card is already its
+ *   pips.
+ *
+ * A genuinely colourless card -- an artifact, a fetchland, Kozilek -- comes back
+ * empty from all three, which is what keeps the empty array meaning something.
+ * It now means only "playable in any deck", which is what every one of those six
+ * readers already assumed it meant.
+ */
+function requiredColors(sc: ScryfallCard): string[] {
+  // `isLand` rather than a regex of our own: it already reads the front face of
+  // a "Creature — Human // Land", and two answers to "is this a land" in one
+  // codebase is one more than the question supports.
+  if (isLand({ typeLine: sc.type_line })) return sc.color_identity ?? [];
+  const stated = colorsOf(sc) ?? [];
+  return stated.length > 0 ? stated : pipColors(sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost);
+}
+
 // P/T and loyalty come from the top level, falling back to the front face.
 function combatOf(sc: ScryfallCard) {
   const front = sc.card_faces?.[0];
@@ -140,7 +188,7 @@ export function mergeCards(
     return {
       name: sc.name,
       rarity: toRarity(sc.rarity),
-      colors: asColorCodes(colorsOf(sc)),
+      colors: asColorCodes(requiredColors(sc)),
       colorIdentity: asColorCodes(sc.color_identity),
       manaCost: sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost ?? "",
       cmc: sc.cmc ?? 0,

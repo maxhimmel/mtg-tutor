@@ -7,8 +7,13 @@ import type { Card, ColorWinRate } from "../model/card.js";
 const spell = (name: string, color: "W" | "U" | "B", gih = 0.55): Card =>
   mkCard(name, "common", [color], gih);
 
-const land = (name: string, overrides: Partial<Card> = {}): Card =>
-  mkCard(name, "common", [], 0.52, { typeLine: "Land", ...overrides });
+// A land's `colors` is its colour identity, because that is what `requiredColors`
+// settles at ingest -- a land has no mana cost, so anything else here would be a
+// card the pipeline cannot produce, and the fixture would be testing nothing.
+const land = (name: string, overrides: Partial<Card> = {}): Card => {
+  const card = mkCard(name, "common", [], 0.52, { typeLine: "Land", ...overrides });
+  return { ...card, colors: overrides.colors ?? card.colorIdentity };
+};
 
 // A pool deep enough in W/U that the pair is never in doubt, so the tests are
 // about the land split and not about which colors got chosen.
