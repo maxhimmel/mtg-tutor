@@ -4,7 +4,6 @@ import {
   benchEntry,
   cardContext,
   cardStats,
-  cardRole,
   cardText,
   colorCode,
   colorWinRate,
@@ -19,7 +18,6 @@ import {
   llmCall,
   packCard,
   packComposition,
-  packSlot,
   packedCards,
   pickDefense,
   reviewVerdict,
@@ -315,6 +313,25 @@ export default defineSchema({
   // draft, and a snapshot rather than a join is the more correct shape anyway:
   // these are the rates the draft was actually graded against, frozen the way
   // `reviewVerdicts` is, so a re-ingest cannot silently re-grade old picks.
+  //
+  // ONE ROW PER CARD WAS TRIED HERE AND IS 2.6x WORSE. Measured, not reasoned:
+  // both shapes were written, and each read through the same transaction counter
+  // to produce the identical EngineCard[].
+  //
+  //   packed column     13.8 KB, 1 document      82 B per card
+  //   one row per card  35.4 KB, 172 documents  211 B per card
+  //
+  // A Convex row costs ~129 B before it holds anything -- `_id`,
+  // `_creationTime`, `sessionId`, index entry -- and a card's engine half is
+  // 82 B, so the bookkeeping is 1.6x the card. Over a draft that is 0.57 MB
+  // against 1.45 MB, and creating one would insert 172 rows in place of this.
+  //
+  // The rule, which is NOT "arrays in columns are fine": normalise when readers
+  // want a SUBSET, pack when every reader wants the whole thing. `setCardText`
+  // and `setCardContext` above are row-per-card and are the two biggest wins in
+  // this schema -- the coach wants 5 cards of 285 and scoring wants 14 -- and
+  // they earned -94% each. This pool loses because nobody ever skips any of it:
+  // dealing samples every pool and the bots score every card in every hand.
   draftPools: defineTable({
     sessionId: v.id("draftSessions"),
     cards: packedCards,
@@ -359,27 +376,6 @@ export default defineSchema({
     // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
-
-  // THE EXPERIMENT: the same card pool as one row per card.
-  //
-  // Written beside `draftPools.cards` rather than instead of it, so the two can
-  // be read in the same transaction and billed by the same counter. The question
-  // is whether a normalised table beats a packed column for a reader that wants
-  // the WHOLE pool -- which is what dealing and bot scoring want on every pick.
-  //
-  // Delete this and its probe once the number is in. It is here to answer a
-  // question, not to be a second copy of the pool forever.
-  draftCards: defineTable({
-    sessionId: v.id("draftSessions"),
-    idx: v.number(),
-    name: v.string(),
-    colors: v.array(colorCode),
-    turn: v.number(),
-    role: cardRole,
-    value: v.number(),
-    slot: v.optional(packSlot),
-    packRate: v.optional(v.number()),
-  }).index("by_session_and_idx", ["sessionId", "idx"]),
 
   // What the statistics screen plots, written once when a draft finishes.
   //

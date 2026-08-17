@@ -40,8 +40,7 @@
     "typecheck": "turbo run typecheck",
     "validate-pack-model": "pnpm --filter @mtg-tutor/backend validate-pack-model",
     "validate-set-stats": "pnpm --filter @mtg-tutor/backend validate-set-stats",
-    "verify-data": "pnpm --filter @mtg-tutor/cli verify-data",
-    "bench-normalise": "pnpm --filter @mtg-tutor/backend bench-normalise"
+    "verify-data": "pnpm --filter @mtg-tutor/cli verify-data"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
