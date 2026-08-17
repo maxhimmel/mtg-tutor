@@ -41,30 +41,7 @@ shipped on 2026-08-15.
    say", and `undefined === undefined` is true, so a naive comparison calls a
    draft fresh exactly when it knows least about it.
 
-5. **The coach still manufactures a fault when it cannot find one — prompt
-   changed, not yet observed.** Reported on draft-v2: a Room dealing 4 damage to
-   a creature, described by the player as "good removal", drew "calling it good
-   removal mischaracterizes what the card does". It does kill a creature; the
-   coach was wrong, and it was wrong on the easy case.
-
-   Not the failure decision #9 fixed — the coach read the rules text correctly
-   and described both halves of the card. It is `DEFENSE_RULE` in `prompt.ts`:
-   inside the margin the model is told not to grade the card and to grade the
-   reasoning instead, and it had no branch for reasoning that holds. It filled
-   the space. Two rules were added — fault the reasoning only where the error can
-   be named, and say so plainly when it is sound — and **a prompt change is only
-   real once a live generation shows it.** `pnpm bench-llm --area coach`, after
-   `--update-baseline` (roadmap #4: the stored baseline is stale).
-
-   The rest of that report shipped. The reading names the card the pick was
-   argued against instead of saying "the two cards" (`ChallengeOutcome`
-   carries it now); the confidence control says "Clear gap"/"Close call" and
-   asks "How big is the gap to the next-best card?", because "Clear" alone was
-   read as "how obvious is this to me" — the one question the data cannot grade;
-   and the panel's eyebrow says "Your call on the gap", so a `misread` badge
-   under an A+ is not read as a second opinion on the card.
-
-8. This coaching feels so offbase to me:
+4. This coaching feels so offbase to me:
 
 ```
 Last pick
@@ -96,7 +73,7 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 - It also disappears when i scroll even tho the card is still being hovered upon
 - be thorough w/this fix because we've already improved/fixed other bugs regarding similar mechanics and I don't want a spaghetti mess w/all these fixes.
 
-13. Love that the coach noticed the incongruency here:
+13. Love that the coach noticed the incongruency here (but there's an issue):
 
 ```
 Last pick
@@ -115,7 +92,7 @@ Their reasoning "staying open, not committed to anything" doesn't hold up either
 ```
 
 - I had 6 cards in my main deck that were blue(U) and red(R). And only 2 cards that were white(W) in my sideboard.
-- I think the problem is that the coach seems to not have known that I picked that card directly into my sideboard.
+- THE ISSUE: is that the coach seems to not have known that I picked that card directly into my sideboard.
 
 # Ideas:
 
@@ -195,6 +172,8 @@ on 2026-08-15.
    just the context best perhaps since the user should always be caring about
    the deck they're currently drafting? (Stats-on-hover is the always-on version —
    a passive win-rate readout. This is the on-demand, ask-for-it one.)
+   - I love that we now have a way to see the N-closest cards if they're in some kinda
+     error margin. So maybe we show all rather than only one?
 
 4. **Show the field, not just the win rate.** The draft dataset is every human
    pick, so we can say "34% of drafters took this card at this pick" instead of
@@ -297,7 +276,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     `defense` related: how come we don't show the `defense` reasoning w/the
     current challenge mode?
 
-14. **The coach cannot see what a Map is either** (2026-08-15, fell out of
+11. **The coach cannot see what a Map is either** (2026-08-15, fell out of
     shipping the token feature). Decision #9 is that every card written into a
     prompt carries its rules text, because a type line cannot say whether a card
     kills something and a model asked to judge from the name answers from the
@@ -317,7 +296,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
     tokens per coached pick, and a token's text on the ~6 cards a pick shows is
     the same shape of cost for a much rarer payoff.
 
-17. **A static page for what `detectRole` calls things** (2026-08-14). The
+12. **A static page for what `detectRole` calls things** (2026-08-14). The
     classifier is a handful of regexes over rules text, and since it moved to
     ingest its answer is STORED -- so it decides which deck need a pick can meet
     (DECK-06, DECK-08) for the life of a pool, and correcting it costs a
