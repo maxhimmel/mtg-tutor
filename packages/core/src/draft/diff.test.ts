@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fakeSet } from "../testing/fakeSet.js";
 import { mulberry32 } from "../util/rng.js";
 import { cardValue } from "../scoring/value.js";
+import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 import {
   diffDrafts,
@@ -34,7 +35,7 @@ const DIVERGE = 0;
  * about almost everything -- the case the whole feature has to survive.
  */
 function draft(divergeAt?: number): DiffSide[] {
-  const engine = new DraftEngine(fakeSet(), mulberry32(SEED));
+  const engine = new DraftEngine(dealDraft(fakeSet(), SEED), botRng(SEED));
   const sides: DiffSide[] = [];
 
   for (let i = 0; !engine.isComplete(); i++) {
@@ -192,7 +193,7 @@ describe("forkImpact", () => {
   const names = mine.map((s) => s.pickedName);
 
   it("reports nothing changed when the swap is the same card", () => {
-    const impact = forkImpact(set, SEED, names, DIVERGE, names[DIVERGE]);
+    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, names[DIVERGE]);
     expect(impact.reach).toBe(0);
     expect(impact.delay).toBeUndefined();
   });
@@ -201,7 +202,7 @@ describe("forkImpact", () => {
     const theirs = draft(DIVERGE)[DIVERGE].pickedName;
     expect(theirs).not.toBe(names[0]);
 
-    const impact = forkImpact(set, SEED, names, DIVERGE, theirs);
+    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, theirs);
     expect(impact.reach).toBeGreaterThan(0);
     expect(impact.of).toBeGreaterThan(impact.reach - 1);
   });
@@ -211,7 +212,7 @@ describe("forkImpact", () => {
     // round. A delay of 1 would mean the pack in front of you changed because
     // of what you just took out of it, which is not how passing works.
     const theirs = draft(DIVERGE)[DIVERGE].pickedName;
-    const impact = forkImpact(set, SEED, names, DIVERGE, theirs);
+    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, theirs);
     expect(impact.delay).toBeGreaterThanOrEqual(8);
   });
 });

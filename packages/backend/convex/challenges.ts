@@ -1,5 +1,10 @@
 import { ConvexError, v } from "convex/values";
-import { diffDrafts, forkImpact, summarizeDiff } from "@mtg-tutor/core";
+import {
+  dealDraft,
+  diffDrafts,
+  forkImpact,
+  summarizeDiff,
+} from "@mtg-tutor/core";
 import type { DiffSide } from "@mtg-tutor/core";
 import { internalAction, internalQuery, mutation, query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
@@ -461,7 +466,7 @@ export const forkImpacts = query({
     try {
       const set = toSetData(cardsDoc);
       return forks.map((f) =>
-        forkImpact(set, challenge.seed, mineSession.pickedNames, f.pickIndex, f.theirs),
+        forkImpact(dealDraft(set, challenge.seed), challenge.seed, mineSession.pickedNames, f.pickIndex, f.theirs),
       );
     } catch {
       // The set has moved since this was drafted, so the counterfactual cannot

@@ -1,7 +1,7 @@
-import type { ColorCode, EngineCard, PoolCard, SetData } from "../model/card.js";
+import type { ColorCode, EngineCard, PoolCard } from "../model/card.js";
 import { colorKey } from "../scoring/context.js";
 import { cardValue } from "../scoring/value.js";
-import { mulberry32 } from "../util/rng.js";
+import { botRng, type Deal } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 
 // Comparing two people's drafts of the same seed.
@@ -259,11 +259,11 @@ export interface ForkImpact {
 }
 
 function walk(
-  set: SetData,
+  deal: Deal,
   seed: number,
   choose: (pack: EngineCard[], index: number) => EngineCard | undefined,
 ): string[][] {
-  const engine = new DraftEngine(set, mulberry32(seed));
+  const engine = new DraftEngine(deal, botRng(seed));
   const packs: string[][] = [];
 
   for (let i = 0; !engine.isComplete(); i++) {
@@ -297,12 +297,15 @@ const sameNames = (a: string[], b: string[]): boolean =>
  * This is the cheapest single-ply form of the alternate-draft-lines idea the
  * seed was stored to keep possible.
  *
- * Throws nothing it can help: a set whose pool has moved makes the BASELINE
- * replay diverge, and the caller is expected to let the braid go without weights
- * rather than take the screen down.
+ * SOUND BY CONSTRUCTION NOW, where it used to be sound by discipline. Both walks
+ * play the SAME STORED DEAL, so a swapped pick cannot change which cards are in
+ * a later booster -- only who ends up holding them. It no longer rests on bots
+ * drawing exactly one number per card in hand to keep a shared stream in step;
+ * see deal.ts. That rule still holds and is still worth keeping, but breaking it
+ * can no longer silently turn these weights into noise.
  */
 export function forkImpact(
-  set: SetData,
+  deal: Deal,
   seed: number,
   pickedNames: readonly string[],
   forkIndex: number,
@@ -312,9 +315,9 @@ export function forkImpact(
   const bestOf = (pack: EngineCard[]) =>
     pack.reduce((best, c) => (cardValue(c) > cardValue(best) ? c : best), pack[0]);
 
-  const baseline = walk(set, seed, (pack, i) => byName(pack, pickedNames[i]));
+  const baseline = walk(deal, seed, (pack, i) => byName(pack, pickedNames[i]));
 
-  const counterfactual = walk(set, seed, (pack, i) => {
+  const counterfactual = walk(deal, seed, (pack, i) => {
     if (i === forkIndex) return byName(pack, theirCardName) ?? bestOf(pack);
     // Their card is gone from your pool now, so your real later pick is usually
     // still there; when it is not, carry on the way the pod itself would.

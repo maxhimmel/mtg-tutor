@@ -1,5 +1,8 @@
 import { ConvexError } from "convex/values";
-import { replayDraft } from "@mtg-tutor/core";
+import {
+  dealDraft,
+  replayDraft,
+} from "@mtg-tutor/core";
 import type { QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
 
@@ -174,7 +177,7 @@ export async function replayFor(ctx: QueryCtx, session: Doc<"draftSessions">) {
   let engine;
   try {
     engine = replayDraft(
-      toSetData(cardsDoc),
+      dealDraft(toSetData(cardsDoc), session.seed),
       session.seed,
       session.pickedNames,
       undefined,

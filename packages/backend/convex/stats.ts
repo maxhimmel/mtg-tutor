@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import {
+  dealDraft,
   normalizeBench,
   normalizeName,
   packScoringContext,
@@ -109,7 +110,7 @@ export const overview = query({
 
       let engine;
       try {
-        engine = replayDraft(set, session.seed, session.pickedNames, scoring, session.pod ?? "legacy");
+        engine = replayDraft(dealDraft(set, session.seed), session.seed, session.pickedNames, scoring, session.pod ?? "legacy");
       } catch {
         // Set data changed under a stored draft; skip its detail, keep its summary.
         continue;

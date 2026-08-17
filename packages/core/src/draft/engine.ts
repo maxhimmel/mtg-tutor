@@ -1,6 +1,6 @@
-import type { EngineCard, SetData } from "../model/card.js";
-import { DRAFT, PACK } from "../config.js";
-import { makePacks, packSizeFor } from "./pack.js";
+import type { EngineCard } from "../model/card.js";
+import { DRAFT } from "../config.js";
+import { type Deal, dealTotalPicks } from "./deal.js";
 import { Bot, type PodPolicy } from "./bots.js";
 import { draftProgress } from "./policy.js";
 import { scorePick } from "../scoring/score.js";
@@ -18,26 +18,33 @@ export class DraftEngine {
 
   private hands: EngineCard[][] = []; // hands[0] = human, seat index = position
   private bots: Bot[];
-  private set: SetData;
-  private rng: () => number;
+  private deal: Deal;
 
-  // `pod` defaults to "legacy" everywhere it appears, which is not laziness: a
-  // stored session is only replayable against the policy that dealt it, and
-  // every draft taken before `draftSessions.pod` existed has no value there. An
-  // absent pod has to keep meaning the bot that was running at the time, forever.
+  /**
+   * Plays a deal. It does NOT deal one, and that is the whole shape of this
+   * class now: `rng` drives bot noise and nothing else, so no number drawn here
+   * can change which cards are in a booster. See deal.ts for why the two were
+   * split.
+   *
+   * `pod` defaults to "legacy" everywhere it appears, which is not laziness: a
+   * stored session is only replayable against the policy that played it, and an
+   * absent pod has to keep meaning the bot that was running at the time.
+   */
   constructor(
-    set: SetData,
+    deal: Deal,
     rng: () => number = Math.random,
     private readonly pod: PodPolicy = "legacy",
   ) {
-    this.set = set;
-    this.rng = rng;
+    this.deal = deal;
     this.bots = Array.from({ length: DRAFT.seats - 1 }, () => new Bot(pod, rng));
     this.openPack();
   }
 
+  // Copied, because a hand is replaced as it is picked from and rotated between
+  // seats. Without the copy a second engine over the same deal would find the
+  // first one's leavings -- which `forkImpact` does, twice, by construction.
   private openPack() {
-    this.hands = makePacks(this.set, DRAFT.seats, this.rng);
+    this.hands = [...(this.deal.rounds[this.packNo - 1] ?? [])];
     this.pickNo = 1;
   }
 
@@ -45,8 +52,11 @@ export class DraftEngine {
     return this.hands[DRAFT.humanSeat];
   }
 
+  // Off the deal rather than PACK.packsPerDraft: how many rounds this draft has
+  // was decided when it was dealt, and a constant read at play time is free to
+  // disagree with the boosters actually stored.
   isComplete(): boolean {
-    return this.packNo > PACK.packsPerDraft;
+    return this.packNo > this.deal.rounds.length;
   }
 
   // Human picks a card; bots pick from their hands; packs rotate; state advances.
@@ -105,6 +115,6 @@ export class DraftEngine {
   }
 
   totalPicks(): number {
-    return PACK.packsPerDraft * packSizeFor(this.set);
+    return dealTotalPicks(this.deal);
   }
 }

@@ -1,5 +1,13 @@
 import { ConvexError, v } from "convex/values";
-import { DraftEngine, cardValue, mulberry32, splitPool, summarizeDraft } from "@mtg-tutor/core";
+import {
+  DraftEngine,
+  botRng,
+  cardValue,
+  dealDraft,
+  mulberry32,
+  splitPool,
+  summarizeDraft,
+} from "@mtg-tutor/core";
 import type { EngineCard, SetData } from "@mtg-tutor/core";
 import { internalMutation } from "./_generated/server.js";
 import { internal } from "./_generated/api.js";
@@ -75,7 +83,7 @@ async function botDraft(
   fromPickIndex = 0,
   existing: readonly string[] = [],
 ): Promise<string[]> {
-  const engine = new DraftEngine(set, mulberry32(seed));
+  const engine = new DraftEngine(dealDraft(set, seed), botRng(seed));
   const wobble = mulberry32(seed ^ 0x5eed);
   const picked: string[] = [];
   const pool: EngineCard[] = [];
@@ -124,7 +132,7 @@ async function complete(
   // today. The loop below skips a name it cannot find, so replaying under the
   // wrong policy would not throw -- it would quietly build the deck out of
   // whichever picks happened to survive, which is the worst available outcome.
-  const engine = new DraftEngine(set, mulberry32(session.seed), session.pod ?? "legacy");
+  const engine = new DraftEngine(dealDraft(set, session.seed), botRng(session.seed), session.pod ?? "legacy");
   for (const name of picked) {
     const card = engine.currentPack.find((c) => c.name === name);
     if (card) engine.humanPick(card);
