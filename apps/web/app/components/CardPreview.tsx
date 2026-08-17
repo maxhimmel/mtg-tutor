@@ -13,6 +13,18 @@ import { usePathname } from "next/navigation";
 import { type Card, cardShapeOf, frontIsSideways, keywordsOf } from "@mtg-tutor/core";
 import { tokensPreviewed } from "../lib/analytics";
 import { webpImage } from "../lib/cardImage";
+import {
+  type Box,
+  type Placement,
+  type Viewport,
+  boxFor,
+  CARD_CORNER,
+  PANEL_W,
+  PREVIEW_H,
+  PREVIEW_W,
+  place,
+  UPRIGHT,
+} from "../lib/previewPlacement";
 import { useHeldKey } from "../lib/useHeldKey";
 import { CardStats, hasStats } from "./CardStats";
 
@@ -74,102 +86,17 @@ export function useSuspendPreview() {
   return ctx?.suspend ?? (() => {});
 }
 
-const PREVIEW_W = 320; // px; height follows the card aspect ratio
-const PREVIEW_H = Math.round((PREVIEW_W * 680) / 488);
-const PANEL_W = 260;
-const GAP = 12;
-
-interface Box {
-  w: number;
-  h: number;
-}
-
-// A card lying on its side is the same card: the 63mm edge is still drawn at
-// PREVIEW_W, so it is the box that turns and not the scale.
-const UPRIGHT: Box = { w: PREVIEW_W, h: PREVIEW_H };
-const TURNED: Box = { w: PREVIEW_H, h: PREVIEW_W };
-const boxFor = (sideways: boolean) => (sideways ? TURNED : UPRIGHT);
-
-interface Placement {
-  // One x per face that fits, in the order they were asked for, and SHORTER
-  // than that list when they do not all fit -- the front is what the player
-  // pointed at, so everything after it yields to the viewport in turn.
-  lefts: number[];
-  top: number;
-  // The tallest face that is actually being drawn. A Battle is a landscape
-  // front beside an upright back, so the faces are no longer all one shape and
-  // none of them can stand for the block on its own.
-  height: number;
-  // Null when there is no room for the keyword panel on either side of the
-  // preview; the card image is what the player asked for and always wins.
-  panelLeft: number | null;
-}
-
-// The preview's right-hand wall. Usually the viewport, but a page can nominate
-// something else as its edge -- the draft board's side panel is where the coach
-// is talking, and a card image landing on top of it is the preview covering the
-// thing you are drafting by. Only honoured when that element genuinely sits to
-// the right of the card, so a layout that stacks it below (narrow viewports)
-// falls back to the viewport rather than clamping the preview to nothing.
-function rightEdge(anchor: DOMRect): number {
+// The viewport as `place` needs it. Read at the moment it is needed rather than
+// held: the window resizes, and the side panel that nominates itself as the
+// preview's wall is not on every screen.
+function viewport(): Viewport {
   const marked = document.querySelector("[data-preview-edge]");
-  const box = marked?.getBoundingClientRect();
-  return box && box.left > anchor.right ? box.left : window.innerWidth;
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    wall: marked?.getBoundingClientRect().left ?? null,
+  };
 }
-
-// `faces` is the front, then whatever else is worth drawing beside it -- a back,
-// and the tokens the card makes. Ordered by claim on the space: the front is
-// what the player pointed at and is never dropped, and each one after it is
-// taken only if the whole of it still fits between the anchor and the wall.
-function place(anchor: DOMRect, wantsPanel: boolean, faces: Box[]): Placement {
-  const right = rightEdge(anchor);
-  const vh = window.innerHeight;
-
-  // How many fit, decided before the horizontal placement because everything
-  // below positions against the block as a whole. Measured face by face rather
-  // than as a multiple of PREVIEW_W, because a Battle's front is landscape, its
-  // back is not, and a token is a third width again.
-  let width = faces[0].w;
-  let shown = 1;
-  while (shown < faces.length && width + GAP + faces[shown].w + GAP * 2 <= right) {
-    width += GAP + faces[shown].w;
-    shown += 1;
-  }
-  const drawn = faces.slice(0, shown);
-  const height = Math.max(...drawn.map((f) => f.h));
-
-  // Prefer the right of the anchor; flip left when it would overflow.
-  let left = anchor.right + GAP;
-  if (left + width > right - GAP) left = anchor.left - GAP - width;
-  left = Math.max(GAP, Math.min(left, right - GAP - width));
-
-  const lefts: number[] = [];
-  let x = left;
-  for (const face of drawn) {
-    lefts.push(x);
-    x += face.w + GAP;
-  }
-
-  // Vertically center on the anchor, clamped to the viewport.
-  let top = anchor.top + anchor.height / 2 - height / 2;
-  top = Math.max(GAP, Math.min(top, vh - GAP - height));
-
-  // The panel sits beyond the preview, so the image never has to move to make
-  // room for it.
-  let panelLeft: number | null = null;
-  if (wantsPanel) {
-    const beyond = left + width + GAP;
-    const before = left - GAP - PANEL_W;
-    if (beyond + PANEL_W <= right - GAP) panelLeft = beyond;
-    else if (before >= GAP) panelLeft = before;
-  }
-
-  return { lefts, top, height, panelLeft };
-}
-
-// A Magic card is 63mm across with a 3mm corner, and Scryfall's art is the whole
-// card -- so this is the card's own rounding at whatever width it is drawn.
-const CARD_CORNER = (PREVIEW_W * 3) / 63;
 
 // One card image. Unplaced until the effect below has measured the viewport,
 // which is what `left` being null means -- parked offscreen at opacity 0 so
@@ -403,7 +330,8 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // useEffect (not layout) keeps this off the server render; the box stays at
   // opacity 0 until a position is set, so there is no visible flash.
   useEffect(() => {
-    if (hover && faces.length > 0) setPos(place(hover.anchor, panel, faces.map((f) => f.box)));
+    if (hover && faces.length > 0)
+      setPos(place(hover.anchor, viewport(), panel, faces.map((f) => f.box)));
   }, [hover, panel, faces]);
 
   // Reported from here rather than from `place`, because the question is how
