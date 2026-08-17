@@ -62,6 +62,36 @@ export const cardRole = v.union(
  * Optional columns carry `null` holes so index `i` still lines up, and are
  * omitted entirely when no card in the pool uses them.
  */
+/**
+ * One pick reduced to what the statistics screen plots.
+ *
+ * Columns rather than a row per pick, for the reason `packedCards` is: 42
+ * objects each repeating "score" "packNo" "pickNo" is mostly field names.
+ */
+export const digestPicks = v.object({
+  scores: v.array(v.number()),
+  packNos: v.array(v.number()),
+  pickNos: v.array(v.number()),
+});
+
+/**
+ * A pick the player would want back, kept whole because the screen names it.
+ *
+ * Only the worst DIGEST_MISTAKES of a draft are stored, which is exact rather
+ * than approximate for the list that reads them: a global top-K can only ever
+ * draw K from any single draft, so keeping each draft's top K is sufficient.
+ * See draftDigests.ts.
+ */
+export const digestMistake = v.object({
+  pickedName: v.string(),
+  bestName: v.string(),
+  pickedValue: v.number(),
+  bestValue: v.number(),
+  score: v.number(),
+  packNo: v.number(),
+  pickNo: v.number(),
+});
+
 export const packedCards = v.object({
   names: v.array(v.string()),
   colors: v.array(v.array(colorCode)),
@@ -252,6 +282,7 @@ export const card = v.object({ ...engineCard.fields, ...cardText.fields, rarity 
 export type StoredCard = Infer<typeof card>;
 export type StoredEngineCard = Infer<typeof engineCard>;
 export type StoredCardText = Infer<typeof cardText>;
+export type DigestMistake = Infer<typeof digestMistake>;
 
 // What scoring reads to judge a card in context. One row per card in
 // `setCardContext` -- see core's CardContext for why this is a third table and

@@ -17,10 +17,10 @@
     "draft.pick": {
       "sampled": 42,
       "meanBytesRead": 19425,
-      "meanBytesWritten": 2628,
+      "meanBytesWritten": 2659,
       "maxBytesRead": 98278,
       "callsPerDraft": 42,
-      "totalBytesPerDraft": 926227
+      "totalBytesPerDraft": 927516
     },
     "draft.coachContext": {
       "sampled": 30,
@@ -64,9 +64,9 @@
     },
     "stats.overview": {
       "sampled": 1,
-      "meanBytesRead": 81358,
+      "meanBytesRead": 11049,
       "meanBytesWritten": 0,
-      "maxBytesRead": 81358,
+      "maxBytesRead": 11049,
       "callsPerDraft": null,
       "totalBytesPerDraft": null
     },
@@ -87,5 +87,5 @@
       "totalBytesPerDraft": 42060
     }
   },
-  "totalBytesPerDraft": 2115176
+  "totalBytesPerDraft": 2116465
 }

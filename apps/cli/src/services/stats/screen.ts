@@ -21,7 +21,7 @@ export async function showStats() {
     return;
   }
 
-  const { overall, recent, byPackNo, byPickNo, topMistakes, truncated, replayedDrafts } = data;
+  const { overall, recent, byPackNo, byPickNo, topMistakes, truncated, countedDrafts } = data;
 
   if (overall.drafts === 0) {
     p.outro("No drafts saved yet. Run a draft first: mtg-tutor draft <set>");
@@ -50,17 +50,21 @@ export async function showStats() {
   }
   p.log.message(pc.bold("Recent drafts\n") + t.toString());
 
-  // The per-pick breakdowns need replay, which needs the set still ingested.
-  // A draft whose set has since been replaced counts in the totals above but
-  // contributes no detail here, so say what the breakdown is actually built on.
-  if (replayedDrafts === 0) {
-    p.log.warn("No per-pick detail available — the sets these drafts used are no longer ingested.");
+  // The per-pick breakdowns come from each draft's digest, which is written
+  // when the draft finishes. A draft that finished before digests existed
+  // counts in the totals above and contributes no detail here, so say what the
+  // breakdown is actually built on rather than implying it covers everything.
+  //
+  // It is no longer possible for an ingest to take this away: a draft carries
+  // its own packs, and the digest is written from its own rows.
+  if (countedDrafts === 0) {
+    p.log.warn("No per-pick detail available yet — finish a draft to fill these in.");
     p.outro("Keep drafting to sharpen these numbers.");
     return;
   }
-  if (replayedDrafts < overall.drafts) {
+  if (countedDrafts < overall.drafts) {
     p.log.warn(
-      `Breakdowns below cover ${replayedDrafts} of ${overall.drafts} drafts — the rest used sets that are no longer ingested.`,
+      `Breakdowns below cover ${countedDrafts} of ${overall.drafts} drafts — the rest finished before per-pick detail was recorded.`,
     );
   }
 

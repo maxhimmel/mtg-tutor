@@ -7,6 +7,8 @@ import {
   cardText,
   colorCode,
   colorWinRate,
+  digestMistake,
+  digestPicks,
   draftSummary,
   engineCard,
   feedbackAnchor,
@@ -355,6 +357,31 @@ export default defineSchema({
     // client that does not run the challenge writes rows without it.
     defense: v.optional(pickDefense),
   }).index("by_session_and_pickIndex", ["sessionId", "pickIndex"]),
+
+  // What the statistics screen plots, written once when a draft finishes.
+  //
+  // `stats.overview` used to REPLAY every draft in the window to get its
+  // per-pick scores -- a hundred sessions, each reading its set's pool and
+  // context, 732KB a page view against a real history. It replayed to recompute
+  // numbers that `draftPicks` already stored, and `draftPicks.ts` says plainly
+  // that when the two disagree the stored rows win: a replay has no per-pack
+  // context rows, so it grades on raw power and the player was shown these.
+  // Reading the rows directly instead is both cheaper and the correct answer.
+  //
+  // Not the rows themselves, though. A draft's `draftPicks` are ~92KB, because
+  // each carries the pack it saw and the pool before it -- a hundred drafts is
+  // ~9MB. This is the ~1KB of it that a chart of averages actually plots.
+  //
+  // DELIBERATELY NOT A COPY OF `draftSessions.summary`. The overall score, the
+  // accuracy and the colour pair are answered there already, and a second copy
+  // here would be free to disagree with the first -- the same reason
+  // `accessRequests` has no status field and there is no stored deck list. The
+  // screen reads both, which costs one session row it was reading anyway.
+  draftDigests: defineTable({
+    sessionId: v.id("draftSessions"),
+    picks: digestPicks,
+    mistakes: v.array(digestMistake),
+  }).index("by_session", ["sessionId"]),
 
   // One person daring another to draft the same packs, and the two drafts that
   // came of it.

@@ -16,6 +16,7 @@ import type * as cardText from "../cardText.js";
 import type * as challengeFixture from "../challengeFixture.js";
 import type * as challenges from "../challenges.js";
 import type * as draft from "../draft.js";
+import type * as draftDigests from "../draftDigests.js";
 import type * as draftPicks from "../draftPicks.js";
 import type * as draftPools from "../draftPools.js";
 import type * as feedback from "../feedback.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   challengeFixture: typeof challengeFixture;
   challenges: typeof challenges;
   draft: typeof draft;
+  draftDigests: typeof draftDigests;
   draftPicks: typeof draftPicks;
   draftPools: typeof draftPools;
   feedback: typeof feedback;

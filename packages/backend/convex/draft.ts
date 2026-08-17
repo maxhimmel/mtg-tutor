@@ -27,6 +27,7 @@ import { requireCaller } from "./roles.js";
 import type { Caller } from "./roles.js";
 import { loadBoard, ownedSession, setCardsFor, setDocFor } from "./sessions.js";
 import { copyDeal, storeDeal } from "./draftPools.js";
+import { storeDigest } from "./draftDigests.js";
 import { toSetData } from "./setData.js";
 import { cardContextFor, cardTextFor } from "./cardText.js";
 import { hydrate, hydrateCard } from "@mtg-tutor/core";
@@ -34,6 +35,7 @@ import type { StoredPod } from "@mtg-tutor/core";
 import {
   recordPick,
   storedPick,
+  storedPicks,
   storedPool,
   storedScores,
   toRecordedPick,
@@ -331,6 +333,13 @@ export const pick = mutation({
     // rebuild one pick out of the set's whole card pool.
     await recordPick(ctx, args.sessionId, pickIndex, record, poolBefore, defense);
 
+    // Read ONCE on the last pick, and shared by the two things that want them:
+    // the summary wants every score, the digest wants those and the misses. A
+    // draft's pick rows are ~92KB, because each carries the pack it saw -- so
+    // collecting them twice here would cost more than the digest saves on the
+    // statistics screen it was added for.
+    const storedRows = complete ? await storedPicks(ctx, args.sessionId) : [];
+
     await ctx.db.patch(args.sessionId, {
       pickedNames: [...session.pickedNames, chosen.name],
       ...(args.bench ? { sideboard } : {}),
@@ -346,12 +355,21 @@ export const pick = mutation({
             // The colours here are provisional -- the deck builder is still to
             // come, and cutting a card changes them. `build` recomputes them
             // when the forty is locked in; see `refreshedColors`.
-            summary: summarizeDraft(await storedScores(ctx, args.sessionId), maindeck),
+            summary: summarizeDraft(
+              storedRows.map((r) => r.score),
+              maindeck,
+            ),
           }
         : {}),
     });
 
     if (complete) {
+      // What the statistics screen plots, off the rows this pick just finished
+      // writing. After the patch, so a draft is never digested as complete
+      // before it is recorded as complete -- and inside the transaction, so a
+      // throw below takes both back together.
+      await storeDigest(ctx, args.sessionId, storedRows);
+
       await draftCompleted(ctx, {
         sessionId: args.sessionId,
         setCode: session.setCode,
