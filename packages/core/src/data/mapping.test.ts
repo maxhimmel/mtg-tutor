@@ -144,6 +144,27 @@ describe("mergeCards", () => {
     expect(card.colors).toEqual([]);
   });
 
+  // Hallowed Fountain in ecl: `reversible_card` states the type line on both
+  // faces and not on the card, and these are booster:true so they reach the
+  // merge. This threw on a live ingest -- `isLand` split an undefined type line
+  // -- after five sets had already been rewritten.
+  it("takes a reversible card's type line off its faces", () => {
+    const card = merge(
+      scryfall({
+        name: "Hallowed Fountain // Hallowed Fountain",
+        layout: "reversible_card",
+        type_line: undefined,
+        color_identity: ["W", "U"],
+        card_faces: [
+          { name: "Hallowed Fountain", type_line: "Land — Plains Island" },
+          { name: "Hallowed Fountain", type_line: "Land — Plains Island" },
+        ],
+      }),
+    );
+    expect(card.typeLine).toBe("Land — Plains Island // Land — Plains Island");
+    expect(card.colors).toEqual(["W", "U"]);
+  });
+
   // An MDFC with a land on the back is cast as a spell, so it takes its pips and
   // not the identity -- `isLand` reads the front face, which is what makes the
   // difference visible.

@@ -53,7 +53,10 @@ export interface ScryfallCard {
   color_identity?: string[];
   mana_cost?: string;
   cmc?: number;
-  type_line: string;
+  // Absent on `reversible_card`, which states it per face -- ecl prints five
+  // shocklands that way. Optional so the compiler insists on `typeLineOf`
+  // rather than letting the next reader find out by throwing.
+  type_line?: string;
   oracle_text?: string;
   power?: string;
   toughness?: string;

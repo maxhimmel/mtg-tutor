@@ -104,6 +104,18 @@ function colorsOf(sc: ScryfallCard): string[] | undefined {
   return sc.colors ?? sc.card_faces?.[0]?.colors;
 }
 
+// The type line, which `reversible_card` does not state at the top level -- it
+// puts the same one on both faces. ecl prints five shocklands that way, and they
+// are `booster: true`, so they reach `mergeCards` even though the pack manifest
+// drops them again afterwards. Before this they were stored with `typeLine`
+// undefined against a field typed `string`, which nothing had tripped over only
+// because nothing had yet asked one of them whether it was a land.
+function typeLineOf(sc: ScryfallCard): string {
+  if (sc.type_line) return sc.type_line;
+  const faces = (sc.card_faces ?? []).map((f) => f.type_line).filter(Boolean);
+  return faces.length > 0 ? faces.join(" // ") : "";
+}
+
 // Every coloured pip in a mana cost, hybrid and phyrexian included -- both are
 // castable off their colour, so both require you to have it.
 function pipColors(manaCost: string | undefined): string[] {
@@ -147,7 +159,7 @@ function requiredColors(sc: ScryfallCard): string[] {
   // `isLand` rather than a regex of our own: it already reads the front face of
   // a "Creature — Human // Land", and two answers to "is this a land" in one
   // codebase is one more than the question supports.
-  if (isLand({ typeLine: sc.type_line })) return sc.color_identity ?? [];
+  if (isLand({ typeLine: typeLineOf(sc) })) return sc.color_identity ?? [];
   const stated = colorsOf(sc) ?? [];
   return stated.length > 0 ? stated : pipColors(sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost);
 }
@@ -192,7 +204,7 @@ export function mergeCards(
       colorIdentity: asColorCodes(sc.color_identity),
       manaCost: sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost ?? "",
       cmc: sc.cmc ?? 0,
-      typeLine: sc.type_line,
+      typeLine: typeLineOf(sc),
       oracleText: oracleOf(sc),
       power: combat.power,
       toughness: combat.toughness,
