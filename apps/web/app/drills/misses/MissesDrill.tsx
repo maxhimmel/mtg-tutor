@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Card, DisplayCard } from "@mtg-tutor/core";
-import { gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
+import { byCurve, gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
 import { CardPlacardList } from "../../components/CardPlacard";
 import { CardFace, CardTile } from "../../components/CardTile";
 import { ColorTally } from "../../components/ColorPips";
@@ -21,7 +21,6 @@ import {
   RAW_BEST,
   TOOK,
 } from "../../components/PickMarks";
-import { SealedPick, ageInDays, stamp } from "../../components/SealedPick";
 import { SetIcon } from "../../components/SetIcon";
 import { points } from "../../lib/format";
 import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics";
@@ -51,6 +50,22 @@ type Run = NonNullable<ReturnType<typeof useDeal>>;
 type Question = Run["questions"][number];
 
 const useDeal = (skip: number) => useQuery(api.drills.misses.deal, { skip });
+
+const DAY = 24 * 60 * 60 * 1000;
+const ageInDays = (iso: string) =>
+  Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / DAY));
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// The date a pick was made, short. Read off the string rather than through Date,
+// which takes a bare ISO date as UTC midnight and renders the day before for
+// anyone west of Greenwich -- the same reason `releaseDate` does.
+function stamp(iso: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!parts) return "";
+  const [, , month, day] = parts;
+  return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+}
 
 const TICK: Record<MissResult["outcome"], Tick["state"]> = {
   fixed: "hit",
@@ -264,12 +279,6 @@ export function MissesDrill() {
           </Panel>
 
           <aside className="flex flex-col gap-4">
-            <SealedPick
-              name={current.tookName}
-              card={current.pack.find((c) => c.name === current.tookName)}
-              draftedAt={current.draftedAt}
-              turned={guess != null}
-            />
             <Deck cards={current.pool} />
           </aside>
         </div>
@@ -409,7 +418,11 @@ function Table({
  *
  * The sideboard is applied before it gets here, at that pick's own clock, so
  * this is what the player was actually building rather than everything they had
- * taken.
+ * taken. `byCurve` is not a preference: it is the order a deck list is read in
+ * everywhere in this app, and the comment on it warns that a second client
+ * sorting one deck a second way is the same bug with a wider blast radius. This
+ * was that second way -- it arrived in pick order, which is how the row stores
+ * it and not how anybody reads it.
  */
 function Deck({ cards }: { cards: DisplayCard[] }) {
   return (
@@ -426,7 +439,10 @@ function Deck({ cards }: { cards: DisplayCard[] }) {
           <DeckShape cards={cards} />
           <div className="flex flex-col gap-1.5">
             <div className="eyebrow">Maindeck ({cards.length})</div>
-            <CardPlacardList cards={cards} className="max-h-[45vh] overflow-y-auto pr-1" />
+            <CardPlacardList
+              cards={[...cards].sort(byCurve)}
+              className="max-h-[45vh] overflow-y-auto pr-1"
+            />
           </div>
         </>
       )}
