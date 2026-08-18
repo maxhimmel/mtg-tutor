@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Card, DisplayCard } from "@mtg-tutor/core";
@@ -67,6 +67,52 @@ function stamp(iso: string): string {
   return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
 }
 
+/**
+ * How much screen the deck rail is allowed.
+ *
+ * CSS cannot say this on its own, and both attempts that tried are why this
+ * exists. The chrome above the rail is one height AT REST -- the masthead plus
+ * the page heading -- and a different one once the rail pins, because the
+ * masthead scrolls away. So a single `calc(100dvh - …)` is either short in one
+ * state or hanging off the bottom of the screen in the other. A `max-height` is
+ * not an answer either: it caps without filling, so the panel just stops
+ * wherever its content happens to end.
+ *
+ * At rest is the state that can overflow, so at rest is what is measured. The
+ * anchor is the grid, which never pins, so its offset is a fact about the
+ * document rather than about the scroll position. Pinned, the rail stops short
+ * of the fold by the height of the masthead that scrolled away, which is the
+ * one direction this is allowed to be wrong in.
+ */
+function useRailHeight() {
+  const node = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<string>();
+
+  const measure = useCallback(() => {
+    if (!node.current) return;
+    const top = node.current.getBoundingClientRect().top + window.scrollY;
+    setHeight(`calc(100dvh - ${Math.round(top)}px - 1.25rem)`);
+  }, []);
+
+  // A callback ref rather than an effect, because the grid this measures does
+  // not exist until the run is dealt -- an effect with an empty dependency list
+  // runs once, before the table has been left, and measures nothing.
+  const anchor = useCallback(
+    (el: HTMLDivElement | null) => {
+      node.current = el;
+      if (el) measure();
+    },
+    [measure],
+  );
+
+  useEffect(() => {
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+
+  return { anchor, height };
+}
+
 const TICK: Record<MissResult["outcome"], Tick["state"]> = {
   fixed: "hit",
   stood: "stood",
@@ -74,6 +120,7 @@ const TICK: Record<MissResult["outcome"], Tick["state"]> = {
 };
 
 export function MissesDrill() {
+  const rail = useRailHeight();
   const [skip, setSkip] = useState(0);
   const [step, setStep] = useState(0);
   // A run opens on the table rather than on its first question. The count and
@@ -234,7 +281,7 @@ export function MissesDrill() {
           onBack={() => setStep(0)}
         />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
+        <div ref={rail.anchor} className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
           <Panel
             title={guess ? "What you did, both times" : "Which card did this deck want?"}
             aside={
@@ -283,12 +330,16 @@ export function MissesDrill() {
               pack beside it runs past the fold on a laptop, so scrolling down to
               look at a card scrolled the deck away.
 
-              `h` and not `max-h`. A max-height only ever CAPS: the panel stays
-              its content's height and happens to reach the bottom of the screen
-              when the deck is big enough, which is not a layout, it is a
-              coincidence with a limit on it. The rail is a fixed height and the
-              list takes whatever is left over. */}
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:h-[calc(100dvh-2.5rem)]">
+              A real height and not a max-height: a cap only ever caps, so the
+              panel would stay its content's height and reach the bottom of the
+              screen only when the deck happened to be big enough. The height
+              itself is measured -- see useRailHeight for why no `calc` can be
+              right both at rest and pinned. Until it is, the var is unset and
+              the rail is its content's height, which is what it was before. */}
+          <aside
+            style={{ "--rail-h": rail.height } as CSSProperties}
+            className="flex flex-col gap-4 lg:sticky lg:top-5 lg:h-[var(--rail-h)]"
+          >
             <Deck cards={current.pool} />
           </aside>
         </div>
