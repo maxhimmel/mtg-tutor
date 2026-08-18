@@ -425,6 +425,26 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    - Also, related kinda but not really: it'd be very rad if we could have some kinda
      mock-auth so, as a dev, I could sign in offline - but low priority.
 
+3. **The CLI's review quiz prints the answer beside the question** (2026-08-18,
+   found while giving the misses drill a blind picker). `pickCard` puts a GIH win
+   rate on every row and the whole stat line under the cursor, which is most of
+   the answer to "which was the better pick" — so the terminal's quiz is a
+   reading test where the web's hides the same numbers. `blind` exists on
+   `pickCard` and `cardDetail` now and the drill passes it; the review was left
+   alone deliberately, because it is a separate screen and a separate call about
+   how much help a walkthrough should give. One argument to pass, whenever that
+   call is made.
+
+4. **The drill's deck rail stops short of the fold once it pins** (2026-08-18).
+   Its height is measured at rest, where the masthead and the page heading sit
+   above it; pinned, the masthead has scrolled away and that much screen goes
+   unused at the bottom. No `calc` can be right in both states — see
+   `useRailHeight` — so the only exact fix is to stop the page scrolling at all:
+   a fixed-height board where the pack scrolls in its panel and the deck scrolls
+   in its rail, which is what that screen probably wants to be anyway. Deferred
+   because it changes how the whole route lays out to buy back a strip of empty
+   panel.
+
 # Roadmap (pick per future session):
 
 Ordered by value × readiness. Each is a candidate feature branch. Cite these by

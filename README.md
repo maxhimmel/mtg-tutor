@@ -72,8 +72,8 @@ of what you took the first time. Ten of them is a few minutes rather than a
 draft.
 
 It re-simulates nothing. Every pick recorded the pack it was offered from, so a
-question is a stored row read back; a run costs about what opening one review
-costs. What it asks for is the card the pick was **graded against** — the one
+question is a stored row read back. A measured run — seven questions over one
+set — reads 72.6KB, against 262.7KB to open a single review. What it asks for is the card the pick was **graded against** — the one
 that best served the deck you were building, not the strongest card in the pack,
 and the drill says so out loud when those differ, because that gap is most of
 what a miss is made of.
@@ -81,7 +81,7 @@ what a miss is made of.
 Three kinds of pick never come up: one where the pack was nearly empty and the
 choice was not real, one where the data could not separate the two cards (the
 grade itself declined to dock it), and one from a set that has been re-ingested
-since and no longer has every card the pack held.
+since and no longer has every card the pack or the deck held.
 
 Nothing is recorded. A run is a sitting, and "you fixed six of ten" is a claim
 about today rather than about your last month — persisting attempts is a
