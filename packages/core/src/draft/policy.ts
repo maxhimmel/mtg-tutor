@@ -222,6 +222,12 @@ export const POLICY_FEATURES = [
   // one interaction term can carry it.
   "laneFitLate",
   "opennessLate",
+  // What a card DOES, and the only one of the four roles that earned a column.
+  // Drafters have standing preferences about the job a card does and do not
+  // visibly count what they are holding -- every `deckNeeds` interaction fitted
+  // to zero while this main effect did not. See the block above this list for
+  // what it is worth and what it cost to be sure of that.
+  "removal",
 ] as const;
 
 export type PolicyWeights = readonly number[];
@@ -307,9 +313,30 @@ export type PolicyWeights = readonly number[];
  * DESCRIBES signal-reading did not make it a better predictor of what drafters
  * DO. The script's header carries the rest.
  */
-export const FITTED_POLICIES: Record<"table" | "sharks", PolicyWeights> = {
+export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", PolicyWeights> = {
   table: [3.7889, 43.0546, 1.8065, -0.3002, 1.5222, 7.9243, -16.2986],
   sharks: [3.7963, 47.934, 1.8479, -0.3142, 1.4838, 7.8993, -16.4302],
+
+  // THE SEVEN-LONG VECTORS ABOVE ARE NOT STALE, THEY ARE FROZEN. `policyScore`
+  // iterates the WEIGHTS, not the feature row, so each of them ignores the
+  // eighth column entirely and deals exactly what it always dealt. That is what
+  // makes adding a feature additive rather than destructive, and it is why these
+  // two are still here rather than being edited in place.
+  //
+  // Refitted over all eighteen sets with the colours corrected (POOL_REVISION 13
+  // and 14) and with `removal` added:
+  //
+  //   table2    all drafters      571,996 train / 284,334 held-out
+  //             49.3% held out, against 49.2% without `removal`
+  //   sharks2   3-0 drafters      109,420 train /  55,475 held-out
+  //             50.8% held out
+  //
+  // `removal` fits to +0.3557 for the field and +0.3564 for the sharks, which is
+  // the same number twice: whatever separates a strong drafter from the field,
+  // it is not how much they want removal. `valueOpen` remains the only
+  // coefficient that really moves between the tiers (43.6 against 48.0).
+  table2: [3.3236, 43.6123, 1.9992, -0.3877, 1.6652, 7.0121, -13.6627, 0.3557],
+  sharks2: [3.3956, 48.0251, 2.0645, -0.1621, 1.3524, 6.9176, -13.9007, 0.3564],
 };
 
 /** How far into the draft this pick is, in [0, 1]. */
@@ -357,6 +384,7 @@ export function policyFeatures(
   out[4] = rare * packOpenness(packSize);
   out[5] = laneFit * progress;
   out[6] = memory.openness(card) * progress;
+  out[7] = card.role === "removal" ? 1 : 0;
   return out;
 }
 
