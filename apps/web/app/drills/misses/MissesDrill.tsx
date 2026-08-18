@@ -234,7 +234,7 @@ export function MissesDrill() {
           onBack={() => setStep(0)}
         />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
           <Panel
             title={guess ? "What you did, both times" : "Which card did this deck want?"}
             aside={
@@ -278,7 +278,13 @@ export function MissesDrill() {
             )}
           </Panel>
 
-          <aside className="flex flex-col gap-4">
+          {/* Pinned, and as tall as the viewport will allow. The deck is half
+              the question, and the pack beside it is taller than the fold on a
+              laptop -- so scrolling down to compare a card against the deck used
+              to scroll the deck away. `max-h` rather than `h`: an early pick
+              holds four cards, and a full-height box with four cards in it is
+              worse than a short one. */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-2.5rem)]">
             <Deck cards={current.pool} />
           </aside>
         </div>
@@ -429,6 +435,8 @@ function Deck({ cards }: { cards: DisplayCard[] }) {
     <Panel
       title="Your deck then"
       aside={<ColorTally colors={tally(cards, (c) => c.colors)} />}
+      className="min-h-0"
+      bodyClassName="min-h-0"
     >
       {cards.length === 0 ? (
         <p className="text-sm text-base-content/60">
@@ -437,11 +445,15 @@ function Deck({ cards }: { cards: DisplayCard[] }) {
       ) : (
         <>
           <DeckShape cards={cards} />
-          <div className="flex flex-col gap-1.5">
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <div className="eyebrow">Maindeck ({cards.length})</div>
+            {/* Capped by the viewport where the panel is pinned, and by a
+                fraction of it where the panel is just another block below the
+                pack -- a forty-card list running the length of a phone puts the
+                Next button somewhere nobody will find it. */}
             <CardPlacardList
               cards={[...cards].sort(byCurve)}
-              className="max-h-[45vh] overflow-y-auto pr-1"
+              className="max-h-[45vh] min-h-0 flex-1 overflow-y-auto pr-1 lg:max-h-none"
             />
           </div>
         </>
@@ -602,7 +614,7 @@ function Finish({
   };
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
       <Panel title="Every pack you took again" bodyClassName="gap-0">
         {rows.length === 0 ? (
           <p className="text-base-content/60">
