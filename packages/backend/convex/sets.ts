@@ -111,7 +111,12 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // colours at all for the first time. Unlike every tag above it this one changes
 // no field and adds none: the shape is identical and the VALUES are different,
 // which is exactly the change a revision tag exists to catch, since nothing in
-// the schema would notice it.
+// the schema would notice it,
+// and "14-adventure-colors" reads a card's colours off its WHOLE mana cost
+// rather than off Scryfall's stated answer, which reports an adventure by its
+// creature half alone -- so Callous Sell-Sword stops being a black card that
+// happens to cost {1}{B} // {R} and becomes the black-red card a drafter would
+// call it. Same shape again, different values again, 28 cards.
 // The tag names what changed; the fingerprint makes a change to how a card is
 // VALUED invalidate every pool without anyone remembering to say so. See
 // VALUE_FINGERPRINT.
@@ -120,7 +125,7 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // re-ingest rather than a migration -- and until one runs, a set simply has no
 // stored margins and grades exactly as it always has. That is the safe
 // direction: absent means "cannot say these are the same", never "they are".
-const POOL_REVISION = `13-required-colors.${VALUE_FINGERPRINT}`;
+const POOL_REVISION = `14-adventure-colors.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
