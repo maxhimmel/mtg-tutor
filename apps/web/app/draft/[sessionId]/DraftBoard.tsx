@@ -518,6 +518,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // making everything behind it inert.
   useEffect(() => suspendFeedback(standing !== undefined), [standing, suspendFeedback]);
 
+  // The card preview is held back for as long as the board is not the thing
+  // being pointed at: a card in hand crosses every tile and every deck row on
+  // its way across the screen, and a stage standing over the board is asking a
+  // question that a card image must not land on top of.
+  //
+  // Both reasons in one place, because they are one boolean and a second writer
+  // for the second reason is how the two would come to disagree. `onDragStart`
+  // still says it itself, one render earlier -- see there.
+  const previewYields = carrying !== null || standing !== undefined;
+  useEffect(() => suspendPreview(previewYields), [previewYields, suspendPreview]);
+
   // What the board is showing, so anything said from here arrives knowing it
   // without the player having to type "I was drafting Duskmourn". The coach
   // prose rides along because nothing on the server holds it.
@@ -797,14 +808,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // selected, which is the honest reading of the gesture: you meant this card
     // and have not yet said which pile.
     setSelected(card.name);
-    // For the whole gesture, not just its start: the cursor crosses every card
-    // in the pack and every row in the deck on its way across the board.
+    // Ahead of the effect that owns this, which cannot run until the render
+    // `setCarrying` schedules. The hand is already moving -- that is what armed
+    // the drag -- so the cards it is crossing are firing their hovers now.
     suspendPreview(true);
   }
 
   function endDrag() {
     setCarrying(null);
-    suspendPreview(false);
   }
 
   function onDragEnd(e: DragEndEvent) {
