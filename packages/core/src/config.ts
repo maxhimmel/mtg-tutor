@@ -104,6 +104,9 @@ export const DRILLS = {
   // run can always be filled from a single draft's history if that is all there
   // is -- and because a run that outlasts one sitting is not the point.
   runLength: 10,
-  // How far back through finished drafts a run draws from.
-  draftWindow: 50,
+  // How far back through finished drafts a run draws from. The same 25 the
+  // review picker lists, and for the same reason: this reads a session document
+  // per draft in the window before it knows whether any of them contributed a
+  // question, so the window is a bill paid up front.
+  draftWindow: 25,
 };

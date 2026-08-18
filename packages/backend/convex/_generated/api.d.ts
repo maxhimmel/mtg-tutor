@@ -19,6 +19,7 @@ import type * as draft from "../draft.js";
 import type * as draftDigests from "../draftDigests.js";
 import type * as draftPicks from "../draftPicks.js";
 import type * as draftPools from "../draftPools.js";
+import type * as drills_misses from "../drills/misses.js";
 import type * as feedback from "../feedback.js";
 import type * as http from "../http.js";
 import type * as iobench from "../iobench.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   draftDigests: typeof draftDigests;
   draftPicks: typeof draftPicks;
   draftPools: typeof draftPools;
+  "drills/misses": typeof drills_misses;
   feedback: typeof feedback;
   http: typeof http;
   iobench: typeof iobench;

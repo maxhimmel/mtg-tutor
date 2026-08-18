@@ -57,6 +57,28 @@ export function pickIndexOfMiss(
 }
 
 /**
+ * How many cards the pack still held when a stored mistake was made.
+ *
+ * Read off the digest rather than the pick row, which is the point: a pick with
+ * three cards left is a forced pick and teaches nothing, and knowing that
+ * BEFORE the row is read is the difference between filtering a candidate and
+ * paying for it first. The arrays carry every pick of the draft, so the largest
+ * pick number in a pack IS that pack's size -- exact for a completed draft,
+ * where every pack is picked to the end, which is the only kind this drill
+ * draws from.
+ */
+export function cardsLeftAtMiss(
+  picks: { readonly packNos: readonly number[]; readonly pickNos: readonly number[] },
+  miss: { packNo: number; pickNo: number },
+): number {
+  let size = 0;
+  for (let i = 0; i < picks.packNos.length; i++) {
+    if (picks.packNos[i] === miss.packNo && picks.pickNos[i] > size) size = picks.pickNos[i];
+  }
+  return size - miss.pickNo + 1;
+}
+
+/**
  * The worst misses first, across every draft they came from.
  *
  * Ranked on the gap alone, deliberately: a run built from your five worst

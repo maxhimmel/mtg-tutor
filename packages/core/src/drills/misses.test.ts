@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type MissCandidate,
   type MissQuestion,
+  cardsLeftAtMiss,
   gradeMiss,
   missGap,
   pickIndexOfMiss,
@@ -37,6 +38,27 @@ describe("pickIndexOfMiss", () => {
   // served. Serving it from the nearest pack would deal a stranger's question.
   it("answers undefined rather than guessing", () => {
     expect(pickIndexOfMiss(picks, { packNo: 4, pickNo: 1 })).toBeUndefined();
+  });
+});
+
+describe("cardsLeftAtMiss", () => {
+  const picks = {
+    packNos: [1, 1, 1, 1, 2, 2, 2, 2],
+    pickNos: [1, 2, 3, 4, 1, 2, 3, 4],
+  };
+
+  it("counts the pack down from its own size", () => {
+    expect(cardsLeftAtMiss(picks, { packNo: 1, pickNo: 1 })).toBe(4);
+    expect(cardsLeftAtMiss(picks, { packNo: 1, pickNo: 3 })).toBe(2);
+    expect(cardsLeftAtMiss(picks, { packNo: 2, pickNo: 4 })).toBe(1);
+  });
+
+  // The size is taken from the pack the miss is in, not from the draft, because
+  // nothing promises every pack of every format holds the same number.
+  it("sizes each pack on its own picks", () => {
+    const uneven = { packNos: [1, 1, 2, 2, 2], pickNos: [1, 2, 1, 2, 3] };
+    expect(cardsLeftAtMiss(uneven, { packNo: 1, pickNo: 1 })).toBe(2);
+    expect(cardsLeftAtMiss(uneven, { packNo: 2, pickNo: 1 })).toBe(3);
   });
 });
 
