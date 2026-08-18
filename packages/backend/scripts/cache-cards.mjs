@@ -11,7 +11,7 @@
 // This is the ten seconds of deployment time those runs actually needed.
 
 import { ConvexHttpClient } from "convex/browser";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { api } from "../convex/_generated/api.js";
@@ -34,6 +34,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const setCodes = readdirSync(`${HERE}/../data`)
   .filter((f) => f.endsWith(`.${format}.json`))
   .map((f) => f.slice(0, f.indexOf(".")));
+
+// A CACHED FILE IS NEVER REFETCHED, so a POOL_REVISION bump leaves every long
+// run reading cards that no longer exist -- and reading them successfully,
+// which is the dangerous half. `fit-bot-policy` would fit `laneFit` against
+// colours the deployment has since changed and report a perfectly good number
+// for a policy no bot will ever play. Nothing downstream can detect that.
+//
+// So the refresh is a flag rather than a thing to remember: `--refresh` drops
+// the snapshots first and takes them again. Run it after any ingest that moved
+// the engine half of a card.
+if (process.argv.includes("--refresh")) {
+  let dropped = 0;
+  for (const setCode of setCodes) {
+    const path = `${HERE}/../../../datasets/cards.${setCode}.${format}.json`;
+    if (existsSync(path)) {
+      rmSync(path);
+      dropped++;
+    }
+  }
+  console.log(`--refresh: dropped ${dropped} stale snapshot(s)`);
+}
 
 console.log(`caching ${setCodes.length} sets from ${url}`);
 let cached = 0;
