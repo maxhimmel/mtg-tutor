@@ -245,11 +245,26 @@ on 2026-08-15.
    order).
    - Not too interested in this format. Low priority.
 
-6. **Re-serve your own misses.** `stats.overview` already computes
-   `topMistakes`. Storing the seed + pick index and dealing that exact pack back
-   weeks later is spaced repetition on the mistakes you personally make.
-   - This feels like it has the potential to be an AWESOME mini-game!
-     We could introduce a star UX rating system. It could help w/user retention.
+6. **Shipped 2026-08-18** — the packs you got wrong, dealt back, at
+   `/drills/misses` and `mtg-tutor practice`. What it is and what it refuses are
+   in `README.md`; the reasoning that shaped it is in the commits and in
+   `core/src/drills/`.
+
+   The number keeps a stub rather than being left empty, because the drills
+   category it opened is where Ideas #1 and roadmap #3 are now expected to land,
+   and both cite this shape. Two things it deliberately did NOT do, so that
+   picking either up is a decision rather than a discovery:
+
+   - **Nothing is recorded.** A run writes no row, so the same misses come back
+     until you draft more (`skip` pages past them for a sitting). Whether being
+     dealt your own mistakes teaches anybody anything is a question about
+     people, and `drill_answered` is what answers it: `fixed` is a pick got
+     wrong once that would now be got right. Persisting attempts is Deferred #2,
+     and this is the evidence it is waiting on.
+   - **No star rating, no streak, no retention loop.** Those are the reward half
+     of a mini-game and they are only worth building over a drill somebody
+     already wants to play twice. The events say whether that is true before any
+     of it is designed.
 
 7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
@@ -375,6 +390,14 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    review loop feels right; MVP only shows a session score. Nothing persists
    quiz outcomes today — `reviewVerdicts` stores the coach's verdict, not your
    guess.
+
+   **Now has a second customer and a gate.** The misses drill (Ideas #6) grades
+   a retry against the pick's own stored answer and forgets it, which is why it
+   needed no schema — but "you fixed six of ten today" is the sentence this item
+   would turn into "and four of those you had missed twice before". Both surfaces
+   want the same row: which question, what was answered, when. Deliberately not
+   built ahead of the drill's own numbers, because a table designed before anyone
+   has played twice is a guess about what to store.
 
 # Still open from shipped work:
 

@@ -32,6 +32,7 @@
     "login": "pnpm --filter @mtg-tutor/cli login",
     "new-set": "pnpm --filter @mtg-tutor/backend new-set",
     "redeal": "pnpm --filter @mtg-tutor/backend redeal",
+    "practice": "pnpm --filter @mtg-tutor/cli practice",
     "review": "pnpm --filter @mtg-tutor/cli review",
     "seed-set-stats": "pnpm --filter @mtg-tutor/backend seed-set-stats",
     "smoke-draft": "pnpm --filter @mtg-tutor/backend smoke-draft",
