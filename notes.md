@@ -103,6 +103,12 @@ I want all instances referencing the draft principles to use the badge renderer 
 
 - Again, I'm no expert, so take that with a grain of salt.
 
+16. What the heck is going on with this drill/practice vernacular?
+
+- We have a route called /drills/<some-feature>
+- We call the label on the nav "Practice"
+- "Take the pick back" navigates to /drills/misses --> why is it called "misses"? The word "miss" isn't even used once in the link describing this drill.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
