@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import { COACH, DEFAULT_POD } from "@mtg-tutor/core";
+import type { OfferedPod } from "@mtg-tutor/core";
 import type { SettingSurface } from "./analytics";
 
 export type SetView = "grid" | "list";
@@ -84,16 +85,22 @@ export const DIFF_LAYOUTS: readonly { id: DiffLayout; label: string; blurb: stri
  * keeping pickCeremony out of the database does not carry: that is per-pick and
  * already recorded per pick, and this one decides the deal.
  */
-export type Pod = "table" | "sharks";
+// A POD ID IS A STORAGE KEY AND THE LABEL IS THE PRODUCT, and keeping those two
+// apart is what lets a pod be refitted without anything a person reads changing.
+// `table` and `sharks` are still real -- every draft that stored one replays
+// against it -- and neither is offered any more, exactly as `legacy` is not.
+// "A real table" goes on meaning the current best fit of how people actually
+// pick, which is the only thing the label ever claimed.
+export type Pod = OfferedPod;
 
 export const PODS: readonly { id: Pod; label: string; blurb: string }[] = [
   {
-    id: "table",
+    id: "table2",
     label: "A real table",
     blurb: "Seven drafters fitted to how people actually pick, disagreements and all",
   },
   {
-    id: "sharks",
+    id: "sharks2",
     label: "Sharks",
     blurb: "The same, fitted to drafters who went 3-0. Good cards wheel less",
   },

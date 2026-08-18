@@ -124,7 +124,7 @@ export function botScore(card: EngineCard, memory: BotMemory): number {
  * editing the weights under an existing one. `BOT_FINGERPRINT` exists to go red
  * if somebody does.
  */
-export type PodPolicy = "legacy" | "table" | "sharks";
+export type PodPolicy = "legacy" | "table" | "sharks" | "table2" | "sharks2";
 
 /**
  * The pods a draft can be STARTED against, which is not the same set.
@@ -135,7 +135,26 @@ export type PodPolicy = "legacy" | "table" | "sharks";
  * would mean the same thing by convention rather than by construction. Nobody
  * chooses the old bot; you get it by having drafted before pods existed.
  */
+// What a session may CARRY, which is every pod but `legacy` -- that one is what
+// an absent `pod` means, so it is never written down.
 export type StoredPod = Exclude<PodPolicy, "legacy">;
+
+/**
+ * What a new draft may be started AS, which is a smaller set and has to be.
+ *
+ * `table` and `sharks` are superseded fits. They stay in `PodPolicy` and in the
+ * schema forever, because the drafts that recorded them replay against them and
+ * would strand otherwise -- but nobody should be offered one, any more than
+ * anybody is offered `legacy`.
+ *
+ * SEPARATE FROM `StoredPod` BECAUSE `challenges.accept` PROVES THEY DIFFER. It
+ * deals the friend a session carrying the CHALLENGER's pod, whatever that was,
+ * because a challenge is the same packs and a different pod deals a different
+ * forty-two. So a draft can legitimately be created today carrying `table`,
+ * which is exactly the thing this type must not permit anyone to choose. One
+ * type doing both jobs made that a typecheck error, which is how this was found.
+ */
+export type OfferedPod = Extract<PodPolicy, "table2" | "sharks2">;
 
 /**
  * The pod a new draft gets when nobody says otherwise.
@@ -145,11 +164,16 @@ export type StoredPod = Exclude<PodPolicy, "legacy">;
  * other a different table -- the CLI is not a lesser client. It began that way
  * and the CLI got `legacy` while the browser got this.
  *
- * `table` and not `sharks`: a pod fitted to 3-0 drafters sends the signals a
+ * `table2` and not `sharks2`: a pod fitted to 3-0 drafters sends the signals a
  * strong table sends, and reading those is not the skill anybody drafting here
  * is trying to practise. Harder to learn from, not just harder to beat.
+ *
+ * The `2` is a storage key and never reaches a person -- the web app's `PODS`
+ * still labels this one "A real table", which is what it has always been called
+ * and what it still is. A refit gets a new NAME because a name is frozen the
+ * moment a session records it; it does not get a new identity.
  */
-export const DEFAULT_POD: StoredPod = "table";
+export const DEFAULT_POD: OfferedPod = "table2";
 
 /**
  * Gumbel noise, which is what turns an argmax into a draw from the softmax.

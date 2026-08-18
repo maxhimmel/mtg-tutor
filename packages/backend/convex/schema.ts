@@ -280,7 +280,14 @@ export default defineSchema({
     // pickCeremony (decision #13). That one is per-pick and switchable
     // mid-draft because nothing session-level depends on it. This decides the
     // deal, so it has to be on the row a replay reads.
-    pod: v.optional(v.union(v.literal("table"), v.literal("sharks"))),
+    pod: v.optional(
+      v.union(
+        v.literal("table"),
+        v.literal("sharks"),
+        v.literal("table2"),
+        v.literal("sharks2"),
+      ),
+    ),
   }).index("by_user", ["userId"]),
 
   // Every booster this draft will ever open, settled at creation.

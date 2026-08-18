@@ -235,6 +235,38 @@ const POLICIES = {
     }
     return best;
   },
+  // The refit that ships, beside the one it replaces rather than in place of it.
+  // Both rows matter and the SAMPLED one matters more: argmax measures ranking,
+  // sampling measures whether the pod puts the right CONFIDENCE on its ranking,
+  // and only the second is what "drafts like a person" means. A pod can rank
+  // perfectly and still feel wrong, which is the whole content of trap #7.
+  table2: (pack, memory, progress) => {
+    let best = pack[0];
+    let bestScore = -Infinity;
+    for (const c of pack) {
+      const s = policyScore(c, memory, progress, FITTED_POLICIES.table2, pack.length);
+      if (s > bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+    return best;
+  },
+  "table2~": (pack, memory, progress, rng) => {
+    let best = pack[0];
+    let bestScore = -Infinity;
+    for (const c of pack) {
+      const u = Math.min(1 - 1e-12, Math.max(1e-12, rng()));
+      const s =
+        policyScore(c, memory, progress, FITTED_POLICIES.table2, pack.length) -
+        Math.log(-Math.log(u));
+      if (s > bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+    return best;
+  },
   // And what actually ships: a draw from the fitted distribution, which is how
   // seven seats come to disagree the way seven people do.
   //
