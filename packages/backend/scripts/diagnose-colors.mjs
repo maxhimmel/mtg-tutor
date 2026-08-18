@@ -1,54 +1,54 @@
-// What `EngineCard.colors` says a card costs, against what it actually costs.
+// Whether every stored `colors` is still the colours you have to be in.
 //
 //   node scripts/diagnose-colors.mjs [--format TradDraft] [--set mh3]
 //                                    [--examples 8]
 //
-// ONE FIELD, THREE DIFFERENT REASONS IT IS EMPTY
+// A REGRESSION CHECK, WHICH IS NOT WHAT IT WAS WRITTEN AS
 //
-// `colors` is Scryfall's `colors` copied through `mapping.ts` untouched, and
-// Scryfall means something specific by it: the colour the card IS. Almost
-// nothing in this repo wants that. `laneFit` wants the mana a drafter has to be
-// able to SPEND; `committedColors` and the deck builder want what a card commits
-// you TO. Sorting the empties apart is the whole point of this script, because
-// the three have different causes and only one of them is a design question:
+// This began as a discovery tool and found three separate populations sitting
+// in one empty array, at 4.08 affected cards per pack on mh3:
 //
-//   DFC          A BUG, and the largest of the three. Scryfall puts `colors` on
-//                `card_faces` for `transform` and `modal_dfc` and omits it at
-//                the top level entirely, so `asColorCodes(undefined)` is []. The
-//                mapping already knows this about `mana_cost` one line below and
-//                falls back to the face; `colors` never learned to. Every
-//                double-faced card in every set is colourless to the engine --
-//                which on mh3 is Ajani, Tamiyo, Sorin, Ral and Grist, the five
-//                cards a drafter is most likely to build around.
+//   dfc     116 cards  Scryfall states `colors` per FACE on transform and
+//                      modal_dfc and omits it on the card, so every
+//                      double-faced card in the pool was colourless -- on mh3
+//                      that was every planeswalker in the set.
+//   devoid   27 cards  {1}{U} with `colors` [] is what devoid MEANS, and the
+//                      drafter still cannot cast it off Swamps.
+//   land    356 cards  No mana cost, ever. Its identity is the whole of what it
+//                      commits you to.
 //
-//   DEVOID       mana cost {2}{B}, `colors` [] and correctly so -- the card IS
-//                colourless by rule and is cast with black mana. Not a mapping
-//                error; a question about which of the two a reader wanted.
+// All three are fixed at ingest by `requiredColors` in mapping.ts, and all three
+// now read zero. What the script is FOR now is noticing if that stops being
+// true -- a new set, a Scryfall change, or an edit to the mapping. Run it after
+// any ingest that matters.
 //
-//   LAND         `colors` [] and always will be -- a land has no mana cost --
-//                while its colour identity is the whole of what it commits you
-//                to. `deck.ts` already knows this and corrects for it in
-//                `landFitsColors`; no other reader does.
+// WHY IT RESTATES THE RULE INSTEAD OF IMPORTING IT
 //
-// WHY THIS IS COUNTED BEFORE IT IS FIXED
+// A check that imports the code it is checking agrees with it by construction.
+// `expectedColors` below is a deliberate second implementation, from the STORED
+// fields rather than the Scryfall response, so the two can disagree. They are
+// both four lines; keeping them in step by eye is cheaper than the coupling.
 //
-// `colors` is on the ENGINE half, so it feeds `laneFit`, which feeds the bots,
-// which decide what wheels. Changing it re-deals every draft and moves the
-// feature values the fitted policies were fitted against. That is a
-// POOL_REVISION bump and a refit, and it should be bought with a number rather
-// than with the observation that the field is wrong -- which is true and says
-// nothing about whether anybody meets it.
+// THE ONE KNOWN NON-ZERO, AND IT IS NOT A BUG
 //
-// So: how many cards, in which sets, and how often does a pack contain one.
+// `other` holds 29 cards, 28 of them ADVENTURES and one Living End. Scryfall
+// gives Callous Sell-Sword (`{1}{B} // {R}`) a top-level `colors` of ["B"] --
+// the creature half only -- while its identity is ["B","R"]. We store what
+// Scryfall says, so an adventure card reads as mono-coloured.
+//
+// That is consistent with the rule as stated: you CAN play it in mono-black and
+// simply never cast the adventure. Whether a draft tutor should say so is a real
+// question and not this script's to answer -- woe is the adventure set and
+// carries 0.53 of these per pack, which is the number to weigh if anyone picks
+// it up. Left visible here rather than filtered out, because a check that hides
+// its known exceptions cannot tell you when one stops being known.
 //
 // WHAT THE PACK RATE COLUMN MEANS
 //
 // `packRate` is the share of observed packs a card appears in, so summing it
-// over the affected cards is the expected number of affected cards PER PACK --
-// which is the number that says whether this is a curiosity or something a
-// drafter meets every time they open one. A card with no `packRate` is counted
-// as present at its slot's average rather than dropped, because a set ingested
-// before that field existed still deals it.
+// over the affected cards is the expected number of affected cards PER PACK.
+// A card with no `packRate` is counted at its slot's average rather than
+// dropped, because a set ingested before that field existed still deals it.
 
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../convex/_generated/api.js";
@@ -78,32 +78,41 @@ function castColors(manaCost) {
   return [...found];
 }
 
-const isLand = (typeLine) => /\bLand\b/.test(typeLine ?? "");
+const isLand = (typeLine) => /\bLand\b/.test((typeLine ?? "").split("//")[0]);
 const same = (a, b) => a.length === b.length && [...a].sort().join("") === [...b].sort().join("");
 
-// The layouts Scryfall gives two `card_faces` and no top-level `colors`. Stored
-// only when it is not `normal`, which is why this can be asked of a card at all.
+/**
+ * What `colors` SHOULD be, recomputed from the other stored fields.
+ *
+ * The same two rules as `requiredColors` in mapping.ts, deliberately restated
+ * here rather than imported: this script's job is to disagree with the pipeline,
+ * and a check that shares the code it is checking can only ever agree with it.
+ * The two are small enough that keeping them in step by eye is cheaper than the
+ * coupling -- and a divergence between them shows up here as a whole set going
+ * red, not as silence.
+ *
+ * Reads the stored `manaCost`, which ingest has already resolved to the FRONT
+ * face, so a transforming artifact costing {3} correctly expects nothing.
+ */
+function expectedColors(card) {
+  if (isLand(card.typeLine)) return card.colorIdentity ?? [];
+  return castColors(card.manaCost);
+}
+
+// Why this card's stored colours are not what its cost says, or null when they
+// agree. A label rather than a taxonomy: each names a CAUSE, so a count against
+// one of them points at the line that produced it.
 const TWO_FACED = new Set(["transform", "modal_dfc", "double_faced_token", "reversible_card"]);
 
-// Which of the three gaps this card sits in, or null when `colors` is right.
 function classify(card) {
-  const cast = castColors(card.manaCost);
   const colors = card.colors ?? [];
-  const identity = card.colorIdentity ?? [];
+  const expected = expectedColors(card);
+  if (same(expected, colors)) return null;
 
-  if (isLand(card.typeLine)) {
-    return identity.length > 0 && colors.length === 0 ? "land" : null;
-  }
-  // Checked before devoid, because a devoid DFC would otherwise be filed under
-  // the design question when what it needs first is the mapping fixed.
-  if (TWO_FACED.has(card.layout) && colors.length === 0) return "dfc";
-  if (cast.length > 0 && colors.length === 0) return "devoid";
-  // A card with no mana cost at all and a coloured identity -- the back of a
-  // modal double-faced card, mostly. Not the same bug and not necessarily a bug,
-  // but it is the third population living in `colors.length === 0` and counting
-  // it is how we find out.
-  if (cast.length === 0 && colors.length === 0 && identity.length > 0) return "costless";
-  return same(cast, colors) ? null : "other";
+  if (isLand(card.typeLine)) return "land";
+  if (TWO_FACED.has(card.layout)) return "dfc";
+  if (colors.length === 0) return "devoid";
+  return "other";
 }
 
 const client = new ConvexHttpClient(process.env.CONVEX_URL);
@@ -116,7 +125,7 @@ if (sets.length === 0) {
   process.exit(1);
 }
 
-const KINDS = ["dfc", "devoid", "land", "costless", "other"];
+const KINDS = ["dfc", "devoid", "land", "other"];
 const rows = [];
 const examples = new Map(KINDS.map((k) => [k, []]));
 
@@ -152,7 +161,7 @@ for (const set of sets) {
 const pct = (n, d) => (d === 0 ? "  0.0%" : `${((100 * n) / d).toFixed(1).padStart(5)}%`);
 
 console.log(`\n${format} — cards whose \`colors\` is not what they cost\n`);
-console.log("set    cards  colorless      dfc   devoid     land costless    other   affected/pack");
+console.log("set    cards  colorless      dfc   devoid     land    other   affected/pack");
 const wrong = (r) => r.counts.dfc + r.counts.devoid + r.counts.land;
 for (const r of rows.sort((a, b) => wrong(b) - wrong(a))) {
   const affected = KINDS.reduce((n, k) => n + r.perPack[k], 0);

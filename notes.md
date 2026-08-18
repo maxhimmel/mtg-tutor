@@ -94,6 +94,8 @@ Their reasoning "staying open, not committed to anything" doesn't hold up either
 - I had 6 cards in my main deck that were blue(U) and red(R). And only 2 cards that were white(W) in my sideboard.
 - THE ISSUE: is that the coach seems to not have known that I picked that card directly into my sideboard.
 
+14. We should download the data from 17lands rather than stream from their s3 buckets. I don't think that data gets updated very often (I don't actually know that tho). And and I'd hate to need to do a reingest but 17lands took down their data. I dunno if that data needs to persist in the repo (seems expensive) but at least locally - although maybe u know best.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
