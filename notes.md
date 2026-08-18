@@ -724,6 +724,39 @@ to the data work.
 
 # Deferred trade-offs (revisit when the premise changes):
 
+0a. **`apps/web` has no DOM test harness, and the hover preview is the reason
+   to know it.** No jsdom, no happy-dom, no testing-library anywhere in the
+   monorepo, so nothing in the web app can be tested at the component level --
+   only pure functions it exports and the seams (`analytics.ts`,
+   `previewPlacement.ts`) that were extracted for the purpose.
+
+   **Why that is worth writing down rather than shrugging at.** The card hover
+   preview has now been fixed FIVE times -- `4775c63`, `56da759`, `f9c0f8b`,
+   `61ff7a9`, and the click/scroll fix on 2026-08-17 -- and not one of those
+   changes could go red in CI. Every one of them is a rule about what happens
+   on an event: the pointer leaves, the anchor unmounts, a drag starts, the
+   route changes, a stage opens. Those are exactly the rules a DOM harness
+   tests and a pure function cannot.
+
+   The dismiss-on-click bug is the demonstration. `CardTile` called
+   `hidePreview()` on click, which was right when a click WAS the pick, and
+   two later commits changed what a click means without touching it. A test
+   asserting "the preview survives a click" would have failed the moment
+   `9cdbcde` landed. Nothing failed, and it shipped, and it took a person
+   noticing the preview vanish under their own cursor.
+
+   **The current answer is still no**, and deliberately: two dev dependencies
+   and a vitest environment config against a repo that has kept its moving
+   parts few on purpose, and the extraction trick has worked twice now
+   (`previewPlacement.ts` pins the placement rule, `plot.ts` pins the stats
+   axis). What it does not cover is event wiring, which is where all five of
+   those bugs lived.
+
+   **The premise changes** when a sixth regression lands in the same file, or
+   when a rule cannot be extracted into a pure function without contorting the
+   component around the test. Either is the signal to stop paying for this in
+   people noticing.
+
 0. **What the client may compute, now that scoring says "nothing".** Three bugs
    in a week came from one shape: `EngineCard` is deliberately thin because
    `setCards` is read on every pick, so anything needing a mana value or a type
