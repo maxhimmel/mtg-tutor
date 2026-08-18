@@ -40,6 +40,9 @@ export * from "./tutor/challenge.js";
 export * from "./tutor/pickCoach.js";
 export * from "./tutor/reviewPrompt.js";
 
+export * from "./drills/drill.js";
+export * from "./drills/misses.js";
+
 export * from "./draft/engine.js";
 export * from "./draft/replay.js";
 export * from "./draft/diff.js";
