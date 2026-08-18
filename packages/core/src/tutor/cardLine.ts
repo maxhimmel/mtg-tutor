@@ -1,4 +1,4 @@
-import type { Card, ColorCode, PoolCard } from "../model/card.js";
+import type { Card, DisplayCard, ColorCode, PoolCard } from "../model/card.js";
 import { CARD_STAT_GLOSSARY } from "./glossary.js";
 
 // How a card is written into a prompt: what it is, and what the data says about
@@ -86,7 +86,9 @@ export function describeCard(c: Card): string {
 // set with thin data would otherwise spend most of a fifteen-line pack listing
 // what it does not know. No sample-size guard is needed here -- build-set-stats
 // already withholds iwd unless both halves of it cleared the floor.
-export function statLine(c: Card): string {
+// Reads the statistics half only, so anything drawable can be described --
+// see DisplayCard. The prompts pass whole cards and are unaffected.
+export function statLine(c: DisplayCard): string {
   const parts: string[] = [];
 
   if (c.gihWinRate != null) {

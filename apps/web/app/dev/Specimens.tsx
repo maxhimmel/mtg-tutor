@@ -255,5 +255,5 @@ export const SPECIMENS: Specimen[] = [
         ))}
       </PileGrid>
     ),
-  },
+  }
 ];

@@ -41,6 +41,9 @@ pnpm draft dsk PremierDraft
 # See your progress, trends, and biggest recurring mistakes
 pnpm stats
 
+# Take back the picks you got wrong, one pack at a time
+pnpm practice
+
 # Dare a friend to draft one of your finished drafts
 pnpm challenge
 
@@ -60,6 +63,29 @@ mtg-tutor stats
 During a draft, arrow-key through the pack (cards are pre-sorted by win rate with hints) and read the grade + reasoning after each pick. Enter takes the card to your maindeck, `s` takes it straight to the sideboard, and `v` opens the two piles so you can move cards between them mid-draft.
 
 When the last pack runs out you build the forty — cut down to 40 cards and set the land count — and only then does the CLI show you the suggested build, how far your deck is from it, the curve and colours side by side, your overall score and your biggest missed picks. Walk away before locking in and `mtg-tutor draft --resume <id>` puts you back on the build screen.
+
+### Take the pick back
+
+`pnpm practice` (web: **Practice** in the nav) deals your worst picks back as
+the packs they came from — the same cards, the same deck behind you, and no sign
+of what you took the first time. Ten of them is a few minutes rather than a
+draft.
+
+It re-simulates nothing. Every pick recorded the pack it was offered from, so a
+question is a stored row read back. A measured run — seven questions over one
+set — reads 72.6KB, against 262.7KB to open a single review. What it asks for is the card the pick was **graded against** — the one
+that best served the deck you were building, not the strongest card in the pack,
+and the drill says so out loud when those differ, because that gap is most of
+what a miss is made of.
+
+Three kinds of pick never come up: one where the pack was nearly empty and the
+choice was not real, one where the data could not separate the two cards (the
+grade itself declined to dock it), and one from a set that has been re-ingested
+since and no longer has every card the pack or the deck held.
+
+Nothing is recorded. A run is a sitting, and "you fixed six of ten" is a claim
+about today rather than about your last month — persisting attempts is a
+separate feature, deliberately not built until this one has earned it.
 
 ### Challenge a friend to your packs
 

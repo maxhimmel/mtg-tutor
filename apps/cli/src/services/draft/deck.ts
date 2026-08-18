@@ -16,7 +16,7 @@ import type { Bench, BuiltDeck, Card } from "@mtg-tutor/core";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
-import { pct } from "../../core/ui/format.js";
+import { curveLine, pct } from "../../core/ui/format.js";
 import { editPiles, type PileRow } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { humanError } from "../../core/ui/humanError.js";
@@ -81,12 +81,6 @@ export async function managePiles(
   spin.stop(moved.join(", "));
   return stored;
 }
-
-const curveLine = (curve: number[]) =>
-  "Curve  " +
-  curve
-    .map((n, i) => `${i + 1 === CURVE_TOP ? `${CURVE_TOP}+` : i + 1}:${n === 0 ? pc.dim("0") : n}`)
-    .join("  ");
 
 function deckReadout(deck: BuiltDeck, benched: number): string {
   const lands = deck.nonbasicLands.length + deck.basicLands;

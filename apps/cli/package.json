@@ -13,6 +13,7 @@
     "dev": "tsx src/cli.ts",
     "draft": "tsx src/services/draft/main.ts",
     "login": "tsx src/cli.ts login",
+    "practice": "tsx src/services/drills/main.ts",
     "review": "tsx src/services/review/main.ts",
     "start": "node dist/cli.js",
     "stats": "tsx src/services/stats/main.ts",

@@ -1,4 +1,4 @@
-import { type Card, type ColorCode, isLand } from "@mtg-tutor/core";
+import { type ColorCode, type DisplayCard, isLand } from "@mtg-tutor/core";
 
 // Colours for the deck-list row Arena draws: a saturated ring in the card's
 // colour, wrapping a plate that is the same colour mixed toward white.
@@ -68,7 +68,7 @@ function multicolor(colors: ColorCode[]): Frame {
 //
 // Precedence from there: no colours takes the colourless ring, one colour takes
 // that colour, and anything else runs its colours across the ring.
-export function frameFor(card: Card): Frame {
+export function frameFor(card: DisplayCard): Frame {
   const colors = isLand(card) ? card.colorIdentity : card.colors;
   if (colors.length === 0) return mono(RINGS.colorless);
   if (colors.length === 1) return mono(RINGS[colors[0]]);

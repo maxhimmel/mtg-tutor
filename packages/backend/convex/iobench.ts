@@ -116,6 +116,23 @@ export const saveVerdictCost = mutation({
   },
 });
 
+// The whole drill in one read, which is what a run costs: the drill deals ten
+// packs at once rather than one per question.
+//
+// Worth its own probe because the deck panel made the pool drawable, and the
+// pool names LOOK like the expensive half -- ten pools of up to 44 cards. They
+// are not: `cardTextFor` reads one row per distinct name and every one of those
+// cards was drafted out of the same set as the pack beside it, so the union is
+// bounded by the set's own card count however many questions ask for it. That
+// is an argument, and this is how it stops being one.
+export const drillMissesCost = query({
+  args: { skip: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await ctx.runQuery(api.drills.misses.deal, args);
+    return await cost(ctx);
+  },
+});
+
 export const reviewLoadCost = query({
   args: { sessionId: v.id("draftSessions") },
   handler: async (ctx, args) => {

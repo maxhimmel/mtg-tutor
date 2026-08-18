@@ -20,12 +20,13 @@ export interface PromptIO {
 
 const bar = pc.gray("│");
 
-function listRow(card: Card, active: boolean, prefix = ""): string {
+function listRow(card: Card, active: boolean, prefix = "", blind = false): string {
   const marker = active ? pc.cyan("▶ ") : "  ";
   const name = active ? pc.cyan(pc.bold(card.name)) : card.name;
   const pt = ptLine(card);
   const wr = card.gihWinRate != null ? pct(card.gihWinRate) : "—";
-  return `${bar} ${marker}${prefix}${rarityTag(card.rarity)} ${colorSwatch(card.colors)} ${name}${pt ? " " + pc.dim(pt) : ""}  ${pc.dim(`GIH ${wr}`)}`;
+  const stats = blind ? "" : `  ${pc.dim(`GIH ${wr}`)}`;
+  return `${bar} ${marker}${prefix}${rarityTag(card.rarity)} ${colorSwatch(card.colors)} ${name}${pt ? " " + pc.dim(pt) : ""}${stats}`;
 }
 
 function visibleWindow(count: number, cursor: number): [number, number] {
@@ -45,6 +46,9 @@ function frame(opts: {
   row: (index: number) => string;
   detail: Card;
   keys?: string;
+  // The detail panel's win rates, off. See cardDetail: a picker asking which
+  // card is better must not print the answer under the list.
+  blind?: boolean;
 }): string {
   const [start, end] = visibleWindow(opts.count, opts.cursor);
   const lines: string[] = [`${pc.cyan("◆")}  ${pc.bold(opts.message)}`];
@@ -54,7 +58,9 @@ function frame(opts: {
   if (end < opts.count) lines.push(`${bar}  ${pc.dim(`… ${opts.count - end} more below`)}`);
 
   lines.push(bar);
-  for (const l of cardDetail(opts.detail).split("\n")) lines.push(`${bar}  ${l}`);
+  for (const l of cardDetail(opts.detail, undefined, { stats: !opts.blind }).split("\n")) {
+    lines.push(`${bar}  ${l}`);
+  }
   if (opts.keys) {
     lines.push(bar);
     lines.push(`${bar}  ${pc.dim(opts.keys)}`);
@@ -69,7 +75,13 @@ const closingLine = (message: string, tag: string) =>
 const options = (cards: Card[]): PickOption[] =>
   cards.map((c) => ({ value: c.name, label: c.name, card: c }));
 
-export async function pickCard(cards: Card[], message: string): Promise<Card | null> {
+export async function pickCard(
+  cards: Card[],
+  message: string,
+  // `blind` hides every win rate in the frame. The drills ask which card was
+  // right, and the number that answers it is on the same row as the name.
+  opts: { blind?: boolean } = {},
+): Promise<Card | null> {
   const prompt = new SelectPrompt<PickOption>({
     options: options(cards),
     initialValue: cards[0]?.name,
@@ -83,8 +95,9 @@ export async function pickCard(cards: Card[], message: string): Promise<Card | n
         count: this.options.length,
         cursor: this.cursor,
         message,
-        row: (i) => listRow(this.options[i].card, i === this.cursor),
+        row: (i) => listRow(this.options[i].card, i === this.cursor, "", opts.blind),
         detail: this.options[this.cursor].card,
+        blind: opts.blind,
       });
     },
   });

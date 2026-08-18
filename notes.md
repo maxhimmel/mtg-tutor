@@ -245,11 +245,26 @@ on 2026-08-15.
    order).
    - Not too interested in this format. Low priority.
 
-6. **Re-serve your own misses.** `stats.overview` already computes
-   `topMistakes`. Storing the seed + pick index and dealing that exact pack back
-   weeks later is spaced repetition on the mistakes you personally make.
-   - This feels like it has the potential to be an AWESOME mini-game!
-     We could introduce a star UX rating system. It could help w/user retention.
+6. **Shipped 2026-08-18** — the packs you got wrong, dealt back, at
+   `/drills/misses` and `mtg-tutor practice`. What it is and what it refuses are
+   in `README.md`; the reasoning that shaped it is in the commits and in
+   `core/src/drills/`.
+
+   The number keeps a stub rather than being left empty, because the drills
+   category it opened is where Ideas #1 and roadmap #3 are now expected to land,
+   and both cite this shape. Two things it deliberately did NOT do, so that
+   picking either up is a decision rather than a discovery:
+
+   - **Nothing is recorded.** A run writes no row, so the same misses come back
+     until you draft more (`skip` pages past them for a sitting). Whether being
+     dealt your own mistakes teaches anybody anything is a question about
+     people, and `drill_answered` is what answers it: `fixed` is a pick got
+     wrong once that would now be got right. Persisting attempts is Deferred #2,
+     and this is the evidence it is waiting on.
+   - **No star rating, no streak, no retention loop.** Those are the reward half
+     of a mini-game and they are only worth building over a drill somebody
+     already wants to play twice. The events say whether that is true before any
+     of it is designed.
 
 7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
 
@@ -376,6 +391,14 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    quiz outcomes today — `reviewVerdicts` stores the coach's verdict, not your
    guess.
 
+   **Now has a second customer and a gate.** The misses drill (Ideas #6) grades
+   a retry against the pick's own stored answer and forgets it, which is why it
+   needed no schema — but "you fixed six of ten today" is the sentence this item
+   would turn into "and four of those you had missed twice before". Both surfaces
+   want the same row: which question, what was answered, when. Deliberately not
+   built ahead of the drill's own numbers, because a table designed before anyone
+   has played twice is a guess about what to store.
+
 # Still open from shipped work:
 
 1. **`stats.overview` disagrees with itself about a draft with no summary**
@@ -401,6 +424,26 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
      delete them and make the field required, not to migrate them.
    - Also, related kinda but not really: it'd be very rad if we could have some kinda
      mock-auth so, as a dev, I could sign in offline - but low priority.
+
+3. **The CLI's review quiz prints the answer beside the question** (2026-08-18,
+   found while giving the misses drill a blind picker). `pickCard` puts a GIH win
+   rate on every row and the whole stat line under the cursor, which is most of
+   the answer to "which was the better pick" — so the terminal's quiz is a
+   reading test where the web's hides the same numbers. `blind` exists on
+   `pickCard` and `cardDetail` now and the drill passes it; the review was left
+   alone deliberately, because it is a separate screen and a separate call about
+   how much help a walkthrough should give. One argument to pass, whenever that
+   call is made.
+
+4. **The drill's deck rail stops short of the fold once it pins** (2026-08-18).
+   Its height is measured at rest, where the masthead and the page heading sit
+   above it; pinned, the masthead has scrolled away and that much screen goes
+   unused at the bottom. No `calc` can be right in both states — see
+   `useRailHeight` — so the only exact fix is to stop the page scrolling at all:
+   a fixed-height board where the pack scrolls in its panel and the deck scrolls
+   in its rail, which is what that screen probably wants to be anyway. Deferred
+   because it changes how the whole route lays out to buy back a strip of empty
+   panel.
 
 # Roadmap (pick per future session):
 

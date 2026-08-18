@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { type Card, statLine } from "@mtg-tutor/core";
+import { CURVE_TOP, type DisplayCard, statLine } from "@mtg-tutor/core";
 
 export const pct = (v?: number | null) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
 
@@ -50,7 +50,7 @@ export function renderManaCost(cost: string): string {
     .join("");
 }
 
-export function ptLine(card: Card): string {
+export function ptLine(card: DisplayCard): string {
   if (card.power != null && card.toughness != null) return `${card.power}/${card.toughness}`;
   if (card.loyalty != null) return `Loyalty ${card.loyalty}`;
   return "";
@@ -81,9 +81,21 @@ export function wrapText(text: string, width: number): string[] {
   return out;
 }
 
-// Full multi-line detail panel for the highlighted card (no gutter; the picker
-// adds one). `width` is the available text width.
-export function cardDetail(card: Card, width = (process.stdout.columns ?? 80) - 4): string {
+/**
+ * Full multi-line detail panel for the highlighted card (no gutter; the picker
+ * adds one). `width` is the available text width.
+ *
+ * `stats: false` prints the card without its win rates.
+ *
+ * For a prompt whose whole question is which card is better: the stat line is
+ * most of the answer, and a picker that shows it is a reading test rather than
+ * a judgment one. The web hides the same numbers on the same screens.
+ */
+export function cardDetail(
+  card: DisplayCard,
+  width = (process.stdout.columns ?? 80) - 4,
+  opts: { stats?: boolean } = {},
+): string {
   const w = Math.max(24, width);
   const lines: string[] = [];
   const cost = renderManaCost(card.manaCost);
@@ -95,10 +107,25 @@ export function cardDetail(card: Card, width = (process.stdout.columns ?? 80) - 
     lines.push("");
     for (const l of wrapText(card.oracleText, w)) lines.push(l);
   }
-  lines.push("");
-  // The same line the coach is shown, so the terminal and the prompt do not name
-  // the same numbers two different ways.
-  lines.push(pc.dim(statLine(card)));
+  if (opts.stats !== false) {
+    lines.push("");
+    // The same line the coach is shown, so the terminal and the prompt do not
+    // name the same numbers two different ways.
+    lines.push(pc.dim(statLine(card)));
+  }
   return lines.join("\n");
 }
 
+/**
+ * A mana curve as one line of counts, "1:2  2:5  3:4 …".
+ *
+ * Shared by the build screen and the misses drill: both show a pile of cards
+ * and both have to say when it can play, and a terminal has no room for the
+ * bars the web draws. Takes the counts rather than the cards so a caller can
+ * pass a BuiltDeck's own curve or one derived from `manaCurve`.
+ */
+export const curveLine = (curve: number[]): string =>
+  "Curve  " +
+  curve
+    .map((n, i) => `${i + 1 === CURVE_TOP ? `${CURVE_TOP}+` : i + 1}:${n === 0 ? pc.dim("0") : n}`)
+    .join("  ");
