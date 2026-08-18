@@ -4,6 +4,11 @@
 export interface ScryfallFace {
   name?: string;
   mana_cost?: string;
+  // Present here and ABSENT at the top level on `transform` and `modal_dfc`,
+  // which is the whole reason `colorsOf` exists. Scryfall states a two-faced
+  // card's colours per face because the two faces can differ; it does not
+  // restate them on the card.
+  colors?: string[];
   type_line?: string;
   oracle_text?: string;
   power?: string;
@@ -48,7 +53,10 @@ export interface ScryfallCard {
   color_identity?: string[];
   mana_cost?: string;
   cmc?: number;
-  type_line: string;
+  // Absent on `reversible_card`, which states it per face -- ecl prints five
+  // shocklands that way. Optional so the compiler insists on `typeLineOf`
+  // rather than letting the next reader find out by throwing.
+  type_line?: string;
   oracle_text?: string;
   power?: string;
   toughness?: string;
