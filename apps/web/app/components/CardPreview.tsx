@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
-import { type Card, cardShapeOf, frontIsSideways, keywordsOf } from "@mtg-tutor/core";
+import { type DisplayCard, cardShapeOf, frontIsSideways, keywordsOf } from "@mtg-tutor/core";
 import { tokensPreviewed } from "../lib/analytics";
 import { webpImage } from "../lib/cardImage";
 import {
@@ -29,7 +29,7 @@ import { useHeldKey } from "../lib/useHeldKey";
 import { CardStats, hasStats } from "./CardStats";
 
 interface HoverState {
-  card: Card;
+  card: DisplayCard;
   // The element the preview is hanging off. The element and not a rect measured
   // from it: a rect is where the card WAS, and the page moves -- see the
   // tracking effect below.
@@ -38,7 +38,7 @@ interface HoverState {
 }
 
 interface HoverPreviewValue {
-  show: (card: Card, el: HTMLElement, showStats: boolean) => void;
+  show: (card: DisplayCard, el: HTMLElement, showStats: boolean) => void;
   hide: () => void;
   suspend: (on: boolean) => void;
 }
@@ -52,7 +52,7 @@ const HoverPreviewContext = createContext<HoverPreviewValue | null>(null);
 // a live draft it follows the showStats setting, which is the whole of what that
 // setting now controls. After the draft the numbers ARE the lesson, so review
 // and results pass true.
-export function useCardHover(card: Card | undefined, showStats = false) {
+export function useCardHover(card: DisplayCard | undefined, showStats = false) {
   const ctx = useContext(HoverPreviewContext);
   if (!ctx || !card?.imageUrl) return {};
   const onEnter = (e: { currentTarget: HTMLElement }) =>
@@ -250,7 +250,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // nothing renders differently for it -- `show` simply declines.
   const suspended = useRef(false);
 
-  const show = useCallback((card: Card, el: HTMLElement, showStats: boolean) => {
+  const show = useCallback((card: DisplayCard, el: HTMLElement, showStats: boolean) => {
     if (suspended.current) return;
     setHover({ card, el, showStats });
   }, []);

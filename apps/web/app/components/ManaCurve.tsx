@@ -1,6 +1,6 @@
 "use client";
 
-import { type Card, CURVE_TOP, manaCurve } from "@mtg-tutor/core";
+import { type DisplayCard, CURVE_TOP, manaCurve } from "@mtg-tutor/core";
 import { frameFor } from "../lib/cardFrame";
 
 // The pool's shape, in the one dimension a Limited deck lives or dies on: what
@@ -20,12 +20,12 @@ const WUBRG = ["W", "U", "B", "R", "G"];
 
 // Stable bands rather than pick order: a stack that reshuffles its colours on
 // every pick reads as movement where nothing has moved.
-const byColor = (a: Card, b: Card) => {
-  const key = (c: Card) => c.colors.map((col) => WUBRG.indexOf(col)).join(",");
+const byColor = (a: DisplayCard, b: DisplayCard) => {
+  const key = (c: DisplayCard) => c.colors.map((col) => WUBRG.indexOf(col)).join(",");
   return key(a).localeCompare(key(b)) || a.name.localeCompare(b.name);
 };
 
-export function ManaCurve({ cards }: { cards: Card[] }) {
+export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
   const curve = manaCurve(cards);
   const tallest = Math.max(...curve.map((b) => b.cards.length));
   if (tallest === 0) return null;

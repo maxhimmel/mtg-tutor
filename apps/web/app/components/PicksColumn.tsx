@@ -4,20 +4,15 @@ import { useDroppable } from "@dnd-kit/core";
 import {
   type Bench,
   type Card,
+  type DisplayCard,
   type DeckPick,
-  cardTypes,
-  creatureTypes,
   deckPiles,
   tally,
 } from "@mtg-tutor/core";
 import { ColorTally } from "./ColorPips";
 import { CardPlacardList } from "./CardPlacard";
-import { ManaCurve } from "./ManaCurve";
+import { DeckShape } from "./DeckShape";
 import { Panel } from "./Panel";
-
-// Enough to see what the deck is becoming without turning the panel into a
-// wall of one-off tribes; the rest stay in the tooltip.
-const TOP_CREATURE_TYPES = 6;
 
 // The two piles, as places to put a card rather than as lists of one. A section
 // wearing a card is where it will land; the wash and the ring are the same gold
@@ -36,7 +31,7 @@ function BenchButton({
   benched,
   onClick,
 }: {
-  card: Card;
+  card: DisplayCard;
   benched: boolean;
   onClick: () => void;
 }) {
@@ -100,11 +95,8 @@ export function PicksColumn({
   const deck = maindeck.map((p) => p.card);
 
   const colors = tally(deck, (c) => c.colors);
-  const types = tally(deck, cardTypes);
-  const tribes = tally(deck, creatureTypes);
-  const asCounts = (counts: [string, number][]) => counts.map(([n, c]) => `${n} ${c}`).join(" · ");
 
-  const trailingFor = (list: DeckPick<Card>[], isBenched: boolean) => (card: Card, i: number) => (
+  const trailingFor = (list: DeckPick<Card>[], isBenched: boolean) => (card: DisplayCard, i: number) => (
     <BenchButton card={card} benched={isBenched} onClick={() => onBench(list[i].pos, !isBenched)} />
   );
 
@@ -119,27 +111,7 @@ export function PicksColumn({
         <ColorTally colors={colors} />
       }
     >
-      {/* Above the counts, because it answers a question they cannot: the tally
-          says what the pool is made of, the curve says when it can play it. */}
-      <ManaCurve cards={deck} />
-
-      {types.length > 0 && (
-        <div className="flex flex-col gap-1.5 border-b border-base-300 pb-2.5">
-          <div className="flex flex-wrap gap-1">
-            {types.map(([type, n]) => (
-              <span key={type} className="badge badge-ghost badge-sm font-normal">
-                {type} {n}
-              </span>
-            ))}
-          </div>
-          {tribes.length > 0 && (
-            <div className="truncate text-xs text-base-content/60" title={asCounts(tribes)}>
-              {asCounts(tribes.slice(0, TOP_CREATURE_TYPES))}
-              {tribes.length > TOP_CREATURE_TYPES && " …"}
-            </div>
-          )}
-        </div>
-      )}
+      <DeckShape cards={deck} />
 
       {/* Labelled like the sideboard below it, because since benching shipped
           the panel's title counts both and neither number could be read off the

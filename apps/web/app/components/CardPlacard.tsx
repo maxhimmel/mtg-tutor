@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Card } from "@mtg-tutor/core";
+import type { DisplayCard } from "@mtg-tutor/core";
 import { frameFor } from "../lib/cardFrame";
 import { useCardHover } from "./CardPreview";
 import { ManaCost } from "./ManaCost";
@@ -54,7 +54,7 @@ export function CardPlacard({
   label,
   className,
 }: {
-  card: Card;
+  card: DisplayCard;
   // What happens when the card itself is pressed, which is how the build screen
   // moves one between the deck and the sideboard. A placard is already the whole
   // target -- name, cost, colour -- so a separate move button beside it was a
@@ -162,7 +162,7 @@ export function CardPlacard({
   );
 }
 
-function PlacardRow({ card, trailing }: { card: Card; trailing?: ReactNode }) {
+function PlacardRow({ card, trailing }: { card: DisplayCard; trailing?: ReactNode }) {
   return (
     <li className="flex items-center gap-3">
       <CardPlacard card={card} className="min-w-0 flex-1" />
@@ -190,8 +190,8 @@ export function CardPlacardList({
   trailing,
   className,
 }: {
-  cards: Card[];
-  trailing?: (card: Card, index: number) => ReactNode;
+  cards: DisplayCard[];
+  trailing?: (card: DisplayCard, index: number) => ReactNode;
   className?: string;
 }) {
   return (

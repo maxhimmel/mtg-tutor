@@ -1,6 +1,6 @@
 "use client";
 
-import type { Card } from "@mtg-tutor/core";
+import type { DisplayCard } from "@mtg-tutor/core";
 import { CARD_STAT_GLOSSARY } from "@mtg-tutor/core";
 import { pct, points } from "../lib/format";
 
@@ -17,7 +17,7 @@ const byId = new Map(CARD_STAT_GLOSSARY.map((s) => [s.id, s]));
 
 // Which stats this card actually has, in glossary order. Returned as a list so
 // the caller can ask "is there anything to draw?" without rendering.
-function rowsFor(card: Card): { id: string; value: string }[] {
+function rowsFor(card: DisplayCard): { id: string; value: string }[] {
   const rows: { id: string; value: string }[] = [];
 
   if (card.gihWinRate != null) {
@@ -44,9 +44,9 @@ function rowsFor(card: Card): { id: string; value: string }[] {
   return rows;
 }
 
-export const hasStats = (card: Card): boolean => rowsFor(card).length > 0;
+export const hasStats = (card: DisplayCard): boolean => rowsFor(card).length > 0;
 
-export function CardStats({ card, expanded }: { card: Card; expanded?: boolean }) {
+export function CardStats({ card, expanded }: { card: DisplayCard; expanded?: boolean }) {
   const rows = rowsFor(card);
   if (rows.length === 0) return null;
 

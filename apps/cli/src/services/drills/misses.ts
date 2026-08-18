@@ -2,8 +2,17 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
-import { gradeMiss, scoreMissRun, type MissResult } from "@mtg-tutor/core";
+import {
+  byCurve,
+  deckColors,
+  gradeMiss,
+  manaCurve,
+  scoreMissRun,
+  tally,
+  type MissResult,
+} from "@mtg-tutor/core";
 import { pickCard } from "../../core/ui/cardPicker.js";
+import { curveLine, renderManaCost } from "../../core/ui/format.js";
 import { spinner } from "../../core/ui/spinner.js";
 
 // The misses drill, in a terminal.
@@ -73,7 +82,7 @@ async function play(run: Run): Promise<MissResult[] | null> {
   const results: MissResult[] = [];
 
   for (const [i, question] of run.questions.entries()) {
-    p.log.message(deckLine(question));
+    p.note(deckPanel(question), `Your deck then · ${ageInDays(question.draftedAt)}d ago`);
 
     const guess = await pickCard(
       question.pack,
@@ -98,15 +107,32 @@ async function play(run: Run): Promise<MissResult[] | null> {
  * A terminal has no second column, and this is not decoration to drop when the
  * room runs out: the answer is the card that best served this deck, so without
  * it the drill is asking which card is strongest -- a different question.
+ *
+ * The same three things the web draws in its sidebar, said the way a terminal
+ * says them: what it is committed to, when it can play, and what is in it. The
+ * curve goes through the build screen's own `curveLine` rather than a second
+ * one written here, and the cards are sorted `byCurve` because that is the
+ * order every deck list in this app is read in.
  */
-function deckLine(question: Question): string {
-  if (question.pool.length === 0) {
-    return pc.dim(`${question.setCode.toUpperCase()} · your first pick of that draft`);
+function deckPanel(question: Question): string {
+  const pool = question.pool;
+  if (pool.length === 0) {
+    return `${question.setCode.toUpperCase()} · your first pick of that draft — every colour still open`;
   }
-  return pc.dim(
-    `${question.setCode.toUpperCase()} · ${ageInDays(question.draftedAt)}d ago · your deck: ` +
-      question.pool.map((c) => c.name).join(", "),
-  );
+
+  const colors = tally([...pool], (c) => [...c.colors])
+    .map(([color, n]) => `${color}${n}`)
+    .join(" ");
+  const curve = manaCurve(pool).map((bucket) => bucket.cards.length);
+
+  return [
+    `${deckColors(pool) || "—"} · ${pool.length} cards · ${colors}`,
+    curveLine(curve),
+    "",
+    ...[...pool]
+      .sort(byCurve)
+      .map((c) => `  ${c.name} ${pc.dim(renderManaCost(c.manaCost))}`),
+  ].join("\n");
 }
 
 const head = (question: Question, result: MissResult) =>

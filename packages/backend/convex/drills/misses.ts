@@ -127,9 +127,27 @@ export const deal = query({
       picked.push({ candidate, row });
     }
 
-    // Text for the packs, one read per distinct set rather than per question --
-    // a run drawn from three drafts of one set asks for the same ~14 cards
-    // three times otherwise.
+    // Text for the packs AND the pools, one read per distinct set rather than
+    // per question.
+    //
+    // The pool names are the expensive-looking half and are nearly free, which
+    // is the whole reason the deck can be drawn properly. `cardTextFor` reads
+    // one row per DISTINCT name, and a pool is cards drafted out of the packs
+    // this run is already reading -- so the union barely moves.
+    //
+    // MEASURED, with `api.iobench.drillMissesCost`, on a real mh3 history:
+    // 7 questions, 63 pack cards and 114 POOL cards, and the pool added 14
+    // distinct names to the 52 the packs already asked for. The whole run is
+    // 72.6KB over 77 documents, against 262.7KB for opening one review. Ten
+    // questions spread over three sets read more than this; the shape holds
+    // either way, because the bound is the sets' card counts and not the
+    // number of questions.
+    //
+    // Without them the deck panel could only ever be a list of names: a
+    // placard needs a mana cost and a type line, and a curve needs a mana
+    // value, all of which live on the text half. See DisplayCard in core for
+    // why that is all it needs -- these cards are drawn, never dealt or
+    // scored.
     const byPool = new Map<string, { code: string; format: string; names: string[] }>();
     for (const { candidate, row } of picked) {
       const key = `${candidate.session.setCode}|${candidate.session.format}`;
@@ -138,7 +156,7 @@ export const deal = query({
         format: candidate.session.format,
         names: [],
       };
-      entry.names.push(...row.pack.map((c) => c.name));
+      entry.names.push(...row.pack.map((c) => c.name), ...row.poolBefore.map((c) => c.name));
       byPool.set(key, entry);
     }
     const text = new Map(
@@ -162,7 +180,10 @@ export const deal = query({
       // issue #3 arriving through a different door, and here the honest answer
       // is to leave the question out and say how many were left out, because
       // one unservable question out of ten is not worth a wall.
-      if (!row.pack.every((c) => index.has(normalizeName(c.name)))) {
+      if (
+        !row.pack.every((c) => index.has(normalizeName(c.name))) ||
+        !row.poolBefore.every((c) => index.has(normalizeName(c.name)))
+      ) {
         unavailable++;
         continue;
       }
@@ -176,6 +197,12 @@ export const deal = query({
         normalizeBench(session.sideboard ?? []),
         candidate.pickIndex,
       );
+      // Colours from the stored row, everything else from the text table. NOT
+      // `hydrateCard`, which takes an EngineCard: a pool row is name and
+      // colours, and the fields it is missing -- value, turn, role -- are for
+      // dealing and grading rather than drawing. Recovering them would mean
+      // reading the set's pool document to satisfy a type no renderer reads.
+      const pool = maindeck.map((c) => ({ ...index.get(normalizeName(c.name))!, ...c }));
 
       questions.push({
         sessionId: session._id,
@@ -186,7 +213,7 @@ export const deal = query({
         pickNo: row.pickNo,
         draftedAt: session.createdAt,
         pack: rec.pack,
-        pool: maindeck,
+        pool,
         // What they took, what it was graded against, and the strongest card in
         // the pack. Three names rather than a flag, because the reveal says
         // something different about each of them -- and because the drill's

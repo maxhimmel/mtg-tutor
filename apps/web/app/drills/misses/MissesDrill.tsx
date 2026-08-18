@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
-import type { Card, PoolCard } from "@mtg-tutor/core";
-import { deckColors, gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
+import type { Card, DisplayCard } from "@mtg-tutor/core";
+import { gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
+import { CardPlacardList } from "../../components/CardPlacard";
 import { CardFace, CardTile } from "../../components/CardTile";
-import { ColorPips, ColorTally } from "../../components/ColorPips";
+import { ColorTally } from "../../components/ColorPips";
+import { DeckShape } from "../../components/DeckShape";
 import { PageHeading } from "../../components/PageHeading";
 import { Panel } from "../../components/Panel";
 import { PickTrack, type Tick } from "../../components/PickTrack";
@@ -217,7 +219,7 @@ export function MissesDrill() {
           onBack={() => setStep(0)}
         />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <Panel
             title={guess ? "What you did, both times" : "Which card did this deck want?"}
             aside={
@@ -393,25 +395,27 @@ function Table({
 /**
  * The deck the question is about.
  *
- * Half the question rather than context: the answer is the card that best served
- * THIS deck, so a pack shown without it is asking which card is strongest -- a
- * different question with a different answer. It leads with the commitment
- * because the colours are what decide most close calls, and a reader given nine
- * names has to add them up themselves.
+ * Half the question rather than context: the answer is the card that best
+ * served THIS deck, so a pack shown without it is asking which card is
+ * strongest -- a different question with a different answer.
  *
- * Names and pips only. The pool carries no rules text -- reading it for 44 more
- * cards a question would cost more than the rest of the run put together -- and
- * a placard with no mana cost on it is a worse placard, not a cheaper one.
+ * It is the draft board's own picks column, minus the parts that would lie. The
+ * curve, the colour tally, the type and creature-type counts and the placards
+ * are the same components reading the same cards, because a player who has
+ * learned to read their pool mid-draft should not have to learn a second
+ * shorthand to read it here. What is deliberately absent is everything that
+ * offers to CHANGE the pile -- the drop zones, the bench buttons, the sideboard
+ * -- because this deck is a fact about a draft that is over.
+ *
+ * The sideboard is applied before it gets here, at that pick's own clock, so
+ * this is what the player was actually building rather than everything they had
+ * taken.
  */
-function Deck({ cards }: { cards: PoolCard[] }) {
-  const colors = deckColors(cards);
-  const counts = tally([...cards], (c) => [...c.colors]);
-
+function Deck({ cards }: { cards: DisplayCard[] }) {
   return (
     <Panel
       title="Your deck then"
-      aside={<span className="text-xs tabular-nums text-base-content/50">{cards.length}</span>}
-      bodyClassName="gap-3"
+      aside={<ColorTally colors={tally(cards, (c) => c.colors)} />}
     >
       {cards.length === 0 ? (
         <p className="text-sm text-base-content/60">
@@ -419,22 +423,11 @@ function Deck({ cards }: { cards: PoolCard[] }) {
         </p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-base-300 pb-2.5">
-            <ColorPips colors={colors} className="text-base" />
-            <ColorTally colors={counts} />
+          <DeckShape cards={cards} />
+          <div className="flex flex-col gap-1.5">
+            <div className="eyebrow">Maindeck ({cards.length})</div>
+            <CardPlacardList cards={cards} className="max-h-[45vh] overflow-y-auto pr-1" />
           </div>
-          <ul className="flex flex-col text-sm">
-            {cards.map((card, i) => (
-              // Two copies of one card is normal and both belong on the list.
-              <li
-                key={`${i}-${card.name}`}
-                className="flex items-center justify-between gap-3 py-0.5"
-              >
-                <span className="truncate text-base-content/80">{card.name}</span>
-                <ColorPips colors={card.colors.join("")} className="shrink-0 text-[11px]" />
-              </li>
-            ))}
-          </ul>
         </>
       )}
     </Panel>
@@ -593,7 +586,7 @@ function Finish({
   };
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <Panel title="Every pack you took again" bodyClassName="gap-0">
         {rows.length === 0 ? (
           <p className="text-base-content/60">

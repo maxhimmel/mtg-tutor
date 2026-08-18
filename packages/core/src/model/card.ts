@@ -296,6 +296,28 @@ export interface CardContext {
 export type Card = EngineCard & CardText;
 
 /**
+ * A card with enough on it to be DRAWN, as opposed to dealt or scored.
+ *
+ * Everything that puts a card on a screen -- the placard, the mana curve, the
+ * hover panel, the type and creature-type counts -- reads the text half plus
+ * the colours, and nothing else. `value`, `turn`, `role` and `slot` are for
+ * dealing a pack and grading a pick; no renderer has ever touched one.
+ *
+ * The distinction was free to ignore while every card on a screen had come out
+ * of a pack and so was whole. The misses drill broke that: a stored pick keeps
+ * the pool it was made against as name-and-colours, ~30 bytes a card, which is
+ * what lets a pick carry its own history -- and that pool is a deck somebody
+ * wants to see drawn. Requiring `Card` there would mean either reading a set
+ * document to recover fields no renderer reads, or inventing a `turn` and a
+ * `role`, which is the kind of confident wrong number this codebase has been
+ * bitten by three times.
+ *
+ * `Card` is assignable to this, so widening a component from one to the other
+ * breaks no caller and narrows what the component is allowed to depend on.
+ */
+export type DisplayCard = PoolCard & CardText;
+
+/**
  * A card between the Scryfall/17Lands merge and ingest settling what it derives.
  *
  * Three fields, all computed in the same pass and none of them available before

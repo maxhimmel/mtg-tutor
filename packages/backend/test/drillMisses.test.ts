@@ -211,6 +211,26 @@ describe("drills/misses.deal", () => {
     expect(run.unavailable).toBe(1);
   });
 
+  // The same hazard as a pack card whose set has moved, through the other half
+  // of the row. A pool card with no text row cannot be drawn either, and
+  // `hydrateCard`'s throw is just as fatal from the sidebar as from the pack.
+  it("leaves out a question whose DECK has lost a card, and says so", async () => {
+    const t = harness();
+    await withText(t, PACK.filter((n) => n !== "Alpha"));
+    await draft(
+      t,
+      "alice",
+      "2026-08-01",
+      [{ pickNo: 3, took: "Gamma", graded: "Delta", gap: 0.05 }],
+      PACK.map((name) => ({ name, colors: ["U" as const] })),
+    );
+
+    const run = await as(t, "alice").query(api.drills.misses.deal, {});
+
+    expect(run.questions).toHaveLength(0);
+    expect(run.unavailable).toBe(1);
+  });
+
   it("deals the pack whole, and the deck as it stood before the pick", async () => {
     const t = harness();
     await withText(t);
@@ -228,6 +248,16 @@ describe("drills/misses.deal", () => {
 
     const [question] = (await as(t, "alice").query(api.drills.misses.deal, {})).questions;
 
+    // Drawable, not just nameable: the deck panel is the draft board's own
+    // picks column, and a placard needs a mana cost and a curve needs a mana
+    // value. Both come off the text table, which the pool now reads too.
+    expect(question.pool[0]).toMatchObject({
+      name: "Beta",
+      colors: ["U"],
+      manaCost: "{1}{U}",
+      cmc: 2,
+      typeLine: "Creature — Test",
+    });
     expect(question.pack.map((c) => c.name)).toEqual([
       "Gamma",
       "Delta",
