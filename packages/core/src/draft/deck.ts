@@ -62,13 +62,12 @@ const COLOR_SETS = (() => {
   return { pairs, triples };
 })();
 
+// One predicate for lands and spells alike, since `colors` became the colours a
+// card REQUIRES. This used to be two: lands print colourless, so a `landFitsColors`
+// read `colorIdentity` instead to keep a Boros tapland out of a Dimir deck. That
+// correction now happens once, at ingest, for every reader rather than this one.
 const fitsColors = (c: Card, colors: string[]) =>
-  c.colors.length === 0 || c.colors.every((col) => colors.includes(col));
-
-// Lands print colorless, so their `colors` says nothing -- a Boros tapland is
-// only playable in a Boros deck by its color identity.
-const landFitsColors = (c: Card, colors: string[]) =>
-  c.colorIdentity.every((col) => colors.includes(col));
+  c.colors.every((col) => colors.includes(col));
 
 // Whether the table prices this exact width, rather than falling back to a mean.
 //
@@ -330,7 +329,7 @@ export function suggestDeck(pool: Card[], options: DeckOptions = {}): DeckSugges
     const landSlots = landCount(ranked.slice(0, DECK.spellCount));
     const spells = ranked.slice(0, deckSize - landSlots);
     const nonbasicLands = landPool
-      .filter((c) => landFitsColors(c, colors))
+      .filter((c) => fitsColors(c, colors))
       .sort((a, b) => cardValue(b) - cardValue(a))
       .slice(0, Math.min(DECK.maxNonbasicLands, landSlots));
 

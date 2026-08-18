@@ -3,7 +3,8 @@
 Numbering is stable and therefore gappy, for the same reason the ideas below
 are: `corpus.test.ts` cites issue #3. A fixed issue is deleted and its number
 left empty rather than renumbering everything under it. 1, 4, 6, 9 and 10
-shipped on 2026-08-15.
+shipped on 2026-08-15; 11 (mana pips off the cost, not the colour) and 12 (the
+hover preview surviving a click and a scroll) on 2026-08-17.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -20,26 +21,33 @@ shipped on 2026-08-15.
    this is picked up. `pnpm backtest-scoring` is the harness, with the caveat
    below about what it can and cannot judge.
 
-3. **A re-ingest can strand a draft, and the fingerprint that warns about it
-   cannot be trusted to guard one.** The failure itself is closed: a session is
-   `{seed, pickedNames}`, so a set whose pool or pack model changed deals
-   different packs and the replay throws — but nothing replays any more.
-   `draftPicks` stores the pack every pick saw, `review.load` and
-   `challenges.diff` rebuild from those rows, and `review.list` badges a stale
-   draft before you click it. Hit for real once, on 2026-07-27 with EOE.
+3. **A re-ingest can still strand a draft, through the half nobody guarded**
+   (rewritten 2026-08-18). Everything this item used to describe is gone.
+   `draftPools` gives every session its own packed cards, so the PACKS are
+   beyond a re-ingest's reach, and `draftSessions.sourceHash`, `staleAgainst`,
+   the stale badge and the "can no longer be rebuilt" error were all deleted
+   with the hazard they existed for.
 
-   **What is actually left is one sentence.** `draftSessions.sourceHash` is a
-   hint and not a guard, so `challenges.accept` replays instead of comparing —
-   because `ingest-sets --force` re-crawls Scryfall and writes a new pool under
-   the SAME hash, and a set ingested with no artifact to hand (the CLI's
-   on-demand path) gets no hash at all. Getting an accept wrong is silent: both
-   drafts work and the comparison is nonsense. Both blind spots are fixable —
-   perturb the hash on `--force`, write one on the on-demand path — and then the
-   hash could guard and the replay could go.
+   **The card TEXT was not.** `sets.ingest` replaces a set's `setCardText` rows
+   wholesale, so a card that leaves a pool loses its row while a draft in
+   progress goes on holding that card in boosters nothing can reach to update.
+   The board joins the two halves by name and `hydrateCard` throws on a name it
+   cannot find — deliberately, because a blank frame with no name is worse — and
+   it throws during RENDER, so the board went white with the reason in the
+   console and the back button as the only way out.
 
-   `staleAgainst` must keep answering three ways. `undefined` means "cannot
-   say", and `undefined === undefined` is true, so a naive comparison calls a
-   draft fresh exactly when it knows least about it.
+   Handled on 2026-08-18: the board asks before the answer can take the page
+   down, names the cards that left, and puts a delete on that screen. A FINISHED
+   draft lands there too and is offered its review first, because `review.load`
+   reads the rows each pick wrote and rebuilds nothing.
+
+   **Never reproduced live.** The mechanism is read off the code and verified
+   there; nobody has watched it happen. Worth knowing before trusting the copy
+   on that screen.
+
+   Not a hazard the eighteen-set re-ingest of 2026-08-17 hit: card counts held
+   for every set, all 29 distinct cards of a pre-re-ingest draft still resolved,
+   and every pool card in all 18 sets has a text row.
 
 4. This coaching feels so offbase to me:
 
@@ -66,33 +74,22 @@ I could understand the misread based purely off stats - sure. But this happened 
 
 Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
 
-11. I noticed when drafting modern horizons 3 that devoid-type cards technically don't have a mana color. Fine/whatever. But I don't like how the UI reflects that - the mana pips, curve bar-graph should work off of what colors of mana I need to SPEND -- overriding the mechanic of the card. That's what a human reading this would care about: how big is my mana base in the actual colors of mana-cost for this card?
+13. **The coach does not know a card was picked straight into the sideboard**
+    (trimmed 2026-08-18). This began as two complaints about one screen and only
+    one of them is left.
 
-12. When a card is hovered and the enlarged version is shown and then I click/select the card the hover disappears. That feels incorrect because I didn't STOP hovering over the card.
+    The colour half is fixed. The coach called Forum of Amity "committed as on
+    those colors" for a UR pool because a land's `colors` was `[]` and every
+    reader treats an empty array as "goes in any deck" — so a WB tapland was
+    on-colour for everything. `requiredColors` settles it at ingest now and a
+    land carries its colour identity.
 
-- It also disappears when i scroll even tho the card is still being hovered upon
-- be thorough w/this fix because we've already improved/fixed other bugs regarding similar mechanics and I don't want a spaghetti mess w/all these fixes.
-
-13. Love that the coach noticed the incongruency here (but there's an issue):
-
-```
-Last pick
-A+
-100/100
-Nothing scored higher
-Forum of Amity
-Your call on the gap
-read it right
-You took the card worth 2.7pp more than Burrog Barrage, against a ±1.0pp margin of error. You said it was clear, and it was.
-
-Coach
-Wait — Forum of Amity taps for White/Black, not Blue/Red, and it's committed as "on those colors" here, but the text clearly makes W/B mana. That's an off-color land for a UR deck; it doesn't fix anything you're actually casting. Grading the pick as printed: since it produces the wrong colors for your pool, it's a near-blank here despite the eye-popping stats (which reflect a totally different archetype's love of it).
-
-Their reasoning "staying open, not committed to anything" doesn't hold up either — you're 9 picks in with a Blue/Red pool already flagged as committed, so the open-drafting window per has closed, and taking an off-color land isn't "staying open," it's just not advancing your deck. Burrog Barrage is also off your colors (green), so neither pack option actually served this UR pool — but between them you'd rather take a card you might splash or that at least does something (removal-ish) than a land that produces neither of your colors.
-```
-
-- I had 6 cards in my main deck that were blue(U) and red(R). And only 2 cards that were white(W) in my sideboard.
-- THE ISSUE: is that the coach seems to not have known that I picked that card directly into my sideboard.
+    **What is left is the sideboard.** `coachContext` splits `poolBefore` into
+    maindeck and sideboard and the prompt shows both, so a card benched EARLIER
+    is handled. A card benched as it is picked is not: `poolBefore` is the pool
+    before this pick, so the card being graded is never in either half, and the
+    coach reads it as an ordinary pick. Taking something into the sideboard on
+    purpose and being lectured about your colours for it is the failure.
 
 # Ideas:
 
@@ -212,6 +209,35 @@ on 2026-08-15.
    The measurement trap to avoid: pick rate is what humans DO, win rate is what
    works, and the two disagree — that gap is the most interesting thing here and
    must not be presented as one number. Trap #1 is the same mistake one level up.
+
+   **Explored on 2026-08-17 and put down, with two things worth keeping.**
+
+   The wheel is largely already in the stats we store. Measured over 6,001
+   drafts each on fdn, woe and mh3 against the wheel counted directly (a card
+   first offered in a pack's opening five picks, seen again eight or more picks
+   later): `wheel% vs ALSA` r = 0.91-0.92, `vs ATA` r = 0.91-0.94. Bucketed into
+   a three-way sentence it agrees 83.5-91.0% of the time, and every disagreement
+   is a card ON a threshold moving between adjacent buckets — nothing is ever
+   told to come back when it will not.
+
+   But the coefficients do not transfer. fdn fits ALSA at -0.027 where woe and
+   mh3 fit +0.072 and +0.076, so a single global formula is worse than any
+   per-set one and the "free" version still needs three stored numbers per set.
+   And the misses are systematic: cards around ALSA 5.4-5.7 run ~20pp above the
+   line, which is where most playables live.
+
+   **The road not taken, and it should stay not taken.** Simulating the pod
+   forward to compute a live wheel probability was proposed and rejected on the
+   spot: it would hand a player a readout of what the other seats are doing, in
+   an app whose subject is learning to READ what the other seats are doing.
+   Cheap, accurate, and teaches the opposite of the thing.
+
+   What the exploration was really circling is a smaller idea that does not need
+   this one: the stats already on the hover panel are unreadable, and holding
+   Shift already swaps them for a definition that is identical for every card.
+   Making that explanation read the value is a deploy, not a pipeline. Left
+   undone deliberately — several passes at the wording went nowhere and it wants
+   a fresh start rather than more iteration.
 
 5. **Sealed mode.** Six packs, no passing, build the 40. `makePack` and
    `suggestDeck` already exist, so this is mostly a new screen — and it is a
@@ -352,11 +378,17 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
 
 # Still open from shipped work:
 
-1. **Stats is CLI-only.** `convex/stats.ts:overview` already returns overall
-   averages, score-by-pick-number, score-by-pack-number and top mistakes, and
-   the web app has no route for any of it — the largest remaining capability gap
-   between the two clients. Review shipped to the web on 2026-07-22
-   (`/review`, `/review/[id]`, `/review/[id]/breakdown`); this is what is left.
+1. **`stats.overview` disagrees with itself about a draft with no summary**
+   (2026-08-17, found while giving the web app `/stats`). `recent` maps a
+   missing summary to `overallScore: 0` while `avgScore` filters those sessions
+   out through `scored`, so a completed session carrying no summary would plot
+   as a zero column and drag the chart's axis floor down while the header
+   average ignored it. The window is already filtered to `status === "complete"`
+   and `draft.pick` writes the summary in its completion branch, so this needs a
+   completion that wrote none — narrow, real, and not worth widening the query
+   for ahead of the overhaul that screen is going to get. Left visible rather
+   than filtered, because filtering hides a disagreement between two fields of
+   one query.
 2. **Draft sessions created before auth have `userId: undefined` and are now
    unreachable.** The schema still allows the field to be absent so those rows
    validate; nothing can read them. Only dev data, but it is why the field is
@@ -444,12 +476,38 @@ rather than thrown away. Over fdn+dsk, 75,646 train / 36,145 held-out, against a
   preferences about what a card does and do not visibly count what they hold.
 
 What did turn up, unasked for: a four-drop is taken **less** than its win rate
-says (−0.34, +0.4pp held-out, carrying nearly the whole curve-bank gain on its
-own), and `removal` is the largest role main effect. Both are free — `turn` and
-`role` are already on `EngineCard`. Neither is shipped: both were chosen by
-looking at the held-out set and confirmed nowhere else, and a new feature means a
-new pod name, which is a thing a person has to choose between. The reasoning is
-in `policy.ts` beside the features it is about.
+says (−0.34), and `removal` is the largest role main effect. Both were chosen by
+looking at the held-out set and confirmed nowhere else, which is the caveat that
+was written down at the time and turned out to be the whole story.
+
+**Both were confirmed on sets nobody had looked at, on 2026-08-17. One died.**
+Refitted with the corrected colours and ablated one at a time:
+
+    ablation, held-out top-1   fdn+dsk   woe+blb   four sets   ALL EIGHTEEN
+      turnFour                 +0.40pp   −0.10pp    +0.10pp     not fitted
+      removal                   0.00pp   +0.60pp    +0.20pp       +0.10pp
+
+`turnFour` CHANGES SIGN out of sample — everything on the two sets it was found
+on, less than nothing on two it was not — so its pooled positive is the
+discovery sets showing through a mean. Dropped, and it was the one that looked
+stronger. **A feature discovered on a held-out set has been SELECTED on that
+set, so its held-out number is a training number wearing the wrong label.**
+
+`removal` never changes sign (+0.26, +0.52, +0.36 across three fits) and shrank
+with breadth to +0.10pp pooled over all eighteen. Shipped anyway, on the
+sharper question of whether it makes the pods act more HUMAN rather than more
+accurate: it is closer to the human P1P1 bomb rate on all three sets checked,
+better or equal on top-1 on all three. `table2` and `sharks2`; the menu still
+reads "A real table" and "Sharks", because a pod id is a storage key and the
+label is the product.
+
+**The colour fix is priced in the same run**, on the identical fdn+dsk split
+this probe used — same 75,646 train / 36,145 held-out, same seven features, only
+the colours corrected: 52.52% → 52.8% held-out top-1. That reaches every new
+draft through the data rather than through the weights.
+
+All eighteen 17Lands draft datasets are cached in `datasets/` (308MB,
+gitignored), so the next experiment of this kind costs seconds.
 
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
@@ -723,6 +781,39 @@ to the data work.
     a bank, compare it against a plain run.
 
 # Deferred trade-offs (revisit when the premise changes):
+
+0a. **`apps/web` has no DOM test harness, and the hover preview is the reason
+to know it.** No jsdom, no happy-dom, no testing-library anywhere in the
+monorepo, so nothing in the web app can be tested at the component level --
+only pure functions it exports and the seams (`analytics.ts`,
+`previewPlacement.ts`) that were extracted for the purpose.
+
+**Why that is worth writing down rather than shrugging at.** The card hover
+preview has now been fixed FIVE times -- `4775c63`, `56da759`, `f9c0f8b`,
+`61ff7a9`, and the click/scroll fix on 2026-08-17 -- and not one of those
+changes could go red in CI. Every one of them is a rule about what happens
+on an event: the pointer leaves, the anchor unmounts, a drag starts, the
+route changes, a stage opens. Those are exactly the rules a DOM harness
+tests and a pure function cannot.
+
+The dismiss-on-click bug is the demonstration. `CardTile` called
+`hidePreview()` on click, which was right when a click WAS the pick, and
+two later commits changed what a click means without touching it. A test
+asserting "the preview survives a click" would have failed the moment
+`9cdbcde` landed. Nothing failed, and it shipped, and it took a person
+noticing the preview vanish under their own cursor.
+
+**The current answer is still no**, and deliberately: two dev dependencies
+and a vitest environment config against a repo that has kept its moving
+parts few on purpose, and the extraction trick has worked twice now
+(`previewPlacement.ts` pins the placement rule, `plot.ts` pins the stats
+axis). What it does not cover is event wiring, which is where all five of
+those bugs lived.
+
+**The premise changes** when a sixth regression lands in the same file, or
+when a rule cannot be extracted into a pure function without contorting the
+component around the test. Either is the signal to stop paying for this in
+people noticing.
 
 0. **What the client may compute, now that scoring says "nothing".** Three bugs
    in a week came from one shape: `EngineCard` is deliberately thin because

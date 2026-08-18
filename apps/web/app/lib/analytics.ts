@@ -491,6 +491,77 @@ export function forkOpened(p: {
 }
 
 /**
+ * Somebody went back into a draft they had walked away from.
+ *
+ * The one measurement the resume list exists to earn. Nothing was BUILT to make
+ * resuming work -- the board has always rebuilt itself from a session id, and
+ * `/draft/<id>` always put you back where you stopped. What was built is the
+ * list that says an unfinished draft is there at all, and the only evidence it
+ * was worth building is somebody clicking one.
+ *
+ * `picks` and `agedHours` together say which product this is. Coming back at
+ * pick 3 an hour later is an interrupted sitting, and the list is a
+ * convenience; coming back at pick 30 a week later is somebody who wanted to
+ * finish and had no way to reach it, and if that is the common case then how a
+ * draft is left and returned to is worth much more work than a list.
+ *
+ * NO PAIRED IMPRESSION EVENT, deliberately. Whether a person has an unfinished
+ * draft at all is `draft_started` minus `draft_completed` minus `draft_deleted`
+ * for that person, and this file's own rule is that an event you can subtract is
+ * an event you should not send -- doubly so on the screen the app opens on,
+ * where it would fire on every visit forever.
+ */
+export function draftResumed(p: {
+  sessionId: string;
+  setCode: string;
+  format: string;
+  picks: number;
+  /** How long the draft sat before they came back to it. */
+  agedHours: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("draft_resumed", p);
+}
+
+/**
+ * A draft that can no longer be played, found by opening it.
+ *
+ * THE ONE WAY A DRAFT CAN STILL STRAND, and it is not the one the schema used
+ * to track. Storing each draft's own boosters (schema.ts, draftPools) put the
+ * packs out of a re-ingest's reach, and `draftSessions.sourceHash` was narrowed
+ * away because of it. The card TEXT was not: `sets.ingest` replaces a set's
+ * text rows wholesale, so a card that leaves the pool loses its row, and a
+ * draft in progress is holding that card in boosters nothing can reach to
+ * update. The board joins the two halves by name and `hydrate` throws on a name
+ * it cannot find -- which before this was a blank screen with a console error
+ * behind it.
+ *
+ * The browser is the only side that can see it. The server sends the engine's
+ * half of a card and never looks the text up; the client reads the set's text
+ * once for the session and does the join. So the failure happens here, and here
+ * is the only place that knows it happened.
+ *
+ * `missing` against `dealt` is what decides what to do about it. One card gone
+ * is a draft that could have been repaired; forty is a set that moved under
+ * everybody, and the answer to that is to stop re-ingesting sets people are
+ * mid-draft on. Zero of these ever firing is the honest answer that the pool
+ * being stored closed the hazard for good, which is worth knowing too.
+ */
+export function draftStranded(p: {
+  sessionId: string;
+  setCode: string;
+  format: string;
+  picks: number;
+  /** Distinct names in the pack and pool that the set no longer has text for. */
+  missing: number;
+  /** How many the draft was holding, so `missing` has a denominator. */
+  dealt: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("draft_stranded", p);
+}
+
+/**
  * How much of a review list a person is actually offered.
  *
  * IT USED TO CARRY `stale` AND `unknown`, AND THEY ARE GONE ON PURPOSE. This
@@ -508,6 +579,42 @@ export function forkOpened(p: {
 export function reviewListSeen(p: { shown: number }): void {
   if (!on()) return;
   posthog.capture("review_list_seen", p);
+}
+
+/**
+ * The stats screen was opened, and whether it had anything on it.
+ *
+ * ONE EVENT COVERING BOTH THE FULL PAGE AND THE EMPTY ONE, because `drafts: 0`
+ * IS the empty state. A `stats_empty` beside it would be exactly this event
+ * filtered, and an event you can derive from another is an event that should not
+ * be sent -- the same call `feedback_opened` makes about the abandonment it does
+ * not name.
+ *
+ * The page is a screen nothing else in the app leads to except one nav link, so
+ * the first thing it has to answer is whether anybody goes there at all. The
+ * counts answer the second: a stats page opened by somebody with nothing to
+ * average is a dead end wearing a heading, and if that is most of the views then
+ * the link is in the wrong place rather than the page being unloved.
+ *
+ * `detailed` is the quieter of the two empty states and the one nothing else
+ * would report. It is the drafts that finished with a digest -- everything below
+ * the header is built on those -- so `drafts` high and `detailed` zero is a page
+ * with a score at the top and nothing underneath it, which reads as broken
+ * rather than as unfilled.
+ *
+ * Once per visit, not once per render: `stats.overview` is a live subscription
+ * and re-answers whenever any draft in the window is written to.
+ */
+export function statsViewed(p: {
+  drafts: number;
+  picks: number;
+  detailed: number;
+  mistakes: number;
+  /** The window clipped their history, so the averages are of a subset. */
+  truncated: boolean;
+}): void {
+  if (!on()) return;
+  posthog.capture("stats_viewed", p);
 }
 
 /**

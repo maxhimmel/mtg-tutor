@@ -3,7 +3,7 @@
 // responses, regardless of how they got them.
 
 import type { Card, CardToken, ColorCode, IngestCard, Rarity } from "../model/card.js";
-import { normalizeName } from "../model/card.js";
+import { isLand, normalizeName } from "../model/card.js";
 import type { ColorRating, ScryfallCard, SeventeenLandsCard } from "./sources.js";
 
 const RARITIES: Rarity[] = ["common", "uncommon", "rare", "mythic", "special", "bonus"];
@@ -87,6 +87,106 @@ function oracleOf(sc: ScryfallCard): string {
   return "";
 }
 
+// The colours of the face a drafter casts.
+//
+// Top level for a normal card, and the FRONT face for a two-faced one, where
+// Scryfall omits `colors` on the card entirely -- `transform` and `modal_dfc`
+// state it per face because the faces can differ. Left unhandled this returned
+// [] for every double-faced card in the pool, which is 116 cards across the
+// eighteen ingested sets and, on mh3, every planeswalker in the set.
+//
+// The FRONT face rather than a union of both, for the same reason `manaCost`
+// one line below already takes the front: that is the half you have to pay for,
+// so it is the half that decides whether you can play the card. What the back
+// adds is in `colorIdentity`, which Scryfall DOES state at the top level for
+// these -- so the union is not lost, it is on the field that means union.
+function colorsOf(sc: ScryfallCard): string[] | undefined {
+  return sc.colors ?? sc.card_faces?.[0]?.colors;
+}
+
+// The type line, which `reversible_card` does not state at the top level -- it
+// puts the same one on both faces. ecl prints five shocklands that way, and they
+// are `booster: true`, so they reach `mergeCards` even though the pack manifest
+// drops them again afterwards. Before this they were stored with `typeLine`
+// undefined against a field typed `string`, which nothing had tripped over only
+// because nothing had yet asked one of them whether it was a land.
+function typeLineOf(sc: ScryfallCard): string {
+  if (sc.type_line) return sc.type_line;
+  const faces = (sc.card_faces ?? []).map((f) => f.type_line).filter(Boolean);
+  return faces.length > 0 ? faces.join(" // ") : "";
+}
+
+// Every coloured pip in a mana cost, hybrid and phyrexian included -- both are
+// castable off their colour, so both require you to have it.
+function pipColors(manaCost: string | undefined): string[] {
+  const found = new Set<string>();
+  for (const symbol of manaCost?.match(/\{[^}]+\}/g) ?? []) {
+    for (const c of "WUBRG") if (symbol.includes(c)) found.add(c);
+  }
+  return [...found];
+}
+
+/**
+ * THE COLOURS YOU HAVE TO BE IN TO PLAY THIS CARD.
+ *
+ * Which is not Scryfall's `colors`, and the difference is not pedantry -- it is
+ * `colors.length === 0` being a special case in six readers, every one of which
+ * is asking this question and getting Scryfall's answer to a different one.
+ * `scripts/diagnose-colors.mjs` counts the damage: 4.08 cards per pack on mh3.
+ *
+ * Three rules, and the first two are corrections rather than choices:
+ *
+ *   A LAND is its colour identity. A land has no mana cost, so Scryfall says []
+ *   and always will -- while a Boros tapland is playable in exactly one kind of
+ *   deck. `deck.ts` has known this for as long as it has had a `landFitsColors`
+ *   and it was the only reader that did.
+ *
+ *   ANYTHING ELSE is its PIPS -- every coloured symbol in the whole mana cost.
+ *   For an ordinary card that is Scryfall's answer restated. For the two kinds
+ *   it is not, the pips are the ones a drafter would give:
+ *
+ *     devoid      `{1}{U}` with `colors` [] is precisely what devoid MEANS, and
+ *                 Scryfall is right. The drafter still cannot cast it without
+ *                 blue. This is the one place the app deliberately disagrees
+ *                 with the rules of Magic, because the question on a draft
+ *                 screen is never what colour a card IS.
+ *     adventure   `{1}{B} // {R}` is reported as ["B"], the creature half only.
+ *                 Reading the whole cost calls it black-red, which is what a
+ *                 drafter calls it.
+ *
+ *   Scryfall's stated answer survives as the FALLBACK, for the cards that have
+ *   no mana cost to read: Living End is black by colour indicator alone.
+ *
+ * A genuinely colourless card -- an artifact, a fetchland, Kozilek -- comes back
+ * empty from all three, which is what keeps the empty array meaning something.
+ * It now means only "playable in any deck", which is what every one of those six
+ * readers already assumed it meant.
+ */
+function requiredColors(sc: ScryfallCard): string[] {
+  // `isLand` rather than a regex of our own: it already reads the front face of
+  // a "Creature — Human // Land", and two answers to "is this a land" in one
+  // codebase is one more than the question supports.
+  if (isLand({ typeLine: typeLineOf(sc) })) return sc.color_identity ?? [];
+
+  // THE PIPS DECIDE, and Scryfall's own answer is the fallback rather than the
+  // rule. Devoid is why the pips have to win somewhere; adventures are why they
+  // have to win everywhere. Callous Sell-Sword costs `{1}{B} // {R}` and
+  // Scryfall reports `colors: ["B"]` -- the creature half alone -- so preferring
+  // the stated answer filed 28 two-colour cards as mono-coloured, 21 of them in
+  // woe, which is the adventure set and deals 0.53 of them a pack.
+  //
+  // Reading the whole cost calls it black-red, which is what a drafter calls it.
+  // The narrow reading is defensible on the rules -- you can play it in mono-
+  // black and simply never cast the adventure -- and it is not what anybody
+  // means when they say what colour a card is. Half a card you cannot cast is a
+  // cost, and a lane that cannot see the cost cannot weigh it.
+  //
+  // The fallback still matters for the cards with no mana cost at all: Living
+  // End is black by colour indicator and has nothing to read pips from.
+  const pips = pipColors(sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost);
+  return pips.length > 0 ? pips : (colorsOf(sc) ?? []);
+}
+
 // P/T and loyalty come from the top level, falling back to the front face.
 function combatOf(sc: ScryfallCard) {
   const front = sc.card_faces?.[0];
@@ -123,11 +223,11 @@ export function mergeCards(
     return {
       name: sc.name,
       rarity: toRarity(sc.rarity),
-      colors: asColorCodes(sc.colors),
+      colors: asColorCodes(requiredColors(sc)),
       colorIdentity: asColorCodes(sc.color_identity),
       manaCost: sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost ?? "",
       cmc: sc.cmc ?? 0,
-      typeLine: sc.type_line,
+      typeLine: typeLineOf(sc),
       oracleText: oracleOf(sc),
       power: combat.power,
       toughness: combat.toughness,

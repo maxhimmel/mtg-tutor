@@ -25,6 +25,21 @@ export type PackSlot = "common" | "uncommon" | "rare" | "mythic" | "bonus" | "la
  */
 export interface EngineCard {
   name: string;
+  /**
+   * The colours you have to be in to play this card -- NOT the colours the card
+   * is. Settled at ingest by `requiredColors`, which carries the three rules.
+   *
+   * The distinction matters because `colors.length === 0` is a special case in
+   * six readers and all six mean "playable in any deck": `laneFit` and
+   * `openness` return 0 for it, `fitsColors` admits it everywhere, `contextValue`
+   * counts it as in-colours, `deckColors` never names it, and `onColor` is
+   * unconditionally true. Under Scryfall's meaning a Boros tapland and a devoid
+   * spell both landed in that case and neither belongs there.
+   *
+   * So a land carries its colour identity and a devoid card carries its pips.
+   * What is left in the empty array is what actually goes in any deck -- an
+   * artifact, a fetchland, a true Eldrazi.
+   */
   colors: ColorCode[];
   // Which pool this card is dealt from, decided at ingest rather than derived
   // from the type line on every replay. It is also the last thing that needed

@@ -90,6 +90,59 @@ import type { BotMemory } from "./bots.js";
 // was chosen by looking at the held-out set and has not been confirmed anywhere
 // else -- and because a new feature means a new pod name, which is a thing a
 // person has to pick between, for four tenths of a point.
+// TWO CANDIDATES WERE CONFIRMED ON SETS NOBODY HAD LOOKED AT. ONE SURVIVED.
+//
+// `--shape` over fdn+dsk turned up two effects unasked for -- a four-drop taken
+// LESS than its win rate says (-0.34, carrying nearly the whole curve-bank gain)
+// and `removal` as the largest role main effect (+0.319). Neither shipped at the
+// time, for a stated reason: both had been chosen by looking at the held-out set
+// and confirmed nowhere else.
+//
+// Confirming them elsewhere killed one and promoted the other. Refitted with the
+// corrected colours (revisions 13 and 14) and ablated one at a time, held-out
+// top-1:
+//
+//                     fdn+dsk    woe+blb    four sets    ALL EIGHTEEN
+//   turnFour           +0.40pp    -0.10pp     +0.10pp      not fitted
+//   removal             0.00pp    +0.60pp     +0.20pp        +0.10pp
+//
+// Mirror images, and the mirror is the finding. `turnFour` carries everything on
+// the two sets it was found on and less than nothing on two it was not; its
+// pooled positive is those sets showing through a mean, which is the shape of an
+// overfit rather than of a small effect. `removal` is worth nothing beside
+// `turnFour` on fdn+dsk and six tenths of a point where nobody had looked.
+//
+// THE GENERAL FORM, which is why this sits here rather than in a commit: a
+// feature discovered on a held-out set has been SELECTED on that set, so its
+// held-out number is a training number wearing the wrong label. The only test it
+// has not already passed is a set nobody looked at. Trap #8 is the same
+// confusion about a different quantity.
+//
+// AND THEN THE POOLED FIT SHRANK IT. Over all eighteen sets -- 571,996 train /
+// 284,334 held-out, the way `table` itself is fitted -- `removal` is worth
+// +0.10pp, against +0.60pp on the two sets it was confirmed on. Its coefficient
+// is stable everywhere (+0.26, +0.52, +0.36) and the log-likelihood improves
+// consistently (1.3456 -> 1.3416), so this is a REAL effect and a small one,
+// which is a different verdict from `turnFour` above: that one changed sign.
+//
+// It is not here because +0.10pp does not clear the bar this file has set. The
+// features that were measured out -- `openness`, `colorless`, `signal` -- went
+// at -0.02, -0.04 and -0.04pp, and the ones that stayed are worth +0.45pp to
+// +1.47pp. A tenth of a point buys a pod name frozen forever, seven
+// registration points across four packages, and a second weight vector every
+// future reader has to understand. That is a lot of permanent structure for an
+// effect you could not see in a draft.
+//
+// THE SHAPE TO NOTICE, because it is the one that fooled `turnFour`: an effect
+// measured on two sets and then on eighteen went 0.60 -> 0.20 -> 0.10. Breadth
+// shrinks an estimate that was concentrated. Neither number is wrong; the wide
+// one is the one that answers "what will this be worth on the next set", which
+// is the only question a shipped policy is asked.
+//
+// The colour fix is priced in the same run, on the identical fdn+dsk split the
+// probe used: 52.52% -> 52.8% held-out on the same seven features, which is what
+// four hundred and ninety-nine cards getting their colours back is worth to
+// predicting a human.
 export const POLICY_FEATURES = [
   // Raw power, centred on the format's rough midpoint so the coefficient is
   // "how much a point of win rate is worth" rather than an offset.
@@ -169,6 +222,12 @@ export const POLICY_FEATURES = [
   // one interaction term can carry it.
   "laneFitLate",
   "opennessLate",
+  // What a card DOES, and the only one of the four roles that earned a column.
+  // Drafters have standing preferences about the job a card does and do not
+  // visibly count what they are holding -- every `deckNeeds` interaction fitted
+  // to zero while this main effect did not. See the block above this list for
+  // what it is worth and what it cost to be sure of that.
+  "removal",
 ] as const;
 
 export type PolicyWeights = readonly number[];
@@ -254,9 +313,30 @@ export type PolicyWeights = readonly number[];
  * DESCRIBES signal-reading did not make it a better predictor of what drafters
  * DO. The script's header carries the rest.
  */
-export const FITTED_POLICIES: Record<"table" | "sharks", PolicyWeights> = {
+export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", PolicyWeights> = {
   table: [3.7889, 43.0546, 1.8065, -0.3002, 1.5222, 7.9243, -16.2986],
   sharks: [3.7963, 47.934, 1.8479, -0.3142, 1.4838, 7.8993, -16.4302],
+
+  // THE SEVEN-LONG VECTORS ABOVE ARE NOT STALE, THEY ARE FROZEN. `policyScore`
+  // iterates the WEIGHTS, not the feature row, so each of them ignores the
+  // eighth column entirely and deals exactly what it always dealt. That is what
+  // makes adding a feature additive rather than destructive, and it is why these
+  // two are still here rather than being edited in place.
+  //
+  // Refitted over all eighteen sets with the colours corrected (POOL_REVISION 13
+  // and 14) and with `removal` added:
+  //
+  //   table2    all drafters      571,996 train / 284,334 held-out
+  //             49.3% held out, against 49.2% without `removal`
+  //   sharks2   3-0 drafters      109,420 train /  55,475 held-out
+  //             50.8% held out
+  //
+  // `removal` fits to +0.3557 for the field and +0.3564 for the sharks, which is
+  // the same number twice: whatever separates a strong drafter from the field,
+  // it is not how much they want removal. `valueOpen` remains the only
+  // coefficient that really moves between the tiers (43.6 against 48.0).
+  table2: [3.3236, 43.6123, 1.9992, -0.3877, 1.6652, 7.0121, -13.6627, 0.3557],
+  sharks2: [3.3956, 48.0251, 2.0645, -0.1621, 1.3524, 6.9176, -13.9007, 0.3564],
 };
 
 /** How far into the draft this pick is, in [0, 1]. */
@@ -304,6 +384,7 @@ export function policyFeatures(
   out[4] = rare * packOpenness(packSize);
   out[5] = laneFit * progress;
   out[6] = memory.openness(card) * progress;
+  out[7] = card.role === "removal" ? 1 : 0;
   return out;
 }
 

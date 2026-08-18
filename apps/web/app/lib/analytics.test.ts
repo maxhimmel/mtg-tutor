@@ -4,12 +4,15 @@ import posthog from "posthog-js";
 import {
   authRecovered,
   authStalled,
+  draftResumed,
+  draftStranded,
   feedbackOpened,
   feedbackRefused,
   identify,
   pickMade,
   settingChanged,
   signedOut,
+  statsViewed,
   tokensPreviewed,
 } from "./analytics";
 
@@ -60,6 +63,16 @@ describe("without a project token", () => {
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
       tokensPreviewed({ named: 1, withArt: 1, drawn: 1, viewport: 1440 });
+      statsViewed({ drafts: 0, picks: 0, detailed: 0, mistakes: 0, truncated: false });
+      draftResumed({ sessionId: "s1", setCode: "fdn", format: "TradDraft", picks: 3, agedHours: 2 });
+      draftStranded({
+        sessionId: "s1",
+        setCode: "fdn",
+        format: "TradDraft",
+        picks: 3,
+        missing: 1,
+        dealt: 45,
+      });
     }).not.toThrow();
 
     expect(capture).not.toHaveBeenCalled();
@@ -133,6 +146,43 @@ describe("with a project token", () => {
       route: "/draft/[sessionId]",
       stalledMs: 2400,
     });
+  });
+
+  // The empty view is the half of this measurement worth having -- whether the
+  // screen is opened by people with nothing on it -- so the guard has to be
+  // "was it viewed", never "was there anything to view".
+  it("reports a stats view with nothing in it", () => {
+    const empty = { drafts: 0, picks: 0, detailed: 0, mistakes: 0, truncated: false };
+    statsViewed(empty);
+    expect(capture).toHaveBeenCalledWith("stats_viewed", empty);
+  });
+
+  // The two halves of what happens to an unfinished draft: it is played on, or
+  // it turns out it cannot be. Named here for the reason every other event in
+  // this file is -- `draft_resumed` against `draft_started` is the only evidence
+  // the resume list was worth building, and a rename leaves the old data behind
+  // as an event nothing can be repaired to include.
+  it("names the two events an unfinished draft can produce", () => {
+    const resumed = {
+      sessionId: "s1",
+      setCode: "fdn",
+      format: "TradDraft",
+      picks: 17,
+      agedHours: 40,
+    };
+    draftResumed(resumed);
+    expect(capture).toHaveBeenCalledWith("draft_resumed", resumed);
+
+    const stranded = {
+      sessionId: "s1",
+      setCode: "fdn",
+      format: "TradDraft",
+      picks: 17,
+      missing: 3,
+      dealt: 45,
+    };
+    draftStranded(stranded);
+    expect(capture).toHaveBeenCalledWith("draft_stranded", stranded);
   });
 
   it("resets on sign-out, so the next person is not the last one", () => {

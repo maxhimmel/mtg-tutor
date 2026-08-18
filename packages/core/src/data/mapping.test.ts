@@ -67,6 +67,159 @@ describe("mergeCards", () => {
     expect(card.imageUrl).toBe(IMAGE);
     expect(card.backImageUrl).toBe(BACK);
   });
+
+  // Ajani, Nacatl Pariah: Scryfall omits `colors` on the card and states it per
+  // face, so reading only the top level made every double-faced card colourless.
+  // The two faces differ here on purpose -- a fixture whose faces matched would
+  // pass against the union just as happily as against the front.
+  it("takes a two-faced card's colours from the front face", () => {
+    const card = merge(
+      scryfall({
+        name: "Ajani, Nacatl Pariah // Ajani, Nacatl Avenger",
+        layout: "transform",
+        type_line: "Legendary Creature — Cat Warrior // Legendary Planeswalker — Ajani",
+        color_identity: ["R", "W"],
+        card_faces: [
+          { name: "Ajani, Nacatl Pariah", mana_cost: "{1}{W}", colors: ["W"] },
+          { name: "Ajani, Nacatl Avenger", colors: ["R", "W"] },
+        ],
+      }),
+    );
+    expect(card.colors).toEqual(["W"]);
+    expect(card.colorIdentity).toEqual(["R", "W"]);
+  });
+
+  it("keeps a single-faced card's own colours", () => {
+    const card = merge(
+      scryfall({ name: "Lightning Bolt", colors: ["R"], color_identity: ["R"] }),
+    );
+    expect(card.colors).toEqual(["R"]);
+  });
+
+  // Scryfall is RIGHT that this card is colourless -- that is what devoid means
+  // -- and the drafter still needs blue mana to cast it, which is the question
+  // `colors` answers here.
+  it("gives a devoid card the colours of its pips", () => {
+    const card = merge(
+      scryfall({
+        name: "Emrakul's Messenger",
+        mana_cost: "{1}{U}",
+        colors: [],
+        color_identity: ["U"],
+      }),
+    );
+    expect(card.colors).toEqual(["U"]);
+  });
+
+  it("gives a land the colours of its identity", () => {
+    const card = merge(
+      scryfall({
+        name: "Forum of Amity",
+        type_line: "Land",
+        colors: [],
+        color_identity: ["W", "B"],
+      }),
+    );
+    expect(card.colors).toEqual(["W", "B"]);
+  });
+
+  // A fetchland taps for nothing and goes in any deck. The empty array has to
+  // keep meaning that, or the three rules above have just moved the problem.
+  it("leaves a colourless land colourless", () => {
+    const card = merge(
+      scryfall({ name: "Bloodstained Mire", type_line: "Land", colors: [], color_identity: [] }),
+    );
+    expect(card.colors).toEqual([]);
+  });
+
+  it("leaves a genuinely colourless spell colourless", () => {
+    const card = merge(
+      scryfall({
+        name: "Kozilek's Unsealing",
+        mana_cost: "{4}",
+        colors: [],
+        color_identity: [],
+      }),
+    );
+    expect(card.colors).toEqual([]);
+  });
+
+  // Callous Sell-Sword: Scryfall reports ["B"] for a card that costs
+  // {1}{B} // {R}, because it answers for the creature half alone. woe deals
+  // 0.53 of these a pack and a drafter calls this a black-red card.
+  it("gives an adventure card both halves' colours", () => {
+    const card = merge(
+      scryfall({
+        name: "Callous Sell-Sword // Burn Together",
+        layout: "adventure",
+        type_line: "Creature — Human Mercenary // Sorcery — Adventure",
+        mana_cost: "{1}{B} // {R}",
+        colors: ["B"],
+        color_identity: ["B", "R"],
+        card_faces: [
+          { name: "Callous Sell-Sword", mana_cost: "{1}{B}" },
+          { name: "Burn Together", mana_cost: "{R}" },
+        ],
+      }),
+    );
+    expect(card.colors).toEqual(["B", "R"]);
+  });
+
+  // The fallback the pips rule still needs. Living End has no mana cost at all
+  // -- it is black by colour indicator -- so there are no pips to read and
+  // Scryfall's answer is the only one there is.
+  it("falls back to the stated colours when there is no mana cost", () => {
+    const card = merge(
+      scryfall({
+        name: "Living End",
+        mana_cost: "",
+        colors: ["B"],
+        color_identity: ["B"],
+        type_line: "Sorcery",
+      }),
+    );
+    expect(card.colors).toEqual(["B"]);
+  });
+
+  // Hallowed Fountain in ecl: `reversible_card` states the type line on both
+  // faces and not on the card, and these are booster:true so they reach the
+  // merge. This threw on a live ingest -- `isLand` split an undefined type line
+  // -- after five sets had already been rewritten.
+  it("takes a reversible card's type line off its faces", () => {
+    const card = merge(
+      scryfall({
+        name: "Hallowed Fountain // Hallowed Fountain",
+        layout: "reversible_card",
+        type_line: undefined,
+        color_identity: ["W", "U"],
+        card_faces: [
+          { name: "Hallowed Fountain", type_line: "Land — Plains Island" },
+          { name: "Hallowed Fountain", type_line: "Land — Plains Island" },
+        ],
+      }),
+    );
+    expect(card.typeLine).toBe("Land — Plains Island // Land — Plains Island");
+    expect(card.colors).toEqual(["W", "U"]);
+  });
+
+  // An MDFC with a land on the back is cast as a spell, so it takes its pips and
+  // not the identity -- `isLand` reads the front face, which is what makes the
+  // difference visible.
+  it("treats a spell with a land on its back as a spell", () => {
+    const card = merge(
+      scryfall({
+        name: "Agadeem's Awakening // Agadeem, the Undercrypt",
+        layout: "modal_dfc",
+        type_line: "Sorcery // Land",
+        color_identity: ["B"],
+        card_faces: [
+          { name: "Agadeem's Awakening", mana_cost: "{X}{B}{B}{B}", colors: ["B"] },
+          { name: "Agadeem, the Undercrypt", type_line: "Land" },
+        ],
+      }),
+    );
+    expect(card.colors).toEqual(["B"]);
+  });
 });
 
 // dsk prints two Insect tokens under one name, a 1/1 and a 2/1, and two cards in

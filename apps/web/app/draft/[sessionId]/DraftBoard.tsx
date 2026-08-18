@@ -41,6 +41,7 @@ import {
   textIndex,
 } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
+import { Stranded } from "./Stranded";
 import { PageHeading } from "../../components/PageHeading";
 import { TableTerms } from "./TableTerms";
 import { PickTrack, type Tick } from "../../components/PickTrack";
@@ -440,19 +441,56 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // pack in front of you, since picking advanced the board. Without that last
   // one only the pick and the data's pick could ever be matched, and the rest of
   // the pack the coach compared them against rendered as plain text.
+  /**
+   * The cards this draft is holding that the set no longer has text for.
+   *
+   * THE ONE WAY A DRAFT CAN STILL BE STRANDED. Storing each draft's own
+   * boosters put the packs out of a re-ingest's reach, and `draftSessions`
+   * dropped its staleness hash because of it -- but `sets.ingest` replaces a
+   * set's `setCardText` rows wholesale, so a card that leaves the pool loses
+   * its row while this draft goes on holding it in boosters nothing can reach
+   * to update.
+   *
+   * Checked rather than caught. `hydrate` below throws on a name it cannot
+   * find, which is the right answer where it is used -- a blank frame with no
+   * name on it is worse than a crash -- but it throws during render, so the
+   * board went white with the reason only in the console. This asks the
+   * question before the answer can take the page down.
+   *
+   * Costs nothing: the text index is already in hand and this is a lookup per
+   * card in the pack and the pool, once per board.
+   */
+  const stranded = useMemo(() => {
+    if (!state || !text) return null;
+    const held = [...state.pack, ...state.pool].map((c) => c.name);
+    const missing = [...new Set(held.filter((n) => !text.has(normalizeName(n))))];
+    return missing.length > 0 ? { missing, dealt: new Set(held).size } : null;
+  }, [state, text]);
+
   // Whole cards, joined from the text read once above. Everything below this
   // point works in Card; everything the server sent works in EngineCard.
-  const pack = useMemo(() => (text ? hydrate(state?.pack ?? [], text) : []), [state?.pack, text]);
-  const pool = useMemo(() => (text ? hydrate(state?.pool ?? [], text) : []), [state?.pool, text]);
+  //
+  // Guarded on `stranded` because hydrating is exactly what would throw, and a
+  // hook cannot be skipped: the early return that renders the explanation is
+  // hundreds of lines below, and every useMemo between here and it runs first.
+  const pack = useMemo(
+    () => (text && !stranded ? hydrate(state?.pack ?? [], text) : []),
+    [state?.pack, text, stranded],
+  );
+  const pool = useMemo(
+    () => (text && !stranded ? hydrate(state?.pool ?? [], text) : []),
+    [state?.pool, text, stranded],
+  );
   const lastView = useMemo(
     () =>
-      last &&
-      text && {
-        ...last,
-        score: hydrateScore(last.score, text),
-        pack: hydrate(last.pack, text),
-      },
-    [last, text],
+      last && text && !stranded
+        ? {
+            ...last,
+            score: hydrateScore(last.score, text),
+            pack: hydrate(last.pack, text),
+          }
+        : undefined,
+    [last, text, stranded],
   );
 
   // The deck as the player has defined it, and what a pack is judged against.
@@ -517,6 +555,17 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // and is clickable through the dim, which the stage otherwise prevents by
   // making everything behind it inert.
   useEffect(() => suspendFeedback(standing !== undefined), [standing, suspendFeedback]);
+
+  // The card preview is held back for as long as the board is not the thing
+  // being pointed at: a card in hand crosses every tile and every deck row on
+  // its way across the screen, and a stage standing over the board is asking a
+  // question that a card image must not land on top of.
+  //
+  // Both reasons in one place, because they are one boolean and a second writer
+  // for the second reason is how the two would come to disagree. `onDragStart`
+  // still says it itself, one render earlier -- see there.
+  const previewYields = carrying !== null || standing !== undefined;
+  useEffect(() => suspendPreview(previewYields), [previewYields, suspendPreview]);
 
   // What the board is showing, so anything said from here arrives knowing it
   // without the player having to type "I was drafting Duskmourn". The coach
@@ -797,14 +846,14 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // selected, which is the honest reading of the gesture: you meant this card
     // and have not yet said which pile.
     setSelected(card.name);
-    // For the whole gesture, not just its start: the cursor crosses every card
-    // in the pack and every row in the deck on its way across the board.
+    // Ahead of the effect that owns this, which cannot run until the render
+    // `setCarrying` schedules. The hand is already moving -- that is what armed
+    // the drag -- so the cards it is crossing are firing their hovers now.
     suspendPreview(true);
   }
 
   function endDrag() {
     setCarrying(null);
-    suspendPreview(false);
   }
 
   function onDragEnd(e: DragEndEvent) {
@@ -847,6 +896,25 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
   if (state === undefined || text === undefined) {
     return <PageNotice>Loading draft…</PageNotice>;
+  }
+
+  // Before the board and after the load, because this is neither: the query
+  // answered and the text arrived, and the two of them cannot be put together.
+  // A PageNotice would not do -- there is a decision to offer, not a sentence.
+  if (stranded) {
+    return (
+      <Stranded
+        sessionId={id}
+        setCode={state.setCode}
+        format={state.format}
+        setName={state.setName}
+        setIcon={state.setIcon}
+        picks={state.pool.length}
+        missing={stranded.missing}
+        dealt={stranded.dealt}
+        complete={state.complete}
+      />
+    );
   }
 
   // Every pack in this set is the same size, so the whole draft's shape follows
