@@ -12,6 +12,7 @@ import {
 import { ColorTally } from "./ColorPips";
 import { CardPlacardList } from "./CardPlacard";
 import { DeckShape } from "./DeckShape";
+import { ScrollBox } from "./ScrollBox";
 import { Panel } from "./Panel";
 
 // The two piles, as places to put a card rather than as lists of one. A section
@@ -124,11 +125,12 @@ export function PicksColumn({
             {pool.length === 0 ? "Nothing drafted yet." : "Every pick is in the sideboard."}
           </p>
         ) : (
-          <CardPlacardList
-            cards={deck}
-            trailing={trailingFor(maindeck, false)}
-            className="max-h-[45vh] overflow-y-auto pr-1"
-          />
+          // No `label`: every row carries a bench button, so tabbing through
+          // the deck already scrolls this and a stop on the region would be one
+          // more press between a reader and the card they are heading for.
+          <ScrollBox maxHeight="max-h-[45vh]">
+            <CardPlacardList cards={deck} trailing={trailingFor(maindeck, false)} />
+          </ScrollBox>
         )}
       </div>
 
@@ -150,13 +152,17 @@ export function PicksColumn({
               // benched early is the one you most need to see when the lane you
               // left starts coming back. Full strength while a card is being
               // carried, because then it is a destination and not a footnote.
-              <CardPlacardList
-                cards={bench.map((p) => p.card)}
-                trailing={trailingFor(bench, true)}
-                className={`max-h-[25vh] overflow-y-auto pr-1 motion-safe:transition-opacity ${
-                  offering ? "" : "opacity-60"
-                }`}
-              />
+              //
+              // The dimming goes on the scroller rather than the frame, so the
+              // well itself stays at full strength -- a faded box reads as a
+              // section that is switched off, and this one is a live target for
+              // the card in your hand.
+              <ScrollBox
+                maxHeight="max-h-[25vh]"
+                className={`motion-safe:transition-opacity ${offering ? "" : "opacity-60"}`}
+              >
+                <CardPlacardList cards={bench.map((p) => p.card)} trailing={trailingFor(bench, true)} />
+              </ScrollBox>
             )}
           </div>
         </div>

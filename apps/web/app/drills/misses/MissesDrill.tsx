@@ -12,6 +12,7 @@ import { ColorTally } from "../../components/ColorPips";
 import { DeckShape } from "../../components/DeckShape";
 import { PageHeading } from "../../components/PageHeading";
 import { Panel } from "../../components/Panel";
+import { ScrollBox } from "../../components/ScrollBox";
 import { PickTrack, type Tick } from "../../components/PickTrack";
 import {
   CONTEXT_BEST,
@@ -503,14 +504,14 @@ function Deck({ cards }: { cards: DisplayCard[] }) {
           <DeckShape cards={cards} />
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <div className="eyebrow">Maindeck ({cards.length})</div>
-            {/* Capped by the viewport where the panel is pinned, and by a
-                fraction of it where the panel is just another block below the
+            {/* Capped by the rail where the panel is pinned, and by a fraction
+                of the viewport where the panel is just another block below the
                 pack -- a forty-card list running the length of a phone puts the
-                Next button somewhere nobody will find it. */}
-            <CardPlacardList
-              cards={[...cards].sort(byCurve)}
-              className="max-h-[45vh] min-h-0 flex-1 overflow-y-auto pr-1 lg:max-h-none"
-            />
+                Next button somewhere nobody will find it. The rail's ceiling is
+                what actually binds on a desktop; the class is what says so. */}
+            <ScrollBox maxHeight="max-h-[45vh] lg:max-h-[var(--rail-h)]">
+              <CardPlacardList cards={[...cards].sort(byCurve)} />
+            </ScrollBox>
           </div>
         </>
       )}

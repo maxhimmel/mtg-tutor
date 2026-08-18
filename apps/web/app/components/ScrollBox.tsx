@@ -75,11 +75,17 @@ export function ScrollBox({
     // the radius, and six pixels against this theme's twelve is comfortably past
     // it. The bar still hugs its box. Its box simply sits inside the frame,
     // which is how a rounded container has always had to do this.
-    <div className="scroll-well rounded-box border border-base-content/30 bg-base-100 p-1.5">
+    // `flex min-h-0 flex-col` so the box works inside a panel whose own height
+    // is constrained -- the drill's deck rail is capped at the fold, and a
+    // frame that cannot shrink pushes its scroller straight through the bottom
+    // of it. Outside such a parent both are inert: `min-height: 0` says nothing
+    // to a block box, and a column flex container with one child lays it out
+    // exactly where it already was.
+    <div className="scroll-well rounded-box flex min-h-0 flex-col border border-base-content/30 bg-base-100 p-1.5">
       <div
         // Its own padding is the focus ring's clearance -- `card-focus` draws
         // 3px outside the row it is on, and a scroll box clips at its own edge.
-        className={`scroll-box p-1.5 ${maxHeight} ${className ?? ""}`}
+        className={`scroll-box min-h-0 p-1.5 ${maxHeight} ${className ?? ""}`}
         {...(label ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}
       >
         {children}
