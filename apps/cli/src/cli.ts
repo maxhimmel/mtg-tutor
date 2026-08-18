@@ -3,6 +3,7 @@ import { run as runDraft } from "./services/draft/index.js";
 import { run as runStats } from "./services/stats/index.js";
 import { run as runReview } from "./services/review/index.js";
 import { run as runChallenge } from "./services/challenge/index.js";
+import { run as runDrills } from "./services/drills/index.js";
 import { runLogin, runLogout } from "./services/auth/index.js";
 
 const HELP = `${pc.bold("mtg-tutor")} — practice MTG draft with 17Lands-based scoring
@@ -16,6 +17,7 @@ Usage:
   mtg-tutor review [id]              Review a past draft pick-by-pick (quiz yourself)
   mtg-tutor review [id] --passive    Step through without the guessing prompts
   mtg-tutor review [id] --breakdown  Print the whole diagnostic at once (no stepping)
+  mtg-tutor practice                 Take back the picks you got wrong, one pack at a time
   mtg-tutor stats                    Show your progress and biggest mistakes
   mtg-tutor login                    Sign in (drafts are stored against your account)
   mtg-tutor logout                   Forget the stored session
@@ -25,6 +27,7 @@ Examples:
   mtg-tutor draft fdn
   mtg-tutor draft dsk PremierDraft
   mtg-tutor review
+  mtg-tutor practice
   mtg-tutor challenge
 `;
 
@@ -40,6 +43,9 @@ async function main() {
       break;
     case "challenge":
       await runChallenge(rest);
+      break;
+    case "practice":
+      await runDrills(rest);
       break;
     case "stats":
       await runStats(rest);

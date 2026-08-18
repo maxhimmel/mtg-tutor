@@ -81,9 +81,21 @@ export function wrapText(text: string, width: number): string[] {
   return out;
 }
 
-// Full multi-line detail panel for the highlighted card (no gutter; the picker
-// adds one). `width` is the available text width.
-export function cardDetail(card: Card, width = (process.stdout.columns ?? 80) - 4): string {
+/**
+ * Full multi-line detail panel for the highlighted card (no gutter; the picker
+ * adds one). `width` is the available text width.
+ *
+ * `stats: false` prints the card without its win rates.
+ *
+ * For a prompt whose whole question is which card is better: the stat line is
+ * most of the answer, and a picker that shows it is a reading test rather than
+ * a judgment one. The web hides the same numbers on the same screens.
+ */
+export function cardDetail(
+  card: Card,
+  width = (process.stdout.columns ?? 80) - 4,
+  opts: { stats?: boolean } = {},
+): string {
   const w = Math.max(24, width);
   const lines: string[] = [];
   const cost = renderManaCost(card.manaCost);
@@ -95,10 +107,12 @@ export function cardDetail(card: Card, width = (process.stdout.columns ?? 80) - 
     lines.push("");
     for (const l of wrapText(card.oracleText, w)) lines.push(l);
   }
-  lines.push("");
-  // The same line the coach is shown, so the terminal and the prompt do not name
-  // the same numbers two different ways.
-  lines.push(pc.dim(statLine(card)));
+  if (opts.stats !== false) {
+    lines.push("");
+    // The same line the coach is shown, so the terminal and the prompt do not
+    // name the same numbers two different ways.
+    lines.push(pc.dim(statLine(card)));
+  }
   return lines.join("\n");
 }
 
