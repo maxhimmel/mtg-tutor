@@ -1,5 +1,5 @@
 import posthog from "posthog-js";
-import type { Confidence } from "@mtg-tutor/core";
+import type { Confidence, DrillId, MissOutcome } from "@mtg-tutor/core";
 import type { Doc } from "@mtg-tutor/backend/dataModel";
 
 import type { PickCeremony } from "./useSettings";
@@ -789,4 +789,92 @@ export function settingChanged(
 ): void {
   if (!on()) return;
   posthog.capture("setting_changed", { key, value, where });
+}
+
+/**
+ * A drill was started, answered, finished.
+ *
+ * THREE EVENTS FOR EVERY DRILL, NOT THREE PER DRILL. The `drill` property is
+ * what separates them, and it is the only decision in this block that cannot be
+ * taken back: a drill that minted `misses_started` would put its funnel in a
+ * different universe from the archetype quiz's, with no way to ask "does
+ * anybody play these at all" across both and no way to merge them afterwards.
+ * A property splits on demand; two event names never rejoin.
+ *
+ * Why the browser owns all three, when a draft's lifecycle is captured on the
+ * server: a drill run writes nothing. There is no mutation to hang a capture
+ * off, deliberately -- see convex/drills/misses.ts, which explains why the
+ * feature is a query and a bet rather than a table. The cost of that is real
+ * and worth stating: a run taken in the CLI is invisible here, exactly as the
+ * CLI's review quiz already is.
+ */
+export function drillStarted(p: {
+  drill: DrillId;
+  /** How many questions the run was dealt. Zero is the empty state. */
+  served: number;
+  /**
+   * What the run was drawn from, so the three kinds of empty stay apart: no
+   * finished drafts, drafts with no miss worth asking about, or misses whose
+   * sets have moved out from under them.
+   */
+  drafts: number;
+  candidates: number;
+  unavailable: number;
+  /** Which page of the ranked list -- 0 is the first run of a sitting. */
+  skip: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("drill_started", p);
+}
+
+/**
+ * One question answered.
+ *
+ * THE EVENT THE WHOLE FEATURE IS FOR. `outcome` is the only measurement of
+ * whether re-serving somebody their own mistake teaches them anything: `fixed`
+ * is a pick they got wrong once and would now get right, and a run of `stood`
+ * is a player who stands by picks the grader docked -- which is a finding about
+ * the grader, not about them, and is the second reason this is worth counting.
+ *
+ * `gap` and `ageDays` are here because the obvious follow-up question is which
+ * misses are worth re-serving. If only the huge gaps ever get fixed, the run
+ * should be cut shorter; if only recent ones do, then this is a memory test and
+ * not a drill, which is the finding that would sink the whole idea.
+ */
+export function drillAnswered(p: {
+  drill: DrillId;
+  outcome: MissOutcome;
+  /** They took the strongest card in the pack, which still was not the answer. */
+  tookRawBest: boolean;
+  /** The win-rate points the original pick cost, as the grade measured it. */
+  gap: number;
+  /** How long ago the draft this question came from was taken. */
+  ageDays: number;
+  setCode: string;
+  /** Position in the run, so a drop-off shows as a shape rather than a total. */
+  index: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("drill_answered", p);
+}
+
+/**
+ * A run played to the end.
+ *
+ * Against `drill_started` this is the completion rate, which is the question
+ * that decides whether a drill is the right SIZE -- ten questions abandoned at
+ * four is a run that should be five. `answered` is carried separately from
+ * `served` because leaving mid-run and finishing a shortened run are different
+ * things and the totals alone cannot tell them apart.
+ */
+export function drillFinished(p: {
+  drill: DrillId;
+  served: number;
+  answered: number;
+  fixed: number;
+  stood: number;
+  missed: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("drill_finished", p);
 }

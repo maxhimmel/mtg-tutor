@@ -23,6 +23,11 @@ const NAV = [
   { href: "/", label: "Draft", match: (p: string) => p === "/" || p.startsWith("/draft") },
   { href: "/review", label: "Review", match: (p: string) => p.startsWith("/review") },
   { href: "/stats", label: "Stats", match: (p: string) => p.startsWith("/stats") },
+  // "Practice" rather than "Drills", which is what the code, the routes and the
+  // events call it. The two do not have to agree: an event name can never be
+  // repaired retroactively and a nav label can be changed this afternoon, so the
+  // internal word is locked and the read one is not.
+  { href: "/drills", label: "Practice", match: (p: string) => p.startsWith("/drills") },
   {
     href: "/challenge",
     label: "Challenges",

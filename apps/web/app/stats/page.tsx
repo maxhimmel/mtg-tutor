@@ -318,7 +318,19 @@ function Mistakes({ data }: { data: Stats }) {
   if (data.topMistakes.length === 0) return null;
 
   return (
-    <Panel title="Biggest missed picks" aside={coverage(data)}>
+    <Panel
+      title="Biggest missed picks"
+      aside={coverage(data)}
+      // The list names the picks; the drill deals them back. This is the only
+      // place in the app where somebody is already looking at the cards they got
+      // wrong, so it is the one place where "play them again" is an offer rather
+      // than an interruption.
+      footer={
+        <Link href="/drills/misses" className="btn btn-sm btn-primary">
+          Take these picks again
+        </Link>
+      }
+    >
       <ul className="flex flex-col">
         {/* Keyed by position in the list, because the same miss made twice in
             two drafts is two identical rows and both belong here. */}
