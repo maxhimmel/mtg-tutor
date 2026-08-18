@@ -22,6 +22,20 @@ import { SetIcon } from "./SetIcon";
  * started" is a better answer to that question than any set on the grid, so it
  * goes above them rather than beside them.
  *
+ * A STRIP OF CHIPS RATHER THAN A TABLE, and that is the size argument. This used
+ * to be a bordered card with a table in it under an 18px display heading, which
+ * is the exact anatomy of the set list directly below -- so with the picker in
+ * list view the page drew two identical tables, and the top one read as the
+ * picker's own first rows, headerless and unsortable. It is also the wrong shape
+ * on its own terms: a table is built for browsing eighteen of something, and
+ * this is one or two bookmarks. A chip strip is a shape neither set view uses,
+ * which is what keeps a footnote from looking like the question, and it costs a
+ * single line where the card cost about four.
+ *
+ * The chips carry no set code. `BLB ·` earns its place on the picker, where it
+ * supports scanning eighteen rows; here the symbol and the name have both
+ * already said which set this is.
+ *
  * Renders nothing at all when there is nothing to resume, which is the normal
  * case and should cost the home page nothing.
  */
@@ -29,9 +43,9 @@ export function UnfinishedDrafts({ sets }: { sets?: SetSummary[] }) {
   const drafts = useQuery(api.draft.unfinished, {});
   const discard = useMutation(api.draft.discard);
 
-  // Which row is asking to be sure. Deleting a draft is the only thing in the
+  // Which chip is asking to be sure. Deleting a draft is the only thing in the
   // app that destroys somebody's own work, so the button does not do it -- it
-  // asks, in place, where the row is. A dialog would be the heavier answer and
+  // asks, in place, where the chip is. A dialog would be the heavier answer and
   // would cover the very list the choice is about.
   const [confirming, setConfirming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -53,9 +67,11 @@ export function UnfinishedDrafts({ sets }: { sets?: SetSummary[] }) {
       await discard({ sessionId: id });
       setConfirming(null);
     } catch (e) {
-      // Beside the row that refused rather than in an alert, for the same
+      // Beside the chip that refused rather than in an alert, for the same
       // reason the set picker renders its refusal in place: the way out should
-      // be next to the thing that would not go.
+      // be next to the thing that would not go. A refusal leaves `confirming`
+      // set, so the open chip is the one this belongs to and it needs no bar of
+      // its own above the strip.
       setFailed(humanError(e));
     } finally {
       setDeleting(null);
@@ -63,118 +79,133 @@ export function UnfinishedDrafts({ sets }: { sets?: SetSummary[] }) {
   }
 
   return (
-    <section className="mb-8">
-      <h2 className="mb-3 font-display text-lg font-semibold tracking-tight">
-        Pick up where you left off
-      </h2>
+    <section className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+      {/* An eyebrow rather than a heading. Still an <h2> for the outline, but at
+          the scale of a caption: the chips beside it are already legible as
+          drafts, so the words only have to say why they are up here. */}
+      <h2 className="eyebrow shrink-0">Pick up where you left off</h2>
 
-      {failed && (
-        <div role="alert" className="alert alert-warning mb-3">
-          <span>{failed}</span>
-        </div>
-      )}
+      <ul className="flex flex-wrap items-center gap-2">
+        {drafts.map((draft) => {
+          const set = icons.get(`${draft.setCode}:${draft.format}`);
+          const name = set?.name ?? draft.setCode.toUpperCase();
+          const started = releaseDate(draft.createdAt.slice(0, 10));
 
-      <div className="card overflow-x-auto border border-base-300 bg-base-200">
-        <table className="table">
-          <tbody>
-            {drafts.map((draft) => {
-              const set = icons.get(`${draft.setCode}:${draft.format}`);
-              const name = set?.name ?? draft.setCode.toUpperCase();
-              const asking = confirming === draft.id;
+          if (confirming === draft.id) {
+            return (
+              <li
+                key={draft.id}
+                className="flex flex-wrap items-center gap-2 rounded-field border border-warning/50 bg-base-200 py-1 pl-2.5 pr-1 text-sm"
+              >
+                <span>Delete {name} and its picks?</span>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-error"
+                  disabled={deleting === draft.id}
+                  onClick={() => void remove(draft.id)}
+                >
+                  {deleting === draft.id ? "Deleting…" : "Delete"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  onClick={() => setConfirming(null)}
+                >
+                  Keep
+                </button>
+                {failed && (
+                  <span role="alert" className="text-warning">
+                    {failed}
+                  </span>
+                )}
+              </li>
+            );
+          }
 
-              return (
-                <tr key={draft.id} className="transition-colors hover:bg-base-300/40">
-                  <th scope="row" className="font-normal">
-                    <span className="flex items-center gap-3">
-                      <SetIcon uri={set?.iconUri} className="size-6 text-base-content/50" />
-                      <span className="flex flex-col">
-                        <span className="font-display font-semibold leading-tight">
-                          {name}
-                        </span>
-                        {/* No "of 42". The denominator is how big this draft's
-                            packs were, which lives in its pool row -- see
-                            draft.unfinished, which exists not to read it. */}
-                        <span className="eyebrow">
-                          {draft.setCode.toUpperCase()} · {draft.picks}{" "}
-                          {draft.picks === 1 ? "pick" : "picks"} in
-                        </span>
-                      </span>
-                    </span>
-                  </th>
+          return (
+            <li
+              key={draft.id}
+              className="group relative flex items-center gap-2 rounded-field border border-base-300 bg-base-200 py-1 pl-2.5 pr-1 transition-colors hover:border-primary/60 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-primary"
+            >
+              {/* The one gold thing on the strip, and it is a mark the page
+                  already owns: the picker draws its symbols dim, so a symbol
+                  lit in the theme's gold is enough to say this set is live for
+                  you without the chip needing a badge or a rule of its own. */}
+              <SetIcon
+                uri={set?.iconUri}
+                className="size-4 text-primary/70 transition-colors group-hover:text-primary"
+              />
 
-                  <td className="whitespace-nowrap tabular-nums text-base-content/70">
-                    {releaseDate(draft.createdAt.slice(0, 10)) ?? "—"}
-                  </td>
+              {/* The chip is the button, the same anatomy the set list uses: a
+                  real link keeps the keyboard and screen-reader path on the
+                  name, and its stretched ::after is what makes the whole chip
+                  the hit target. */}
+              <Link
+                href={`/draft/${draft.id}`}
+                className="font-display text-sm font-semibold leading-tight after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                onClick={() =>
+                  draftResumed({
+                    sessionId: draft.id,
+                    setCode: draft.setCode,
+                    format: draft.format,
+                    picks: draft.picks,
+                    agedHours: (Date.now() - Date.parse(draft.createdAt)) / 3_600_000,
+                  })
+                }
+              >
+                {name}
+              </Link>
 
-                  <td className="whitespace-nowrap">
-                    {asking ? (
-                      <span className="flex items-center justify-end gap-2">
-                        <span className="text-sm text-base-content/70">
-                          Delete this draft and its picks?
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-error"
-                          disabled={deleting === draft.id}
-                          onClick={() => void remove(draft.id)}
-                        >
-                          {deleting === draft.id ? "Deleting…" : "Delete"}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-ghost"
-                          onClick={() => setConfirming(null)}
-                        >
-                          Keep
-                        </button>
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-end gap-1.5">
-                        <Link
-                          href={`/draft/${draft.id}`}
-                          className="btn btn-sm btn-primary w-[5.5rem]"
-                          onClick={() =>
-                            draftResumed({
-                              sessionId: draft.id,
-                              setCode: draft.setCode,
-                              format: draft.format,
-                              picks: draft.picks,
-                              agedHours:
-                                (Date.now() - Date.parse(draft.createdAt)) / 3_600_000,
-                            })
-                          }
-                        >
-                          Resume
-                        </Link>
-                        {/* A challenge names both drafts and is the only thing
-                            letting two people read each other's picks, so this
-                            one cannot be thrown away -- see draft.discard. Said
-                            here rather than left to a button that refuses. */}
-                        {draft.promised ? (
-                          <span className="px-2 text-sm text-base-content/55">
-                            In a challenge
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-ghost text-base-content/60"
-                            onClick={() => {
-                              setFailed(null);
-                              setConfirming(draft.id);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              {/* No "of 42". The denominator is how big this draft's packs were,
+                  which lives in its pool row -- see draft.unfinished, which
+                  exists not to read it. */}
+              <span className="whitespace-nowrap text-xs tabular-nums text-base-content/55">
+                {draft.picks} {draft.picks === 1 ? "pick" : "picks"} in
+                {started ? ` · ${started}` : ""}
+              </span>
+
+              {/* A challenge names both drafts and is the only thing letting two
+                  people read each other's picks, so this one cannot be thrown
+                  away -- see draft.discard. Said here rather than left to a
+                  button that refuses. */}
+              {draft.promised ? (
+                <span className="whitespace-nowrap px-1.5 text-[0.6875rem] text-base-content/45">
+                  In a challenge
+                </span>
+              ) : (
+                // A bin rather than an X. An X on a chip means dismiss it, and
+                // this destroys a draft -- the glyph has to mean the thing the
+                // confirm is about to ask about.
+                <button
+                  type="button"
+                  className="btn btn-square btn-ghost btn-xs relative text-base-content/35 hover:text-error"
+                  aria-label={`Delete your ${name} draft`}
+                  title={`Delete your ${name} draft`}
+                  onClick={() => {
+                    setFailed(null);
+                    setConfirming(draft.id);
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    aria-hidden
+                    className="size-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2.75 4.25h10.5" />
+                    <path d="M6.25 4.25V2.75h3.5v1.5" />
+                    <path d="M4.5 4.25v8a.75.75 0 0 0 .75.75h5.5a.75.75 0 0 0 .75-.75v-8" />
+                  </svg>
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
