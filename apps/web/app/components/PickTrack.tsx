@@ -35,6 +35,7 @@ export type TickState =
   | "current"
   | "hit"
   | "miss"
+  | "stood"
   | "agreed"
   | "fork"
   | "apart";
@@ -60,6 +61,15 @@ export interface Tick {
 // colour that makes it. Red is the one grade colour the marks do not use, and it
 // is already what this app means by a pick that went wrong: gradeFor sends D and
 // F here, and the walkthrough writes "✗ not this time" in it two inches away.
+// `stood` belongs to the misses drill, where a question can come back a third
+// way: you were dealt a pick you got wrong, and you made the same call again.
+// That is not a hit and the drill refuses to call it a failure -- it is a
+// disagreement with the grader rather than a slip. Blue rather than a fifth
+// hue, because blue is already what this app marks THE CARD YOU TOOK with (see
+// PickMarks), and standing by a pick is precisely answering with that card. The
+// tick and the mark on the card it refers to are then the same colour saying
+// the same thing, which is the test any new state here has to pass.
+//
 // The comparison's three read as one sentence: nothing happened, a decision
 // happened, or the question was not the same one. Agreeing is the hairline,
 // because forty of forty-two picks agree and a track that draws them all at full
@@ -76,6 +86,7 @@ const TONE: Record<TickState, string> = {
   current: "bg-primary",
   hit: "bg-success/60",
   miss: "bg-error/70",
+  stood: "bg-info/60",
   agreed: "bg-base-content/25",
   fork: "bg-primary",
   apart: "bg-warning/45",
@@ -97,7 +108,7 @@ const AHEAD_NAVIGABLE = "bg-base-content/30";
 // Where you ARE is still not said with size. It is said with the halo (see
 // tick-lit in globals.css), for the reason recorded there: a tick is too small
 // for size or colour alone to be findable among forty-four siblings.
-const TALL: TickState[] = ["current", "hit", "miss", "fork", "apart"];
+const TALL: TickState[] = ["current", "hit", "miss", "stood", "fork", "apart"];
 
 // The tick you are ON is an object too, whatever it happens to say. That is the
 // one exception, and it is not an exception to the idea above so much as the

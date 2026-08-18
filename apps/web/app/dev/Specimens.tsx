@@ -5,6 +5,7 @@ import type { Card } from "@mtg-tutor/core";
 import { CardPlacard, CardPlacardList } from "../components/CardPlacard";
 import { CardFace, CardTile } from "../components/CardTile";
 import { CardStats, hasStats } from "../components/CardStats";
+import { SealedPick } from "../components/SealedPick";
 import { CardText } from "../components/CardText";
 import { ColorPips } from "../components/ColorPips";
 import { ManaCost } from "../components/ManaCost";
@@ -254,6 +255,36 @@ export const SPECIMENS: Specimen[] = [
           </PileWell>
         ))}
       </PileGrid>
+    ),
+  },
+  {
+    id: "sealed",
+    title: "Sealed pick",
+    note: "The drill's face-down answer, at the width its sidebar gives it",
+    render: ({ card, selected }) => (
+      <div className="flex flex-wrap items-start gap-8">
+        {/* Both states side by side, because the whole point of the component is
+            that they are one box: a back and a face that must land at exactly
+            the same size, or the panel beside it jumps when the card turns. */}
+        <Bay label="Before you answer" width="w-[17rem] max-w-full">
+          <SealedPick name={card.name} card={card} draftedAt="2026-08-04" turned={false} />
+        </Bay>
+        <Bay label="After" width="w-[17rem] max-w-full">
+          <SealedPick name={card.name} card={card} draftedAt="2026-08-04" turned />
+        </Bay>
+        {/* The turn itself, driven by the chip strip's own selection, so the
+            motion can be watched as many times as it takes rather than only on
+            the one frame a screenshot catches. */}
+        <Bay label="Turning — select the card above to flip" width="w-[17rem] max-w-full">
+          <SealedPick name={card.name} card={card} draftedAt="2026-08-04" turned={selected} />
+        </Bay>
+        {/* A run reaching back weeks is the normal case, and the stamp is the
+            only thing on the back -- so it gets checked at a date that is not
+            today. */}
+        <Bay label="No face to show" width="w-[17rem] max-w-full">
+          <SealedPick name={card.name} draftedAt="2026-07-21" turned />
+        </Bay>
+      </div>
     ),
   },
 ];

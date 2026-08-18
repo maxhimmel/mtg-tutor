@@ -483,11 +483,11 @@ html {
   @apply text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-base-content/60;
 }
 
-/* Animation is rationed to moments worth marking, of which there are three: a
-   pack changing hands, a graded pick landing, and the win-rate gap opening in
-   the glossary's opening figure -- which is that page's whole argument. All go
-   through motion-safe:, so a reduced-motion reader gets the result with no
-   movement at all. */
+/* Animation is rationed to moments worth marking, of which there are four: a
+   pack changing hands, a graded pick landing, the win-rate gap opening in the
+   glossary's opening figure -- which is that page's whole argument -- and the
+   drill's sealed pick turning face up. All go through motion-safe:, so a
+   reduced-motion reader gets the result with no movement at all. */
 /* A booster draft passes packs one way around the table, and it reverses each
    pack: 1 left, 2 right, 3 left (engine.ts rotate). So the board moves the way
    the table does. In packs 1 and 3 the pack in front of you came from the player
@@ -847,5 +847,44 @@ html {
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;
+  }
+}
+
+/* THE SEALED PICK, TURNING OVER.
+
+   The misses drill deals you a pack you have already answered once, and the
+   answer you gave is sitting on the table the whole time -- face-down, stamped
+   with the date you gave it. This is that card turning up.
+
+   It earns a place on the rationed list above on the same grounds as a graded
+   pick landing: the information was genuinely withheld and is genuinely being
+   released, and there is no other way for a page to say "this already exists
+   and you are not being shown it yet". A card turned over is how the game
+   itself says that, which is why the drill withholds a CARD rather than
+   dimming a panel.
+
+   Two faces on one box, so nothing moves on the page while it turns -- the
+   reveal is the card's own business and the layout around it must not jump. The
+   back is rotated a half turn so it faces the reader at rest, and the pair swap
+   through 180deg; backface-visibility is what keeps the far side dark rather
+   than showing through mirrored.
+
+   Slower than the app's other moments (520ms against 260ms) because it is a
+   physical action being watched rather than a state change being acknowledged,
+   and a card that snaps over reads as a sprite swap instead of a turn. */
+@utility card-turn {
+  transform-style: preserve-3d;
+  transition: transform 520ms cubic-bezier(0.3, 0.7, 0.25, 1);
+
+  & > * {
+    backface-visibility: hidden;
+  }
+}
+
+/* Reduced motion gets the answer with no turn at all: the faces cross-fade in
+   place, which is the same information arriving without anything rotating. */
+@media (prefers-reduced-motion: reduce) {
+  .card-turn {
+    transition: none;
   }
 }
