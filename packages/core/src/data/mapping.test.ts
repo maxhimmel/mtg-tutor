@@ -144,6 +144,43 @@ describe("mergeCards", () => {
     expect(card.colors).toEqual([]);
   });
 
+  // Callous Sell-Sword: Scryfall reports ["B"] for a card that costs
+  // {1}{B} // {R}, because it answers for the creature half alone. woe deals
+  // 0.53 of these a pack and a drafter calls this a black-red card.
+  it("gives an adventure card both halves' colours", () => {
+    const card = merge(
+      scryfall({
+        name: "Callous Sell-Sword // Burn Together",
+        layout: "adventure",
+        type_line: "Creature — Human Mercenary // Sorcery — Adventure",
+        mana_cost: "{1}{B} // {R}",
+        colors: ["B"],
+        color_identity: ["B", "R"],
+        card_faces: [
+          { name: "Callous Sell-Sword", mana_cost: "{1}{B}" },
+          { name: "Burn Together", mana_cost: "{R}" },
+        ],
+      }),
+    );
+    expect(card.colors).toEqual(["B", "R"]);
+  });
+
+  // The fallback the pips rule still needs. Living End has no mana cost at all
+  // -- it is black by colour indicator -- so there are no pips to read and
+  // Scryfall's answer is the only one there is.
+  it("falls back to the stated colours when there is no mana cost", () => {
+    const card = merge(
+      scryfall({
+        name: "Living End",
+        mana_cost: "",
+        colors: ["B"],
+        color_identity: ["B"],
+        type_line: "Sorcery",
+      }),
+    );
+    expect(card.colors).toEqual(["B"]);
+  });
+
   // Hallowed Fountain in ecl: `reversible_card` states the type line on both
   // faces and not on the card, and these are booster:true so they reach the
   // merge. This threw on a live ingest -- `isLand` split an undefined type line

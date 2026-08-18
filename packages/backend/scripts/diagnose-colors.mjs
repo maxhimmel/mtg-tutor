@@ -29,19 +29,17 @@
 // fields rather than the Scryfall response, so the two can disagree. They are
 // both four lines; keeping them in step by eye is cheaper than the coupling.
 //
-// THE ONE KNOWN NON-ZERO, AND IT IS NOT A BUG
+// THE ADVENTURES, WHICH THIS SCRIPT ARGUED ITSELF INTO
 //
-// `other` holds 29 cards, 28 of them ADVENTURES and one Living End. Scryfall
-// gives Callous Sell-Sword (`{1}{B} // {R}`) a top-level `colors` of ["B"] --
-// the creature half only -- while its identity is ["B","R"]. We store what
-// Scryfall says, so an adventure card reads as mono-coloured.
+// `other` used to hold 29 cards, 28 of them adventures: Scryfall gives Callous
+// Sell-Sword (`{1}{B} // {R}`) a top-level `colors` of ["B"], the creature half
+// alone, and the pipeline stored what Scryfall said. This script flagged them
+// because it had always compared against the PIPS, and the disagreement was
+// real -- woe deals 0.53 of them a pack, and a drafter calls that card
+// black-red. `requiredColors` now reads the whole cost and the row is zero.
 //
-// That is consistent with the rule as stated: you CAN play it in mono-black and
-// simply never cast the adventure. Whether a draft tutor should say so is a real
-// question and not this script's to answer -- woe is the adventure set and
-// carries 0.53 of these per pack, which is the number to weigh if anyone picks
-// it up. Left visible here rather than filtered out, because a check that hides
-// its known exceptions cannot tell you when one stops being known.
+// Worth keeping in the header: the check was right and the pipeline was wrong,
+// which is the only reason to write a second implementation of a rule at all.
 //
 // WHAT THE PACK RATE COLUMN MEANS
 //
@@ -96,7 +94,12 @@ const same = (a, b) => a.length === b.length && [...a].sort().join("") === [...b
  */
 function expectedColors(card) {
   if (isLand(card.typeLine)) return card.colorIdentity ?? [];
-  return castColors(card.manaCost);
+  // Pips first, stored colours only when there are none to read -- the same
+  // fallback `requiredColors` keeps for Living End, which is black by colour
+  // indicator and has no mana cost at all. Without it this reports every such
+  // card forever as a mismatch it can do nothing about.
+  const pips = castColors(card.manaCost);
+  return pips.length > 0 ? pips : (card.colors ?? []);
 }
 
 // Why this card's stored colours are not what its cost says, or null when they

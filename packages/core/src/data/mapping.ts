@@ -141,14 +141,21 @@ function pipColors(manaCost: string | undefined): string[] {
  *   deck. `deck.ts` has known this for as long as it has had a `landFitsColors`
  *   and it was the only reader that did.
  *
- *   A DEVOID card is its pips. `{1}{U}` with `colors` [] is precisely what
- *   devoid MEANS and Scryfall is right; the drafter still cannot cast it
- *   without blue. This is the one place the app deliberately disagrees with the
- *   rules of Magic, because the question on a draft screen is never what colour
- *   a card is.
+ *   ANYTHING ELSE is its PIPS -- every coloured symbol in the whole mana cost.
+ *   For an ordinary card that is Scryfall's answer restated. For the two kinds
+ *   it is not, the pips are the ones a drafter would give:
  *
- *   ANYTHING ELSE is Scryfall's answer, which for a normal card is already its
- *   pips.
+ *     devoid      `{1}{U}` with `colors` [] is precisely what devoid MEANS, and
+ *                 Scryfall is right. The drafter still cannot cast it without
+ *                 blue. This is the one place the app deliberately disagrees
+ *                 with the rules of Magic, because the question on a draft
+ *                 screen is never what colour a card IS.
+ *     adventure   `{1}{B} // {R}` is reported as ["B"], the creature half only.
+ *                 Reading the whole cost calls it black-red, which is what a
+ *                 drafter calls it.
+ *
+ *   Scryfall's stated answer survives as the FALLBACK, for the cards that have
+ *   no mana cost to read: Living End is black by colour indicator alone.
  *
  * A genuinely colourless card -- an artifact, a fetchland, Kozilek -- comes back
  * empty from all three, which is what keeps the empty array meaning something.
@@ -160,8 +167,24 @@ function requiredColors(sc: ScryfallCard): string[] {
   // a "Creature — Human // Land", and two answers to "is this a land" in one
   // codebase is one more than the question supports.
   if (isLand({ typeLine: typeLineOf(sc) })) return sc.color_identity ?? [];
-  const stated = colorsOf(sc) ?? [];
-  return stated.length > 0 ? stated : pipColors(sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost);
+
+  // THE PIPS DECIDE, and Scryfall's own answer is the fallback rather than the
+  // rule. Devoid is why the pips have to win somewhere; adventures are why they
+  // have to win everywhere. Callous Sell-Sword costs `{1}{B} // {R}` and
+  // Scryfall reports `colors: ["B"]` -- the creature half alone -- so preferring
+  // the stated answer filed 28 two-colour cards as mono-coloured, 21 of them in
+  // woe, which is the adventure set and deals 0.53 of them a pack.
+  //
+  // Reading the whole cost calls it black-red, which is what a drafter calls it.
+  // The narrow reading is defensible on the rules -- you can play it in mono-
+  // black and simply never cast the adventure -- and it is not what anybody
+  // means when they say what colour a card is. Half a card you cannot cast is a
+  // cost, and a lane that cannot see the cost cannot weigh it.
+  //
+  // The fallback still matters for the cards with no mana cost at all: Living
+  // End is black by colour indicator and has nothing to read pips from.
+  const pips = pipColors(sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost);
+  return pips.length > 0 ? pips : (colorsOf(sc) ?? []);
 }
 
 // P/T and loyalty come from the top level, falling back to the front face.
