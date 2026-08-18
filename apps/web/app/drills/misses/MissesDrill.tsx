@@ -278,13 +278,17 @@ export function MissesDrill() {
             )}
           </Panel>
 
-          {/* Pinned, and as tall as the viewport will allow. The deck is half
-              the question, and the pack beside it is taller than the fold on a
-              laptop -- so scrolling down to compare a card against the deck used
-              to scroll the deck away. `max-h` rather than `h`: an early pick
-              holds four cards, and a full-height box with four cards in it is
-              worse than a short one. */}
-          <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:max-h-[calc(100dvh-2.5rem)]">
+          {/* Pinned, and the full height of the viewport. The deck is half the
+              question -- the answer is the card that served THAT deck -- and the
+              pack beside it runs past the fold on a laptop, so scrolling down to
+              look at a card scrolled the deck away.
+
+              `h` and not `max-h`. A max-height only ever CAPS: the panel stays
+              its content's height and happens to reach the bottom of the screen
+              when the deck is big enough, which is not a layout, it is a
+              coincidence with a limit on it. The rail is a fixed height and the
+              list takes whatever is left over. */}
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:h-[calc(100dvh-2.5rem)]">
             <Deck cards={current.pool} />
           </aside>
         </div>
@@ -435,7 +439,7 @@ function Deck({ cards }: { cards: DisplayCard[] }) {
     <Panel
       title="Your deck then"
       aside={<ColorTally colors={tally(cards, (c) => c.colors)} />}
-      className="min-h-0"
+      className="min-h-0 lg:flex-1"
       bodyClassName="min-h-0"
     >
       {cards.length === 0 ? (
