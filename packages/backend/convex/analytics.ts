@@ -101,6 +101,45 @@ export async function draftCompleted(
 }
 
 /**
+ * A draft was thrown away.
+ *
+ * The end of the one story `draft_started` and `draft_completed` could not
+ * finish between them. Started minus completed has always been abandonment;
+ * what it could never say is whether an abandoned draft is a thing people come
+ * back to or a thing they clear out, and those two answers want opposite
+ * products. A high delete rate says the list wants tidying; a low one says every
+ * abandoned draft is somebody who still means to finish it.
+ *
+ * `picks` is where they gave up -- the same breakdown `pick_made`'s pickIndex
+ * gives for the drafts nobody deleted -- and `ms` is how long the draft sat
+ * before they decided. Three minutes in is a misclick; a fortnight later at pick
+ * 30 is somebody admitting they will not go back, and only the second is
+ * evidence about a draft being too long.
+ *
+ * `status` because this deletes a finished draft too, and those are different
+ * acts: throwing away a review you do not want to keep, against clearing out a
+ * draft you were never going to finish.
+ *
+ * Captured after every delete and never before -- a send scheduled ahead of the
+ * writes is rolled back by anything that throws under it, which would leave this
+ * as the only report of a draft that is still there.
+ */
+export async function draftDeleted(
+  ctx: MutationCtx,
+  p: {
+    sessionId: string;
+    setCode: string;
+    format: string;
+    status: string;
+    picks: number;
+    ms: number;
+  },
+): Promise<void> {
+  if (!on()) return;
+  await posthog.capture(ctx, { event: "draft_deleted", properties: p });
+}
+
+/**
  * Somebody dared a friend to their packs.
  *
  * The root of a funnel whose every later step is a different person, which is

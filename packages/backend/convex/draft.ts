@@ -20,12 +20,25 @@ import {
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { Doc, Id } from "./_generated/dataModel.js";
-import { challengeFinished, deckBuilt, draftCompleted, draftStarted } from "./analytics.js";
+import {
+  challengeFinished,
+  deckBuilt,
+  draftCompleted,
+  draftDeleted,
+  draftStarted,
+} from "./analytics.js";
 import { internal } from "./_generated/api.js";
 import { enforce } from "./quota.js";
 import { requireCaller } from "./roles.js";
 import type { Caller } from "./roles.js";
-import { loadBoard, ownedSession, setCardsFor, setDocFor } from "./sessions.js";
+import {
+  loadBoard,
+  ownSessions,
+  ownedSession,
+  requireUserId,
+  setCardsFor,
+  setDocFor,
+} from "./sessions.js";
 import { copyDeal, storeDeal } from "./draftPools.js";
 import { storeDigest } from "./draftDigests.js";
 import { toSetData } from "./setData.js";
@@ -195,6 +208,154 @@ export const state = query({
       colorWinRates: colorWinRates,
       ...boardView(engine),
     };
+  },
+});
+
+/**
+ * The drafts you walked away from.
+ *
+ * The other half of `review.list`, which answers for finished drafts only --
+ * there is nothing to review about one still being played. Nothing answered for
+ * this half at all. `draft.state` has always rebuilt a board from any session
+ * id, so resuming worked from the day drafts were stored; what was missing was
+ * anywhere to LEARN that an unfinished draft existed. Close the tab and the URL
+ * was the only way back into it.
+ *
+ * IT REPLAYS NOTHING, which is what decides its shape. Rebuilding a board costs
+ * that draft's own ~14KB pool row, and this is a list of every draft you have
+ * open, on the screen the app opens on. So a row carries what the session
+ * document already says and not one field more.
+ *
+ * Which is also why a row says "17 picks in" rather than "pick 17 of 42". How
+ * many picks a draft has is how big its packs were, and that is in the pool row
+ * this list exists not to read -- so the denominator would cost the whole
+ * saving, to qualify a number a drafter can already read.
+ */
+export const unfinished = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const active = (await ownSessions(ctx, args.limit ?? 25)).filter(
+      (s) => s.status === "active",
+    );
+    if (active.length === 0) return [];
+
+    // Which of these a friend is on the other side of, so a row can say up
+    // front that it cannot be thrown away instead of offering a button that
+    // refuses. `discard` says why a challenged draft is kept.
+    //
+    // Only the challenger's side needs looking up: the friend's session names
+    // its challenge on its own face, and the challenger's is named BY the
+    // challenge, so this index is the only thing that can answer for it. The
+    // caller's own challenges, at ~600 bytes a row, and read only once there is
+    // something on the page it could be about.
+    const issued = await ctx.db
+      .query("challenges")
+      .withIndex("by_challenger", (q) => q.eq("challengerUserId", userId))
+      .collect();
+    const promised = new Set<string>(issued.map((c) => c.challengerSessionId));
+
+    return active.map((s) => ({
+      id: s._id,
+      setCode: s.setCode,
+      format: s.format,
+      createdAt: s.createdAt,
+      picks: s.pickedNames.length,
+      // Whether a challenge names this draft, and so whether it may be deleted.
+      promised: s.challengeId != null || promised.has(s._id),
+    }));
+  },
+});
+
+/**
+ * Throw a draft away, and everything written about it.
+ *
+ * Manual and per-draft on purpose. There is no cron, no retention window and no
+ * auto-clear of stale sessions: an abandoned draft costs its owner nothing to
+ * keep, and the one thing worse than a list cluttered with drafts you meant to
+ * finish is a list that quietly finished the decision for you.
+ *
+ * The tables and their order are `reset.wipeDrafts`'s, narrowed to one session
+ * -- rows that point at the session go before the session does, so a failure
+ * part-way through leaves nothing pointing at something that is not there.
+ *
+ * `llmUsage` is deliberately kept, for the reason the wipe keeps it: a row there
+ * records that this deployment's key was spent, which stays true after the draft
+ * it was spent on is gone. It is also what `bench-report` reads. `feedback` is
+ * kept for the same reason -- a note records what somebody experienced, and the
+ * draft going away does not make it untrue.
+ */
+export const discard = mutation({
+  args: { sessionId: v.id("draftSessions") },
+  handler: async (ctx, args) => {
+    const session = await ownedSession(ctx, args.sessionId);
+    const userId = await requireUserId(ctx);
+    const id = args.sessionId;
+
+    // A challenge NAMES both drafts, and that row is the whole grant -- it is
+    // what lets two people read each other's picks, with no share table behind
+    // it. Deleting a session it points at would leave the other person holding a
+    // link to nothing.
+    //
+    // Refused rather than cascaded. Withdrawing a promise somebody has already
+    // taken up is not what pressing delete on your own draft asks for, and there
+    // is already a way to withdraw one that has not been (`challenges.revoke`).
+    // Checked here as well as marked in `unfinished` above, because what a
+    // client draws is not what makes this true.
+    const issued = await ctx.db
+      .query("challenges")
+      .withIndex("by_challenger", (q) => q.eq("challengerUserId", userId))
+      .collect();
+
+    if (session.challengeId || issued.some((c) => c.challengerSessionId === id)) {
+      throw new ConvexError(
+        "This draft is part of a challenge with a friend, so it cannot be deleted.",
+      );
+    }
+
+    for (const row of await ctx.db
+      .query("draftPools")
+      .withIndex("by_session", (q) => q.eq("sessionId", id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    for (const row of await ctx.db
+      .query("draftDigests")
+      .withIndex("by_session", (q) => q.eq("sessionId", id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    for (const row of await ctx.db
+      .query("draftPicks")
+      .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    for (const row of await ctx.db
+      .query("reviewVerdicts")
+      .withIndex("by_session_and_pickIndex", (q) => q.eq("sessionId", id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    for (const row of await ctx.db
+      .query("reviewFrames")
+      .withIndex("by_session_and_phase", (q) => q.eq("sessionId", id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    await ctx.db.delete(id);
+
+    // After every delete, never before: a capture scheduled ahead of the writes
+    // is rolled back by anything that throws below it, and would otherwise be
+    // the one report of a draft that is still there.
+    await draftDeleted(ctx, {
+      sessionId: id,
+      setCode: session.setCode,
+      format: session.format,
+      status: session.status,
+      picks: session.pickedNames.length,
+      ms: Date.now() - Date.parse(session.createdAt),
+    });
   },
 });
 
