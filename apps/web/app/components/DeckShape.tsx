@@ -32,7 +32,13 @@ export function DeckShape({ cards }: { cards: DisplayCard[] }) {
     counts.map(([n, c]) => `${n} ${c}`).join(" · ");
 
   return (
-    <>
+    // `shrink-0`, and a box of its own to carry it. Where the panel is height
+    // constrained -- the drill's rail is -- something has to give way, and it
+    // must be the card list rather than the curve: a curve squashed to fit is
+    // a chart that lies about its own bars, and a list is a thing you scroll.
+    // The gap matches the panel body's own, so wrapping these two changes no
+    // spacing on either caller.
+    <div className="flex shrink-0 flex-col gap-2">
       {/* Above the counts, because it answers a question they cannot: the tally
           says what the pool is made of, the curve says when it can play it. */}
       <ManaCurve cards={cards} />
@@ -54,6 +60,6 @@ export function DeckShape({ cards }: { cards: DisplayCard[] }) {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

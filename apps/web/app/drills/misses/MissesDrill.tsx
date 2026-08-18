@@ -330,15 +330,16 @@ export function MissesDrill() {
               pack beside it runs past the fold on a laptop, so scrolling down to
               look at a card scrolled the deck away.
 
-              A real height and not a max-height: a cap only ever caps, so the
-              panel would stay its content's height and reach the bottom of the
-              screen only when the deck happened to be big enough. The height
-              itself is measured -- see useRailHeight for why no `calc` can be
-              right both at rest and pinned. Until it is, the var is unset and
-              the rail is its content's height, which is what it was before. */}
+              A CEILING rather than a height. Four cards at P1P3 in a
+              full-height box is a lot of empty panel and nothing gained -- the
+              rail should be as tall as the deck is, and stop at the fold. What
+              a max-height could not do on its own was know where the fold IS;
+              that is measured, and useRailHeight says why no `calc` can be
+              right both at rest and pinned. Until it lands the var is unset,
+              which reads as no ceiling at all. */}
           <aside
             style={{ "--rail-h": rail.height } as CSSProperties}
-            className="flex flex-col gap-4 lg:sticky lg:top-5 lg:h-[var(--rail-h)]"
+            className="flex min-h-0 flex-col gap-4 lg:sticky lg:top-5 lg:max-h-[var(--rail-h)]"
           >
             <Deck cards={current.pool} />
           </aside>
@@ -490,7 +491,7 @@ function Deck({ cards }: { cards: DisplayCard[] }) {
     <Panel
       title="Your deck then"
       aside={<ColorTally colors={tally(cards, (c) => c.colors)} />}
-      className="min-h-0 lg:flex-1"
+      className="min-h-0"
       bodyClassName="min-h-0"
     >
       {cards.length === 0 ? (
