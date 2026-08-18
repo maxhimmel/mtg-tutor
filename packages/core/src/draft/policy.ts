@@ -90,6 +90,43 @@ import type { BotMemory } from "./bots.js";
 // was chosen by looking at the held-out set and has not been confirmed anywhere
 // else -- and because a new feature means a new pod name, which is a thing a
 // person has to pick between, for four tenths of a point.
+// TWO CANDIDATES WERE CONFIRMED ON SETS NOBODY HAD LOOKED AT. ONE SURVIVED.
+//
+// `--shape` over fdn+dsk turned up two effects unasked for -- a four-drop taken
+// LESS than its win rate says (-0.34, carrying nearly the whole curve-bank gain)
+// and `removal` as the largest role main effect (+0.319). Neither shipped at the
+// time, for a stated reason: both had been chosen by looking at the held-out set
+// and confirmed nowhere else.
+//
+// Confirming them elsewhere killed one and promoted the other. Refitted with the
+// corrected colours (revisions 13 and 14) and ablated one at a time, held-out
+// top-1:
+//
+//                     fdn+dsk    woe+blb    pooled over the four
+//   turnFour           +0.40pp    -0.10pp    +0.10pp
+//   removal             0.00pp    +0.60pp    +0.20pp
+//
+// Mirror images, and the mirror is the finding. `turnFour` carries everything on
+// the two sets it was found on and less than nothing on two it was not; its
+// pooled positive is those sets showing through a mean, which is the shape of an
+// overfit rather than of a small effect. `removal` is worth nothing beside
+// `turnFour` on fdn+dsk and six tenths of a point where nobody had looked.
+//
+// THE GENERAL FORM, which is why this sits here rather than in a commit: a
+// feature discovered on a held-out set has been SELECTED on that set, so its
+// held-out number is a training number wearing the wrong label. The only test it
+// has not already passed is a set nobody looked at. Trap #8 is the same
+// confusion about a different quantity.
+//
+// `removal` is therefore a candidate and is NOT here yet, because adding it is a
+// new pod name -- frozen forever the moment a session stores it -- and the fit
+// that would deserve one is pooled over all eighteen sets the way `table` is,
+// not over the four this was measured on. Both of those are a person's call.
+//
+// The colour fix is priced in the same run, on the identical fdn+dsk split the
+// probe used: 52.52% -> 52.8% held-out on the same seven features, which is what
+// four hundred and ninety-nine cards getting their colours back is worth to
+// predicting a human.
 export const POLICY_FEATURES = [
   // Raw power, centred on the format's rough midpoint so the coefficient is
   // "how much a point of win rate is worth" rather than an offset.
