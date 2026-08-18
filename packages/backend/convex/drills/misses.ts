@@ -108,9 +108,14 @@ export const deal = query({
     // Rows, one at a time, until the run is full or the budget runs out.
     const picked: { candidate: Candidate; row: Doc<"draftPicks"> }[] = [];
     let reads = 0;
+    // How far down the ranked list this run got, which is NOT how many
+    // questions it serves -- a candidate can be read and then refused. Paging
+    // by the number served would re-deal every refused one on the next run.
+    let examined = 0;
     for (const candidate of ranked) {
       if (picked.length >= limit || reads >= limit * READ_BUDGET) break;
       reads++;
+      examined++;
       const row = await storedPick(ctx, candidate.session._id, candidate.pickIndex);
       if (!row) continue;
       // Scored 100 and still in the digest: the gap to the better card is
@@ -202,6 +207,9 @@ export const deal = query({
       drafts: drafts.length,
       candidates: candidates.length,
       unavailable,
+      // Where a following run should start. The client cannot compute it: it
+      // counts questions, and this counts the candidates spent producing them.
+      nextSkip: skip + examined,
     };
   },
 });

@@ -62,7 +62,7 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
       initialValue: false,
     });
     if (p.isCancel(again) || !again) break;
-    skip += run.questions.length;
+    skip = run.nextSkip;
   }
 
   p.outro(pc.green("That is the run."));

@@ -160,7 +160,7 @@ export function MissesDrill() {
         <Scoreboard
           results={results}
           served={questions.length}
-          onAgain={() => deal(skip + questions.length)}
+          onAgain={() => deal(run.nextSkip)}
         />
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">

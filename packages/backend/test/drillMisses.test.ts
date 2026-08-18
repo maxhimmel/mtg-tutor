@@ -241,6 +241,31 @@ describe("drills/misses.deal", () => {
     expect(question.rawBestName).toBe("Zeta");
   });
 
+  // Paging by the number of questions served would re-deal every candidate the
+  // run read and then refused -- here the indistinguishable one, which is
+  // examined, dropped, and would otherwise come back first next time.
+  it("pages by what the run consumed, not by what it served", async () => {
+    const t = harness();
+    await withText(t);
+    await draft(t, "alice", "2026-08-01", [
+      { pickNo: 1, took: "Alpha", graded: "Beta", gap: 0.08, indistinguishable: true },
+      { pickNo: 2, took: "Beta", graded: "Gamma", gap: 0.05 },
+      { pickNo: 3, took: "Gamma", graded: "Delta", gap: 0.01 },
+    ]);
+
+    const first = await as(t, "alice").query(api.drills.misses.deal, { limit: 1 });
+
+    expect(first.questions.map((q) => q.gradedName)).toEqual(["Gamma"]);
+    // Two candidates spent to serve one question.
+    expect(first.nextSkip).toBe(2);
+
+    const second = await as(t, "alice").query(api.drills.misses.deal, {
+      limit: 1,
+      skip: first.nextSkip,
+    });
+    expect(second.questions.map((q) => q.gradedName)).toEqual(["Delta"]);
+  });
+
   it("pages past the run just played", async () => {
     const t = harness();
     await withText(t);
