@@ -102,9 +102,9 @@ import type { BotMemory } from "./bots.js";
 // corrected colours (revisions 13 and 14) and ablated one at a time, held-out
 // top-1:
 //
-//                     fdn+dsk    woe+blb    pooled over the four
-//   turnFour           +0.40pp    -0.10pp    +0.10pp
-//   removal             0.00pp    +0.60pp    +0.20pp
+//                     fdn+dsk    woe+blb    four sets    ALL EIGHTEEN
+//   turnFour           +0.40pp    -0.10pp     +0.10pp      not fitted
+//   removal             0.00pp    +0.60pp     +0.20pp        +0.10pp
 //
 // Mirror images, and the mirror is the finding. `turnFour` carries everything on
 // the two sets it was found on and less than nothing on two it was not; its
@@ -118,10 +118,26 @@ import type { BotMemory } from "./bots.js";
 // has not already passed is a set nobody looked at. Trap #8 is the same
 // confusion about a different quantity.
 //
-// `removal` is therefore a candidate and is NOT here yet, because adding it is a
-// new pod name -- frozen forever the moment a session stores it -- and the fit
-// that would deserve one is pooled over all eighteen sets the way `table` is,
-// not over the four this was measured on. Both of those are a person's call.
+// AND THEN THE POOLED FIT SHRANK IT. Over all eighteen sets -- 571,996 train /
+// 284,334 held-out, the way `table` itself is fitted -- `removal` is worth
+// +0.10pp, against +0.60pp on the two sets it was confirmed on. Its coefficient
+// is stable everywhere (+0.26, +0.52, +0.36) and the log-likelihood improves
+// consistently (1.3456 -> 1.3416), so this is a REAL effect and a small one,
+// which is a different verdict from `turnFour` above: that one changed sign.
+//
+// It is not here because +0.10pp does not clear the bar this file has set. The
+// features that were measured out -- `openness`, `colorless`, `signal` -- went
+// at -0.02, -0.04 and -0.04pp, and the ones that stayed are worth +0.45pp to
+// +1.47pp. A tenth of a point buys a pod name frozen forever, seven
+// registration points across four packages, and a second weight vector every
+// future reader has to understand. That is a lot of permanent structure for an
+// effect you could not see in a draft.
+//
+// THE SHAPE TO NOTICE, because it is the one that fooled `turnFour`: an effect
+// measured on two sets and then on eighteen went 0.60 -> 0.20 -> 0.10. Breadth
+// shrinks an estimate that was concentrated. Neither number is wrong; the wide
+// one is the one that answers "what will this be worth on the next set", which
+// is the only question a shipped policy is asked.
 //
 // The colour fix is priced in the same run, on the identical fdn+dsk split the
 // probe used: 52.52% -> 52.8% held-out on the same seven features, which is what
