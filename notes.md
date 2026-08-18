@@ -91,6 +91,18 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
     coach reads it as an ordinary pick. Taking something into the sideboard on
     purpose and being lectured about your colours for it is the failure.
 
+14. This showed on the deck builder screen (bottom of deck list component):
+
+```
+cannot reach a reliable number of sources at this land count — eight for a main colour, three for a splash [MANA-02, MANA-05].
+```
+
+I want all instances referencing the draft principles to use the badge renderer we have for them.
+
+15. I don't think the last 5 or so picks in a pack should be included in "biggest missed picks" section or the practice > misses drill. Sometimes I pick a land so I can send a signal to the people down the line that I'm not interested in these colors.
+
+- Again, I'm no expert, so take that with a grain of salt.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -254,7 +266,6 @@ on 2026-08-15.
    category it opened is where Ideas #1 and roadmap #3 are now expected to land,
    and both cite this shape. Two things it deliberately did NOT do, so that
    picking either up is a decision rather than a discovery:
-
    - **Nothing is recorded.** A run writes no row, so the same misses come back
      until you draft more (`skip` pages past them for a sitting). Whether being
      dealt your own mistakes teaches anybody anything is a question about
