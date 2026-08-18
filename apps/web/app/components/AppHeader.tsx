@@ -15,9 +15,14 @@ import { UserMenu } from "./UserMenu";
 // `/` is the set picker, which is where a draft starts, so it is named Draft
 // rather than left to the wordmark. That also separates it from Principles,
 // which as "Draft principles" sat next to Review looking like a second verb.
+//
+// Stats sits next to Review because the two are the same subject at two scales
+// -- one draft read back, or all of them averaged -- and because a screen the
+// app never links to is a screen nobody has.
 const NAV = [
   { href: "/", label: "Draft", match: (p: string) => p === "/" || p.startsWith("/draft") },
   { href: "/review", label: "Review", match: (p: string) => p.startsWith("/review") },
+  { href: "/stats", label: "Stats", match: (p: string) => p.startsWith("/stats") },
   {
     href: "/challenge",
     label: "Challenges",
