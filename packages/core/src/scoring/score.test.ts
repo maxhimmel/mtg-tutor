@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { REVIEW } from "../config.js";
 import { NO_NEEDS } from "../testing/fakeSet.js";
 import type { Card, CardRole, ColorCode, IngestCard, Rarity } from "../model/card.js";
 import type { ScoringContext } from "./context.js";
@@ -106,6 +107,25 @@ describe("isDecisionPick", () => {
   });
   it("coaches every pick at the floor the force button sends", () => {
     expect(isDecisionPick(1, 1)).toBe(true);
+  });
+
+  // The SHIPPED floor, not an argument passed in -- which is the only thing the
+  // three cases above do not cover, and the thing that was wrong. They test the
+  // comparison; this tests where the comparison is drawn.
+  //
+  // Written as picks of a fourteen-card Play Booster rather than as
+  // `expect(REVIEW.decisionPickMinCards).toBe(6)`, because that assertion is
+  // the constant restated and would go green against any number so long as
+  // somebody updated both lines. The claim worth pinning is the one a player
+  // made: the last FIVE picks of a pack are not decisions. Off by one and this
+  // goes red naming the pick that came back.
+  it("drops the last five picks of a fourteen-card pack", () => {
+    const cardsLeftAt = (pickNo: number) => 14 - pickNo + 1;
+    const decisions = Array.from({ length: 14 }, (_, i) => i + 1).filter((pickNo) =>
+      isDecisionPick(cardsLeftAt(pickNo), REVIEW.decisionPickMinCards),
+    );
+
+    expect(decisions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 });
 

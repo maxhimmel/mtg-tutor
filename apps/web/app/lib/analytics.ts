@@ -648,11 +648,16 @@ export function statsViewed(p: {
    * Misses the decision-pick floor withheld -- picks off the dregs of a pack,
    * which are what was left rather than what was chosen.
    *
-   * Here rather than nowhere because the floor is a guess. It is 5 cards only
-   * because that is what the review quiz has always used, and the complaint it
-   * answers said "the last 5 or so". `forced` large beside `mistakes` small
-   * says the floor is eating the list; `forced` at zero says it was never the
-   * problem. Neither is answerable from the picks that survive it.
+   * Here rather than nowhere because the floor is a judgement rather than a
+   * measurement. `forced` large beside `mistakes` small says it is eating the
+   * list; `forced` at zero says it was never the problem. Neither is answerable
+   * from the picks that survive it.
+   *
+   * WHAT IT CANNOT TELL YOU, learned the day after it shipped: whether the
+   * floor is in the RIGHT PLACE. It went in at 5, which kept the tenth pick of
+   * a fourteen-card pack, and a player was dealt one of those in the drill and
+   * said so before this had a single data point. A count of what a setting
+   * withholds is not evidence about the setting.
    */
   forced: number;
   /** The window clipped their history, so the averages are of a subset. */

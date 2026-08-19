@@ -82,8 +82,22 @@ export const RARITY_BASELINE: Record<string, number> = {
 // Post-draft review. Only decision picks (see isDecisionPick) get quizzed; the
 // rest flash by as a passive summary. A future frontend can expose this as a
 // slider.
+//
+// SIX, RAISED FROM FIVE ON 2026-08-19, and the one card matters more than it
+// looks. The test is `cardsInPack >= this`, so five kept the pick that sees five
+// cards -- the tenth of fourteen -- and dropped only the last four of a pack.
+// Six drops the last five, which is what a player asked for after being dealt
+// one of those in the misses drill: at that depth you are taking what is left,
+// and a land taken to signal disinterest is not a mistake to be shown back to
+// you as one.
+//
+// Not measured, and it did not need to be. `stats_viewed.forced` was added to
+// settle exactly this and one real drill run settled it first, which is the
+// better evidence -- the metric answers "how many does the floor withhold" and
+// the complaint answers "was the floor in the right place", and only the second
+// one is the question.
 export const REVIEW = {
-  decisionPickMinCards: 5,
+  decisionPickMinCards: 6,
 };
 
 // Live AI coaching. Same threshold as review, for the same reason -- the last
@@ -91,6 +105,13 @@ export const REVIEW = {
 // no choice". Clients may raise or lower their own threshold; the server clamps
 // whatever it is sent to 1..maxMinPackCards so one client cannot ask for
 // coaching on picks that do not exist.
+//
+// It moved to six with review's, which is a saving rather than a loss: one
+// fewer coached pick per pack, three per draft out of about thirty, on the
+// picks whose advice was always going to be "you had no choice". Following
+// review rather than being pinned is the point of the reference -- the reason
+// the two thresholds exist is identical, so they are wrong together or right
+// together and a second number would only let them drift.
 export const COACH = {
   minPackCards: REVIEW.decisionPickMinCards,
   maxMinPackCards: 15,
