@@ -133,6 +133,12 @@ function SettingsList() {
           options={COACH_THRESHOLDS}
           value={settings.coachMinPackCards}
           onChange={(id) => set("coachMinPackCards", id)}
+          // The only numeric row on the page, and the one with nine segments
+          // rather than two. `xs` keeps them tabular and tight enough to read
+          // as a scale, which is what they are -- at the word rows' size they
+          // would be nine widely spaced digits and look like nine unrelated
+          // choices.
+          size="xs"
         />
       ),
       blurb: <SegmentedBlurb options={COACH_THRESHOLDS} value={settings.coachMinPackCards} />,

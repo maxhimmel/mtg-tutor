@@ -54,7 +54,21 @@ export function Segmented<T extends string | number | boolean>({
   fill?: boolean;
 }) {
   return (
-    <div className="flex rounded-lg bg-base-300 p-0.5" role="group" aria-label={label}>
+    <div
+      // `w-fit`, because the trough must hug its segments and nothing else.
+      // As a plain flex child this stretched to the width of whatever sat
+      // beside or beneath it -- on the settings page, the line of explanatory
+      // type under the group -- and since the segments themselves do not grow,
+      // the surplus came out as bare trough trailing off the last one. It read
+      // as a segment that had lost its label.
+      //
+      // `fill` is the deliberate opposite and keeps its stretch: inside a fixed
+      // popover the group SHOULD span, and there the segments grow to fill it
+      // so no trough is left over.
+      className={`flex rounded-lg bg-base-300 p-0.5 ${fill ? "" : "w-fit"}`}
+      role="group"
+      aria-label={label}
+    >
       {options.map((option) => {
         const here = value === option.id;
         return (
@@ -64,7 +78,12 @@ export function Segmented<T extends string | number | boolean>({
             aria-pressed={here}
             title={option.blurb}
             className={`cursor-pointer rounded-md transition-colors ${
-              size === "xs" ? "py-1 text-xs tabular-nums" : "px-3 py-1 text-sm"
+              // Both sizes carry their own horizontal padding. `xs` used to
+              // carry none, which worked only because its one caller passed
+              // `fill` and `flex-1` gave the segments a width -- so the size
+              // was quietly not usable on its own, and the settings page is
+              // where that would have shown up as nine numbers touching.
+              size === "xs" ? "px-2 py-1 text-xs tabular-nums" : "px-3 py-1 text-sm"
             } ${fill ? "flex-1" : ""} ${
               here
                 ? "bg-primary font-semibold text-primary-content"
@@ -96,7 +115,11 @@ export function SegmentedBlurb<T extends string | number | boolean>({
   value: T;
 }) {
   return (
-    <p className="min-h-[2.5rem] text-xs leading-relaxed text-base-content/50">
+    // Capped at a reading measure rather than left to the column. Uncapped it
+    // set the width of everything above it, which is how the group came to
+    // stretch in the first place -- and a single line of small type running the
+    // full width of a page is hard to read besides.
+    <p className="min-h-[2.5rem] max-w-[34rem] text-xs leading-relaxed text-base-content/50">
       {options.find((option) => option.id === value)?.blurb}
     </p>
   );

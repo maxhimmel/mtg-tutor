@@ -1396,7 +1396,8 @@ The architecture, the data pipeline and the deploy story are all documented in
     at all. `--force` is the way back in.
 
 22. **A setting belongs on the surface it changes, and that is not the same as
-    belonging ONLY there** (2026-08-19). The account menu carried every setting
+    belonging ONLY there** (2026-08-19). Three rulings, and the third is about
+    the shape of a control rather than where it lives. The account menu carried every setting
     in the app and was emptied on purpose: the card stats, the coach threshold
     and the ceremony sat two clicks from the one screen any of them affects,
     with their state unreadable until you opened the dropdown, and they were
@@ -1434,3 +1435,25 @@ The architecture, the data pipeline and the deploy story are all documented in
     The premise changes if the page turns out to be where settings are actually
     changed. Then the on-surface controls are the redundant half, not this, and
     the numbers to read are already being collected.
+
+    **A short range of small integers should offer all of them.** The coach
+    threshold went through three option lists in two days: [2, 3, 5, 7, 9] with
+    no derivation, then even steps, then every value from 2 to 10. The first was
+    arbitrary and did not contain the app's own floor; the second fixed the
+    derivation and KEPT THE COARSENESS, which is the part worth writing down --
+    a principled reason for the spacing is not a reason for there to be spacing
+    at all. Somebody wanting the coach quiet for the last four picks had to
+    choose between three and five, and no argument existed for why they should.
+    The only real decision on a range this small is where it stops: 2 rather
+    than 1 because commenting on the one card you have no choice about is what
+    the explain-anyway button is for, and 10 rather than the server's 15 because
+    past it every setting is the same answer with a longer silence.
+
+    **The blurb under it is computed and cross-checked against the rule.** A
+    threshold N silences the coach for the last N-1 picks whatever the pack size
+    is, which is why it is phrased that way rather than as "coaches the first
+    nine" -- that would be wrong on one of the two pack shapes. `useSettings.test`
+    counts the picks `isDecisionPick` actually silences, on both a fourteen and
+    a fifteen card pack, and asserts the sentence names that number. Copy and
+    the rule it describes are two places that can disagree, and this boundary
+    has now produced two off-by-ones in one week.
