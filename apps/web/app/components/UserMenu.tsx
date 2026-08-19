@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { useDismissable } from "../lib/useDismissable";
 
@@ -41,14 +42,23 @@ function Signet({ seed, className }: { seed: string; className?: string }) {
 }
 
 /**
- * Who you are, and the way out. Nothing else.
+ * Who you are, the way out, and one link.
  *
- * This used to also carry every setting the app has, which put the card stats,
- * the coach threshold and the pick ceremony two clicks away from the one screen
- * any of them affects, with their state unreadable until you opened it. They now
- * sit on the draft board as the terms of the table (see TableTerms), and the set
+ * This used to carry every setting the app has, which put the card stats, the
+ * coach threshold and the pick ceremony two clicks away from the one screen any
+ * of them affects, with their state unreadable until you opened it. They now sit
+ * on the draft board as the terms of the table (see TableTerms), and the set
  * picker keeps its own view toggle -- so every setting in the app is on the
  * surface it changes, and this is an account menu again.
+ *
+ * NONE OF THAT CAME BACK. The `Settings` row is a link to /settings, which is a
+ * second door to the same controls and not a copy of them: what failed here was
+ * a control you had to open a dropdown to READ, and the page is the opposite of
+ * that -- every setting showing its value and what the value means, at rest.
+ * The page exists because "on the surface it changes" turned out to also mean
+ * "only there", and three of the six cannot be reached without first being
+ * mid-draft, mid-challenge, or in front of a loaded set list. `setting_changed`
+ * keeps telling the two doors apart, so if this one goes unused it can go.
  */
 export function UserMenu() {
   const { user, loading, signOut } = useAuth();
@@ -102,6 +112,21 @@ export function UserMenu() {
           </div>
 
           <div className="my-1 border-t border-base-300" />
+
+          {/* A LINK TO THE SETTINGS, NOT THE SETTINGS. The distinction is the
+              whole of what the emptying above was about: what failed here was
+              controls whose state you had to open a dropdown to read, and a row
+              that says "Settings" and goes somewhere is not that. Everything it
+              leads to is still on the screen it changes; the page exists for the
+              three that cannot be reached until you are already mid-draft,
+              mid-challenge, or looking at a loaded set list. */}
+          <Link
+            href="/settings"
+            className="cursor-pointer rounded-lg px-2 py-1.5 text-left text-sm no-underline hover:bg-base-300"
+            onClick={() => setOpen(false)}
+          >
+            Settings
+          </Link>
 
           <button
             type="button"

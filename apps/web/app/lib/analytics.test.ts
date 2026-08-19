@@ -11,6 +11,7 @@ import {
   identify,
   pickMade,
   settingChanged,
+  settingsOpened,
   signedOut,
   statsViewed,
   tokensPreviewed,
@@ -58,6 +59,7 @@ describe("without a project token", () => {
       identify("user_01", "friend@example.com");
       signedOut();
       settingChanged("pickCeremony", "passive", "board");
+      settingsOpened({ from: "menu" });
       feedbackOpened({ surface: "coach", source: "ai", route: "/draft/[sessionId]" });
       feedbackRefused({ surface: "coach", reason: "rate", message: "no" });
       authStalled({ route: "/" });
@@ -155,6 +157,14 @@ describe("with a project token", () => {
     const empty = { drafts: 0, picks: 0, detailed: 0, mistakes: 0, forced: 0, truncated: false };
     statsViewed(empty);
     expect(capture).toHaveBeenCalledWith("stats_viewed", empty);
+  });
+
+  // Fires on arrival, so a visit that changed nothing is still counted -- which
+  // is the whole point: opens with no `setting_changed` beside them is the page
+  // being read and approved of, and no opens at all is a link nobody finds.
+  it("reports a settings visit on arrival", () => {
+    settingsOpened({ from: "menu" });
+    expect(capture).toHaveBeenCalledWith("settings_opened", { from: "menu" });
   });
 
   // The two halves of what happens to an unfinished draft: it is played on, or
