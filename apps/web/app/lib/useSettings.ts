@@ -8,6 +8,43 @@ import type { SettingSurface } from "./analytics";
 export type SetView = "grid" | "list";
 
 /**
+ * Minted for the settings page, which is the first surface that has to draw this
+ * choice as a CHOICE rather than as a way out of the current one.
+ *
+ * The picker's own toggle stays an icon flip button drawing the view it switches
+ * TO, and that is still right where it is: with exactly two views the unselected
+ * half of a segmented control is already the button, so on a toolbar the second
+ * segment only costs width. On a page with nothing to switch away from, a
+ * control that shows the other view and not the current one is unreadable at
+ * rest -- which is the whole reason a settings page is different from a toolbar.
+ */
+export const SET_VIEWS: readonly { id: SetView; label: string; blurb: string }[] = [
+  { id: "grid", label: "Grid", blurb: "One plate per set, scanned by symbol. For browsing" },
+  { id: "list", label: "List", blurb: "Sorted rows, for comparing sets against each other" },
+];
+
+/**
+ * Whether 17Lands numbers show while you draft.
+ *
+ * A boolean with two written-out options rather than a checkbox, so it reads on
+ * the settings page as the choice it is. The labels are the glossary's own
+ * asymmetric pair rather than On/Off, because "off" describes the numbers and
+ * "drafting blind" describes what you are doing -- and the second is the point.
+ */
+export const STAT_MODES: readonly { id: boolean; label: string; blurb: string }[] = [
+  {
+    id: true,
+    label: "Stats showing",
+    blurb: "Hovering a card mid-draft shows everything 17Lands knows about it",
+  },
+  {
+    id: false,
+    label: "Drafting blind",
+    blurb: "The card is just a card. The numbers wait for the review",
+  },
+];
+
+/**
  * Which of the two ways of making a pick the player is drafting under.
  *
  * Nothing on the server knows this setting exists, and nothing needs to: a

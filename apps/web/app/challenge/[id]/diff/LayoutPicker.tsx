@@ -1,5 +1,6 @@
 "use client";
 
+import { Segmented } from "../../../components/Segmented";
 import { DIFF_LAYOUTS, useSettings } from "../../../lib/useSettings";
 
 /**
@@ -19,58 +20,21 @@ import { DIFF_LAYOUTS, useSettings } from "../../../lib/useSettings";
  * permanent control that is the app's own idea drawn slightly differently is
  * worse than either doing it the same or doing it deliberately differently.
  *
- * NO LABEL, for the same reason `ReviewViews` has none. A segmented control with
- * one segment lit is self-describing once, and after that the word in front of it
- * is a word you read every visit to learn nothing. What it is called survives
- * where it is needed, on the group itself, for a reader who cannot see which of
- * the two is filled.
- *
- * BUTTONS AND `aria-pressed`, WHERE THE REVIEW'S ARE LINKS AND `aria-current`.
- * That difference is real and not worth hiding: those three are pages and this is
- * a preference, so there is nothing to navigate to. Not a `radiogroup`, which is
- * the other honest option -- that contract owes a reader one tab stop and arrow
- * keys between the options, and building that for two buttons buys a keyboard
- * reader one saved keystroke in exchange for a control that no longer behaves
- * like every other button on the page.
+ * That argument came for this file in the end. The markup it used to hold now
+ * lives in `Segmented`, together with the reasons for the label, the cursor and
+ * `aria-pressed` over a `radiogroup` -- because a third copy was about to be
+ * written for the settings page, and three is where a shape stops being a
+ * coincidence. What is left here is which setting it sets and where from.
  */
 export function LayoutPicker() {
   const { settings, update } = useSettings();
 
   return (
-    <div
-      className="flex rounded-lg bg-base-300 p-0.5"
-      role="group"
-      aria-label="How this comparison is laid out"
-    >
-      {DIFF_LAYOUTS.map((layout) => {
-        const here = settings.diffLayout === layout.id;
-        return (
-          <button
-            key={layout.id}
-            type="button"
-            aria-pressed={here}
-            // What each one does, for a pointer that hovers before committing.
-            // The labels are two nouns, and a noun cannot say where the score
-            // ends up -- but a reader can also just press it and look, which is
-            // why this is a title and not a line of type under the control.
-            title={layout.blurb}
-            // `cursor-pointer` because this is a BUTTON and the control it is
-            // copied from is made of LINKS. A browser gives an anchor the hand
-            // for free and a button the arrow, and daisyUI's `.btn` is what
-            // usually papers over that -- so dropping `btn` for the segmented
-            // control's own classes silently took the cursor with it. Anything
-            // on this page that is pressable and is not a `.btn` has to say so.
-            className={`cursor-pointer rounded-md px-3 py-1 text-sm transition-colors ${
-              here
-                ? "bg-primary font-semibold text-primary-content"
-                : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
-            }`}
-            onClick={() => update({ diffLayout: layout.id }, "diff")}
-          >
-            {layout.label}
-          </button>
-        );
-      })}
-    </div>
+    <Segmented
+      label="How this comparison is laid out"
+      options={DIFF_LAYOUTS}
+      value={settings.diffLayout}
+      onChange={(id) => update({ diffLayout: id }, "diff")}
+    />
   );
 }

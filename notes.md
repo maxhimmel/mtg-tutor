@@ -1394,3 +1394,43 @@ The architecture, the data pipeline and the deploy story are all documented in
     stored `sourceHash` would skip every set against a table that was just
     emptied, and the deploy would report SUCCESS with production holding no cards
     at all. `--force` is the way back in.
+
+22. **A setting belongs on the surface it changes, and that is not the same as
+    belonging ONLY there** (2026-08-19). The account menu carried every setting
+    in the app and was emptied on purpose: the card stats, the coach threshold
+    and the ceremony sat two clicks from the one screen any of them affects,
+    with their state unreadable until you opened the dropdown, and they were
+    changed by almost nobody. `setting_changed.where` exists to police exactly
+    that, and the terms strip on the draft board is what it bought.
+
+    **The rule had a hole nobody had stood in.** Three of the six settings can
+    only be reached once you are already committed to the thing they govern:
+    the ceremony needs an open draft and a pack on screen, the diff layout needs
+    a finished challenge, and the pod and set-view toggles do not render at all
+    while the set list is empty or still loading. So there is no way to decide
+    how you want to draft BEFORE drafting, which is the moment somebody actually
+    wants to decide it.
+
+    `/settings` is a second door and not a replacement. Nothing moved: the terms
+    strip stays, the picker keeps its view toggle, the diff keeps its layout
+    picker, and every control on the page is the same control through the same
+    `update` seam. What the page adds is the one thing a toolbar cannot do --
+    every setting and what its value MEANS, readable at rest, in one screenful.
+
+    **Told apart rather than merged.** `where` gained `"settings"` rather than
+    reusing `"menu"`, because `"menu"` is the surface this replaces and pouring
+    the new one into that bucket destroys the only comparison worth having. A
+    value in PostHog cannot be split back apart. `settings_opened` fires on
+    arrival beside it, because opens-with-no-changes and no-opens-at-all are
+    opposite findings -- the first says leave the defaults alone, the second
+    says move the link -- and `setting_changed` alone reports both as silence.
+
+    **Fires on arrival, not on the way out**, which was the first shape and is a
+    measurement trap: a per-visit count of what moved reads better in one row
+    and can only be sent from an unmount, which does not happen when a tab is
+    closed. Every visit ending in a close would be missing and every visit
+    ending in a navigation kept. A biased count is worse than a coarser one.
+
+    The premise changes if the page turns out to be where settings are actually
+    changed. Then the on-surface controls are the redundant half, not this, and
+    the numbers to read are already being collected.

@@ -1,5 +1,6 @@
 "use client";
 
+import { Segmented, SegmentedBlurb } from "../../components/Segmented";
 import { COACH_THRESHOLDS, PICK_CEREMONIES, useSettings } from "../../lib/useSettings";
 import { useDismissable } from "../../lib/useDismissable";
 
@@ -210,40 +211,17 @@ function CoachTerm() {
               instead.
             </span>
           </div>
-          <div
-            className="flex rounded-lg bg-base-300 p-0.5"
-            role="group"
-            aria-label="Smallest pack the AI coach comments on"
-          >
-            {COACH_THRESHOLDS.map((rung) => {
-              const selected = settings.coachMinPackCards === rung.id;
-              return (
-                <button
-                  key={rung.id}
-                  type="button"
-                  title={rung.blurb}
-                  className={`flex-1 cursor-pointer rounded-md py-1 text-xs tabular-nums transition-colors ${
-                    selected
-                      ? "bg-primary font-semibold text-primary-content"
-                      : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
-                  }`}
-                  aria-pressed={selected}
-                  onClick={() => update({ coachMinPackCards: rung.id }, "board")}
-                >
-                  {rung.label}
-                </button>
-              );
-            })}
+          <Segmented
+            label="Smallest pack the AI coach comments on"
+            options={COACH_THRESHOLDS}
+            value={settings.coachMinPackCards}
+            onChange={(n) => update({ coachMinPackCards: n }, "board")}
+            size="xs"
+            fill
+          />
+          <div className="mt-2">
+            <SegmentedBlurb options={COACH_THRESHOLDS} value={settings.coachMinPackCards} />
           </div>
-          {/* What the pressed rung actually buys, under the control that sets
-              it. The numbers alone are a scale with no units -- "5" says
-              nothing about whether that is a lot of coaching or a little -- and
-              the one line above the group describes the SETTING rather than the
-              choice within it. Reserved height so choosing does not shift the
-              panel under the cursor that is choosing. */}
-          <p className="mt-2 min-h-[2.5rem] text-xs leading-relaxed text-base-content/50">
-            {COACH_THRESHOLDS.find((rung) => rung.id === settings.coachMinPackCards)?.blurb}
-          </p>
         </div>
       )}
     </div>

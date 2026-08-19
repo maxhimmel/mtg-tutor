@@ -815,8 +815,16 @@ export function tokensPreviewed(p: {
  * it stays in the union because events sent from it are already in PostHog and a
  * breakdown that cannot name the old surface reads as though nothing was ever
  * changed there.
+ *
+ * "settings" is the /settings page, and it is deliberately NOT "menu" even
+ * though the way in is a link in that same dropdown. Reusing the old value
+ * would pour a new surface into a bucket that already holds the surface it
+ * replaced, and the one question worth asking here -- whether a page people
+ * navigate to does better than a dropdown people did not open -- is exactly the
+ * comparison that would be destroyed. A value in PostHog cannot be split back
+ * apart afterwards.
  */
-export type SettingSurface = "menu" | "board" | "sets" | "diff";
+export type SettingSurface = "menu" | "board" | "sets" | "diff" | "settings";
 
 /**
  * A setting moved.
@@ -839,6 +847,34 @@ export function settingChanged(
 ): void {
   if (!on()) return;
   posthog.capture("setting_changed", { key, value, where });
+}
+
+/**
+ * Somebody opened the settings page.
+ *
+ * `setting_changed` cannot answer the question this page is on trial for.
+ * Silence on `where: "settings"` has two readings -- nobody found the page, or
+ * people found it and the defaults were already right -- and those call for
+ * opposite responses: move the link, or leave everything alone. Counted against
+ * this, they separate: opens with no changes is the page being read and
+ * approved of, no opens at all is a link nobody finds.
+ *
+ * ON ARRIVAL, NOT ON THE WAY OUT, which was the first shape and is a
+ * measurement trap. Carrying a per-visit count of what moved reads better in
+ * one row and can only be sent from an unmount -- and an unmount does not
+ * happen when somebody closes the tab, so every visit that ended by leaving
+ * would be missing while every visit that ended by navigating on was kept. A
+ * biased count is worse than a coarser one, and the pair of events answers the
+ * question without either. Same call `coach_shown` makes: capture when it
+ * rendered.
+ *
+ * `from` is how they arrived, because the page has one door today and the
+ * argument for a second one -- a link from the draft board's terms strip, say
+ * -- has to be made out of somebody wanting it there.
+ */
+export function settingsOpened(p: { from: "menu" | "link" }): void {
+  if (!on()) return;
+  posthog.capture("settings_opened", p);
 }
 
 /**
