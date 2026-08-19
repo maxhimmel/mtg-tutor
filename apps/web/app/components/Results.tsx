@@ -12,6 +12,8 @@ import {
   committedColors,
   deckPiles,
   decksAgree,
+  loadPrinciples,
+  splitCitations,
 } from "@mtg-tutor/core";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
@@ -22,9 +24,12 @@ import { DeckBuilder } from "./DeckBuilder";
 import { ChallengeAFriend } from "./ChallengeAFriend";
 import { ChallengeAnswered, RESULT_ANCHOR } from "./ChallengeAnswered";
 import { Panel } from "./Panel";
+import { PrincipleBadge } from "./PrincipleBadge";
 import { AfterDraft } from "./AfterDraft";
 import { humanError } from "../lib/humanError";
 import { buildCompared } from "../lib/analytics";
+
+const PRINCIPLES = loadPrinciples();
 
 type ResultsData = FunctionReturnType<typeof api.draft.results>;
 
@@ -41,6 +46,34 @@ const REVEAL = [
   "motion-safe:animate-verdict [animation-delay:140ms]",
   "motion-safe:animate-verdict [animation-delay:210ms]",
 ];
+
+// Rare by construction -- `splitBasics` pays every floor it can afford, so this
+// only appears on a deck asking for more colour than any legal land count can
+// serve. It is also the one thing this screen can say that no card score can:
+// every term in the value is about how good a card is, and none of them is
+// about whether you can cast it.
+//
+// The grounds go through `splitCitations` rather than being spelled in the
+// sentence. This was the last raw citation in the app -- "[MANA-02, MANA-05]"
+// as literal text, not a link, not explainable on hover, and not recognisable
+// as the same thing the badges under the coach are. `Verdict`'s `TiebreakNote`
+// had the identical problem and the identical fix.
+function Uncastable({ colors }: { colors: string }) {
+  const cited = splitCitations(
+    "cannot reach a reliable number of sources at this land count — eight for a main colour, " +
+      "three for a splash [MANA-02, MANA-05].",
+    PRINCIPLES,
+  );
+
+  return (
+    <p className="text-sm text-warning">
+      <ColorPips colors={colors} className="text-base" /> {cited.prose}{" "}
+      {cited.principles.map((p) => (
+        <PrincipleBadge key={p.id} principle={p} />
+      ))}
+    </p>
+  );
+}
 
 export function Results({
   sessionId,
@@ -363,18 +396,7 @@ export function Results({
           </div>
         )}
 
-        {/* Rare by construction -- `splitBasics` pays every floor it can afford,
-            so this only appears on a deck asking for more colour than any legal
-            land count can serve. It is also the one thing this screen can say
-            that no card score can: every term in the value is about how good a
-            card is, and none of them is about whether you can cast it. */}
-        {deck.uncastable.length > 0 && (
-          <p className="text-sm text-warning">
-            <ColorPips colors={deck.uncastable.join("")} className="text-base" /> cannot reach a
-            reliable number of sources at this land count — eight for a main colour, three for a
-            splash [MANA-02, MANA-05].
-          </p>
-        )}
+        {deck.uncastable.length > 0 && <Uncastable colors={deck.uncastable.join("")} />}
       </Panel>
 
       {mistakes.length > 0 && (
