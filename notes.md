@@ -5,7 +5,15 @@ are: `corpus.test.ts` cites issue #3. A fixed issue is deleted and its number
 left empty rather than renumbering everything under it. 1, 4, 6, 9 and 10
 shipped on 2026-08-15; 11 (mana pips off the cost, not the colour) and 12 (the
 hover preview surviving a click and a scroll) on 2026-08-17; 14 (the deck
-builder's principle citation drawn as a badge like every other) on 2026-08-19.
+builder's principle citation drawn as a badge like every other) and 15 (forced
+picks out of the misses lists) on 2026-08-19.
+
+15 left one thing behind rather than being closed clean. The floor it applies is
+`REVIEW.decisionPickMinCards`, which is 5 and always has been -- picked for the
+review quiz, never measured. "The last 5 or so" would be 6. `stats_viewed.forced`
+now counts the misses the floor withholds, so that is a number to read rather
+than a threshold to argue about; move it if the picks people want back turn out
+to be sitting just above it.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -91,10 +99,6 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
     before this pick, so the card being graded is never in either half, and the
     coach reads it as an ordinary pick. Taking something into the sideboard on
     purpose and being lectured about your colours for it is the failure.
-
-15. I don't think the last 5 or so picks in a pack should be included in "biggest missed picks" section or the practice > misses drill. Sometimes I pick a land so I can send a signal to the people down the line that I'm not interested in these colors.
-
-- Again, I'm no expert, so take that with a grain of salt.
 
 16. What the heck is going on with this drill/practice vernacular?
 

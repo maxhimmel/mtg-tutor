@@ -64,6 +64,7 @@ function Overview() {
       picks: data.overall.totalPicks,
       detailed: data.countedDrafts,
       mistakes: data.topMistakes.length,
+      forced: data.forcedMistakes,
       truncated: data.truncated,
     });
   }, [data]);

@@ -1,3 +1,4 @@
+import { REVIEW, isDecisionPick } from "@mtg-tutor/core";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { DigestMistake } from "./validators.js";
@@ -24,9 +25,17 @@ export const DIGEST_MISTAKES = 10;
 /** The gap the grade is made of, which is what ranks a mistake. */
 const gap = (m: DigestMistake) => m.bestValue - m.pickedValue;
 
+// A mistake is a DECISION got wrong, which is why the pack has to be big enough
+// to have offered one. The last few cards of a pack are what is left rather than
+// what was chosen -- taking a land off the dregs to signal, or because there is
+// nothing else, is not a miss and being shown it as one teaches nothing. The
+// review quiz and the misses drill already step past exactly these picks; this
+// is the same threshold, applied where the list is built.
 function mistakesFrom(rows: readonly Doc<"draftPicks">[]): DigestMistake[] {
   return rows
-    .filter((row) => !row.score.isBest)
+    .filter(
+      (row) => !row.score.isBest && isDecisionPick(row.pack.length, REVIEW.decisionPickMinCards),
+    )
     .map((row) => ({
       pickedName: row.pickedName,
       // contextBest, not rawBest: the filter above is "did you take the card the

@@ -610,6 +610,17 @@ export function statsViewed(p: {
   picks: number;
   detailed: number;
   mistakes: number;
+  /**
+   * Misses the decision-pick floor withheld -- picks off the dregs of a pack,
+   * which are what was left rather than what was chosen.
+   *
+   * Here rather than nowhere because the floor is a guess. It is 5 cards only
+   * because that is what the review quiz has always used, and the complaint it
+   * answers said "the last 5 or so". `forced` large beside `mistakes` small
+   * says the floor is eating the list; `forced` at zero says it was never the
+   * problem. Neither is answerable from the picks that survive it.
+   */
+  forced: number;
   /** The window clipped their history, so the averages are of a subset. */
   truncated: boolean;
 }): void {
