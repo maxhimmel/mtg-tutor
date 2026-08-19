@@ -8,12 +8,30 @@ hover preview surviving a click and a scroll) on 2026-08-17; 14 (the deck
 builder's principle citation drawn as a badge like every other) and 15 (forced
 picks out of the misses lists) on 2026-08-19.
 
-15 left one thing behind rather than being closed clean. The floor it applies is
-`REVIEW.decisionPickMinCards`, which is 5 and always has been -- picked for the
-review quiz, never measured. "The last 5 or so" would be 6. `stats_viewed.forced`
-now counts the misses the floor withholds, so that is a number to read rather
-than a threshold to argue about; move it if the picks people want back turn out
-to be sitting just above it.
+15 shipped in two parts, and the second is worth reading before touching the
+floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
+which had been the number since the review quiz was written and had never been
+measured. The test is `cardsInPack >= this`, so 5 KEPT the pick that sees five
+cards -- the tenth of fourteen -- and dropped only the last four of a pack. The
+first real drill run dealt exactly that pick and it was reported as a miss that
+was not one. Raised to 6 the same day, which drops the last five.
+
+**A metric was added to settle this and a person settled it first.**
+`stats_viewed.forced` counts the misses the floor withholds and it is still
+worth having, but it answers "how many does the floor withhold" where the
+question was "is the floor in the right place" -- and no size of number answers
+that. Worth remembering the next time an instrument goes in beside a threshold:
+the instrument measures the setting, and only somebody standing in front of the
+result can say whether the setting is wrong.
+
+The floor is shared with the coach on purpose (`COACH.minPackCards` reads off
+it) so both moved: three fewer coached picks per draft out of about thirty, on
+picks whose advice was always going to be "you had no choice". The stored
+per-player `coachMinPackCards` is a localStorage setting and does NOT move with
+it -- anyone who drafted before this keeps the 5 they were serialised at, and
+the `Coach >=N` control on the board is where it changes. Deliberately not
+migrated: 5 is a legal value somebody could have chosen, and rewriting a
+deliberate choice to fix a stale default is the worse of the two errors.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the

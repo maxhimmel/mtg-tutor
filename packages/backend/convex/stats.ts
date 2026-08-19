@@ -43,12 +43,15 @@ export const overview = query({
     // player was shown the stored ones. The digest is those stored numbers,
     // reduced to what this screen plots.
     let counted = 0;
-    // How many stored misses the decision-pick floor threw away. Reported rather
-    // than kept quiet because the floor is a guess: REVIEW.decisionPickMinCards
-    // is 5 because that is what the review quiz has always used, and the
-    // complaint that prompted this said "the last 5 or so". This is the number
-    // that says whether 5 is the right one or whether the picks people want back
-    // are sitting just above it.
+    // How many stored misses the decision-pick floor threw away.
+    //
+    // Reported rather than kept quiet because the floor is a judgement, not a
+    // measurement -- and it was WRONG when this went in, at 5 rather than 6,
+    // which kept the tenth pick of a fourteen-card pack. A player found that
+    // within a day of the first drill run, which this number could not have
+    // told anybody: it says how much the floor withholds, never whether the
+    // floor is in the right place. Kept anyway, because how much of a history
+    // the floor eats is still worth knowing before it is ever moved again.
     let forced = 0;
     for (const session of window) {
       const digest = await digestFor(ctx, session._id);
