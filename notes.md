@@ -306,30 +306,33 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
 9. One thing this app feels like it's desperately missing is some kinda progression/indication that the user is learning and improving. Something kinda like, "I was there, but now I'm here!"
 
-10. **Read your friend's reasoning, pick by pick.** Fell out of #8 as a
-    separate thing rather than a mode of it: the interesting part of another
-    person's draft is not only what they took but why, and a shared draft that
-    carried their sentences would be worth reading even where the two pods have
-    drifted and the picks no longer line up.
+10. **Shipped 2026-08-19** — the reason you wrote for a pick is now readable,
+    on your own review and on both sides of a challenge diff. The sentence was
+    written and stored from the day the commitment ceremony landed and read by
+    exactly one thing, the coach prompt; the two screens that show picks back to
+    a person both dropped it in their projections. Four projections carry it now
+    and nothing new is read — `storedPicks` collects whole documents, so the
+    field was already paid for.
 
-    **The data already exists.** `draftPicks.defense` is
-    `{reason, confidence, challengedName, switched}`, written by the commitment
-    ceremony, and decision #11 is emphatic that there is deliberately no edit
-    button on it once the challenger is on screen — so the sentence is a real
-    prediction made before anything was revealed rather than a rationalisation
-    written after. That is exactly what makes it worth showing somebody else.
-    So this is a second reader on a column that is already populated, not a new
-    feature underneath one.
+    The number keeps a stub rather than being left empty, because the honesty
+    question this was waiting on is not answered by shipping it, only opened:
 
-    Two things it would need thinking about. A `defense` only exists for picks
-    made through the challenge ceremony (decision #13 — a row carrying one went
-    through it, a row without one did not), so a draft taken on the passive flow
-    has nothing to show. And a reason written for yourself is not a reason
-    written for a friend; whether people would still be honest in that box once
-    they know it is readable is the question that decides whether this is good.
-
-    `defense` related: how come we don't show the `defense` reasoning w/the
-    current challenge mode?
+    - **A reason written for yourself is not a reason written for a friend.**
+      Whether people stay honest in that box now that it is readable is the
+      thing that decides whether this was a good idea, and it is measurable —
+      `pick_made` already carries `confidence`, `challenged` and `stood` per
+      pick, so a change in how the box is used after somebody's first shared
+      draft is visible in data already being collected. Nobody has looked.
+    - **Most rows have nothing to show**, because a `defense` exists only for a
+      pick made through the ceremony (decision #13) and the CLI has only the
+      passive flow. Every reader draws the absence as absence rather than
+      filling it, and `diff_viewed.reasons` is the count that says whether the
+      panel is a feature or an empty box — near zero across real challenges
+      means the thing to fix is the ceremony being off, not the panel.
+    - **The heads-up is at the link, not at the box.** "They will see your
+      reasons" is said once, in `ChallengeAFriend`, at the moment a private
+      draft becomes a shared one — rather than under the textarea, where it
+      would be read forty-five times a draft about a link most drafts never get.
 
 11. **The coach cannot see what a Map is either** (2026-08-15, fell out of
     shipping the token feature). Decision #9 is that every card written into a

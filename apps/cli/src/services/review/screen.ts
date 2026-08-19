@@ -1,6 +1,6 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { isCorrectGuess, isDecisionPick, REVIEW } from "@mtg-tutor/core";
+import { confidenceLevel, isCorrectGuess, isDecisionPick, REVIEW } from "@mtg-tutor/core";
 import type { Card, ReviewVerdict, StoredDraft, StoredPick } from "@mtg-tutor/core";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
@@ -220,6 +220,14 @@ function renderReveal(
 
   const lines: string[] = [];
   if (guess) lines.push(`You guessed: ${pc.bold(guess.name)}`);
+  // What you committed to before anything was graded, above the data for the
+  // same reason the web puts it above the coach: it came first. Only picks made
+  // through the commitment ceremony carry one, and the CLI has only the passive
+  // flow -- so this is empty for a draft taken here and populated for one taken
+  // in the browser, which is the honest reading of an absent defense.
+  if (pick.defense) {
+    lines.push(`You said: ${pc.italic(`"${pick.defense.reason}"`)} ${pc.dim(`(${confidenceLevel(pick.defense.confidence).label.toLowerCase()})`)}`);
+  }
   lines.push(optionsPanel(pick, contextBest));
   if (verdict) {
     lines.push("");

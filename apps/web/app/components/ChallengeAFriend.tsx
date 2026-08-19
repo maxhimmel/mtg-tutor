@@ -89,6 +89,16 @@ export function ChallengeAFriend({
         A link that deals somebody the same cards you just drafted. When they finish, you
         get the two drafts side by side.
       </p>
+      {/* Said HERE and nowhere else. The comparison shows each drafter what the
+          other wrote for a pick, and the sentence was typed during a draft that
+          was nobody's business at the time -- so the moment it becomes shared is
+          the moment to say so, once, at the decision. Under the textarea it
+          would be a warning read forty-five times about a link most drafts never
+          get, which is how a true sentence turns into furniture. */}
+      <p className="text-xs leading-relaxed text-base-content/50">
+        Whatever you wrote for each pick goes with it — they will see your reasons, and
+        you will see theirs.
+      </p>
       <label className="flex flex-col gap-1">
         <span className="eyebrow">Who is it from?</span>
         <input

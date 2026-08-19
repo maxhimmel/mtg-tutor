@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import type { DiffRow } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
+import { Reasoning } from "../../../components/Reasoning";
 import { gradeColor } from "../../../lib/format";
 import { FaceCard, type Face } from "./faces";
 import { Who } from "./sides";
@@ -86,6 +87,32 @@ export function Shelf({
         <Took mine label="You took" name={row.yours.pickedName} grade={row.yours.grade} />
         <Took label={`${them} took`} name={row.theirs.pickedName} grade={row.theirs.grade} />
       </div>
+
+      {/* Why, in their own words -- which is the only thing on this screen that
+          a replay could not have produced and a grade cannot stand in for. Two
+          people took different cards, and everything else here says WHICH; this
+          says why they thought so at the time, written before either of them
+          knew anything.
+
+          Under the took-strip rather than beside each card, because a reason is
+          about the choice and not about a card: it frequently argues for one
+          card by naming another.
+
+          Either side may be missing, and often both are -- a pick made on the
+          passive flow never wrote one. Each reason is drawn on its own behind
+          the same filled-against-hollow dot the rest of the screen uses, so a
+          row with only one is unambiguous about whose it is rather than being
+          padded out to a pair. */}
+      {(row.yours.reason || row.theirs.reason) && (
+        <div className="flex flex-col gap-3 border-b border-base-300 pb-4">
+          {row.yours.reason && (
+            <Reasoning reason={row.yours.reason} attribution={<Who mine>You said</Who>} />
+          )}
+          {row.theirs.reason && (
+            <Reasoning reason={row.theirs.reason} attribution={<Who>{them} said</Who>} />
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-4 xl:flex-row">
         <div className={`${PACK_GRID} flex-1`}>

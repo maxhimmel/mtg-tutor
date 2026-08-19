@@ -131,6 +131,11 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
             : theirsBuilt
               ? "theirs"
               : "neither",
+      // Rows where either side wrote a sentence. Off `diff.rows` rather than
+      // off what the shelf drew, for the same reason `decks` is off the
+      // registered forties: the shelf shows one row at a time, so what it
+      // rendered is a fact about navigation rather than about the draft.
+      reasons: diff.rows.filter((r) => r.yours.reason || r.theirs.reason).length,
       layout,
       from: doorway(),
     });
@@ -164,6 +169,27 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
     [diff],
   );
 
+  // Whose reasoning was readable at each pick, for `fork_opened`. Derived here
+  // beside `forkIndices` rather than inside `goTo`, so that callback keeps a
+  // complete dependency list instead of closing over the whole query result and
+  // relying on `forkIndices` happening to change at the same time.
+  const reasonsAt = useMemo(() => {
+    const m = new Map<number, "both" | "yours" | "theirs" | "neither">();
+    for (const r of diff?.rows ?? []) {
+      m.set(
+        r.pickIndex,
+        r.yours.reason
+          ? r.theirs.reason
+            ? "both"
+            : "yours"
+          : r.theirs.reason
+            ? "theirs"
+            : "neither",
+      );
+    }
+    return m;
+  }, [diff]);
+
   /**
    * Move the shelf, and report it only when it landed on a fork.
    *
@@ -189,7 +215,15 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
       scroll: boolean,
     ): void => {
       setAt(pickIndex);
-      if (forkIndices.has(pickIndex)) forkOpened({ challengeId, pickIndex, from, layout });
+      if (forkIndices.has(pickIndex)) {
+        forkOpened({
+          challengeId,
+          pickIndex,
+          from,
+          layout,
+          reasons: reasonsAt.get(pickIndex) ?? "neither",
+        });
+      }
 
       const node = shelfRef.current;
       if (!scroll || !node) return;
@@ -230,7 +264,7 @@ function Screen({ challengeId }: { challengeId: Id<"challenges"> }) {
         block: "start",
       });
     },
-    [challengeId, forkIndices, layout],
+    [challengeId, forkIndices, layout, reasonsAt],
   );
 
   // Arrow keys step the shelf, with the usual escape hatch for anything a

@@ -3,11 +3,12 @@
 import { useMemo } from "react";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import type { Card } from "@mtg-tutor/core";
-import { loadPrinciples, splitCitations } from "@mtg-tutor/core";
+import { confidenceLevel, loadPrinciples, splitCitations } from "@mtg-tutor/core";
 import { AiResponse } from "../components/AiResponse";
 import { CardPlacard } from "../components/CardPlacard";
 import { CardText } from "../components/CardText";
 import { PrincipleBadges } from "../components/PrincipleBadge";
+import { Reasoning } from "../components/Reasoning";
 import {
   CONTEXT_BEST,
   GUESS,
@@ -177,6 +178,24 @@ export function PickReveal({
       </div>
 
       <div className="flex max-w-prose flex-col gap-3">
+        {/* Your own sentence, first and above the coach.
+            
+            Above it because it came first: this is what you committed to before
+            the pack was graded, and reading the verdict before being reminded
+            what you claimed turns the reveal into a fact you are told rather
+            than a prediction you made. It is also the one thing in this column
+            that renders without a model key.
+
+            Absent on a pick taken through the passive flow, which is what a row
+            with no defense MEANS -- so nothing is drawn rather than a placeholder
+            explaining that nothing was written. */}
+        {pick.defense && (
+          <Reasoning
+            reason={pick.defense.reason}
+            attribution={`You, before the reveal — ${confidenceLevel(pick.defense.confidence).label.toLowerCase()}`}
+          />
+        )}
+
         {verdict === undefined &&
           (pending ? (
             <p className="flex items-center gap-2 text-sm text-base-content/60">
