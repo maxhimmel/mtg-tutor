@@ -4,7 +4,8 @@ Numbering is stable and therefore gappy, for the same reason the ideas below
 are: `corpus.test.ts` cites issue #3. A fixed issue is deleted and its number
 left empty rather than renumbering everything under it. 1, 4, 6, 9 and 10
 shipped on 2026-08-15; 11 (mana pips off the cost, not the colour) and 12 (the
-hover preview surviving a click and a scroll) on 2026-08-17.
+hover preview surviving a click and a scroll) on 2026-08-17; 14 (the deck
+builder's principle citation drawn as a badge like every other) on 2026-08-19.
 
 2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
    (`setStats.synergies` is computed and stored and read by nothing — it is the
@@ -90,14 +91,6 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
     before this pick, so the card being graded is never in either half, and the
     coach reads it as an ordinary pick. Taking something into the sideboard on
     purpose and being lectured about your colours for it is the failure.
-
-14. This showed on the deck builder screen (bottom of deck list component):
-
-```
-cannot reach a reliable number of sources at this land count — eight for a main colour, three for a splash [MANA-02, MANA-05].
-```
-
-I want all instances referencing the draft principles to use the badge renderer we have for them.
 
 15. I don't think the last 5 or so picks in a pack should be included in "biggest missed picks" section or the practice > misses drill. Sometimes I pick a land so I can send a signal to the people down the line that I'm not interested in these colors.
 
