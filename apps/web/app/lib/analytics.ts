@@ -442,6 +442,26 @@ export function diffViewed(p: {
    * view recorded before this property existed.
    */
   from: "results" | "list" | "landing" | "email" | "link";
+  /**
+   * How many of the compared picks carried a written reason from either side.
+   *
+   * A PROPERTY, for the reason `layout` and `from` are: this is the same view
+   * counted by the same charts, split by whether the reasoning half of the
+   * screen had anything on it.
+   *
+   * It answers the one question that decides whether reading a friend's
+   * reasoning is a feature or an empty panel. A reason exists only for a pick
+   * made through the commitment ceremony, which is a setting either person may
+   * never have turned on -- so two people can finish a challenge and find the
+   * comparison silent about why, through nothing either of them did wrong. If
+   * this is near zero across real challenges, the thing to fix is the ceremony
+   * being off by default, not the panel that has nothing to draw.
+   *
+   * NOT the text. Session replay masks every textarea in this app on purpose
+   * (`instrumentation-client.ts`), and shipping the sentences out as a property
+   * would walk around that decision through a different door.
+   */
+  reasons: number;
 }): void {
   if (!on()) return;
   posthog.capture("diff_viewed", p);
@@ -485,6 +505,20 @@ export function forkOpened(p: {
   pickIndex: number;
   from: "track" | "hero" | "braid" | "tick" | "stepper";
   layout: string;
+  /**
+   * Whose reasoning was readable at the fork that was opened.
+   *
+   * `diff_viewed.reasons` says whether the draft had any; this says whether
+   * they were there at the moment they are worth most. A fork is where the two
+   * drafts actually disagree, so it is the one place "why did you take that"
+   * has a real answer waiting -- and a screen where reasons exist in bulk but
+   * never at a fork is a different problem from one where they do not exist.
+   *
+   * Same four-value shape as `diff_viewed.decks`, and for the same reason:
+   * "one of the two" and "neither" are different findings and collapsing them
+   * to a boolean loses which side is missing.
+   */
+  reasons: "both" | "yours" | "theirs" | "neither";
 }): void {
   if (!on()) return;
   posthog.capture("fork_opened", p);
