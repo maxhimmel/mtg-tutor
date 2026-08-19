@@ -63,7 +63,7 @@ describe("without a project token", () => {
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
       tokensPreviewed({ named: 1, withArt: 1, drawn: 1, viewport: 1440 });
-      statsViewed({ drafts: 0, picks: 0, detailed: 0, mistakes: 0, truncated: false });
+      statsViewed({ drafts: 0, picks: 0, detailed: 0, mistakes: 0, forced: 0, truncated: false });
       draftResumed({ sessionId: "s1", setCode: "fdn", format: "TradDraft", picks: 3, agedHours: 2 });
       draftStranded({
         sessionId: "s1",
@@ -152,7 +152,7 @@ describe("with a project token", () => {
   // screen is opened by people with nothing on it -- so the guard has to be
   // "was it viewed", never "was there anything to view".
   it("reports a stats view with nothing in it", () => {
-    const empty = { drafts: 0, picks: 0, detailed: 0, mistakes: 0, truncated: false };
+    const empty = { drafts: 0, picks: 0, detailed: 0, mistakes: 0, forced: 0, truncated: false };
     statsViewed(empty);
     expect(capture).toHaveBeenCalledWith("stats_viewed", empty);
   });

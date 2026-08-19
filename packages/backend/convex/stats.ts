@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { REVIEW, cardsLeftAtMiss, isDecisionPick } from "@mtg-tutor/core";
 import { query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
 import { ownSessions } from "./sessions.js";
@@ -42,6 +43,13 @@ export const overview = query({
     // player was shown the stored ones. The digest is those stored numbers,
     // reduced to what this screen plots.
     let counted = 0;
+    // How many stored misses the decision-pick floor threw away. Reported rather
+    // than kept quiet because the floor is a guess: REVIEW.decisionPickMinCards
+    // is 5 because that is what the review quiz has always used, and the
+    // complaint that prompted this said "the last 5 or so". This is the number
+    // that says whether 5 is the right one or whether the picks people want back
+    // are sitting just above it.
+    let forced = 0;
     for (const session of window) {
       const digest = await digestFor(ctx, session._id);
       // A draft that finished before digests existed, or one still in progress.
@@ -59,7 +67,18 @@ export const overview = query({
         byPackNo.set(packNos[i], { total: pack.total + scores[i], n: pack.n + 1 });
       }
 
-      for (const m of digest.mistakes) mistakes.push({ ...m, setCode: session.setCode });
+      // The decision-pick filter again, at read time. `mistakesFrom` applies it
+      // when a digest is written, so this is only reaching digests written
+      // before it did -- but a chart of "your worst picks" that still lists the
+      // dregs of a pack for every draft taken before today is the same wrong
+      // answer, and the arrays it needs are already in hand.
+      for (const m of digest.mistakes) {
+        if (!isDecisionPick(cardsLeftAtMiss(digest.picks, m), REVIEW.decisionPickMinCards)) {
+          forced++;
+          continue;
+        }
+        mistakes.push({ ...m, setCode: session.setCode });
+      }
     }
 
     const avg = (m: Map<number, { total: number; n: number }>) =>
@@ -99,6 +118,7 @@ export const overview = query({
       // So the caller can say what it could not see, rather than implying totals.
       truncated,
       countedDrafts: counted,
+      forcedMistakes: forced,
     };
   },
 });

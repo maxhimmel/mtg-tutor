@@ -1,12 +1,14 @@
 import { ConvexError, v } from "convex/values";
 import {
   type DraftEngine,
+  REVIEW,
   applyBench,
   buildDeck,
   buildPickContext,
   clampReason,
   compareDecks,
   deckColors,
+  isDecisionPick,
   isLandCount,
   newSeed,
   normalizeBench,
@@ -680,8 +682,13 @@ export const results = query({
     // disagree -- a pick could be ranked the worst mistake while scoring better
     // than one ranked below it -- and the old guard silently dropped every
     // mistake involving a card 17Lands had no data for.
+    //
+    // And only DECISION picks. The last few cards of a pack are what is left
+    // rather than what was chosen -- taking a land off the dregs to signal, or
+    // because there was nothing else, is not a miss. The review quiz and the
+    // misses drill already step past exactly these; this is the same threshold.
     const mistakes = engine.history
-      .filter((h) => !h.score.isBest)
+      .filter((h) => !h.score.isBest && isDecisionPick(h.pack.length, REVIEW.decisionPickMinCards))
       .map((h) => ({
         packNo: h.packNo,
         pickNo: h.pickNo,
