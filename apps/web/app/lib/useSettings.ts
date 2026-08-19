@@ -106,6 +106,45 @@ export const PODS: readonly { id: Pod; label: string; blurb: string }[] = [
   },
 ];
 
+/**
+ * How much coaching to buy, drawn as the smallest pack the coach will comment on.
+ *
+ * A LADDER FROM "EVERYTHING" TO "OPENINGS ONLY", not a spread of round numbers.
+ * The list this replaced was [2, 3, 5, 7, 9], which had no derivation behind it
+ * and did not contain the app's own floor -- so when `REVIEW.decisionPickMinCards`
+ * moved to 6 the default became unselectable and the control showed nothing
+ * pressed. Even steps around the floor cannot do that: 6 is a rung by
+ * construction, and the rungs either side are the same distance away.
+ *
+ * The middle rung is the one with a reason behind it. Everything else on this
+ * ladder is somebody buying more or less coaching than the app thinks a pick is
+ * worth, which is a preference; `COACH.minPackCards` is where a pick stops being
+ * a decision, which is a judgement the rest of the app already acts on.
+ *
+ * Blurbs describe what you GET rather than restating the number, and none of
+ * them counts picks -- a Play Booster is fourteen cards and the fallback shape
+ * is fifteen, so "9 of 14" would be wrong on a set that carries no observed
+ * composition.
+ */
+export const COACH_THRESHOLDS: readonly { id: number; label: string; blurb: string }[] = [
+  { id: 2, label: "2", blurb: "Everything except the one card you have no choice about" },
+  { id: 4, label: "4", blurb: "Nearly everything — quiet only for the last few of a pack" },
+  {
+    // 6 is `COACH.minPackCards`, written out rather than read from it. A rung
+    // computed from the constant can never disagree with the default, which
+    // makes the test asserting they agree a test that cannot fail -- trap #4 in
+    // notes.md, and the point of that trap is that such a test still reads as
+    // coverage. Spelled out, moving the floor turns `useSettings.test.ts` red
+    // and says to come and look at this ladder, which is the correct amount of
+    // friction: the rungs either side and this blurb are both about where 6 is.
+    id: 6,
+    label: "6",
+    blurb: "Where a pick stops being a real decision. What the review and the drills use",
+  },
+  { id: 8, label: "8", blurb: "Roughly the first half of a pack, where the deck is still open" },
+  { id: 10, label: "10", blurb: "The opening picks only, where a pack is still telling you things" },
+];
+
 export interface Settings {
   // Whether hovering a card mid-draft shows what 17Lands knows about it. Off is
   // drafting blind: the card is just a card, and the numbers wait for the
@@ -155,6 +194,21 @@ export const DEFAULT_SETTINGS: Settings = {
 export const SETTINGS_KEY = "mtg-tutor:settings";
 
 /**
+ * The offered rung closest to a number somebody is carrying.
+ *
+ * Ties go to the smaller rung, which is the side that coaches MORE. A stored
+ * value exactly between two offered ones is a preference this list can no
+ * longer express, and erring toward more advice loses less than erring toward
+ * silence -- the coach going quiet on a pick reads as the feature being broken,
+ * where an extra explanation reads as an extra explanation.
+ */
+function nearestThreshold(stored: number): number {
+  return COACH_THRESHOLDS.reduce((best, rung) =>
+    Math.abs(rung.id - stored) < Math.abs(best.id - stored) ? rung : best,
+  ).id;
+}
+
+/**
  * What localStorage is holding, brought up to the current shape.
  *
  * `showStats` was called `guiderails` until August 2026 -- a word from an early
@@ -197,6 +251,24 @@ export function storedSettings(raw: string): Partial<Settings> {
   // here.
   if (rest.pod !== undefined && !PODS.some((pod) => pod.id === rest.pod)) {
     delete rest.pod;
+  }
+
+  // SNAPPED, not deleted, and the difference is the kind of value it is.
+  //
+  // A layout and a pod are named alternatives with no order between them, so a
+  // stored one that is no longer offered says nothing about which of the
+  // survivors was wanted and falling back to the default is the only honest
+  // move. A threshold is a point on a line: somebody carrying the retired 9
+  // asked for less coaching than somebody carrying 3, and the nearest offered
+  // rung keeps that where the default would throw it away.
+  //
+  // It has to do SOMETHING, which is the part that is not optional. The offered
+  // values changed from [2, 3, 5, 7, 9] to even steps, so every drafter from
+  // before that carries a number this control cannot show as pressed -- and the
+  // default moved at the same time, so leaving them alone strands the untouched
+  // majority too.
+  if (rest.coachMinPackCards !== undefined) {
+    rest.coachMinPackCards = nearestThreshold(rest.coachMinPackCards);
   }
 
   return typeof guiderails === "boolean" && rest.showStats === undefined

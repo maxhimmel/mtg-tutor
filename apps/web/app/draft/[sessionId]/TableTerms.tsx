@@ -1,11 +1,7 @@
 "use client";
 
-import { PICK_CEREMONIES, useSettings } from "../../lib/useSettings";
+import { COACH_THRESHOLDS, PICK_CEREMONIES, useSettings } from "../../lib/useSettings";
 import { useDismissable } from "../../lib/useDismissable";
-
-// 2 is "coach everything except the literally forced last card"; 9 stops at the
-// halfway point of a Play Booster pack.
-const COACH_THRESHOLDS = [2, 3, 5, 7, 9];
 
 // The ceremony drawn as what it actually asks of you: two cards to be weighed
 // against each other, or the one card you are taking. The icon carries the
@@ -219,25 +215,35 @@ function CoachTerm() {
             role="group"
             aria-label="Smallest pack the AI coach comments on"
           >
-            {COACH_THRESHOLDS.map((n) => {
-              const selected = settings.coachMinPackCards === n;
+            {COACH_THRESHOLDS.map((rung) => {
+              const selected = settings.coachMinPackCards === rung.id;
               return (
                 <button
-                  key={n}
+                  key={rung.id}
                   type="button"
+                  title={rung.blurb}
                   className={`flex-1 cursor-pointer rounded-md py-1 text-xs tabular-nums transition-colors ${
                     selected
                       ? "bg-primary font-semibold text-primary-content"
                       : "text-base-content/50 hover:bg-base-100 hover:text-base-content"
                   }`}
                   aria-pressed={selected}
-                  onClick={() => update({ coachMinPackCards: n }, "board")}
+                  onClick={() => update({ coachMinPackCards: rung.id }, "board")}
                 >
-                  {n}
+                  {rung.label}
                 </button>
               );
             })}
           </div>
+          {/* What the pressed rung actually buys, under the control that sets
+              it. The numbers alone are a scale with no units -- "5" says
+              nothing about whether that is a lot of coaching or a little -- and
+              the one line above the group describes the SETTING rather than the
+              choice within it. Reserved height so choosing does not shift the
+              panel under the cursor that is choosing. */}
+          <p className="mt-2 min-h-[2.5rem] text-xs leading-relaxed text-base-content/50">
+            {COACH_THRESHOLDS.find((rung) => rung.id === settings.coachMinPackCards)?.blurb}
+          </p>
         </div>
       )}
     </div>
