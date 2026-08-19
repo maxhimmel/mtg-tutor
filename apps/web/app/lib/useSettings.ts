@@ -146,41 +146,51 @@ export const PODS: readonly { id: Pod; label: string; blurb: string }[] = [
 /**
  * How much coaching to buy, drawn as the smallest pack the coach will comment on.
  *
- * A LADDER FROM "EVERYTHING" TO "OPENINGS ONLY", not a spread of round numbers.
- * The list this replaced was [2, 3, 5, 7, 9], which had no derivation behind it
- * and did not contain the app's own floor -- so when `REVIEW.decisionPickMinCards`
- * moved to 6 the default became unselectable and the control showed nothing
- * pressed. Even steps around the floor cannot do that: 6 is a rung by
- * construction, and the rungs either side are the same distance away.
+ * EVERY VALUE IN THE RANGE, not a ladder of round ones. The first version of
+ * this offered [2, 3, 5, 7, 9] -- five numbers with no derivation -- and the
+ * second offered even steps, which fixed the derivation and kept the coarseness:
+ * somebody who wants the coach quiet for the last four picks of a pack had to
+ * choose between three and five. There is no reason for a gap. The values are
+ * small integers over a short range, so the honest control offers all of them
+ * and the only real decision is where the range stops.
  *
- * The middle rung is the one with a reason behind it. Everything else on this
- * ladder is somebody buying more or less coaching than the app thinks a pick is
- * worth, which is a preference; `COACH.minPackCards` is where a pick stops being
- * a decision, which is a judgement the rest of the app already acts on.
+ * WHERE IT STOPS. The floor is 2 rather than 1 because 1 means commenting on
+ * the single card you have no choice about, which is not a preference anybody
+ * holds -- it is what the "explain this anyway" button sends, and it stays
+ * reachable there. The ceiling is 10 because past it the coach is quiet for
+ * most of a pack and the remaining settings are the same answer with a longer
+ * silence; `COACH.maxMinPackCards` is 15 and the server still accepts anything
+ * up to it, so this is the range OFFERED and not the range allowed.
  *
- * Blurbs describe what you GET rather than restating the number, and none of
- * them counts picks -- a Play Booster is fourteen cards and the fallback shape
- * is fifteen, so "9 of 14" would be wrong on a set that carries no observed
- * composition.
+ * THE BLURB IS COMPUTED, and exactly rather than approximately. A threshold N
+ * silences the coach whenever the pack holds fewer than N cards, which is the
+ * last N-1 picks whatever the pack size is -- so this reads true on a fourteen
+ * card Play Booster and on the fifteen-card fallback shape alike, where
+ * anything phrased as "coaches the first nine picks" would be wrong on one of
+ * them. Written out rather than left to the number because "6" is a scale with
+ * no units: it says nothing about whether that is a lot of coaching or a little.
  */
-export const COACH_THRESHOLDS: readonly { id: number; label: string; blurb: string }[] = [
-  { id: 2, label: "2", blurb: "Everything except the one card you have no choice about" },
-  { id: 4, label: "4", blurb: "Nearly everything — quiet only for the last few of a pack" },
-  {
-    // 6 is `COACH.minPackCards`, written out rather than read from it. A rung
-    // computed from the constant can never disagree with the default, which
-    // makes the test asserting they agree a test that cannot fail -- trap #4 in
-    // notes.md, and the point of that trap is that such a test still reads as
-    // coverage. Spelled out, moving the floor turns `useSettings.test.ts` red
-    // and says to come and look at this ladder, which is the correct amount of
-    // friction: the rungs either side and this blurb are both about where 6 is.
-    id: 6,
-    label: "6",
-    blurb: "Where a pick stops being a real decision. What the review and the drills use",
-  },
-  { id: 8, label: "8", blurb: "Roughly the first half of a pack, where the deck is still open" },
-  { id: 10, label: "10", blurb: "The opening picks only, where a pack is still telling you things" },
-];
+const coachBlurb = (n: number): string => {
+  const quiet = n - 1;
+  const silence =
+    quiet === 1
+      ? "Quiet only for the last pick of a pack, where one card is left"
+      : `Quiet for the last ${quiet} picks of a pack`;
+  // The one rung with a reason behind it rather than a preference. It is the
+  // floor the review quiz, the misses drill and the biggest-misses list all
+  // judge a pick by, so choosing it is choosing to be coached on exactly the
+  // picks the rest of the app is prepared to call decisions.
+  return n === COACH.minPackCards
+    ? `${silence}. Where a pick stops being a real decision — what the review and the drills use`
+    : silence;
+};
+
+export const COACH_THRESHOLDS: readonly { id: number; label: string; blurb: string }[] =
+  Array.from({ length: 9 }, (_, i) => i + 2).map((n) => ({
+    id: n,
+    label: String(n),
+    blurb: coachBlurb(n),
+  }));
 
 export interface Settings {
   // Whether hovering a card mid-draft shows what 17Lands knows about it. Off is

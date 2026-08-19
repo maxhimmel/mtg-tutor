@@ -201,7 +201,9 @@ function CoachTerm() {
         // that is mid-question. 30 still clears the whole board -- the confirm
         // bar's z-20 is inside the board's own `isolate`, which composites as
         // one block below anything in the header.
-        <div className="popup-surface absolute right-0 top-full z-30 mt-2 w-64 p-3">
+        // w-80 rather than w-64: nine segments and a sentence describing the
+        // chosen one both want more room than five bare numbers did.
+        <div className="popup-surface absolute right-0 top-full z-30 mt-2 w-80 p-3">
           <div className="mb-2 flex flex-col gap-0.5">
             <span className="text-sm text-base-content">
               Smallest pack the coach comments on
