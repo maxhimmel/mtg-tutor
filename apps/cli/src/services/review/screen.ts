@@ -54,7 +54,12 @@ export async function runReview(
     let guess: Card | null = null;
     if (opts.mode === "quiz") {
       const header = `Pack ${pick.packNo} · Pick ${pick.pickNo} — which was the better pick?`;
-      guess = await pickCard(pick.pack, header);
+      // Blind, because the mode is a quiz. `pickCard` puts a GIH win rate on
+      // every row and the whole stat line under the cursor, which is most of
+      // the answer to the question being asked -- so the terminal's quiz was a
+      // reading test where the web's hides the same numbers. The reveal below
+      // still prints everything; only the guess is taken in the dark.
+      guess = await pickCard(pick.pack, header, { blind: true });
       if (!guess) {
         p.cancel("Review abandoned.");
         return;
