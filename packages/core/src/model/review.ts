@@ -1,4 +1,5 @@
 import type { Card } from "./card.js";
+import type { PickDefense } from "../tutor/challenge.js";
 
 // The AI's cached judgment for a single pick, frozen on first review so
 // re-reviews are stable. Produced by the review tutor, stored as JSON on the pick.
@@ -21,6 +22,14 @@ export interface StoredPick {
   score: number;
   isBest: boolean;
   onColor: boolean;
+  /**
+   * What the player said for this pick before it was graded.
+   *
+   * Absent on a pick made through the passive flow rather than the commitment
+   * ceremony -- which is how a stored row says which of the two it was, so a
+   * reader must render its absence rather than fill it in.
+   */
+  defense?: PickDefense;
   verdict?: ReviewVerdict;
 }
 

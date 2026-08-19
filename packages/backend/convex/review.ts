@@ -167,6 +167,15 @@ export const load = query({
           score: rec.score.score,
           isBest: rec.score.isBest,
           onColor: rec.score.onColor,
+          // What the player said for this pick BEFORE anything was revealed.
+          // Absent on a pick made through the passive flow, which is not a gap
+          // to paper over -- a row without one did not go through the ceremony,
+          // and that is what its absence means everywhere else in the codebase.
+          //
+          // Free to read: `storedPicks` collects whole documents and this rides
+          // on one already paid for. It widens what is RETURNED by at most ~160
+          // bytes a pick against a query measured at 262.7KB.
+          defense: row.defense,
           verdict: byIndex.get(row.pickIndex),
         };
       }),

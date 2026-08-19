@@ -31,6 +31,19 @@ export interface DiffSide {
   pickedName: string;
   score: number;
   grade: string;
+  /**
+   * What this drafter said for the pick, before anything was revealed.
+   *
+   * The one thing in a comparison that a replay could never produce and a score
+   * cannot stand in for: two people took different cards, and this is why. It
+   * is a real prediction rather than a rationalisation because the ceremony
+   * offers no way to edit it once the challenger is on screen.
+   *
+   * Absent when the pick was made on the passive flow, which every reader has
+   * to render honestly rather than fill in -- most rows of most drafts have
+   * none.
+   */
+  reason?: string;
 }
 
 export interface DiffRow {

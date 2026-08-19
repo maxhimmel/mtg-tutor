@@ -328,6 +328,13 @@ export const diff = query({
       pickedName: r.pickedName,
       score: r.score.score,
       grade: r.score.grade,
+      // The sentence, and only the sentence. `confidence` and `switched` are
+      // about how the pick was arrived at rather than about the pick, and this
+      // screen is a comparison of two drafts rather than of two ceremonies.
+      //
+      // Free to read -- the row is collected whole either way -- and it is the
+      // one field here with no cheaper substitute, since a score cannot say why.
+      ...(r.defense ? { reason: r.defense.reason } : {}),
     });
 
     // "Yours" is whoever is reading. The same challenge read from both sides is
