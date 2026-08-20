@@ -450,10 +450,14 @@ It'd be extremely rad to do some deep research, find some blog posts or somethin
 - Secondarily, I think YOU (the AI helping me develop this app) should also be aware of that same vernacular because you make some wacky suggestions for things I really don't like/never heard before such as "The Forty" when the term "Deck" is the norm.
 
 - Lastly, I think this particular idea should be done in a minimum of 2 phases:
+  1. Research and author the list of vernacular.
+  2. Improve the runtime app's usage of AI with proper terminology.
+  3. Do a pass of everything in the app and update labels, title, etc, EVERYTHING.
 
-1. Research and author the list of vernacular.
-2. Improve the runtime app's usage of AI with proper terminology.
-3. Do a pass of everything in the app and update labels, title, etc, EVERYTHING.
+14. Can we look into some tried and true plugins/packages for resizing, window-drag-n-drop, etc as a standard the app could use?
+
+- I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
+- It'd be cool to empower users to move sections where they like
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
