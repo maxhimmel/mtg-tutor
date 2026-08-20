@@ -1052,6 +1052,22 @@ The architecture, the data pipeline and the deploy story are all documented in
     the maindeck only through colour and value share — the curve and the roles
     reach the tiebreak, not the score.
 
+    **Confirmed on five sets it was not built on**, which the roadmap's
+    `turnFour` post-mortem is the reason for: a term checked only on the sets it
+    was developed against has been selected on them. Developed on fdn/dsk/woe,
+    run over all eight cached sets, 338,892 picks — off-colour nomination rate,
+    human first:
+
+        pack        P1              P2              P3
+        human      23.3%            4.0%            1.9%
+        ours       47.2%           13.4%            4.3%
+
+    Every set moves the same way and none changes sign. The P1 column barely
+    moved and should not have: commitment is 0.17 there, staying open is
+    correct, and a version of this that pushed P1 down would be a worse scorer
+    that scored better on the metric. That is the whole reason the human column
+    is printed beside ours rather than a target being fitted to.
+
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
     is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
     fast the format is, which needs the replay dataset. IWD has a sound
