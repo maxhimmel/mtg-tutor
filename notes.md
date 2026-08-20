@@ -102,6 +102,24 @@ deliberate choice to fix a stale default is the worse of the two errors.
 - A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
 - B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
 
+5. Kinda weird the coach and the scorer text say two different things about the margin of error:
+
+```
+Last pick
+A
+91/100
+You took
+Brush Off
+Graded against
+−1.2pp ± 1.1pp
+Sundering Archaic
+That gap is larger than the margin of error on the two win rates.
+
+Coach
+Brush Off is a fine counterspell that fits your
+ shell and stays cheap when it counters a spell. Sundering Archaic edges it out by removing a permanent unconditionally on a 3/3 body, but the gap is within the margin of error, so this pick is essentially a coin flip — no need to second-guess it.
+```
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -964,7 +982,7 @@ to the data work.
     harness has a paragraph refusing to reimplement "off-colour", and it imports
     `isOnColor` and `committedColors` for exactly that reason. It then assembled
     the scoring context BY HAND -- `{ colors, commitment, archetypes,
-    contextFor }` -- because `packScoringContext` also wants `needs` and the
+contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
     So when the colour rule moved (decision #23), the app changed and the
@@ -1021,150 +1039,149 @@ when a rule cannot be extracted into a pure function without contorting the
 component around the test. Either is the signal to stop paying for this in
 people noticing.
 
-0. **What the client may compute, now that scoring says "nothing".** Three bugs
-   in a week came from one shape: `EngineCard` is deliberately thin because
-   `setCards` is read on every pick, so anything needing a mana value or a type
-   line could only run in the browser -- and the principle tiebreak did, while
-   the grade ran on the server. The two then disagreed about the same pack on
-   screen, three times, and each was patched where it surfaced before anyone
-   traced it to the type.
+0.  **What the client may compute, now that scoring says "nothing".** Three bugs
+    in a week came from one shape: `EngineCard` is deliberately thin because
+    `setCards` is read on every pick, so anything needing a mana value or a type
+    line could only run in the browser -- and the principle tiebreak did, while
+    the grade ran on the server. The two then disagreed about the same pack on
+    screen, three times, and each was patched where it surfaced before anyone
+    traced it to the type.
 
-   **Resolved for scoring** on 2026-08-14: `turn` and `role` are settled at
-   ingest, and `needs` lives on `ScoringContext` built by `packScoringContext`,
-   so a context without needs is unrepresentable and two callers cannot hold
-   different ones. `diagnose-tiebreak.mjs` asserts the grade and the challenge
-   name one card and holds at zero divergences.
+    **Resolved for scoring** on 2026-08-14: `turn` and `role` are settled at
+    ingest, and `needs` lives on `ScoringContext` built by `packScoringContext`,
+    so a context without needs is unrepresentable and two callers cannot hold
+    different ones. `diagnose-tiebreak.mjs` asserts the grade and the challenge
+    name one card and holds at zero divergences.
 
-   **The general rule is not written down anywhere and should be.** The working
-   version: a client may compute what is CHEAPER to recompute than to send, and
-   must not compute anything the server also decides. The second half is the one
-   that was violated -- not by putting logic in the browser, but by putting it
-   ONLY there, which made the server's answer a different answer rather than the
-   same one arrived at twice.
+    **The general rule is not written down anywhere and should be.** The working
+    version: a client may compute what is CHEAPER to recompute than to send, and
+    must not compute anything the server also decides. The second half is the one
+    that was violated -- not by putting logic in the browser, but by putting it
+    ONLY there, which made the server's answer a different answer rather than the
+    same one arrived at twice.
 
-   The premise changes if a rule ever needs data too big for `EngineCard`. Then
-   the choice is a query before the pick rather than a field on the card, and
-   the round trip is the thing to weigh -- not whether the browser is allowed to
-   think.
+    The premise changes if a rule ever needs data too big for `EngineCard`. Then
+    the choice is a query before the pick rather than a field on the card, and
+    the round trip is the thing to weigh -- not whether the browser is allowed to
+    think.
 
-1. **The draft board no longer live-syncs — and it is now cheap enough to
-   reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
-   for the whole draft. Answering that query replays the session, which then read
-   the ~240KB pool, and every pick patches `draftSessions` and so invalidated it
-   — meaning each pick paid for that read twice, once in the mutation and once in
-   the re-run query. It now loads the board once and advances it from what `pick`
-   already returns.
+1.  **The draft board no longer live-syncs — and it is now cheap enough to
+    reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
+    for the whole draft. Answering that query replays the session, which then read
+    the ~240KB pool, and every pick patches `draftSessions` and so invalidated it
+    — meaning each pick paid for that read twice, once in the mutation and once in
+    the re-run query. It now loads the board once and advances it from what `pick`
+    already returns.
 
-   That is only sound because a draft is single-player and nothing but this
-   component ever changes the board. **A shared pod, a spectator view, or
-   drafting from two devices needs a subscription back.**
+    That is only sound because a draft is single-player and nothing but this
+    component ever changes the board. **A shared pod, a spectator view, or
+    drafting from two devices needs a subscription back.**
 
-   **The premise has changed.** `draft.state` is 45KB, not 240KB, since the pool
-   split — so naively restoring the subscription now costs ~45KB per pick rather
-   than 240KB. That is roughly doubling the pick path (1.9MB → 3.8MB per draft),
-   which is affordable but not free, and it buys tab-sync for a single player
-   who is unlikely to have two tabs open.
+    **The premise has changed.** `draft.state` is 45KB, not 240KB, since the pool
+    split — so naively restoring the subscription now costs ~45KB per pick rather
+    than 240KB. That is roughly doubling the pick path (1.9MB → 3.8MB per draft),
+    which is affordable but not free, and it buys tab-sync for a single player
+    who is unlikely to have two tabs open.
 
-   The shape that would keep both is unchanged and still better: subscribe to
-   something small and derived (a pick counter, or a session revision number) and
-   fetch the board only when that moves. Invalidation then costs a cheap read
-   instead of a whole board. Same principle as `setStatsMeta` — if a value is
-   only there to be watched or compared, it belongs on a row small enough to read
-   often.
+    The shape that would keep both is unchanged and still better: subscribe to
+    something small and derived (a pick counter, or a session revision number) and
+    fetch the board only when that moves. Invalidation then costs a cheap read
+    instead of a whole board. Same principle as `setStatsMeta` — if a value is
+    only there to be watched or compared, it belongs on a row small enough to read
+    often.
 
-2. **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
-   a full-table read expensive.** Every model call appends one ~150-byte row.
-   That is nothing next to the ~240KB documents that drained the tier, so
-   aggregating at read time is free at current volume and a rollup cron would be
-   moving parts bought against a cost that does not exist yet.
+2.  **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
+    a full-table read expensive.** Every model call appends one ~150-byte row.
+    That is nothing next to the ~240KB documents that drained the tier, so
+    aggregating at read time is free at current volume and a rollup cron would be
+    moving parts bought against a cost that does not exist yet.
 
-   The premise changes when months of real traffic accumulate: "total tokens
-   ever" then reads every row, which is exactly the `sets.list` pattern. At that
-   point fold raw rows into daily per-area totals and prune the raw rows on a
-   retention window. The benchmark harness is unaffected either way — it filters
-   by `runId` and only ever reads one run.
+    The premise changes when months of real traffic accumulate: "total tokens
+    ever" then reads every row, which is exactly the `sets.list` pattern. At that
+    point fold raw rows into daily per-area totals and prune the raw rows on a
+    retention window. The benchmark harness is unaffected either way — it filters
+    by `runId` and only ever reads one run.
 
-3. **`setStats.synergies` does not survive its own noise floor, and the coach's
-   problem was never this data** (investigated 2026-08-20, nothing built;
-   Issues #2 is the complaint). Left in the artifact rather than deleted,
-   because deleting it is a rebuild of eighteen sets and a re-seed to remove a
-   field nothing reads — but it must not be picked up, and the comment that
-   used to sit in `validators.ts` invited exactly that by framing the omission
-   as a BYTE cost with pool indices as the way to afford it.
+3.  **`setStats.synergies` does not survive its own noise floor, and the coach's
+    problem was never this data** (investigated 2026-08-20, nothing built;
+    Issues #2 is the complaint). Left in the artifact rather than deleted,
+    because deleting it is a rebuild of eighteen sets and a re-seed to remove a
+    field nothing reads — but it must not be picked up, and the comment that
+    used to sit in `validators.ts` invited exactly that by framing the omission
+    as a BYTE cost with pool indices as the way to afford it.
 
-   **The statistic.** `build-set-stats.mjs:527` is
+    **The statistic.** `build-set-stats.mjs:527` is
 
-       lift(a,b) = pairWinRate(a,b) − (soloWr(a) + soloWr(b)) / 2
+        lift(a,b) = pairWinRate(a,b) − (soloWr(a) + soloWr(b)) / 2
 
-   and the halves are measured over different populations: `pairWinRate` comes
-   from `inDeck`, the win rate of games where both cards were in the 40, while
-   `soloWr` is GIH WR (`:522`), games where the card was in HAND. GIH exceeds
-   deck WR by roughly `(1−p)·IWD` per card, so the baseline sits on a higher
-   scale than the thing subtracted from it and the shortfall varies with each
-   card's own IWD.
+    and the halves are measured over different populations: `pairWinRate` comes
+    from `inDeck`, the win rate of games where both cards were in the 40, while
+    `soloWr` is GIH WR (`:522`), games where the card was in HAND. GIH exceeds
+    deck WR by roughly `(1−p)·IWD` per card, so the baseline sits on a higher
+    scale than the thing subtracted from it and the shortfall varies with each
+    card's own IWD.
+    - **The zero point is about −1.4pp, not 0** (−0.61 to −1.76 by set) under a
+      purely additive no-synergy null. The "median lift 1.93pp" this was once
+      defended with is a distance from a zero the formula never produces.
+    - **The ranking prefers low-IWD partners by construction**, because
+      `−(1−p)·IWD/2` is in the baseline. Stored partners run 0.3-1.2pp below
+      their set's mean IWD — the same order as the whole claimed signal.
+      Independently, `corr(lift, mean IWD)` = −0.171 on fdn and
+      `corr(lift, mean GIH WR)` = +0.116, so the subtraction fails at the one
+      job it exists for.
+    - **Pure noise put through the same top-8 selection beats it on all
+      eighteen sets**: fdn 2.72pp simulated against 2.10 observed, SOS 2.70
+      against 1.44, and the same at p90. There is no structure in these lists
+      that chance does not already account for. Trap #13 is the general form.
 
-   - **The zero point is about −1.4pp, not 0** (−0.61 to −1.76 by set) under a
-     purely additive no-synergy null. The "median lift 1.93pp" this was once
-     defended with is a distance from a zero the formula never produces.
-   - **The ranking prefers low-IWD partners by construction**, because
-     `−(1−p)·IWD/2` is in the baseline. Stored partners run 0.3-1.2pp below
-     their set's mean IWD — the same order as the whole claimed signal.
-     Independently, `corr(lift, mean IWD)` = −0.171 on fdn and
-     `corr(lift, mean GIH WR)` = +0.116, so the subtraction fails at the one
-     job it exists for.
-   - **Pure noise put through the same top-8 selection beats it on all
-     eighteen sets**: fdn 2.72pp simulated against 2.10 observed, SOS 2.70
-     against 1.44, and the same at p90. There is no structure in these lists
-     that chance does not already account for. Trap #13 is the general form.
+    Two collaborating defects. `isBasic` (`:420`) tests `slot === "land"`, which
+    is the five basics only, so every dual and utility land is a spell here and
+    lands are over-represented in partner slots by 1.1-2.5x on 17 of 18 sets —
+    `readGameData`'s own comment about spurious land partners, defeated one
+    function from where it is written. And **8.5% of all 38,711 stored partners
+    have a lift of zero or less** (SOS 17.6%, worst −26.6pp) while
+    `schema.ts:166` calls the field "best partners first": the list is padded to
+    eight with whatever cleared `MIN_PAIR`, not filled with eight good ones.
+    Where the lists are not noise they are archetype membership, which
+    `archDelta` already scores and explicitly recentres to avoid charging twice.
 
-   Two collaborating defects. `isBasic` (`:420`) tests `slot === "land"`, which
-   is the five basics only, so every dual and utility land is a spell here and
-   lands are over-represented in partner slots by 1.1-2.5x on 17 of 18 sets —
-   `readGameData`'s own comment about spurious land partners, defeated one
-   function from where it is written. And **8.5% of all 38,711 stored partners
-   have a lift of zero or less** (SOS 17.6%, worst −26.6pp) while
-   `schema.ts:166` calls the field "best partners first": the list is padded to
-   eight with whatever cleared `MIN_PAIR`, not filled with eight good ones.
-   Where the lists are not noise they are archetype membership, which
-   `archDelta` already scores and explicitly recentres to avoid charging twice.
+    **What the complaint actually is.** `summarizePool`
+    (`core/src/tutor/pickCoach.ts:11`) writes the pool as bare NAMES grouped by
+    colour, and `poolBefore` is stored as `{name, colors}` with no text — while
+    the system prompt tells the model never to reason from a card's name because
+    these sets are newer than it is (decision #9). It is obeying the rule.
+    Nothing in `core/src/tutor/` asks it to look for synergy at all.
 
-   **What the complaint actually is.** `summarizePool`
-   (`core/src/tutor/pickCoach.ts:11`) writes the pool as bare NAMES grouped by
-   colour, and `poolBefore` is stored as `{name, colors}` with no text — while
-   the system prompt tells the model never to reason from a card's name because
-   these sets are newer than it is (decision #9). It is obeying the rule.
-   Nothing in `core/src/tutor/` asks it to look for synergy at all.
+    **The experiment, in order.** First a prompt-rule-only version as a CONTROL,
+    expected to be worse: a model asked about synergy with only names in front of
+    it answers from names, which is what `CARD_TEXT_RULE` exists to stop. Then
+    the pool's rules text for the ~6-8 cards nearest the pick, selected in the
+    browser where the text already sits. That costs **no Convex read bytes** —
+    the browser holds the full pool as whole cards and paid for the text once per
+    session, and mutation arguments are not database reads. Tokens: the whole
+    pool is ~3,200 mid-draft and ~6,500 by pick 42, too much; ~6-8 cards is about
+    +1,000 against a variable part of ~1,071, and the system prompt stays cached.
+    Measure how often the coach's reply NAMES a pool card, baseline first — a
+    feature that never names one has silently not shipped.
 
-   **The experiment, in order.** First a prompt-rule-only version as a CONTROL,
-   expected to be worse: a model asked about synergy with only names in front of
-   it answers from names, which is what `CARD_TEXT_RULE` exists to stop. Then
-   the pool's rules text for the ~6-8 cards nearest the pick, selected in the
-   browser where the text already sits. That costs **no Convex read bytes** —
-   the browser holds the full pool as whole cards and paid for the text once per
-   session, and mutation arguments are not database reads. Tokens: the whole
-   pool is ~3,200 mid-draft and ~6,500 by pick 42, too much; ~6-8 cards is about
-   +1,000 against a variable part of ~1,071, and the system prompt stays cached.
-   Measure how often the coach's reply NAMES a pool card, baseline first — a
-   feature that never names one has silently not shipped.
+    **Two corrections worth not rediscovering.** Intersecting partners against
+    the pool server-side saves nothing: Convex bills the document retrieved, so
+    the pack's rows are paid for before any filtering, and an intersection only
+    reduces what is RETURNED. And repairing the statistic (deck-scale both sides,
+    all lands excluded, a higher `MIN_PAIR`, shrinkage for multiplicity) costs
+    nothing to EVALUATE — the null simulation is the acceptance test and needs
+    nothing stored. Expect it to end at no: with SE ≈ 2.2pp at n≈500 and real
+    effects likely under 2pp, the `MIN_PAIR` that would resolve them collapses
+    the eligible set to archetype-mates.
 
-   **Two corrections worth not rediscovering.** Intersecting partners against
-   the pool server-side saves nothing: Convex bills the document retrieved, so
-   the pack's rows are paid for before any filtering, and an intersection only
-   reduces what is RETURNED. And repairing the statistic (deck-scale both sides,
-   all lands excluded, a higher `MIN_PAIR`, shrinkage for multiplicity) costs
-   nothing to EVALUATE — the null simulation is the acceptance test and needs
-   nothing stored. Expect it to end at no: with SE ≈ 2.2pp at n≈500 and real
-   effects likely under 2pp, the `MIN_PAIR` that would resolve them collapses
-   the eligible set to archetype-mates.
+    **The premise changes** if a corrected statistic clearly beats the noise
+    simulation, or if the pool-text experiment lands and the coach still cannot
+    see a theme the data would have given it. Until one of those, treat any
+    synergy number as unbuilt.
 
-   **The premise changes** if a corrected statistic clearly beats the noise
-   simulation, or if the pool-text experiment lands and the coach still cannot
-   see a theme the data would have given it. Until one of those, treat any
-   synergy number as unbuilt.
-
-   If it stays in the artifact: `schema.ts:166` should stop calling it "best
-   partners first", and `validators.ts:291` should say the signal did not
-   survive measurement rather than that it was priced out on bytes.
+    If it stays in the artifact: `schema.ts:166` should stop calling it "best
+    partners first", and `validators.ts:291` should say the signal did not
+    survive measurement rather than that it was priced out on bytes.
 
 # Decisions worth not re-litigating:
 

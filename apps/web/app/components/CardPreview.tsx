@@ -187,11 +187,31 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   // still has draft data worth reading -- so placement has to count them too, or
   // the panel gets no position and never appears.
   const stats = hover != null && hover.showStats && hasStats(hover.card);
+  // A card the numbers were ASKED for and could not be given.
+  //
+  // `stats` being false has two causes and only one of them is the player's.
+  // Turning the readout off is a deliberate choice -- drafting blind is a mode
+  // this app offers -- and repeating it back on every hover would be the app
+  // arguing with a setting. A card 17Lands has no row for is not a choice, is
+  // not fixable, and looks identical: the panel renders, the tokens list, and
+  // where the win rates go there is nothing at all.
+  //
+  // That silence is what notes.md #7 was reported against a second time, after
+  // the placement bug behind it was fixed -- and it is unfalsifiable from the
+  // outside, which is the whole objection. Unrated cards are overwhelmingly
+  // rares and mythics (41 of fdn's 49; up to a third of the rare pool in mom,
+  // woe and lci), and the first card in a pack is ALWAYS the rare or mythic
+  // because `SLOT_ORDER` is fixed -- so "the first card has no stats" is what a
+  // missing row looks like from a chair.
+  const unrated = hover != null && hover.showStats && !hasStats(hover.card);
   // Named in the panel whether or not there was room to draw them. This is the
   // half of the token feature that cannot be squeezed out by a narrow viewport,
   // and it is why the pictures are allowed to yield.
   const tokens = hover?.card.tokens ?? [];
-  const panel = notes.length > 0 || stats || tokens.length > 0;
+  // `unrated` counts, because a sentence explaining an absence is content and a
+  // panel that will not open cannot carry it -- which is the shape of the bug
+  // one line up, one level down.
+  const panel = notes.length > 0 || stats || unrated || tokens.length > 0;
   const back = hover?.card.backImageUrl;
   // Hold Shift to swap the stat rows for what they mean. A key rather than a
   // click because the panel is pointer-events:none -- it sits under the cursor
@@ -418,6 +438,18 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                 </div>
               )}
 
+              {/* Said, rather than left as a gap where the numbers usually are.
+                  Names 17Lands rather than "no data", because whose data is
+                  missing is the difference between a card nobody drafted enough
+                  of and a bug in this app -- and a reader who cannot tell which
+                  has to assume the second. */}
+              {unrated && (
+                <p className="text-xs leading-snug text-base-content/60">
+                  17Lands published no draft data for this card, so it has no win
+                  rates to show. It is scored off its rarity instead.
+                </p>
+              )}
+
               {/* What the card makes, above the keyword reminders because it is
                   about THIS card where a reminder is about the game. Two lines
                   each and no picture: the picture is the box beside the card,
@@ -429,7 +461,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                   indistinguishable from one that was never built. */}
               {!explain && tokens.length > 0 && (
                 <>
-                  {stats && <hr className="border-base-300" />}
+                  {(stats || unrated) && <hr className="border-base-300" />}
                   <div className="flex flex-col gap-1.5">
                     <span className="eyebrow">Makes</span>
                     <ul className="flex flex-col gap-1">
@@ -448,7 +480,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
                   panel cannot be scrolled (pointer-events:none). Someone holding
                   Shift is asking what the numbers mean, not what Flying does, so
                   the reminders yield rather than overflow out of reach. */}
-              {!explain && (stats || tokens.length > 0) && notes.length > 0 && (
+              {!explain && (stats || unrated || tokens.length > 0) && notes.length > 0 && (
                 <hr className="border-base-300" />
               )}
 
