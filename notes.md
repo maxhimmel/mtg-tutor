@@ -39,91 +39,14 @@ migrated: 5 is a legal value somebody could have chosen, and rewriting a
 deliberate choice to fix a stale default is the worse of the two errors.
 
 2.  It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
-    (`setStats.synergies` is computed and stored and read by nothing — it is the
-    data that would fix this. Although, I'm not certain how synergies was initially
-    calculated/derived and warrants an explanation/discussion because I fear the
-    synergy data may be misrepresented.)
 
-    **The fear was right, and the answer is not to make the data cheaper**
-    (investigated 2026-08-20, nothing built). The note that used to sit here said
-    synergy was left out of `setCardContext` on BYTES — two thirds of the table's
-    cost for the weakest signal — and offered pool indices as the way to halve it
-    if anyone picked it up. That framing was the dangerous part: it invites a
-    future session to ship the number as soon as it fits.
-
-    **It does not survive its own noise floor.** `build-set-stats.mjs:527` is
-
-        lift(a,b) = pairWinRate(a,b) − (soloWr(a) + soloWr(b)) / 2
-
-    and the two halves are measured over different populations. `pairWinRate`
-    comes from `inDeck` — the win rate of games where both cards were in the 40.
-    `soloWr` is GIH WR (`:522`), the win rate of games where the card was in
-    HAND. GIH exceeds deck WR by roughly `(1−p)·IWD`, per card, so the baseline
-    sits on a higher scale than the thing it is subtracted from and the shortfall
-    varies with each card's own IWD.
-
-    Three consequences, measured over all eighteen committed artifacts:
-    - **The zero point is about −1.4pp, not 0.** Under a purely additive
-      no-synergy null the formula returns a median of −0.61 to −1.76pp depending
-      on the set. The "median lift 1.93pp" this note used to quote is a distance
-      from a zero the formula never produces.
-    - **The ranking prefers low-IWD partners by construction**, because
-      `−(1−p)·IWD/2` is sitting in the baseline. Stored partners run 0.3-1.2pp
-      below their set's own mean IWD — the same order as the entire reported
-      signal. Independently: `corr(lift, mean IWD of the pair)` = −0.171 on fdn,
-      and `corr(lift, mean GIH WR)` = +0.116, so the subtraction fails at the one
-      job it exists for.
-    - **Simulate the pipeline under pure noise and it produces a LARGER top-8
-      than the real data, on all eighteen sets.** fdn: simulated median 2.72pp
-      against an observed 2.10; SOS 2.70 against 1.44. There is no structure in
-      these lists that noise does not already account for.
-
-    The naive check goes the other way and is the trap: measured against its own
-    null, the stored top-8 sits +3.1pp high with a quarter of it past z=2. That
-    is what selecting the top 8 of several hundred does to noise. **Only a null
-    that is subjected to the SAME selection is a comparison** — the harness is
-    `null.mjs`, worth rebuilding beside `backtest-scoring` if anyone touches
-    this, because it is what turns "looks significant" into "smaller than
-    chance".
-
-    And two collaborating defects. `isBasic` (`:420`) tests `slot === "land"`,
-    which is the five basics only — so every dual and utility land is a spell
-    here and lands are over-represented in stored partner slots by 1.1-2.5x on 17
-    of 18 sets, which is `readGameData`'s own comment about spurious land
-    partners being defeated one function away from where it is written. And
-    **8.5% of all 38,711 stored partners have a lift of zero or less** (SOS
-    17.6%, worst single entry −26.6pp) while `schema.ts:166` calls the field
-    "best partners first" — the list is padded to eight with whatever cleared
-    `MIN_PAIR`, not filled with eight good ones. Where the lists are not noise
-    they are archetype membership, which `archDelta` already scores and
-    explicitly recentres to avoid charging twice.
-
-    **The complaint and this data are about different things, which is the
-    finding worth keeping.** The coach does not notice themes because
-    `summarizePool` (`tutor/pickCoach.ts:11`) writes the pool as bare NAMES
-    grouped by colour, and `poolBefore` is stored as `{name, colors}` with no
-    text — while the system prompt tells the model never to reason from a card's
-    name, because these sets are newer than it is (decision #9). It is obeying
-    the rule. Nothing in `tutor/` ever asks it to look for synergy at all.
-
-    So the cheap experiment is the pool's RULES TEXT, not a statistic: the
-    browser already holds the full pool as whole cards and paid for that text
-    once per session, so passing it up costs no Convex read at all — mutation
-    arguments are not database reads. Whole pool is ~3,200 tokens mid-draft and
-    ~6,500 by pick 42, which is too much; the ~6-8 pool cards nearest the pick is
-    about +1,000 against a variable part of ~1,071, and the system prompt stays
-    cached. Run a prompt-rule-only version first as the control, expecting it to
-    be WORSE — a model asked about synergy with only names in front of it answers
-    from names, which is what `CARD_TEXT_RULE` exists to stop.
-
-    **Correction to a claim made while scoping this**: intersecting partners
-    against the pool server-side does NOT save bytes. Convex bills the whole
-    document retrieved, so the pack's rows are paid for before any filtering; an
-    intersection reduces what is RETURNED, which is not what is billed.
-
-    If `synergies` stays in the artifact, `schema.ts:166` should stop calling it
-    "best partners first" and `validators.ts:291` should say the signal did not
-    survive measurement rather than that it was priced out on bytes.
+    **Still open, and the cause is NOT missing data.** Investigated 2026-08-20;
+    the ruling and the numbers are in "Deferred trade-offs" #3. Short version:
+    `setStats.synergies` is unusable and was never what would have fixed this,
+    and the coach is handed the pool as bare NAMES while being told never to
+    reason from a name -- so it is obeying the rule with nothing to notice a
+    theme in. The experiment worth running is the pool's rules text. Nothing
+    has been built.
 
 3.  **A re-ingest can still strand a draft, through the half nobody guarded**
     (rewritten 2026-08-18). Everything this item used to describe is gone.
@@ -1032,6 +955,48 @@ to the data work.
     four-colour win rate to charge against, and inventing one is the thing
     `splashCost`'s own comment refuses. See the monotonicity note there.
 
+13. **A max-of-many is significant against its own null and still smaller than
+    chance** (2026-08-20, `setStats.synergies`). The obvious check on the stored
+    synergy lists says they are real: against a correct no-synergy baseline the
+    top-8 partners sit **+3.1pp high, with a quarter of them past z = 2**, on
+    every set. That is the number a reviewer would accept, and it is worthless.
+
+    The lists are the top 8 of several hundred candidates per card. Selecting
+    the maximum of many noisy draws produces a large positive value with
+    probability one — so "the selected entries beat their own mean" is not
+    evidence of anything, it is the definition of selecting them. **A null has
+    to be put through the SAME selection to be a comparison.** Simulate the
+    whole pipeline — real candidate sets, correct null means, real sampling
+    noise at each pair's own n, then take the top 8 — and pure noise produces a
+    LARGER top-8 than the real data on all eighteen sets.
+
+    So the honest reading flips from "+3.1pp and significant" to "less structure
+    than chance", on the same data, from adding one step to the null.
+
+    **What makes this its own trap rather than an instance of #7.** Trap #7 is
+    an aggregate hiding the decisions that matter; this is a comparison that is
+    correctly computed, correctly signed, and pointed at a quantity that was
+    never the question. It also cannot be caught by looking at the winners:
+    inspecting the top partners is exactly the step that reproduces the
+    selection. What catches it is asking what the number would be **if there
+    were nothing there at all**, and the only way to answer that is to build the
+    nothing and run it through the same machine.
+
+    The general form, for anything that ships a "best N" out of a candidate set:
+    **the significance of a selected item is not the significance of the
+    selection.** Corollary worth keeping — this cost nothing to settle. The
+    simulation reads the committed artifacts alone, needs no re-ingest and no
+    stored field, and would have been as cheap on the day the statistic was
+    written as it was on the day it was retired.
+
+    A cheaper tell that was available the whole time and nobody looked: 8.5% of
+    the stored "best partners" have a lift of zero or less, and across the
+    eighteen sets a stored partner shares a colour with its card only 27.6-66.3%
+    of the time, median about 40% (woe 27.6, blb 29.0, fdn 34.7, sos 66.3 —
+    counting coloured pairs only, colourless cards skipped). On most sets a
+    MAJORITY of a card's best partners are cards it cannot cast alongside it in
+    a two-colour deck. That needed no statistics to see, only a reader.
+
 # Deferred trade-offs (revisit when the premise changes):
 
 0a. **`apps/web` has no DOM test harness, and the hover preview is the reason
@@ -1129,6 +1094,88 @@ people noticing.
    point fold raw rows into daily per-area totals and prune the raw rows on a
    retention window. The benchmark harness is unaffected either way — it filters
    by `runId` and only ever reads one run.
+
+3. **`setStats.synergies` does not survive its own noise floor, and the coach's
+   problem was never this data** (investigated 2026-08-20, nothing built;
+   Issues #2 is the complaint). Left in the artifact rather than deleted,
+   because deleting it is a rebuild of eighteen sets and a re-seed to remove a
+   field nothing reads — but it must not be picked up, and the comment that
+   used to sit in `validators.ts` invited exactly that by framing the omission
+   as a BYTE cost with pool indices as the way to afford it.
+
+   **The statistic.** `build-set-stats.mjs:527` is
+
+       lift(a,b) = pairWinRate(a,b) − (soloWr(a) + soloWr(b)) / 2
+
+   and the halves are measured over different populations: `pairWinRate` comes
+   from `inDeck`, the win rate of games where both cards were in the 40, while
+   `soloWr` is GIH WR (`:522`), games where the card was in HAND. GIH exceeds
+   deck WR by roughly `(1−p)·IWD` per card, so the baseline sits on a higher
+   scale than the thing subtracted from it and the shortfall varies with each
+   card's own IWD.
+
+   - **The zero point is about −1.4pp, not 0** (−0.61 to −1.76 by set) under a
+     purely additive no-synergy null. The "median lift 1.93pp" this was once
+     defended with is a distance from a zero the formula never produces.
+   - **The ranking prefers low-IWD partners by construction**, because
+     `−(1−p)·IWD/2` is in the baseline. Stored partners run 0.3-1.2pp below
+     their set's mean IWD — the same order as the whole claimed signal.
+     Independently, `corr(lift, mean IWD)` = −0.171 on fdn and
+     `corr(lift, mean GIH WR)` = +0.116, so the subtraction fails at the one
+     job it exists for.
+   - **Pure noise put through the same top-8 selection beats it on all
+     eighteen sets**: fdn 2.72pp simulated against 2.10 observed, SOS 2.70
+     against 1.44, and the same at p90. There is no structure in these lists
+     that chance does not already account for. Trap #13 is the general form.
+
+   Two collaborating defects. `isBasic` (`:420`) tests `slot === "land"`, which
+   is the five basics only, so every dual and utility land is a spell here and
+   lands are over-represented in partner slots by 1.1-2.5x on 17 of 18 sets —
+   `readGameData`'s own comment about spurious land partners, defeated one
+   function from where it is written. And **8.5% of all 38,711 stored partners
+   have a lift of zero or less** (SOS 17.6%, worst −26.6pp) while
+   `schema.ts:166` calls the field "best partners first": the list is padded to
+   eight with whatever cleared `MIN_PAIR`, not filled with eight good ones.
+   Where the lists are not noise they are archetype membership, which
+   `archDelta` already scores and explicitly recentres to avoid charging twice.
+
+   **What the complaint actually is.** `summarizePool`
+   (`core/src/tutor/pickCoach.ts:11`) writes the pool as bare NAMES grouped by
+   colour, and `poolBefore` is stored as `{name, colors}` with no text — while
+   the system prompt tells the model never to reason from a card's name because
+   these sets are newer than it is (decision #9). It is obeying the rule.
+   Nothing in `core/src/tutor/` asks it to look for synergy at all.
+
+   **The experiment, in order.** First a prompt-rule-only version as a CONTROL,
+   expected to be worse: a model asked about synergy with only names in front of
+   it answers from names, which is what `CARD_TEXT_RULE` exists to stop. Then
+   the pool's rules text for the ~6-8 cards nearest the pick, selected in the
+   browser where the text already sits. That costs **no Convex read bytes** —
+   the browser holds the full pool as whole cards and paid for the text once per
+   session, and mutation arguments are not database reads. Tokens: the whole
+   pool is ~3,200 mid-draft and ~6,500 by pick 42, too much; ~6-8 cards is about
+   +1,000 against a variable part of ~1,071, and the system prompt stays cached.
+   Measure how often the coach's reply NAMES a pool card, baseline first — a
+   feature that never names one has silently not shipped.
+
+   **Two corrections worth not rediscovering.** Intersecting partners against
+   the pool server-side saves nothing: Convex bills the document retrieved, so
+   the pack's rows are paid for before any filtering, and an intersection only
+   reduces what is RETURNED. And repairing the statistic (deck-scale both sides,
+   all lands excluded, a higher `MIN_PAIR`, shrinkage for multiplicity) costs
+   nothing to EVALUATE — the null simulation is the acceptance test and needs
+   nothing stored. Expect it to end at no: with SE ≈ 2.2pp at n≈500 and real
+   effects likely under 2pp, the `MIN_PAIR` that would resolve them collapses
+   the eligible set to archetype-mates.
+
+   **The premise changes** if a corrected statistic clearly beats the noise
+   simulation, or if the pool-text experiment lands and the coach still cannot
+   see a theme the data would have given it. Until one of those, treat any
+   synergy number as unbuilt.
+
+   If it stays in the artifact: `schema.ts:166` should stop calling it "best
+   partners first", and `validators.ts:291` should say the signal did not
+   survive measurement rather than that it was priced out on bytes.
 
 # Decisions worth not re-litigating:
 
