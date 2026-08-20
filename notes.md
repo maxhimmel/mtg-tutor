@@ -8,6 +8,11 @@ hover preview surviving a click and a scroll) on 2026-08-17; 14 (the deck
 builder's principle citation drawn as a badge like every other) and 15 (forced
 picks out of the misses lists) on 2026-08-19.
 
+4 and 18 (the same report twice, and the scorer now charges an off-colour card
+for the deck it is not going to be in), 13 (the coach knows a card went
+straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
+lip cut from the scroll position) shipped on 2026-08-20.
+
 15 shipped in two parts, and the second is worth reading before touching the
 floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
 which had been the number since the review quiz was written and had never been
@@ -75,68 +80,6 @@ deliberate choice to fix a stale default is the worse of the two errors.
    Not a hazard the eighteen-set re-ingest of 2026-08-17 hit: card counts held
    for every set, all 29 distinct cards of a pre-re-ingest draft still resolved,
    and every pool card in all 18 sets has a text row.
-
-4. This coaching feels so offbase to me:
-
-```
-Last pick
-A
-90/100
-You took
-Stickytongue Sentinel
-Graded against
-−1.4pp ± 0.7pp
-Mudflat Village
-That gap is larger than the margin of error on the two win rates.
-
-Your call on the gap
-misread
-Mudflat Village was worth 1.4pp more to this deck, against a ±0.7pp margin of error. You called it close, and the data separates them — this one was gettable.
-
-Coach
-Stickytongue Sentinel is a solid 3‑mana 3/3 with reach and a bounce effect, but Mudflat Village’s mana acceleration, creature‑only mana restriction, and graveyard recursion give it a higher deck impact (+1.4 pp versus the +0.3 pp from Sentinel’s synergy) and the margin of error shows the advantage is statistically meaningful, so the “close call” claim is inaccurate and you should have taken Mudflat Village instead. Your reasoning that “exactly what my archetype wants” is off‑base: the archetype you’re building (a creature‑heavy green/blue midrange) benefits more from the extra early mana and the ability to replay cheap creatures than from Sentinel’s bounce effect, which rarely creates a decisive advantage.
-```
-
-I could understand the misread based purely off stats - sure. But this happened at P2P1. I had 9 cards in my main deck that were all blue and green and the coach telling me a black mana card was what I was meant to take feels crazy.
-
-Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
-
-13. **The coach does not know a card was picked straight into the sideboard**
-    (trimmed 2026-08-18). This began as two complaints about one screen and only
-    one of them is left.
-
-    The colour half is fixed. The coach called Forum of Amity "committed as on
-    those colors" for a UR pool because a land's `colors` was `[]` and every
-    reader treats an empty array as "goes in any deck" — so a WB tapland was
-    on-colour for everything. `requiredColors` settles it at ingest now and a
-    land carries its colour identity.
-
-    **What is left is the sideboard.** `coachContext` splits `poolBefore` into
-    maindeck and sideboard and the prompt shows both, so a card benched EARLIER
-    is handled. A card benched as it is picked is not: `poolBefore` is the pool
-    before this pick, so the card being graded is never in either half, and the
-    coach reads it as an ordinary pick. Taking something into the sideboard on
-    purpose and being lectured about your colours for it is the failure.
-
-14. What the heck is going on with this drill/practice vernacular?
-
-- We have a route called /drills/<some-feature>
-- We call the label on the nav "Practice"
-- "Take the pick back" navigates to /drills/misses --> why is it called "misses"? The word "miss" isn't even used once in the link describing this drill.
-
-17. See screenshot in my /Documents:
-
-- "Screenshot 2026-08-19 at 10.57.13 AM.png"
-- The compact scroll view is casting a shadow on the top even though there is nothing scrolled - it should only show shadow if it's scrolled.
-
-18. See screenshot in my /Documents:
-
-- "Screenshot 2026-08-19 at 10.56.35 AM.png"
-- This feels like terrible coaching/scoring algorithm.
-- Look at all the cards I've already drafted here.
-- In WHAT WORLD at P3P9 would taking this green frog be correct?!
-- I'm certain the stats on the frog is great, but it makes absolutely zero sense here.
-- Whatever is the algorithm to judge/score cards needs a lot of work because it's clearly not adapting to the colors we're committed to.
 
 19. Something that's been bothering me is the coaching section when we take unimportant picks that aren't meant to be graded. As well as the coach when we've run out of tokens.
 
@@ -317,7 +260,17 @@ on 2026-08-15.
      already wants to play twice. The events say whether that is true before any
      of it is designed.
 
-7. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
+7. **Shipped, and the note went with it** — resuming an abandoned draft. The
+   question this held ("is a draft that isn't completed even tracked on the
+   DB?") is answered yes: `draftSessions.status` carries `"active"`, and
+   `draft.unfinished` lists every open draft on the screen the app opens on,
+   with a picks-so-far count and a `promised` flag so a draft a friend is on the
+   other side of cannot be thrown away. `draft_resumed` is the event.
+
+   The number is kept rather than reused, because the entry below cites 8 and
+   the renumbering that briefly closed this gap took 8's number with it.
+
+8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
    drafts side by side. What it is and how to test one alone are in `README.md`;
    the rulings that came out of building it are decisions #17 and #18. The
    design write-up that used to sit here is gone with the idea, as a shipped
@@ -868,6 +821,56 @@ to the data work.
     wrong instrument for a partition", never as "the axis is worthless" — to price
     a bank, compare it against a plain run.
 
+11. **A harness built out of the wrong projection reports the app as broken in
+    exactly the way it is looking for** (2026-08-20, `diagnose-offcolour`). The
+    first run said the scorer nominated an off-colour card 55% of the time in
+    pack 1 and 30% in pack 3 against a human 24.6% and 2.3%, which is a
+    plausible number for a real bug and was the bug being hunted. It was also
+    measured with the colour terms switched off, by the harness itself.
+
+    The pool was built out of `{name, colors}` — the `PoolCard` projection a
+    stored row carries, and the correct shape for `committedColors`, which is
+    what it was copied from. `commitment` weights its share by `cardValue`, so a
+    pool of projections totals zero, returns a zero share, and pins commitment
+    at 0 for all 45 picks. Every colour term is multiplied by it.
+
+    **Trap #9 in the instrument rather than in the app**, and worse than trap #9
+    in one specific way: a fallback inside the app degrades a feature, while a
+    fallback inside the thing measuring the app degrades the EVIDENCE, and there
+    is nothing further out to catch it. The number it produced was not absurd.
+    It pointed the right direction. It would have been quoted in a commit
+    message and believed, and the real fix would then have been judged against
+    a baseline that was 20 points too pessimistic.
+
+    What caught it was printing an intermediate nobody had asked for — mean
+    commitment per pack — on the way to answering something else. The general
+    form: **an instrument must report the inputs its verdict is scaled by, not
+    just the verdict.** `diagnose-offcolour` now prints commitment per pack
+    beside the rates and refuses to print a table at all if it never leaves
+    zero. The refusal is the part worth copying; the print is what makes it
+    unnecessary.
+
+    Related and cheaper: `backtest-scoring` had been throwing on every run since
+    `computeCardValue` learned to read a type line, and nothing said so, because
+    nothing runs it but a person. A harness with no caller rots silently.
+
+12. **`splashCost` is flat past three colours, so a wide deck adds a fourth for
+    free** (2026-08-20, noticed while measuring the above; NOT fixed). The
+    artifact carries no four- or five-colour archetypes, so `winRateAtWidth`
+    falls back to the format baseline and the `worst` running maximum keeps the
+    three-colour figure: fdn prices widths 3, 4 and 5 at 0.0432 identically.
+    A deck already committed to three colours therefore pays
+    `splashCost(4) - splashCost(3)` = **zero** to add a fourth, and 52% of the
+    off-colour nominations measured were made to pools already three wide.
+
+    The off-colour term now covers most of this by a different route — a card
+    the deck will not play is charged whatever it was worth above the baseline,
+    regardless of width — so this is no longer producing the visible bug. It is
+    written down because the flatness is still there and is still wrong, and
+    because the honest reading is not obviously "fix it": there is no measured
+    four-colour win rate to charge against, and inventing one is the thing
+    `splashCost`'s own comment refuses. See the monotonicity note there.
+
 # Deferred trade-offs (revisit when the premise changes):
 
 0a. **`apps/web` has no DOM test harness, and the hover preview is the reason
@@ -1026,10 +1029,28 @@ The architecture, the data pipeline and the deploy story are all documented in
 8.  **What the score reads, and what it deliberately does not.** `cardValue` is
     frozen: bots pick by it, so it decides the deal, and every context-dependent
     judgement lives in `contextValue` instead where it can change without
-    stranding a draft. Three terms, none tuned — archetype fit and splash cost
-    are measured win rates carried in their own units, and the trust correction
-    is one-sided because self-selection flatters in one direction only.
-    - I kinda disagree: I feel like card scores should be impacted by what is currently in the maindeck & sideboard. I'm not convinced one way or the other, but I do think it's absolutely worth re-litigating.
+    stranding a draft. FOUR terms now, none tuned — archetype fit and splash
+    cost are measured win rates carried in their own units, the trust correction
+    is one-sided because self-selection flatters in one direction only, and the
+    off-colour charge added on 2026-08-20 is one-sided for the same reason.
+
+    **Re-litigated on 2026-08-20, and the disagreement was right.** The note
+    that used to sit here — "card scores should be impacted by what is currently
+    in the maindeck & sideboard, and it is absolutely worth re-litigating" — was
+    correct, and issues #4 and #18 were it being right twice more. The scorer
+    did read the pool, through `commitment`, but everything it did with what it
+    read was priced as a SPLASH: what a deck gave up by running the extra colour.
+    That is a real measured number and the wrong question late in a draft, where
+    the card is not going into the deck at any price.
+
+    So the answer is not "the score should read the pool" — it always did — but
+    **which claim the pool is being used to make.** A term was added for the
+    other future: an off-colour card is shrunk toward `formatBaseline` in
+    proportion to commitment, because a card that does not make your deck leaves
+    your deck where it was. `pnpm diagnose-offcolour` is the harness, and the
+    before/after is in the commit. What is still NOT read is the sideboard, and
+    the maindeck only through colour and value share — the curve and the roles
+    reach the tiebreak, not the score.
 
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
     is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
