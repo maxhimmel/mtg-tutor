@@ -101,12 +101,23 @@ describe("the keyword panel", () => {
     expect(walled.panelLeft! + 260).toBeLessThanOrEqual(1000 - GAP);
   });
 
-  // notes.md #7. The first card in a pack sits at the far left, so the block
-  // hangs to its RIGHT and runs toward the wall -- and a token adds a whole
-  // second card's width to it. The panel was placed after the faces had already
-  // taken the room, so it came out null: the player hovered a rare, got the card
-  // and its token, and no stats at all. The same card in the middle of the pack
-  // is fine, because the block flips left and leaves room beyond it.
+  // notes.md #7, at the width it was reported from. The first card in a pack
+  // sits at the far left, so the block hangs to its RIGHT and runs toward the
+  // wall -- and a token adds a whole second card's width to it. The panel was
+  // placed after the faces had already taken the room, so it came out null: the
+  // player hovered a rare, got the card and its token, and no stats at all. The
+  // same card mid-pack was fine, because the block overflows, flips left, and
+  // leaves room beyond it.
+  //
+  // "The first card" is two independent facts, and the reporter was right to
+  // distrust the rare half of their own instinct. The POSITION matters at this
+  // width and stops mattering below about 1300px -- see the test under this
+  // one, where every anchor failed. The RARITY never mattered: slot 0 is always
+  // a rare or mythic, because `SLOT_ORDER` in `core/src/draft/pack.ts` is fixed
+  // at ["mythic", "rare", ...] so a seed always deals the same pack, and the
+  // board renders `pack.map` straight through with no shuffle. Rares are also
+  // the cards that make tokens. So "first card" and "rare" are one fact twice,
+  // and neither of them is the bug.
   //
   // The token block's own comment says it "never yields SILENTLY: the panel
   // names every token the card makes whether or not there was room to draw it".
@@ -116,6 +127,20 @@ describe("the keyword panel", () => {
     const board: Viewport = { width: 1440, height: 900, wall: 1060 };
     const first = place(tile(40, 300), board, true, [UPRIGHT, UPRIGHT])!;
     expect(first.panelLeft).not.toBeNull();
+  });
+
+  // The same defect at a narrower window, where it stops depending on which
+  // slot of the pack you point at: below about 1300px there is no room for a
+  // card, a token and a panel at ANY anchor, so before the fix every
+  // token-making card lost its stats and not just the first one. The token is
+  // what yields now, which is the order the token block's own comment states.
+  it("drops the token rather than the panel on a laptop-width board", () => {
+    const laptop: Viewport = { width: 1280, height: 900, wall: 848 };
+    for (const at of [40, 300, 560]) {
+      const placed = place(tile(at, 300), laptop, true, [UPRIGHT, UPRIGHT])!;
+      expect(placed.lefts).toHaveLength(1);
+      expect(placed.panelLeft).not.toBeNull();
+    }
   });
 
   it("gives the panel up before the card image, but only when it must", () => {
