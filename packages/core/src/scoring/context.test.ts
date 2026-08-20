@@ -9,6 +9,7 @@ import {
   colorKey,
   commitment,
   contextValue,
+  deckColorsFor,
   formatBaseline,
   splashCost,
 } from "./context.js";
@@ -53,6 +54,50 @@ describe("formatBaseline", () => {
   it("weights by games, so a tiny archetype cannot drag it", () => {
     const withFringe = [...ARCHETYPES, { colors: "WUBRG", n: 50, wr: 0.2 }];
     expect(formatBaseline(withFringe)).toBeCloseTo(formatBaseline(ARCHETYPES), 3);
+  });
+});
+
+describe("deckColorsFor", () => {
+  // A finished pool with a real WU core and one accidental pair of black cards,
+  // which is exactly the shape `committedColors` calls three colours and a deck
+  // is not. Full-sized on purpose: the ranking compares the best 23 of each
+  // colour set, so a pool with fewer than 23 in ANY set is the case where a
+  // third colour fills slots that were counting as nothing -- real mid-draft,
+  // and not what this test is about.
+  const strayBlack = [
+    ...Array.from({ length: 14 }, (_, i) => card(`W${i}`, ["W"], 0.62)),
+    ...Array.from({ length: 14 }, (_, i) => card(`U${i}`, ["U"], 0.62)),
+    card("B1", ["B"], 0.55),
+    card("B2", ["B"], 0.55),
+  ];
+
+  it("names the deck the pool is building, not every colour it has touched twice", () => {
+    expect(deckColorsFor(strayBlack, ARCHETYPES, 23).sort()).toEqual(["U", "W"]);
+  });
+
+  it("does take a third colour when the table prices one and the cards earn it", () => {
+    // Black now carries the pool's best cards by a wide margin, so WUB's best 23
+    // beat WU's by more than the measured -3.5pp the table charges for width.
+    const realSplash = [
+      ...Array.from({ length: 10 }, (_, i) => card(`W${i}`, ["W"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`U${i}`, ["U"], 0.56)),
+      ...Array.from({ length: 6 }, (_, i) => card(`B${i}`, ["B"], 0.68)),
+    ];
+    expect(deckColorsFor(realSplash, ARCHETYPES, 23)).toContain("B");
+  });
+
+  it("stays two-colour when the table cannot price a third", () => {
+    const pairsOnly = ARCHETYPES.filter((a) => a.colors.length === 2);
+    const wide = [
+      ...Array.from({ length: 10 }, (_, i) => card(`W${i}`, ["W"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`U${i}`, ["U"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`B${i}`, ["B"], 0.68)),
+    ];
+    expect(deckColorsFor(wide, pairsOnly, 23)).toHaveLength(2);
+  });
+
+  it("has no opinion about an empty pool, rather than the first pair in WUBRG order", () => {
+    expect(deckColorsFor([], ARCHETYPES, 23)).toEqual([]);
   });
 });
 
@@ -227,6 +272,97 @@ describe("contextValue", () => {
     const sizes = out.terms.map((t) => Math.abs(t.delta));
     expect([...sizes].sort((a, b) => b - a)).toEqual(sizes);
     expect(out.terms.reduce((a, t) => a + t.delta, 0)).toBeCloseTo(out.value - out.base, 10);
+  });
+});
+
+// notes.md issues #4 and #18, as tests. Both are the same report -- a card the
+// deck on screen was never going to play, held up as the pick that should have
+// been made -- and neither could have gone red before this block existed: every
+// fixture above that is "off colour" is a B card against WU, which is a splash
+// candidate rather than a bench card, so the only assertions on it were about
+// `splashCost`.
+//
+// The measured version of this is `pnpm diagnose-offcolour`, which reads real
+// pools and reports the rate against the human one. These pin the RULE; that
+// pins the BEHAVIOUR. Neither substitutes for the other: a unit test cannot
+// know that 12.4% was too high, and the harness cannot fail in CI.
+describe("a card the deck is not going to play", () => {
+  const committedWU = ctxOf({ colors: new Set<ColorCode>(["W", "U"]) });
+
+  it("is worth nothing once the deck is certainly not playing it", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const out = contextValue(green, { ...committedWU, commitment: 1 });
+    const off = out.terms.find((t) => t.label === "off-color");
+
+    // All of it. A card that is never cast adds what a Mountain adds, which
+    // decision #10 already puts at zero -- not "its excess over a median card",
+    // which is what the format baseline turned out to be and which charged
+    // nothing at all to the half of every set below it.
+    expect(off?.delta).toBeCloseTo(-0.64, 10);
+  });
+
+  it("keeps its whole value while the draft is still open", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const out = contextValue(green, { ...committedWU, commitment: 0 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+    expect(out.value).toBeCloseTo(out.base, 10);
+  });
+
+  // The frog at P3P9. A strong off-colour card beat a decent on-colour one for
+  // the whole life of the scorer, because the only thing standing against it
+  // was `splashCost` -- about four points, against gaps that routinely run
+  // wider. This is the assertion that would have failed before the fix.
+  it("loses to a weaker card the deck can actually cast", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const onColour = card("Fine Blue Common", ["U"], 0.60);
+    const late = { ...committedWU, commitment: 0.85 };
+
+    expect(contextValue(green, late).value).toBeLessThan(contextValue(onColour, late).value);
+  });
+
+  // And the other half of the same rule, which is the one a bigger toll would
+  // have broken: early, taking the best card in the pack is correct, and the
+  // scorer must still say so.
+  it("still beats it at P1P1, where staying open is free", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const onColour = card("Fine Blue Common", ["U"], 0.60);
+    const early = { ...committedWU, commitment: 0 };
+
+    expect(contextValue(green, early).value).toBeGreaterThan(contextValue(onColour, early).value);
+  });
+
+  it("charges a weak card too, which the baseline anchor never did", () => {
+    // The regression this whole term existed for and did not catch. Under the
+    // old anchor a card below the format's own rate was charged NOTHING for
+    // being uncastable -- 31% to 50% of every set, by rarity -- so the two
+    // reports in notes.md #6 were both ordinary commons the scorer held up for
+    // free. There is no longer anything one-sided to protect: the anchor is
+    // zero, so the term cannot turn upward whatever the card is worth.
+    const weak = card("Weak Green", ["G"], 0.5);
+    const out = contextValue(weak, { ...committedWU, commitment: 1 });
+    expect(out.terms.find((t) => t.label === "off-color")?.delta).toBeCloseTo(-0.5, 10);
+    expect(out.terms.every((t) => t.delta <= 0)).toBe(true);
+  });
+
+  it("says nothing about a colourless card, which every deck can cast", () => {
+    const rock = card("Mana Rock", [], 0.62);
+    const out = contextValue(rock, { ...committedWU, commitment: 1 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+  });
+
+  it("says nothing about a card that shares one of the deck's colours", () => {
+    // A WB card in a WU deck is castable and pays `splashCost` for the black,
+    // which is a different charge for a different reason.
+    const partly = card("Half On Colour", ["W", "B"], 0.62);
+    const out = contextValue(partly, { ...committedWU, commitment: 1 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+    expect(out.terms.find((t) => t.label === "splash")).toBeDefined();
+  });
+
+  it("does not fire before the deck has colours at all", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const out = contextValue(green, ctxOf({ colors: new Set<ColorCode>(), commitment: 1 }));
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
   });
 });
 

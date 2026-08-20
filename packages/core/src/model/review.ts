@@ -19,6 +19,25 @@ export interface StoredPick {
   pack: Card[];
   picked: Card;
   bestName: string; // raw-power best (deterministic, from 17Lands data)
+  /**
+   * The card the grade was actually measured against -- `scorePick`'s
+   * `contextBest`, read back off the stored row rather than guessed at.
+   *
+   * The pair is the whole point, exactly as it is on the live board: `bestName`
+   * is what the data likes and this is what the DECK wanted, and the gap between
+   * them is the lesson. Carrying only the first is how the review screen came to
+   * mark the raw-power best as though it were the deck-aware answer whenever no
+   * verdict had been fetched -- the same defect `Verdict.tsx`'s header comment
+   * describes being fixed on the board, left standing here.
+   *
+   * It also fixes what the review MODEL is grounded on. It was told the
+   * raw-power best and asked to name a context-best itself, so a screen the
+   * player reads after the fact could nominate a card the grade never
+   * considered -- and a colour rule the scorer has since been taught could not
+   * reach it. Two authorities over one pack, which this codebase refuses in
+   * three other places.
+   */
+  contextBestName: string;
   score: number;
   isBest: boolean;
   onColor: boolean;

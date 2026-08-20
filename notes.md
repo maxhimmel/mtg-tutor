@@ -8,6 +8,32 @@ hover preview surviving a click and a scroll) on 2026-08-17; 14 (the deck
 builder's principle citation drawn as a badge like every other) and 15 (forced
 picks out of the misses lists) on 2026-08-19.
 
+4 and 18 (the same report twice, and the scorer now charges an off-colour card
+for the deck it is not going to be in), 13 (the coach knows a card went
+straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
+lip cut from the scroll position) shipped on 2026-08-20.
+
+5 (the coach arguing for a card using the one you took instead), 6 (the scorer
+still holding up cards the deck cannot cast, which was 4 and 18 not actually
+fixed) and 7 (the stats panel losing its room to a token picture) shipped later
+the same day. 6 is the one worth reading about rather than only counting: the
+term shipped for 4 and 18 was correct and never fired, for two independent
+reasons, and neither of them was visible in any number the app collected. The
+rulings are decisions #23 and #24; the trap the instrument fell into is #14.
+
+6 had a third half nobody reported, found while three agents were re-checking
+the first two. **The review screen was never asking the scorer at all.**
+`review.ts` put only `rawBest` on a stored pick, so the CONTEXT_BEST mark was
+the review model's own nomination -- or, with no verdict fetched, the raw-power
+best, which is the exact defect `Verdict.tsx` was fixed for on the live board
+and which sat unfixed two screens away. So both of the day's scoring fixes
+stopped at the board: a screen read AFTER the draft went on nominating cards the
+deck cannot cast, from a model that had never been told the colour rule.
+
+The general shape is worth more than the fix: **a rule taught to a scorer only
+reaches the surfaces that ask the scorer.** Three did and one did not, and the
+one that did not was the one nobody had a complaint about yet.
+
 15 shipped in two parts, and the second is worth reading before touching the
 floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
 which had been the number since the review quiz was written and had never been
@@ -33,110 +59,66 @@ the `Coach >=N` control on the board is where it changes. Deliberately not
 migrated: 5 is a legal value somebody could have chosen, and rewriting a
 deliberate choice to fix a stale default is the worse of the two errors.
 
-2. It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
-   (`setStats.synergies` is computed and stored and read by nothing — it is the
-   data that would fix this. Although, I'm not certain how synergies was initially
-   calculated/derived and warrants an explanation/discussion because I fear the
-   synergy data may be misrepresented.)
+2.  It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
 
-   **Still open, and now on purpose.** `setCardContext` was built to carry
-   exactly this and synergy was left out of it: eight partner names per card
-   measured at **201KB of read per draft**, against 41KB for the archetype
-   splits — two thirds of the table's cost for the weakest of the signals
-   (median lift 1.93pp against archetype fit's 4.2pp, p90 3.79 against 8.0).
-   Storing partners as pool indices rather than names would roughly halve it if
-   this is picked up. `pnpm backtest-scoring` is the harness, with the caveat
-   below about what it can and cannot judge.
+    **Still open, and the cause is NOT missing data.** Investigated 2026-08-20;
+    the ruling and the numbers are in "Deferred trade-offs" #3. Short version:
+    `setStats.synergies` is unusable and was never what would have fixed this,
+    and the coach is handed the pool as bare NAMES while being told never to
+    reason from a name -- so it is obeying the rule with nothing to notice a
+    theme in. The experiment worth running is the pool's rules text. Nothing
+    has been built.
 
-3. **A re-ingest can still strand a draft, through the half nobody guarded**
-   (rewritten 2026-08-18). Everything this item used to describe is gone.
-   `draftPools` gives every session its own packed cards, so the PACKS are
-   beyond a re-ingest's reach, and `draftSessions.sourceHash`, `staleAgainst`,
-   the stale badge and the "can no longer be rebuilt" error were all deleted
-   with the hazard they existed for.
+3.  **A re-ingest can still strand a draft, through the half nobody guarded**
+    (rewritten 2026-08-18). Everything this item used to describe is gone.
+    `draftPools` gives every session its own packed cards, so the PACKS are
+    beyond a re-ingest's reach, and `draftSessions.sourceHash`, `staleAgainst`,
+    the stale badge and the "can no longer be rebuilt" error were all deleted
+    with the hazard they existed for.
 
-   **The card TEXT was not.** `sets.ingest` replaces a set's `setCardText` rows
-   wholesale, so a card that leaves a pool loses its row while a draft in
-   progress goes on holding that card in boosters nothing can reach to update.
-   The board joins the two halves by name and `hydrateCard` throws on a name it
-   cannot find — deliberately, because a blank frame with no name is worse — and
-   it throws during RENDER, so the board went white with the reason in the
-   console and the back button as the only way out.
+    **The card TEXT was not.** `sets.ingest` replaces a set's `setCardText` rows
+    wholesale, so a card that leaves a pool loses its row while a draft in
+    progress goes on holding that card in boosters nothing can reach to update.
+    The board joins the two halves by name and `hydrateCard` throws on a name it
+    cannot find — deliberately, because a blank frame with no name is worse — and
+    it throws during RENDER, so the board went white with the reason in the
+    console and the back button as the only way out.
 
-   Handled on 2026-08-18: the board asks before the answer can take the page
-   down, names the cards that left, and puts a delete on that screen. A FINISHED
-   draft lands there too and is offered its review first, because `review.load`
-   reads the rows each pick wrote and rebuilds nothing.
+    Handled on 2026-08-18: the board asks before the answer can take the page
+    down, names the cards that left, and puts a delete on that screen. A FINISHED
+    draft lands there too and is offered its review first, because `review.load`
+    reads the rows each pick wrote and rebuilds nothing.
 
-   **Never reproduced live.** The mechanism is read off the code and verified
-   there; nobody has watched it happen. Worth knowing before trusting the copy
-   on that screen.
+    **Never reproduced live.** The mechanism is read off the code and verified
+    there; nobody has watched it happen. Worth knowing before trusting the copy
+    on that screen.
 
-   Not a hazard the eighteen-set re-ingest of 2026-08-17 hit: card counts held
-   for every set, all 29 distinct cards of a pre-re-ingest draft still resolved,
-   and every pool card in all 18 sets has a text row.
+    Not a hazard the eighteen-set re-ingest of 2026-08-17 hit: card counts held
+    for every set, all 29 distinct cards of a pre-re-ingest draft still resolved,
+    and every pool card in all 18 sets has a text row.
 
-4. This coaching feels so offbase to me:
+4.  Something that's been bothering me is the coaching section when we take unimportant picks that aren't meant to be graded. As well as the coach when we've run out of tokens.
+
+- A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
+- B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
+
+5. Kinda weird the coach and the scorer text say two different things about the margin of error:
 
 ```
 Last pick
 A
-90/100
+91/100
 You took
-Stickytongue Sentinel
+Brush Off
 Graded against
-−1.4pp ± 0.7pp
-Mudflat Village
+−1.2pp ± 1.1pp
+Sundering Archaic
 That gap is larger than the margin of error on the two win rates.
 
-Your call on the gap
-misread
-Mudflat Village was worth 1.4pp more to this deck, against a ±0.7pp margin of error. You called it close, and the data separates them — this one was gettable.
-
 Coach
-Stickytongue Sentinel is a solid 3‑mana 3/3 with reach and a bounce effect, but Mudflat Village’s mana acceleration, creature‑only mana restriction, and graveyard recursion give it a higher deck impact (+1.4 pp versus the +0.3 pp from Sentinel’s synergy) and the margin of error shows the advantage is statistically meaningful, so the “close call” claim is inaccurate and you should have taken Mudflat Village instead. Your reasoning that “exactly what my archetype wants” is off‑base: the archetype you’re building (a creature‑heavy green/blue midrange) benefits more from the extra early mana and the ability to replay cheap creatures than from Sentinel’s bounce effect, which rarely creates a decisive advantage.
+Brush Off is a fine counterspell that fits your
+ shell and stays cheap when it counters a spell. Sundering Archaic edges it out by removing a permanent unconditionally on a 3/3 body, but the gap is within the margin of error, so this pick is essentially a coin flip — no need to second-guess it.
 ```
-
-I could understand the misread based purely off stats - sure. But this happened at P2P1. I had 9 cards in my main deck that were all blue and green and the coach telling me a black mana card was what I was meant to take feels crazy.
-
-Please, take my complaint with a grain of salt because I'm not an MTG expert and I, myself, need the coaching, but still - this smells funky to me.
-
-13. **The coach does not know a card was picked straight into the sideboard**
-    (trimmed 2026-08-18). This began as two complaints about one screen and only
-    one of them is left.
-
-    The colour half is fixed. The coach called Forum of Amity "committed as on
-    those colors" for a UR pool because a land's `colors` was `[]` and every
-    reader treats an empty array as "goes in any deck" — so a WB tapland was
-    on-colour for everything. `requiredColors` settles it at ingest now and a
-    land carries its colour identity.
-
-    **What is left is the sideboard.** `coachContext` splits `poolBefore` into
-    maindeck and sideboard and the prompt shows both, so a card benched EARLIER
-    is handled. A card benched as it is picked is not: `poolBefore` is the pool
-    before this pick, so the card being graded is never in either half, and the
-    coach reads it as an ordinary pick. Taking something into the sideboard on
-    purpose and being lectured about your colours for it is the failure.
-
-14. What the heck is going on with this drill/practice vernacular?
-
-- We have a route called /drills/<some-feature>
-- We call the label on the nav "Practice"
-- "Take the pick back" navigates to /drills/misses --> why is it called "misses"? The word "miss" isn't even used once in the link describing this drill.
-
-17. See screenshot in my /Documents:
-
-- "Screenshot 2026-08-19 at 10.57.13 AM.png"
-- The compact scroll view is casting a shadow on the top even though there is nothing scrolled - it should only show shadow if it's scrolled.
-
-18. See screenshot in my /Documents:
-
-- "Screenshot 2026-08-19 at 10.56.35 AM.png"
-- This feels like terrible coaching/scoring algorithm.
-- Look at all the cards I've already drafted here.
-- In WHAT WORLD at P3P9 would taking this green frog be correct?!
-- I'm certain the stats on the frog is great, but it makes absolutely zero sense here.
-- Whatever is the algorithm to judge/score cards needs a lot of work because it's clearly not adapting to the colors we're committed to.
 
 # Ideas:
 
@@ -312,7 +294,15 @@ on 2026-08-15.
      already wants to play twice. The events say whether that is true before any
      of it is designed.
 
-7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
+7. **Shipped, and the note went with it** — resuming an abandoned draft. The
+   question this held ("is a draft that isn't completed even tracked on the
+   DB?") is answered yes: `draftSessions.status` carries `"active"`, and
+   `draft.unfinished` lists every open draft on the screen the app opens on,
+   with a picks-so-far count and a `promised` flag so a draft a friend is on the
+   other side of cannot be thrown away. `draft_resumed` is the event.
+
+   The number is kept rather than reused, because the entry below cites 8 and
+   the renumbering that briefly closed this gap took 8's number with it.
 
 8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
    drafts side by side. What it is and how to test one alone are in `README.md`;
@@ -406,6 +396,32 @@ flying or trample rather than have it; and 44 fight/bite spells sit in
 `other` because "deals damage equal to its power to target creature" matches
 nothing. Fixing those is its own re-ingest, so seeing them first is the
 cheap half.
+
+13. I want to improve the coach's (actually the AI being used anywhere in the app) vernacular. I want the AI to talk more like a seasoned friendly MTG player.
+
+Here's an example I don't like:
+
+```
+Fine pick, but the gap to Spectral Sailor is right at the margin, so they're essentially indistinguishable in the data. Balmor is a strong payoff card that pushes you toward spells-matter, while Spectral Sailor is a cheaper, higher-floor flyer that fits nearly any blue deck — either is defensible at pick 1.
+```
+
+- I don't like "higher-floor" and "defensible". What the heck does higher-floor mean in this context?
+
+It'd be extremely rad to do some deep research, find some blog posts or something, and collect a list of terms off the internet and store them as a reference here in the project.
+
+- Secondarily, I think YOU (the AI helping me develop this app) should also be aware of that same vernacular because you make some wacky suggestions for things I really don't like/never heard before such as "The Forty" when the term "Deck" is the norm.
+
+- Lastly, I think this particular idea should be done in a minimum of 2 phases:
+  1. Research and author the list of vernacular.
+  2. Improve the runtime app's usage of AI with proper terminology.
+  3. Do a pass of everything in the app and update labels, title, etc, EVERYTHING.
+
+14. Can we look into some tried and true plugins/packages for resizing, window-drag-n-drop, etc as a standard the app could use?
+
+- I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
+- It'd be cool to empower users to move sections where they like
+
+15. Could we have some kinda UI element that shows HOW a score is being added up to give the results it's giving when I make a pick? Some kinda snazzy infographic that explains the weights/calculations.heuristics/etc???
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -865,6 +881,129 @@ to the data work.
     wrong instrument for a partition", never as "the axis is worthless" — to price
     a bank, compare it against a plain run.
 
+11. **A harness built out of the wrong projection reports the app as broken in
+    exactly the way it is looking for** (2026-08-20, `diagnose-offcolour`). The
+    first run said the scorer nominated an off-colour card 55% of the time in
+    pack 1 and 30% in pack 3 against a human 24.6% and 2.3%, which is a
+    plausible number for a real bug and was the bug being hunted. It was also
+    measured with the colour terms switched off, by the harness itself.
+
+    The pool was built out of `{name, colors}` — the `PoolCard` projection a
+    stored row carries, and the correct shape for `committedColors`, which is
+    what it was copied from. `commitment` weights its share by `cardValue`, so a
+    pool of projections totals zero, returns a zero share, and pins commitment
+    at 0 for all 45 picks. Every colour term is multiplied by it.
+
+    **Trap #9 in the instrument rather than in the app**, and worse than trap #9
+    in one specific way: a fallback inside the app degrades a feature, while a
+    fallback inside the thing measuring the app degrades the EVIDENCE, and there
+    is nothing further out to catch it. The number it produced was not absurd.
+    It pointed the right direction. It would have been quoted in a commit
+    message and believed, and the real fix would then have been judged against
+    a baseline that was 20 points too pessimistic.
+
+    What caught it was printing an intermediate nobody had asked for — mean
+    commitment per pack — on the way to answering something else. The general
+    form: **an instrument must report the inputs its verdict is scaled by, not
+    just the verdict.** `diagnose-offcolour` now prints commitment per pack
+    beside the rates and refuses to print a table at all if it never leaves
+    zero. The refusal is the part worth copying; the print is what makes it
+    unnecessary.
+
+    Related and cheaper: `backtest-scoring` had been throwing on every run since
+    `computeCardValue` learned to read a type line, and nothing said so, because
+    nothing runs it but a person. A harness with no caller rots silently.
+
+12. **`splashCost` is flat past three colours, so a wide deck adds a fourth for
+    free** (2026-08-20, noticed while measuring the above; NOT fixed). The
+    artifact carries no four- or five-colour archetypes, so `winRateAtWidth`
+    falls back to the format baseline and the `worst` running maximum keeps the
+    three-colour figure: fdn prices widths 3, 4 and 5 at 0.0432 identically.
+    A deck already committed to three colours therefore pays
+    `splashCost(4) - splashCost(3)` = **zero** to add a fourth, and 52% of the
+    off-colour nominations measured were made to pools already three wide.
+
+    The off-colour term now covers most of this by a different route -- a card
+    the deck will not play is charged its whole value, regardless of width (see
+    decision #24; it was "whatever it was worth above the baseline" for four
+    days, which charged most cards nothing) -- so this is no longer producing
+    the visible bug. Decision #23 also narrows the colour set the width is read
+    off, so the "already three wide" premise is much rarer than when this was
+    measured. It is
+    written down because the flatness is still there and is still wrong, and
+    because the honest reading is not obviously "fix it": there is no measured
+    four-colour win rate to charge against, and inventing one is the thing
+    `splashCost`'s own comment refuses. See the monotonicity note there.
+
+13. **A max-of-many is significant against its own null and still smaller than
+    chance** (2026-08-20, `setStats.synergies`). The obvious check on the stored
+    synergy lists says they are real: against a correct no-synergy baseline the
+    top-8 partners sit **+3.1pp high, with a quarter of them past z = 2**, on
+    every set. That is the number a reviewer would accept, and it is worthless.
+
+    The lists are the top 8 of several hundred candidates per card. Selecting
+    the maximum of many noisy draws produces a large positive value with
+    probability one — so "the selected entries beat their own mean" is not
+    evidence of anything, it is the definition of selecting them. **A null has
+    to be put through the SAME selection to be a comparison.** Simulate the
+    whole pipeline — real candidate sets, correct null means, real sampling
+    noise at each pair's own n, then take the top 8 — and pure noise produces a
+    LARGER top-8 than the real data on all eighteen sets.
+
+    So the honest reading flips from "+3.1pp and significant" to "less structure
+    than chance", on the same data, from adding one step to the null.
+
+    **What makes this its own trap rather than an instance of #7.** Trap #7 is
+    an aggregate hiding the decisions that matter; this is a comparison that is
+    correctly computed, correctly signed, and pointed at a quantity that was
+    never the question. It also cannot be caught by looking at the winners:
+    inspecting the top partners is exactly the step that reproduces the
+    selection. What catches it is asking what the number would be **if there
+    were nothing there at all**, and the only way to answer that is to build the
+    nothing and run it through the same machine.
+
+    The general form, for anything that ships a "best N" out of a candidate set:
+    **the significance of a selected item is not the significance of the
+    selection.** Corollary worth keeping — this cost nothing to settle. The
+    simulation reads the committed artifacts alone, needs no re-ingest and no
+    stored field, and would have been as cheap on the day the statistic was
+    written as it was on the day it was retired.
+
+    A cheaper tell that was available the whole time and nobody looked: 8.5% of
+    the stored "best partners" have a lift of zero or less, and across the
+    eighteen sets a stored partner shares a colour with its card only 27.6-66.3%
+    of the time, median about 40% (woe 27.6, blb 29.0, fdn 34.7, sos 66.3 —
+    counting coloured pairs only, colourless cards skipped). On most sets a
+    MAJORITY of a card's best partners are cards it cannot cast alongside it in
+    a two-colour deck. That needed no statistics to see, only a reader.
+
+14. **An instrument that builds its own copy of the thing it measures will go
+    on measuring the old one** (2026-08-20, `diagnose-offcolour.mjs`). The
+    harness has a paragraph refusing to reimplement "off-colour", and it imports
+    `isOnColor` and `committedColors` for exactly that reason. It then assembled
+    the scoring context BY HAND -- `{ colors, commitment, archetypes,
+contextFor }` -- because `packScoringContext` also wants `needs` and the
+    harness did not care about needs.
+
+    So when the colour rule moved (decision #23), the app changed and the
+    instrument did not. It went on reporting the old rule's numbers, correctly,
+    with the right imports at the top of the file, and nothing anywhere could
+    have said so. It now calls `packScoringContext` like the mutation does.
+
+    **The second half is worse and is the general form.** The same file printed
+    "the colour terms charged it 0.34pp" under its table, from a filter naming
+    `splash` and `archetype`. That filter was written before the off-colour term
+    existed and nobody widened it -- so the number under a table measuring the
+    off-colour term **excluded the off-colour term**. It read as a healthy small
+    charge and it was a subtotal of the two terms that were not the subject. The
+    true figure was 1.28pp, which is still far too small, which is the finding
+    the instrument was built to surface and had been hiding for four days.
+
+    The rule: **a harness must not enumerate what it sums.** Sum everything and
+    exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+    the total by default rather than by somebody remembering. An allowlist in an
+    instrument is a silent undercount waiting for the next field.
+
 # Deferred trade-offs (revisit when the premise changes):
 
 0a. **`apps/web` has no DOM test harness, and the hover preview is the reason
@@ -900,68 +1039,149 @@ when a rule cannot be extracted into a pure function without contorting the
 component around the test. Either is the signal to stop paying for this in
 people noticing.
 
-0. **What the client may compute, now that scoring says "nothing".** Three bugs
-   in a week came from one shape: `EngineCard` is deliberately thin because
-   `setCards` is read on every pick, so anything needing a mana value or a type
-   line could only run in the browser -- and the principle tiebreak did, while
-   the grade ran on the server. The two then disagreed about the same pack on
-   screen, three times, and each was patched where it surfaced before anyone
-   traced it to the type.
+0.  **What the client may compute, now that scoring says "nothing".** Three bugs
+    in a week came from one shape: `EngineCard` is deliberately thin because
+    `setCards` is read on every pick, so anything needing a mana value or a type
+    line could only run in the browser -- and the principle tiebreak did, while
+    the grade ran on the server. The two then disagreed about the same pack on
+    screen, three times, and each was patched where it surfaced before anyone
+    traced it to the type.
 
-   **Resolved for scoring** on 2026-08-14: `turn` and `role` are settled at
-   ingest, and `needs` lives on `ScoringContext` built by `packScoringContext`,
-   so a context without needs is unrepresentable and two callers cannot hold
-   different ones. `diagnose-tiebreak.mjs` asserts the grade and the challenge
-   name one card and holds at zero divergences.
+    **Resolved for scoring** on 2026-08-14: `turn` and `role` are settled at
+    ingest, and `needs` lives on `ScoringContext` built by `packScoringContext`,
+    so a context without needs is unrepresentable and two callers cannot hold
+    different ones. `diagnose-tiebreak.mjs` asserts the grade and the challenge
+    name one card and holds at zero divergences.
 
-   **The general rule is not written down anywhere and should be.** The working
-   version: a client may compute what is CHEAPER to recompute than to send, and
-   must not compute anything the server also decides. The second half is the one
-   that was violated -- not by putting logic in the browser, but by putting it
-   ONLY there, which made the server's answer a different answer rather than the
-   same one arrived at twice.
+    **The general rule is not written down anywhere and should be.** The working
+    version: a client may compute what is CHEAPER to recompute than to send, and
+    must not compute anything the server also decides. The second half is the one
+    that was violated -- not by putting logic in the browser, but by putting it
+    ONLY there, which made the server's answer a different answer rather than the
+    same one arrived at twice.
 
-   The premise changes if a rule ever needs data too big for `EngineCard`. Then
-   the choice is a query before the pick rather than a field on the card, and
-   the round trip is the thing to weigh -- not whether the browser is allowed to
-   think.
+    The premise changes if a rule ever needs data too big for `EngineCard`. Then
+    the choice is a query before the pick rather than a field on the card, and
+    the round trip is the thing to weigh -- not whether the browser is allowed to
+    think.
 
-1. **The draft board no longer live-syncs — and it is now cheap enough to
-   reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
-   for the whole draft. Answering that query replays the session, which then read
-   the ~240KB pool, and every pick patches `draftSessions` and so invalidated it
-   — meaning each pick paid for that read twice, once in the mutation and once in
-   the re-run query. It now loads the board once and advances it from what `pick`
-   already returns.
+1.  **The draft board no longer live-syncs — and it is now cheap enough to
+    reconsider.** `DraftBoard.tsx` used to hold `useQuery(api.draft.state)` open
+    for the whole draft. Answering that query replays the session, which then read
+    the ~240KB pool, and every pick patches `draftSessions` and so invalidated it
+    — meaning each pick paid for that read twice, once in the mutation and once in
+    the re-run query. It now loads the board once and advances it from what `pick`
+    already returns.
 
-   That is only sound because a draft is single-player and nothing but this
-   component ever changes the board. **A shared pod, a spectator view, or
-   drafting from two devices needs a subscription back.**
+    That is only sound because a draft is single-player and nothing but this
+    component ever changes the board. **A shared pod, a spectator view, or
+    drafting from two devices needs a subscription back.**
 
-   **The premise has changed.** `draft.state` is 45KB, not 240KB, since the pool
-   split — so naively restoring the subscription now costs ~45KB per pick rather
-   than 240KB. That is roughly doubling the pick path (1.9MB → 3.8MB per draft),
-   which is affordable but not free, and it buys tab-sync for a single player
-   who is unlikely to have two tabs open.
+    **The premise has changed.** `draft.state` is 45KB, not 240KB, since the pool
+    split — so naively restoring the subscription now costs ~45KB per pick rather
+    than 240KB. That is roughly doubling the pick path (1.9MB → 3.8MB per draft),
+    which is affordable but not free, and it buys tab-sync for a single player
+    who is unlikely to have two tabs open.
 
-   The shape that would keep both is unchanged and still better: subscribe to
-   something small and derived (a pick counter, or a session revision number) and
-   fetch the board only when that moves. Invalidation then costs a cheap read
-   instead of a whole board. Same principle as `setStatsMeta` — if a value is
-   only there to be watched or compared, it belongs on a row small enough to read
-   often.
+    The shape that would keep both is unchanged and still better: subscribe to
+    something small and derived (a pick counter, or a session revision number) and
+    fetch the board only when that moves. Invalidation then costs a cheap read
+    instead of a whole board. Same principle as `setStatsMeta` — if a value is
+    only there to be watched or compared, it belongs on a row small enough to read
+    often.
 
-2. **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
-   a full-table read expensive.** Every model call appends one ~150-byte row.
-   That is nothing next to the ~240KB documents that drained the tier, so
-   aggregating at read time is free at current volume and a rollup cron would be
-   moving parts bought against a cost that does not exist yet.
+2.  **`llmUsage` stores raw rows with no rollup — revisit when prod volume makes
+    a full-table read expensive.** Every model call appends one ~150-byte row.
+    That is nothing next to the ~240KB documents that drained the tier, so
+    aggregating at read time is free at current volume and a rollup cron would be
+    moving parts bought against a cost that does not exist yet.
 
-   The premise changes when months of real traffic accumulate: "total tokens
-   ever" then reads every row, which is exactly the `sets.list` pattern. At that
-   point fold raw rows into daily per-area totals and prune the raw rows on a
-   retention window. The benchmark harness is unaffected either way — it filters
-   by `runId` and only ever reads one run.
+    The premise changes when months of real traffic accumulate: "total tokens
+    ever" then reads every row, which is exactly the `sets.list` pattern. At that
+    point fold raw rows into daily per-area totals and prune the raw rows on a
+    retention window. The benchmark harness is unaffected either way — it filters
+    by `runId` and only ever reads one run.
+
+3.  **`setStats.synergies` does not survive its own noise floor, and the coach's
+    problem was never this data** (investigated 2026-08-20, nothing built;
+    Issues #2 is the complaint). Left in the artifact rather than deleted,
+    because deleting it is a rebuild of eighteen sets and a re-seed to remove a
+    field nothing reads — but it must not be picked up, and the comment that
+    used to sit in `validators.ts` invited exactly that by framing the omission
+    as a BYTE cost with pool indices as the way to afford it.
+
+    **The statistic.** `build-set-stats.mjs:527` is
+
+        lift(a,b) = pairWinRate(a,b) − (soloWr(a) + soloWr(b)) / 2
+
+    and the halves are measured over different populations: `pairWinRate` comes
+    from `inDeck`, the win rate of games where both cards were in the 40, while
+    `soloWr` is GIH WR (`:522`), games where the card was in HAND. GIH exceeds
+    deck WR by roughly `(1−p)·IWD` per card, so the baseline sits on a higher
+    scale than the thing subtracted from it and the shortfall varies with each
+    card's own IWD.
+    - **The zero point is about −1.4pp, not 0** (−0.61 to −1.76 by set) under a
+      purely additive no-synergy null. The "median lift 1.93pp" this was once
+      defended with is a distance from a zero the formula never produces.
+    - **The ranking prefers low-IWD partners by construction**, because
+      `−(1−p)·IWD/2` is in the baseline. Stored partners run 0.3-1.2pp below
+      their set's mean IWD — the same order as the whole claimed signal.
+      Independently, `corr(lift, mean IWD)` = −0.171 on fdn and
+      `corr(lift, mean GIH WR)` = +0.116, so the subtraction fails at the one
+      job it exists for.
+    - **Pure noise put through the same top-8 selection beats it on all
+      eighteen sets**: fdn 2.72pp simulated against 2.10 observed, SOS 2.70
+      against 1.44, and the same at p90. There is no structure in these lists
+      that chance does not already account for. Trap #13 is the general form.
+
+    Two collaborating defects. `isBasic` (`:420`) tests `slot === "land"`, which
+    is the five basics only, so every dual and utility land is a spell here and
+    lands are over-represented in partner slots by 1.1-2.5x on 17 of 18 sets —
+    `readGameData`'s own comment about spurious land partners, defeated one
+    function from where it is written. And **8.5% of all 38,711 stored partners
+    have a lift of zero or less** (SOS 17.6%, worst −26.6pp) while
+    `schema.ts:166` calls the field "best partners first": the list is padded to
+    eight with whatever cleared `MIN_PAIR`, not filled with eight good ones.
+    Where the lists are not noise they are archetype membership, which
+    `archDelta` already scores and explicitly recentres to avoid charging twice.
+
+    **What the complaint actually is.** `summarizePool`
+    (`core/src/tutor/pickCoach.ts:11`) writes the pool as bare NAMES grouped by
+    colour, and `poolBefore` is stored as `{name, colors}` with no text — while
+    the system prompt tells the model never to reason from a card's name because
+    these sets are newer than it is (decision #9). It is obeying the rule.
+    Nothing in `core/src/tutor/` asks it to look for synergy at all.
+
+    **The experiment, in order.** First a prompt-rule-only version as a CONTROL,
+    expected to be worse: a model asked about synergy with only names in front of
+    it answers from names, which is what `CARD_TEXT_RULE` exists to stop. Then
+    the pool's rules text for the ~6-8 cards nearest the pick, selected in the
+    browser where the text already sits. That costs **no Convex read bytes** —
+    the browser holds the full pool as whole cards and paid for the text once per
+    session, and mutation arguments are not database reads. Tokens: the whole
+    pool is ~3,200 mid-draft and ~6,500 by pick 42, too much; ~6-8 cards is about
+    +1,000 against a variable part of ~1,071, and the system prompt stays cached.
+    Measure how often the coach's reply NAMES a pool card, baseline first — a
+    feature that never names one has silently not shipped.
+
+    **Two corrections worth not rediscovering.** Intersecting partners against
+    the pool server-side saves nothing: Convex bills the document retrieved, so
+    the pack's rows are paid for before any filtering, and an intersection only
+    reduces what is RETURNED. And repairing the statistic (deck-scale both sides,
+    all lands excluded, a higher `MIN_PAIR`, shrinkage for multiplicity) costs
+    nothing to EVALUATE — the null simulation is the acceptance test and needs
+    nothing stored. Expect it to end at no: with SE ≈ 2.2pp at n≈500 and real
+    effects likely under 2pp, the `MIN_PAIR` that would resolve them collapses
+    the eligible set to archetype-mates.
+
+    **The premise changes** if a corrected statistic clearly beats the noise
+    simulation, or if the pool-text experiment lands and the coach still cannot
+    see a theme the data would have given it. Until one of those, treat any
+    synergy number as unbuilt.
+
+    If it stays in the artifact: `schema.ts:166` should stop calling it "best
+    partners first", and `validators.ts:291` should say the signal did not
+    survive measurement rather than that it was priced out on bytes.
 
 # Decisions worth not re-litigating:
 
@@ -1023,10 +1243,62 @@ The architecture, the data pipeline and the deploy story are all documented in
 8.  **What the score reads, and what it deliberately does not.** `cardValue` is
     frozen: bots pick by it, so it decides the deal, and every context-dependent
     judgement lives in `contextValue` instead where it can change without
-    stranding a draft. Three terms, none tuned — archetype fit and splash cost
-    are measured win rates carried in their own units, and the trust correction
-    is one-sided because self-selection flatters in one direction only.
-    - I kinda disagree: I feel like card scores should be impacted by what is currently in the maindeck & sideboard. I'm not convinced one way or the other, but I do think it's absolutely worth re-litigating.
+    stranding a draft. FOUR terms now, none tuned — archetype fit and splash
+    cost are measured win rates carried in their own units, the trust correction
+    is one-sided because self-selection flatters in one direction only, and the
+    off-colour charge added on 2026-08-20 charges a card the deck cannot cast
+    its whole value, because that is what it adds to the deck.
+
+    **Re-litigated on 2026-08-20, and the disagreement was right.** The note
+    that used to sit here — "card scores should be impacted by what is currently
+    in the maindeck & sideboard, and it is absolutely worth re-litigating" — was
+    correct, and issues #4 and #18 were it being right twice more. The scorer
+    did read the pool, through `commitment`, but everything it did with what it
+    read was priced as a SPLASH: what a deck gave up by running the extra colour.
+    That is a real measured number and the wrong question late in a draft, where
+    the card is not going into the deck at any price.
+
+    So the answer is not "the score should read the pool" — it always did — but
+    **which claim the pool is being used to make.** A term was added for the
+    other future: an off-colour card is worth what a Mountain is worth, in
+    proportion to commitment, because a card that does not make your deck adds
+    nothing you did not already have. `pnpm diagnose-offcolour` is the harness.
+    What is still NOT read is the sideboard, and the maindeck only through
+    colour and value share — the curve and the roles reach the tiebreak, not the
+    score.
+
+    **That term then did nothing for four days and the numbers below said it was
+    working.** Both halves of why are decisions #23 and #24: it was asked about a
+    colour set that called four fifths of pools five-colour, and its anchor was a
+    deck win rate standing in for a card's. Do not read the paragraph above
+    without them.
+
+    **Confirmed on five sets it was not built on**, which the roadmap's
+    `turnFour` post-mortem is the reason for: a term checked only on the sets it
+    was developed against has been selected on them. Developed on fdn/dsk/woe,
+    run over all eight cached sets — off-colour nomination rate, human first:
+
+        pack        P1              P2              P3            all
+        human      15.3%            6.6%            9.4%          10.3%
+        ours        5.9%            2.6%            4.8%           4.4%
+
+    Every set moves the same way and none changes sign.
+
+    **Both columns moved when the colour rule did, and that is not a mistake in
+    the table.** "Off-colour" is defined by `deckColorsFor` now, so the HUMAN
+    figure is a different measurement than the one this note used to carry
+    (23.3/4.0/1.9 against the old rule). A drafter taking a card outside their
+    best two or three colours late is common and mostly a sideboard or hate
+    pick; against a five-colour reading of their own pool it barely registered.
+    Comparing a number here to a number in an older commit is comparing two
+    questions.
+
+    We now sit BELOW the human rate everywhere rather than at twice it, and when
+    we do name an off-colour card it beats the best on-colour card by 11.7pp —
+    so it is mostly packs holding nothing the deck can play. That is the right
+    direction to be wrong in for this app, and it is still a direction: a scorer
+    that never nominated one would be broken the other way, which is what the
+    floor of about 4.8% at P3 is measuring rather than a success.
 
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
     is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
@@ -1194,6 +1466,11 @@ The architecture, the data pipeline and the deploy story are all documented in
     two. `deckColors` in `packages/core/src/draft/summary.ts`. The stored field
     kept the name `colorPair` because renaming it is a schema migration for a
     label.
+
+    **Amended 2026-08-20, and the amendment is decision #23.** The rule below is
+    unchanged and still the one rule for a DECK's colours. What moved is that the
+    scorer stopped asking it about a POOL, where it answers a different question
+    and calls four fifths of them five-colour. See `deckColorsFor`.
 
     **The moment.** `draft.pick` writes the summary in its completion branch, and
     the player then spends the deck builder cutting cards — `draft.bench` has no
@@ -1470,3 +1747,88 @@ The architecture, the data pipeline and the deploy story are all documented in
     a fifteen card pack, and asserts the sentence names that number. Copy and
     the rule it describes are two places that can disagree, and this boundary
     has now produced two off-by-ones in one week.
+
+23. **A pool is not a deck, and the scorer spent a fortnight asking a deck's
+    question about a pool** (2026-08-20, notes.md #6). Decision #16 says a deck's
+    colours are `committedColors` -- two or more of a colour in the forty -- and
+    that ruling is untouched. What was wrong is where it was being asked.
+
+    Over a POOL the same rule answers something else entirely: two copies of
+    anything clears the bar. Measured over 12,000 real 17Lands drafts across
+    eight sets, by the last pick it calls **82% of pools four or five colours and
+    1.7% of them two**, while the top two colours hold **84.5% of the pool's
+    value**. Decision #16's own memory says this out loud -- "over a whole 42-card
+    draft POOL it gives four or five" -- and `leanColors` exists because the
+    challenge braid hit it. Nobody connected that to the scorer.
+
+    **Every colour term reads that set, so one wrong answer switched all of them
+    off at once, and none of them said so.** Nothing is off-colour when you are
+    in every colour. `splashCost` charges nothing to widen a deck already priced
+    at five. `commitment`'s value share pins near 1.0 because no card is outside
+    it. `archDelta` looks up "WUBRG", an archetype almost nobody drafted. Four
+    terms returning a confident zero, on a code path with no error in it.
+
+    **The fix is not a new rule.** `suggestDeck` has ranked all twenty candidate
+    colour sets by "best 23 castable cards, minus the measured cost of the width"
+    since it was written. That loop is now `deckColorsFor` and both callers share
+    it, so the grade and the deck the grade is about cannot name two decks for
+    one pool -- the failure `ScoringContext.needs` already has a paragraph about,
+    one level up. `scorePick`'s `onColor` and `targetOnColor` moved with it,
+    because leaving the "off your committed colors" warning on one definition and
+    the number that scored it on another is the same bug wearing a hat.
+
+    **NOT A CAP, which #16 forbids and meant.** The width is whatever the
+    archetype table can price: a third colour wins wherever the set says it is
+    cheap, which in snc (-0.3pp) is most of the time and in fdn (-4.3pp) is rare.
+
+    **What it is still wrong about, deliberately.** Candidates are ranked on the
+    cards the pool HAS, so while the pool is short of 23 playables a wider set
+    can win on slots that were counting as nothing rather than on cards -- which
+    mid-draft is every comparison. Padding those slots with a replacement card
+    was tried and put back: `formatBaseline` sits at about the median card, which
+    makes a colour set you hold three cards in beat one you hold twenty-four
+    mediocre cards in. The number that would work is what you will actually draft
+    into those slots, which depends on what is open, which is the thing nothing
+    here knows. A guess would have been worse than the known limitation.
+
+24. **`formatBaseline` is a deck's win rate and `cardValue` is a card's, and
+    they are close enough to swap by accident** (2026-08-20, the other half of
+    #6). The off-colour term shipped four days earlier shrank an uncastable card
+    "toward the format's own baseline", reasoning that a card which never gets
+    cast leaves your deck where it was.
+
+    The reasoning is right and the number was not on the right scale.
+    `formatBaseline` is a sample-weighted mean over ARCHETYPE win rates;
+    `cardValue` is a CARD's GIH win rate. Measured across all eighteen sets the
+    baseline lands at the **31st to 50th percentile of that set's own card
+    values** -- it IS the median card. So the term charged an uncastable card at
+    most its excess over a median playable: nothing at all for the half of every
+    set below that line, a point or two for the rest. Over 609,630 real picks it
+    charged **1.28pp against a 3.90pp winning margin**, and both cards a person
+    reported in #6 were charged exactly zero.
+
+    Decision #10 already had the right number and the right argument.
+    `SCORING.basicLandValue` is 0 because every other card's value answers "how
+    much better is a deck with this in it", and for a card that is never in the
+    deck the answer is zero by construction. **A card you cannot cast is the same
+    card as a Mountain.** `trapCorrection` keeps the baseline and should: it
+    distrusts a measurement and pulls it back toward the population it was
+    measured in. This one believes the measurement and says the card is in the
+    wrong deck. They were never the same anchor; they only looked like it.
+
+    **Still scaled by `commitment`, and that is generous rather than harsh.**
+    Measured forward over the same drafts -- take a card off your colours now,
+    does the deck you finish with cast it -- the real rate runs 0.71 under
+    commitment 0.1, 0.25 through the middle and 0.02 past 0.8, where
+    `1 - commitment` offers 0.95, 0.65 and 0.15. Charging the measured rate was
+    declined: it is observational, it sees only the off-colour cards drafters
+    CHOSE to take, and leaving a pivot open is the right direction to be wrong
+    in. Written down because the next person to look at this will find the term
+    lenient, not severe, and should know that was on purpose.
+
+    **What the two rulings bought, and what they cost.** Off-colour cards held up
+    as the better pick: **22.1% -> 4.4%**, against a human 10.3% on the same
+    packs. And the half that stings: over 122,238 decision picks the F rate goes
+    **3.7% -> 6.8%**, about one more per draft, on picks that spent a card the
+    deck cannot play -- while A+ goes UP, 40.3% -> 43.0%, because the uncastable
+    card is no longer beating the pick that was made.

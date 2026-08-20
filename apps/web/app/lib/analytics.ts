@@ -107,6 +107,29 @@ export function pickMade(p: {
   grade: string;
   isBest: boolean;
   onColor: boolean;
+  /**
+   * Whether the card the pick was GRADED AGAINST was one this deck could cast.
+   *
+   * `onColor` says what the player did; this says what we told them. The two
+   * complaints that produced the off-colour scoring term were both this field
+   * being false -- a black land held up against a UG pool, a green frog held up
+   * against a finished deck -- and neither was visible anywhere, so both had to
+   * be noticed by a person and typed into notes.md.
+   *
+   * The question it answers and that nothing else can: after the fix, how often
+   * does a real draft still get shown a card it cannot play? `diagnose-offcolour`
+   * answers that over 17Lands pools; only this answers it over the drafts people
+   * are actually having, which is where the pools are strange.
+   *
+   * Split by `packNo` is the reading that matters -- false at P1 is staying
+   * open, false at P3 is the bug -- and `packNo` is already on this row.
+   *
+   * Optional only because the score type is -- a score read back from storage
+   * cannot know it. Every pick that reaches this function was just graded live,
+   * so in practice it is always here, and an absent value in PostHog would mean
+   * the live path stopped setting it.
+   */
+  targetOnColor?: boolean;
   rankInPack: number;
   packSize: number;
   benched: boolean;
@@ -794,6 +817,15 @@ export function feedbackRefused(p: {
  * belongs shrunk into the panel. Both outcomes render something plausible, so
  * nothing else would ever say which.
  *
+ * `panel` is the third silence and the one a person found first. The token
+ * pictures used to be taken against the whole width and the stats panel placed
+ * in whatever was left, so a wide block could leave nothing -- and the panel is
+ * the half that names the tokens there was no room to draw, so it took the
+ * report of its own absence with it. notes.md #7: hovering the first card in a
+ * pack showed the card and its token and no stats, while the same card three
+ * slots along was fine. False here means it is still happening on somebody's
+ * real screen, which is the only way anyone would find out again.
+ *
  * Once per provider, not once per hover. A draft is hundreds of hovers and the
  * answer does not move between them; sending it every time would spend the
  * quota on the same fact repeatedly.
@@ -802,6 +834,7 @@ export function tokensPreviewed(p: {
   named: number;
   withArt: number;
   drawn: number;
+  panel: boolean;
   viewport: number;
 }): void {
   if (!on()) return;

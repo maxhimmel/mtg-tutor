@@ -2,7 +2,7 @@ import { DECK } from "../config.js";
 import type { Card, ColorWinRate } from "../model/card.js";
 import { isBasicLand, isLand } from "../model/card.js";
 import { castingValue, manaCurve, parseManaCost } from "../model/mana.js";
-import { splashCost } from "../scoring/context.js";
+import { deckColorsFor } from "../scoring/context.js";
 import { cardValue } from "../scoring/value.js";
 
 export interface DeckSuggestion {
@@ -50,39 +50,12 @@ export interface DeckOptions {
   deckSize?: number;
 }
 
-const COLOR_SETS = (() => {
-  const cols = ["W", "U", "B", "R", "G"];
-  const pairs: string[][] = [];
-  const triples: string[][] = [];
-  for (let i = 0; i < cols.length; i++)
-    for (let j = i + 1; j < cols.length; j++) {
-      pairs.push([cols[i], cols[j]]);
-      for (let k = j + 1; k < cols.length; k++) triples.push([cols[i], cols[j], cols[k]]);
-    }
-  return { pairs, triples };
-})();
-
 // One predicate for lands and spells alike, since `colors` became the colours a
 // card REQUIRES. This used to be two: lands print colourless, so a `landFitsColors`
 // read `colorIdentity` instead to keep a Boros tapland out of a Dimir deck. That
 // correction now happens once, at ingest, for every reader rather than this one.
 const fitsColors = (c: Card, colors: string[]) =>
   c.colors.every((col) => colors.includes(col));
-
-// Whether the table prices this exact width, rather than falling back to a mean.
-//
-// `splashCost` answers for any width, because the pick path needs an answer for
-// the deck it is actually in. A BUILDER choosing to go wider is a different
-// question: an unmeasured width falls back to the format's own rate, which the
-// two-colour decks it is being compared against dominate, so the gap collapses
-// and the extra colour reads as nearly free. Both sides of the comparison have
-// to have been played by somebody for the difference between them to be a
-// measurement.
-//
-// The width itself, not "something at least this wide". A format with three-
-// and five-colour rows and nothing at four says nothing about four.
-const measures = (archetypes: readonly ColorWinRate[], width: number) =>
-  archetypes.some((a) => a.colors.length === width);
 
 /**
  * How many lands this many expensive cards wants.
@@ -347,31 +320,17 @@ export function suggestDeck(pool: Card[], options: DeckOptions = {}): DeckSugges
     };
   };
 
-  const priced = archetypes != null && measures(archetypes, 2) && measures(archetypes, 3);
-  const candidates = priced ? [...COLOR_SETS.pairs, ...COLOR_SETS.triples] : COLOR_SETS.pairs;
+  // The ranking that used to live here is `deckColorsFor`, so the scorer and
+  // the builder cannot name two different decks for one pool -- see its comment.
+  const colors = deckColorsFor(spellPool, archetypes ?? [], spellCount);
+  const ranked = spellPool
+    .filter((c) => fitsColors(c, colors))
+    .sort((a, b) => cardValue(b) - cardValue(a));
 
-  let best: DeckSuggestion | undefined;
-  let bestTotal = -Infinity;
-
-  for (const colors of candidates) {
-    const ranked = spellPool
-      .filter((c) => fitsColors(c, colors))
-      .sort((a, b) => cardValue(b) - cardValue(a));
-    // Colour sets are compared over the SAME number of cards, always the
-    // conventional 23, whatever each would end up playing. Comparing a 24-card
-    // deck against a 23-card one adds a card's worth of win rate to whichever
-    // happened to want more spells, which would make the land rule quietly a
-    // colour-choosing rule as well.
-    const playable = ranked.slice(0, spellCount);
-    if (playable.length < spellCount / 2) continue;
-    const width = priced ? splashCost(archetypes!, colors.length) : 0;
-    const total = playable.reduce((s, c) => s + cardValue(c) - width, 0);
-    if (total > bestTotal) {
-      bestTotal = total;
-      best = fill(colors, ranked);
-    }
+  // A pool too thin to half-fill any colour set gets no colours rather than the
+  // least bad of twenty, which is what the old loop's `continue` protected.
+  if (ranked.slice(0, spellCount).length < spellCount / 2) {
+    return fill([], [...spellPool].sort((a, b) => cardValue(b) - cardValue(a)));
   }
-
-  if (!best) best = fill([], [...spellPool].sort((a, b) => cardValue(b) - cardValue(a)));
-  return best;
+  return fill(colors, ranked);
 }

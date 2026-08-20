@@ -7,12 +7,17 @@ import { SignedOut } from "../components/SignedOut";
 
 // What there is to play, as opposed to what the category is called.
 //
-// The page never announces a heading over the games, because the word for the
-// category is not settled -- "drills" is what the code, the routes and the
-// events call it, and whether that is the word a person should read is a
-// separate decision that costs nothing to change later. Leading with an
-// undecided word in the largest type on the screen buys nothing; the games
-// explain themselves.
+// The page still announces no heading over the games, and the reason has
+// changed. It used to be that the word was undecided; it is decided now --
+// "Practice" in the nav and in the route, "drills" only where a machine reads
+// it -- and a heading saying "Practice" directly under a nav item saying
+// "Practice" is a line of the largest type on the screen spent repeating the
+// thing that got you here. The games still explain themselves.
+//
+// The events are the one place the old word survives, and deliberately: a
+// PostHog event name cannot be repaired retroactively, so renaming `drill_*`
+// would orphan every chart keyed on it and start a second, shorter history of
+// the same thing.
 //
 // AND IT ASKS THE SERVER NOTHING. The obvious version of this page shows how
 // many packs are waiting, which means dealing a run -- ten packs of card text,
@@ -26,8 +31,12 @@ import { SignedOut } from "../components/SignedOut";
 
 const DRILLS = [
   {
-    href: "/drills/misses",
-    name: "Take the pick back",
+    href: "/practice/misses",
+    // Named for the thing it deals rather than the act it invites. "Take the
+    // pick back" said what you DO and left the route -- and the Results screen's
+    // own "Biggest missed picks" panel -- using a word the link never did, so a
+    // person who had just read that panel had nothing to connect it to.
+    name: "Missed picks",
     what: "The packs you got wrong, dealt again — the same cards, the same deck behind you, and no sign of what you took the first time.",
     length: "10 packs · a few minutes",
   },

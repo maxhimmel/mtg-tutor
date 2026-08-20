@@ -181,7 +181,7 @@ const coachBlurb = (n: number): string => {
   // judge a pick by, so choosing it is choosing to be coached on exactly the
   // picks the rest of the app is prepared to call decisions.
   return n === COACH.minPackCards
-    ? `${silence}. Where a pick stops being a real decision — what the review and the drills use`
+    ? `${silence}. Where a pick stops being a real decision — what the review and practice use`
     : silence;
 };
 

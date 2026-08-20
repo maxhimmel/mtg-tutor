@@ -46,6 +46,7 @@ describe("buildPickContext", () => {
     band: [],
     reasons: [],
     onColor: true,
+    targetOnColor: true,
     rankInPack: 2,
   };
 
@@ -93,6 +94,17 @@ describe("buildPickContext", () => {
 
   it("gives the passed cards their stats, not just a win rate", () => {
     expect(ctx).toContain("ALSA 6.0");
+  });
+
+  // The pool the coach is shown includes the card just taken, on purpose -- it
+  // is what the player is holding. What it is not is the pool an argument FOR a
+  // passed card gets to use, and nothing said so: a real answer argued that
+  // Micromancer "tutors back one of your Burst Lightnings" on a pick where Burst
+  // Lightning was taken INSTEAD of Micromancer. notes.md #5.
+  it("says the passed cards are a world where the pick was not made", () => {
+    expect(ctx).toContain("these were PASSED");
+    expect(ctx).toContain("would have meant NOT taking Lightning Strike");
+    expect(ctx).toContain("Lightning Strike is not in the pool");
   });
 
   it("says nothing about a sideboard when nothing has been benched", () => {
@@ -169,6 +181,7 @@ describe("buildPickContext showing the verdict's working", () => {
     band: [],
     reasons: [],
       onColor: true,
+      targetOnColor: true,
       rankInPack: 2,
       ...over,
     },
@@ -319,6 +332,7 @@ describe("buildPickContext with a defended pick", () => {
     band: [],
     reasons: [],
       onColor: true,
+      targetOnColor: true,
       rankInPack: 2,
     },
   };
@@ -366,5 +380,71 @@ describe("buildPickContext with a defended pick", () => {
     const plain = buildPickContext(rec, []);
     expect(plain).not.toContain("committed to this pick");
     expect(plain).toContain("Coach this pick.");
+  });
+});
+
+// The other half of notes.md #13. The colour sentence is `situation.test.ts`;
+// this is where the card is LISTED, and getting that wrong is the error the
+// model would have believed -- the sideboard block says out loud that its cards
+// do not count toward the colours, and the pool block says nothing, because
+// everything in it is supposed to.
+describe("buildPickContext on a pick sent straight to the sideboard", () => {
+  const picked = card("Doom Blade", { colors: ["B"], gihWinRate: 0.6 });
+  const other = card("Grizzly Bears", { colors: ["G"], gihWinRate: 0.52 });
+  const rec = (): RecordedPick<Card> => ({
+    packNo: 3,
+    pickNo: 9,
+    pack: [picked, other],
+    picked,
+    score: {
+      score: 91,
+      grade: "A",
+      picked,
+      pickedValue: 0.6,
+      pickedContextValue: 0.6,
+      rawBest: picked,
+      rawBestValue: 0.6,
+      contextBest: picked,
+      contextBestValue: 0.6,
+      terms: [],
+      isBest: true,
+      indistinguishable: false,
+      band: [],
+      reasons: [],
+      onColor: false,
+      targetOnColor: false,
+      rankInPack: 1,
+    },
+  });
+
+  const pool = [
+    { name: "Island", colors: [] as Card["colors"] },
+    { name: "Blue One", colors: ["U"] as Card["colors"] },
+    { name: "Blue Two", colors: ["U"] as Card["colors"] },
+  ];
+
+  it("lists the card under the sideboard rather than the pool", () => {
+    const out = buildPickContext(rec(), pool, [], [], undefined, true);
+    const sideboardAt = out.indexOf("Sideboard (1 cards)");
+    const poolAt = out.indexOf("Your pool so far");
+    expect(sideboardAt).toBeGreaterThan(-1);
+    expect(out.slice(sideboardAt)).toContain("Doom Blade");
+    // The pool block runs from its heading to the sideboard heading.
+    expect(out.slice(poolAt, sideboardAt)).not.toContain("Doom Blade");
+  });
+
+  it("counts it beside cards benched earlier rather than replacing them", () => {
+    const earlier = [{ name: "Old Mistake", colors: ["R"] as Card["colors"] }];
+    const out = buildPickContext(rec(), pool, earlier, [], undefined, true);
+    expect(out).toContain("Sideboard (2 cards)");
+    expect(out).toContain("Old Mistake");
+  });
+
+  it("puts it in the pool as usual when it was not benched", () => {
+    const out = buildPickContext(rec(), pool);
+    const poolAt = out.indexOf("Your pool so far");
+    expect(out).toContain("Your pool so far (4 cards)");
+    expect(out.slice(poolAt)).toContain("Doom Blade");
+    expect(out).not.toContain("Sideboard (");
   });
 });

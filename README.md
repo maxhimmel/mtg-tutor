@@ -64,7 +64,7 @@ During a draft, arrow-key through the pack (cards are pre-sorted by win rate wit
 
 When the last pack runs out you build the forty — cut down to 40 cards and set the land count — and only then does the CLI show you the suggested build, how far your deck is from it, the curve and colours side by side, your overall score and your biggest missed picks. Walk away before locking in and `mtg-tutor draft --resume <id>` puts you back on the build screen.
 
-### Take the pick back
+### Missed picks
 
 `pnpm practice` (web: **Practice** in the nav) deals your worst picks back as
 the packs they came from — the same cards, the same deck behind you, and no sign

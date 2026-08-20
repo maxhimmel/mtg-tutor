@@ -37,6 +37,10 @@ const pick = {
   grade: "B+",
   isBest: false,
   onColor: true,
+  // In the fixture so the seam is asserted to FORWARD it. The field is optional
+  // on the type, so a capture that quietly dropped it would typecheck -- which
+  // is trap #5's shape, and this test is the last hop before the wire.
+  targetOnColor: false,
   rankInPack: 2,
   packSize: 12,
   benched: false,
@@ -64,7 +68,7 @@ describe("without a project token", () => {
       feedbackRefused({ surface: "coach", reason: "rate", message: "no" });
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
-      tokensPreviewed({ named: 1, withArt: 1, drawn: 1, viewport: 1440 });
+      tokensPreviewed({ named: 1, withArt: 1, drawn: 1, panel: true, viewport: 1440 });
       statsViewed({ drafts: 0, picks: 0, detailed: 0, mistakes: 0, forced: 0, truncated: false });
       draftResumed({ sessionId: "s1", setCode: "fdn", format: "TradDraft", picks: 3, agedHours: 2 });
       draftStranded({
@@ -129,9 +133,11 @@ describe("with a project token", () => {
 
   // Read by subtraction in two directions -- named minus withArt is an ingest
   // problem, withArt minus drawn is a layout one -- so all three counts have to
-  // arrive under the names the differences are computed from.
+  // arrive under the names the differences are computed from. `panel` is not a
+  // count and is not read by subtraction: false is the defect notes.md #7
+  // reported, still happening.
   it("names the token event and keeps all three counts apart", () => {
-    const seen = { named: 2, withArt: 1, drawn: 0, viewport: 1280 };
+    const seen = { named: 2, withArt: 1, drawn: 0, panel: false, viewport: 1280 };
     tokensPreviewed(seen);
     expect(capture).toHaveBeenCalledWith("tokens_previewed", seen);
   });

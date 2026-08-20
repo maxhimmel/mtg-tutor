@@ -117,9 +117,19 @@ function ShortlistCard({ card, marks }: { card: Card; marks: Mark[] }) {
  * evidence and the prose is the argument, which is the relationship they already
  * have.
  *
- * `contextBest` falls back to the deterministic raw-power best when there is no
- * verdict, which is what keeps the review working on a deployment with no model
- * key: you still get the data, just not the prose.
+ * `contextBest` is the DETERMINISTIC one -- the card `scorePick` measured the
+ * grade against, carried on the stored row. It used to be the model's own
+ * nomination, falling back to the raw-power best when no verdict had been
+ * fetched, and both were wrong in the same direction: the fallback painted the
+ * strongest card as though it were the deck-aware answer, which is precisely
+ * what `Verdict.tsx`'s header describes being fixed on the live board, and the
+ * model's guess was made without the colour rules the scorer runs -- so this
+ * screen could hold up a card the deck cannot cast after the board had stopped.
+ *
+ * The model still names one, and a disagreement is still allowed to be
+ * interesting; what it no longer does is decide what the pack is MARKED with.
+ * One pack, one answer, the same one the grade used. The review works with no
+ * model key exactly as before: you get the data and not the prose.
  */
 export function PickReveal({
   pick,
@@ -147,7 +157,7 @@ export function PickReveal({
   // walkthrough asks on arrival, so there is nothing there to offer.
   onAsk?: () => void;
 }) {
-  const contextBest = verdict?.contextBestName ?? pick.bestName;
+  const contextBest = pick.contextBestName;
   const shown = useMemo(() => cardsToShow(pick, contextBest, guess), [pick, contextBest, guess]);
   const advice = useMemo(
     () => splitCitations(verdict?.narrative ?? "", PRINCIPLES),
