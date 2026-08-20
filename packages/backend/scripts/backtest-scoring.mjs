@@ -105,6 +105,12 @@ for (const file of files) {
       gihGames: c.gihN,
       alsa: c.alsa,
       rarityBaseline: undefined,
+      // Required since `computeCardValue` learned to recognise a basic land,
+      // which reads the type line before anything else. This fixture predates
+      // that and threw on every run: the artifact has no type lines, and it
+      // needs none -- a basic land has no `gihWr` and is filtered out two lines
+      // above, so the empty string is the honest answer rather than a stub.
+      typeLine: "",
     };
     const value = computeCardValue(card);
     // Commitment zero: no colours, no pool, so the archetype and splash terms

@@ -46,6 +46,7 @@ describe("buildPickContext", () => {
     band: [],
     reasons: [],
     onColor: true,
+    targetOnColor: true,
     rankInPack: 2,
   };
 
@@ -169,6 +170,7 @@ describe("buildPickContext showing the verdict's working", () => {
     band: [],
     reasons: [],
       onColor: true,
+      targetOnColor: true,
       rankInPack: 2,
       ...over,
     },
@@ -319,6 +321,7 @@ describe("buildPickContext with a defended pick", () => {
     band: [],
     reasons: [],
       onColor: true,
+      targetOnColor: true,
       rankInPack: 2,
     },
   };

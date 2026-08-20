@@ -37,6 +37,10 @@ const pick = {
   grade: "B+",
   isBest: false,
   onColor: true,
+  // In the fixture so the seam is asserted to FORWARD it. The field is optional
+  // on the type, so a capture that quietly dropped it would typecheck -- which
+  // is trap #5's shape, and this test is the last hop before the wire.
+  targetOnColor: false,
   rankInPack: 2,
   packSize: 12,
   benched: false,

@@ -29,6 +29,7 @@
     "check-access": "node scripts/check-access.mjs",
     "check-availability": "node scripts/check-set-availability.mjs",
     "claude-bridge": "node scripts/claude-bridge.mjs",
+    "diagnose-offcolour": "node scripts/diagnose-offcolour.mjs",
     "deploy": "convex deploy",
     "dev": "node scripts/dev.mjs",
     "dev:only": "convex dev",

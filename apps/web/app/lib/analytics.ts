@@ -107,6 +107,29 @@ export function pickMade(p: {
   grade: string;
   isBest: boolean;
   onColor: boolean;
+  /**
+   * Whether the card the pick was GRADED AGAINST was one this deck could cast.
+   *
+   * `onColor` says what the player did; this says what we told them. The two
+   * complaints that produced the off-colour scoring term were both this field
+   * being false -- a black land held up against a UG pool, a green frog held up
+   * against a finished deck -- and neither was visible anywhere, so both had to
+   * be noticed by a person and typed into notes.md.
+   *
+   * The question it answers and that nothing else can: after the fix, how often
+   * does a real draft still get shown a card it cannot play? `diagnose-offcolour`
+   * answers that over 17Lands pools; only this answers it over the drafts people
+   * are actually having, which is where the pools are strange.
+   *
+   * Split by `packNo` is the reading that matters -- false at P1 is staying
+   * open, false at P3 is the bug -- and `packNo` is already on this row.
+   *
+   * Optional only because the score type is -- a score read back from storage
+   * cannot know it. Every pick that reaches this function was just graded live,
+   * so in practice it is always here, and an absent value in PostHog would mean
+   * the live path stopped setting it.
+   */
+  targetOnColor?: boolean;
   rankInPack: number;
   packSize: number;
   benched: boolean;

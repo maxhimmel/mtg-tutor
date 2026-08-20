@@ -13,8 +13,15 @@ import {
   type ValueTerm,
   commitment,
   contextValue,
+  isOnColor,
   marginBetween,
 } from "./context.js";
+
+// Moved to `context.js` when the off-colour term needed it, and re-exported
+// here so `scoring/score.js` stays the import path every existing caller and
+// `situation.ts` already use. The rule itself did not change: it is still the
+// one definition, which is the whole of why its own comment refuses a copy.
+export { isOnColor };
 import { type TiebreakReason, bandOf, deckNeeds, tiebreak } from "./tiebreak.js";
 
 /**
@@ -116,6 +123,36 @@ export interface PickScore<C extends EngineCard = EngineCard> {
   /** Why `preferred` was preferred. Empty when nothing was. */
   reasons: TiebreakReason[];
   onColor: boolean;
+  /**
+   * Whether the card this pick was GRADED AGAINST is one the deck could cast.
+   *
+   * `onColor` is about the player's choice; this is about ours, and until the
+   * off-colour term landed there was no number anywhere that could tell you how
+   * often the app held up a card the deck on screen was never going to play.
+   * That is the whole of notes.md #4 and #18, and both were reported by a
+   * person, twice, because nothing was counting it.
+   *
+   * `diagnose-offcolour` answers this over 17Lands pools and cannot answer it
+   * over anyone's real draft; this can, and it costs a boolean on a row that
+   * was already being written.
+   *
+   * False for a colourless card is impossible -- `isOnColor` calls those
+   * castable -- so a rate here is off-COLOUR cards specifically rather than
+   * "cards outside the pair".
+   *
+   * OPTIONAL, AND THIS IS TRAP #9's "ABSENCE THAT IS AN ANSWER"
+   *
+   * `scorePick` always sets it, so nothing on the live path can be missing it.
+   * What can is `toRecordedPick`, which rebuilds a score out of a stored row and
+   * deliberately reports what the player was shown rather than recomputing it --
+   * and the pool is not on that row, so the committed colours it would need are
+   * genuinely not recoverable there. Absent therefore means "read back from
+   * storage", which is information, and the alternative is either a schema field
+   * nothing reads or a re-derivation from cards the row does not carry. The
+   * `indistinguishable` comment in `convex/draftPicks.ts` refuses the same thing
+   * for the same reason.
+   */
+  targetOnColor?: boolean;
   rankInPack: number; // 1 = best available, by raw power
 }
 
@@ -170,17 +207,6 @@ export function committedColors(pool: readonly PoolCard[]): Set<ColorCode> {
   const counts = new Map<ColorCode, number>();
   for (const c of pool) for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
-}
-
-// Whether a card belongs to what the pool is building. Before any commitment
-// nothing can be off-color -- early picks are expendable and staying open is
-// correct -- and a colorless card fits whatever the pool becomes.
-//
-// Shared rather than inlined because the prompt says this out loud ("this pick
-// is OFF those colors") next to the colors it computed, and the two saying
-// different things is the bug that sentence is most able to hide.
-export function isOnColor(committed: ReadonlySet<ColorCode>, colors: readonly ColorCode[]): boolean {
-  return committed.size === 0 || colors.length === 0 || colors.some((c) => committed.has(c));
 }
 
 /**
@@ -292,6 +318,7 @@ export function scorePick<C extends EngineCard>(
   const mine = ctx ? pickedInContext : pickedValue;
 
   const isBest = picked.name === target.name;
+  const targetOnColor = isOnColor(committed, target.colors);
   // Whether the data can separate the pick from what it is being graded against.
   // Only with a context, because the margin comes off `CardContext.se` -- the
   // engine replaying a draft with no set to read has no error bars and must not
@@ -367,6 +394,7 @@ export function scorePick<C extends EngineCard>(
     ...(preferred ? { preferred } : {}),
     reasons,
     onColor,
+    targetOnColor,
     rankInPack,
   };
 }
