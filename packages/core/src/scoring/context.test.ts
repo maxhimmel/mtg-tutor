@@ -9,6 +9,7 @@ import {
   colorKey,
   commitment,
   contextValue,
+  deckColorsFor,
   formatBaseline,
   splashCost,
 } from "./context.js";
@@ -53,6 +54,50 @@ describe("formatBaseline", () => {
   it("weights by games, so a tiny archetype cannot drag it", () => {
     const withFringe = [...ARCHETYPES, { colors: "WUBRG", n: 50, wr: 0.2 }];
     expect(formatBaseline(withFringe)).toBeCloseTo(formatBaseline(ARCHETYPES), 3);
+  });
+});
+
+describe("deckColorsFor", () => {
+  // A finished pool with a real WU core and one accidental pair of black cards,
+  // which is exactly the shape `committedColors` calls three colours and a deck
+  // is not. Full-sized on purpose: the ranking compares the best 23 of each
+  // colour set, so a pool with fewer than 23 in ANY set is the case where a
+  // third colour fills slots that were counting as nothing -- real mid-draft,
+  // and not what this test is about.
+  const strayBlack = [
+    ...Array.from({ length: 14 }, (_, i) => card(`W${i}`, ["W"], 0.62)),
+    ...Array.from({ length: 14 }, (_, i) => card(`U${i}`, ["U"], 0.62)),
+    card("B1", ["B"], 0.55),
+    card("B2", ["B"], 0.55),
+  ];
+
+  it("names the deck the pool is building, not every colour it has touched twice", () => {
+    expect(deckColorsFor(strayBlack, ARCHETYPES, 23).sort()).toEqual(["U", "W"]);
+  });
+
+  it("does take a third colour when the table prices one and the cards earn it", () => {
+    // Black now carries the pool's best cards by a wide margin, so WUB's best 23
+    // beat WU's by more than the measured -3.5pp the table charges for width.
+    const realSplash = [
+      ...Array.from({ length: 10 }, (_, i) => card(`W${i}`, ["W"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`U${i}`, ["U"], 0.56)),
+      ...Array.from({ length: 6 }, (_, i) => card(`B${i}`, ["B"], 0.68)),
+    ];
+    expect(deckColorsFor(realSplash, ARCHETYPES, 23)).toContain("B");
+  });
+
+  it("stays two-colour when the table cannot price a third", () => {
+    const pairsOnly = ARCHETYPES.filter((a) => a.colors.length === 2);
+    const wide = [
+      ...Array.from({ length: 10 }, (_, i) => card(`W${i}`, ["W"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`U${i}`, ["U"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`B${i}`, ["B"], 0.68)),
+    ];
+    expect(deckColorsFor(wide, pairsOnly, 23)).toHaveLength(2);
+  });
+
+  it("has no opinion about an empty pool, rather than the first pair in WUBRG order", () => {
+    expect(deckColorsFor([], ARCHETYPES, 23)).toEqual([]);
   });
 });
 
