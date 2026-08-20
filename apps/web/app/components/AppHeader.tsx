@@ -23,11 +23,13 @@ const NAV = [
   { href: "/", label: "Draft", match: (p: string) => p === "/" || p.startsWith("/draft") },
   { href: "/review", label: "Review", match: (p: string) => p.startsWith("/review") },
   { href: "/stats", label: "Stats", match: (p: string) => p.startsWith("/stats") },
-  // "Practice" rather than "Drills", which is what the code, the routes and the
-  // events call it. The two do not have to agree: an event name can never be
-  // repaired retroactively and a nav label can be changed this afternoon, so the
-  // internal word is locked and the read one is not.
-  { href: "/drills", label: "Practice", match: (p: string) => p.startsWith("/drills") },
+  // "Practice" everywhere a person reads, "drills" everywhere a machine does.
+  // The label and the route now agree; the EVENTS still say `drill_*` and
+  // always will, because an event name cannot be repaired retroactively and a
+  // chart keyed on the old one would silently become a chart of nothing. That
+  // is the one mismatch left, and it is the one that costs nothing: nobody
+  // reads an event name.
+  { href: "/practice", label: "Practice", match: (p: string) => p.startsWith("/practice") },
   {
     href: "/challenge",
     label: "Challenges",
