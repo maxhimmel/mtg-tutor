@@ -289,14 +289,16 @@ describe("contextValue", () => {
 describe("a card the deck is not going to play", () => {
   const committedWU = ctxOf({ colors: new Set<ColorCode>(["W", "U"]) });
 
-  it("is shrunk toward the baseline once the deck is committed", () => {
+  it("is worth nothing once the deck is certainly not playing it", () => {
     const green = card("Green Frog", ["G"], 0.64);
     const out = contextValue(green, { ...committedWU, commitment: 1 });
     const off = out.terms.find((t) => t.label === "off-color");
 
-    // Everything it was worth ABOVE the format's own rate, which is what a card
-    // that never gets cast adds to a deck: nothing it did not already have.
-    expect(off?.delta).toBeCloseTo(-(0.64 - formatBaseline(ARCHETYPES)), 10);
+    // All of it. A card that is never cast adds what a Mountain adds, which
+    // decision #10 already puts at zero -- not "its excess over a median card",
+    // which is what the format baseline turned out to be and which charged
+    // nothing at all to the half of every set below it.
+    expect(off?.delta).toBeCloseTo(-0.64, 10);
   });
 
   it("keeps its whole value while the draft is still open", () => {
@@ -329,17 +331,17 @@ describe("a card the deck is not going to play", () => {
     expect(contextValue(green, early).value).toBeGreaterThan(contextValue(onColour, early).value);
   });
 
-  it("is not paid for being off colour when it was weak to begin with", () => {
-    // One-sided, exactly as `trapCorrection` is: shrinking a card that is
-    // already below the baseline would move it UP, and read as "unplayable in
-    // your deck" being a point in its favour.
+  it("charges a weak card too, which the baseline anchor never did", () => {
+    // The regression this whole term existed for and did not catch. Under the
+    // old anchor a card below the format's own rate was charged NOTHING for
+    // being uncastable -- 31% to 50% of every set, by rarity -- so the two
+    // reports in notes.md #6 were both ordinary commons the scorer held up for
+    // free. There is no longer anything one-sided to protect: the anchor is
+    // zero, so the term cannot turn upward whatever the card is worth.
     const weak = card("Weak Green", ["G"], 0.5);
     const out = contextValue(weak, { ...committedWU, commitment: 1 });
-    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
-    // Not "nothing charges it" -- `splash` still does, because a green card in
-    // a WU deck still widens the deck that plays it. The claim here is only
-    // that this term never turns upward.
-    expect(out.terms.every((t) => t.label === "off-color" || t.delta <= 0)).toBe(true);
+    expect(out.terms.find((t) => t.label === "off-color")?.delta).toBeCloseTo(-0.5, 10);
+    expect(out.terms.every((t) => t.delta <= 0)).toBe(true);
   });
 
   it("says nothing about a colourless card, which every deck can cast", () => {
