@@ -138,6 +138,11 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
 - I'm certain the stats on the frog is great, but it makes absolutely zero sense here.
 - Whatever is the algorithm to judge/score cards needs a lot of work because it's clearly not adapting to the colors we're committed to.
 
+19. Something that's been bothering me is the coaching section when we take unimportant picks that aren't meant to be graded. As well as the coach when we've run out of tokens.
+
+- A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
+- B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap

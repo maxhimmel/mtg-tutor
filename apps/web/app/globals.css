@@ -388,6 +388,30 @@ html {
   inherits: false;
 }
 
+/* How much lip to draw at each end, 0-1, and the reason they start at 0.
+   The fade above is cut from the scroll position because "a fade has to be
+   honest or it is worse than the problem". The lip is the same claim in the
+   same place -- content passes under this edge -- and it was drawn permanently
+   at both ends, so a box with nothing above it had a shadow saying there was.
+
+   0 rather than 1 is what makes every degraded case honest rather than only the
+   supported one. A box with no overflow has an INACTIVE timeline, not a missing
+   one, so its animation never applies and whatever these are registered with is
+   what gets drawn: at 1 that is a slot-shaped shadow over a list that fits, at 0
+   it is nothing, which is true. A browser with no scroll timelines at all loses
+   the lip and keeps the frame, and never lies about what is off-screen. */
+@property --scroll-lip-top {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: false;
+}
+
+@property --scroll-lip-bottom {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: false;
+}
+
 /* Each animates one end and leaves the other alone, so the two ends can be
    driven over different stretches of the same scroll by `animation-range`.
    The missing half of each pair is the registered initial value. */
@@ -403,20 +427,77 @@ html {
   }
 }
 
+/* Both ends written out rather than leaning on the registered value the way the
+   two above do. Those animate a length whose other end IS the initial value; a
+   lip runs 0->1 at the top and 1->0 at the bottom, so neither keyframe can leave
+   its `from` implicit without one of them running backwards. */
+@keyframes scroll-lip-in {
+  from {
+    --scroll-lip-top: 0;
+  }
+  to {
+    --scroll-lip-top: 1;
+  }
+}
+
+@keyframes scroll-lip-out {
+  from {
+    --scroll-lip-bottom: 1;
+  }
+  to {
+    --scroll-lip-bottom: 0;
+  }
+}
+
 /* The lip of the slot, on the wrapper rather than on the thing that scrolls --
    an inset shadow on the scroller would be masked away by the scroller's own
    fade, at exactly the two edges it exists to describe. Top and bottom only:
    this is a box the content passes under, not a box it sits in a hole in, and
-   shadow down the sides would say the second thing. */
+   shadow down the sides would say the second thing.
+
+   AND THE WRAPPER IS WHY THIS NEEDS A NAMED TIMELINE. The fade is driven by
+   `scroll(self block)` because the element it is on is the element that
+   scrolls. The lip is on the parent, and `scroll()` only ever looks at itself
+   or UP the tree -- the scroller here is a descendant, so there is no anonymous
+   timeline that reaches it. `timeline-scope` is the one mechanism for this and
+   is exactly what it exists for: the scroller names its timeline, the wrapper
+   declares it in scope, and both animations read the same scroll position.
+
+   `rgb(0 0 0 / calc(...))` rather than the `color-mix(in oklab, black 70%,
+   transparent)` this used to be. The two are the same colour, and a percentage
+   inside color-mix does accept calc -- but if it did not, the whole box-shadow
+   would be dropped as invalid and the lip would vanish with no error anywhere.
+   That is not a failure worth risking to keep one idiom. */
 @utility scroll-well {
+  /* ONE NUMBER, ON THE OUTER ELEMENT, because both halves of this now read it:
+     the fade's `animation-range` on the scroller and the lip's on the wrapper.
+     It lived on `scroll-box` while the scroller was the only consumer, and a
+     custom property inherits DOWN -- so the wrapper could not see it there, and
+     an unresolved `var()` in `animation-range` is not an error, it is the whole
+     declaration dropped and a lip that fades over the entire scroll instead of
+     the first inch. Declared here, the scroller inherits it and the two ranges
+     cannot disagree. `ScrollBox` renders both elements together and is the only
+     thing that renders either, so the pairing is the component's contract. */
+  --scroll-fade: 1.75rem;
+
+  timeline-scope: --scroll-lip;
+
   box-shadow:
-    inset 0 0.5rem 0.6rem -0.5rem color-mix(in oklab, black 70%, transparent),
-    inset 0 -0.5rem 0.6rem -0.5rem color-mix(in oklab, black 70%, transparent);
+    inset 0 0.5rem 0.6rem -0.5rem rgb(0 0 0 / calc(0.7 * var(--scroll-lip-top))),
+    inset 0 -0.5rem 0.6rem -0.5rem rgb(0 0 0 / calc(0.7 * var(--scroll-lip-bottom)));
+
+  @supports (animation-timeline: scroll()) {
+    animation:
+      scroll-lip-in linear both,
+      scroll-lip-out linear both;
+    animation-timeline: --scroll-lip, --scroll-lip;
+    /* The same two stretches the fade uses, so the lip and the fade it belongs
+       to arrive and leave together rather than one trailing the other. */
+    animation-range: 0 var(--scroll-fade), calc(100% - var(--scroll-fade)) 100%;
+  }
 }
 
 @utility scroll-box {
-  --scroll-fade: 1.75rem;
-
   /* Declared out here rather than inside the @supports below, which is free and
      strictly safer: with the two lengths at the 0 they are registered with this
      gradient is opaque end to end, so a browser with no scroll timelines gets
@@ -467,6 +548,11 @@ html {
   &::-webkit-scrollbar-thumb:hover {
     background: color-mix(in oklab, var(--color-base-content) 65%, transparent);
   }
+
+  /* Named so the wrapper can reach it -- see scroll-well. The fade below still
+     drives itself off `scroll(self block)`: this element IS the scroller, and an
+     anonymous timeline cannot be got wrong by a caller who forgets the wrapper. */
+  scroll-timeline: --scroll-lip block;
 
   @supports (animation-timeline: scroll()) {
     animation:

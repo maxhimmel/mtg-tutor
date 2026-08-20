@@ -9,6 +9,7 @@ import { CardText } from "../components/CardText";
 import { ColorPips } from "../components/ColorPips";
 import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
+import { ScrollBox } from "../components/ScrollBox";
 import { pct } from "../lib/format";
 
 // One entry per component worth looking at with a real card in it. Adding the
@@ -255,5 +256,33 @@ export const SPECIMENS: Specimen[] = [
         ))}
       </PileGrid>
     ),
-  }
+  },
+  {
+    id: "scroll-box",
+    title: "Scroll box",
+    note: "Sideboards, the drill's deck rail, the comparison's fork list",
+    // THE TWO BAYS ARE THE SPECIMEN. A gallery that renders one comfortable
+    // overflowing box shows the lip working and says nothing about the case
+    // that was wrong -- a box whose content FITS, drawing a shadow at both ends
+    // for content that is not there. Put side by side, the left one must be
+    // flat and the right one must have a foot and no head until it is scrolled.
+    //
+    // Scroll the right one. The head arrives over the first inch of travel and
+    // the foot retires over the last, both cut from the scroll position rather
+    // than painted on, which is the whole of the fix.
+    render: ({ cards }) => (
+      <div className="flex flex-wrap items-start gap-8">
+        <Bay label="Fits — no lip at either end" width="w-[22rem] max-w-full">
+          <ScrollBox maxHeight="max-h-64" label="A list that fits">
+            <CardPlacardList cards={cards.slice(0, 3)} />
+          </ScrollBox>
+        </Bay>
+        <Bay label="Overflows — foot only, until scrolled" width="w-[22rem] max-w-full">
+          <ScrollBox maxHeight="max-h-64" label="A list that overflows">
+            <CardPlacardList cards={[...cards, ...cards, ...cards]} />
+          </ScrollBox>
+        </Bay>
+      </div>
+    ),
+  },
 ];
