@@ -13,6 +13,14 @@ for the deck it is not going to be in), 13 (the coach knows a card went
 straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
 lip cut from the scroll position) shipped on 2026-08-20.
 
+5 (the coach arguing for a card using the one you took instead), 6 (the scorer
+still holding up cards the deck cannot cast, which was 4 and 18 not actually
+fixed) and 7 (the stats panel losing its room to a token picture) shipped later
+the same day. 6 is the one worth reading about rather than only counting: the
+term shipped for 4 and 18 was correct and never fired, for two independent
+reasons, and neither of them was visible in any number the app collected. The
+rulings are decisions #23 and #24; the trap the instrument fell into is #14.
+
 15 shipped in two parts, and the second is worth reading before touching the
 floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
 which had been the number since the review quiz was written and had never been
@@ -80,69 +88,6 @@ deliberate choice to fix a stale default is the worse of the two errors.
 
 - A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
 - B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
-
-5. This is the coach giving bad feedback/having a misunderstanding:
-
-```
-Last pick
-A
-92/100
-You took
-Burst Lightning
-Graded against
-−1.0pp ± 0.7pp
-Micromancer
-That gap is larger than the margin of error on the two win rates.
-
-Coach
-Cheap efficient removal that's flexible early or late thanks to kicker fits your
- shell perfectly. Micromancer edges it out by a margin outside the error bar, since it's a solid body plus tutors back one of your Burst Lightnings/tricks, but the gap is small enough that Burst Lightning is a fine, defensible take here.
-```
-
-- Its reasoning for the Micromancer (which can go get a 1-cost instant/sorcery) is erroneous because I literally picked the burst lightening RATHER THAN the micromancer which means I didnt have the burst lightening for it to go retrieve.
-
-6. I thought we just fixed issues with the scoring making judgments with off-color stuff:
-
-```
-Last pick
-D
-51/100
-You took
-Electroduplicate
-Graded against
-−6.5pp ± 3.1pp
-Dazzling Angel
-That gap is larger than the margin of error on the two win rates.
-
-Coach
-Electroduplicate is a fine role-player with your Balmor and big creatures like Shivan Dragon to copy, but it's low-impact and only sings if you already have a strong board. Dazzling Angel was clearly the strongest card in the pack and outperformed this by a margin well outside the error bar, but it's off your committed
- colors this late, so passing it for on-color consistency isn't unreasonable. Just don't expect Electroduplicate to carry games by itself — it needs a good target to matter.
-```
-
-- That was P2P4 and I have 14 cards in my maindeck that are either blue/red so the white pick suggestion (w/only 1 white in my sideboard) feels incorrectly assessed as a "D".
-
-Another example:
-
-```
-Last pick
-C+
-72/100
-You took
-Frenzied Goblin
-Graded against
-−3.7pp ± 1.3pp
-Gnarlid Colony
-That gap is larger than the margin of error on the two win rates.
-
-Coach
-Frenzied Goblin already has a second copy in your pool and adds cheap aggressive pressure with an evasion-enabling ability, but a fourth off-color green card at this point does you no good — Gnarlid Colony isn't castable in your
- deck, so the raw win-rate gap doesn't even apply here. The real comparison was Homunculus Horde or Goblin Boarders, both on-color and both viable four-of/curve-fillers for a
- deck; either likely beats a third one-drop.
-```
-
-- That occurred at P3P7. And you give me a "C" for that?! Seems so incorrect - I thought we just fixed this.
-
-7. Weird new bug I'm seeing in the draft screen: When I hover over the first card in a pack (dunno if it matters but they have been coinceidentally rare - but instinct tells me that matters less than what I'm about to say) I can't see the stats popup. Each of these cards has had a token to render in the side popup, too.
 
 # Ideas:
 
@@ -947,9 +892,13 @@ to the data work.
     `splashCost(4) - splashCost(3)` = **zero** to add a fourth, and 52% of the
     off-colour nominations measured were made to pools already three wide.
 
-    The off-colour term now covers most of this by a different route — a card
-    the deck will not play is charged whatever it was worth above the baseline,
-    regardless of width — so this is no longer producing the visible bug. It is
+    The off-colour term now covers most of this by a different route -- a card
+    the deck will not play is charged its whole value, regardless of width (see
+    decision #24; it was "whatever it was worth above the baseline" for four
+    days, which charged most cards nothing) -- so this is no longer producing
+    the visible bug. Decision #23 also narrows the colour set the width is read
+    off, so the "already three wide" premise is much rarer than when this was
+    measured. It is
     written down because the flatness is still there and is still wrong, and
     because the honest reading is not obviously "fix it": there is no measured
     four-colour win rate to charge against, and inventing one is the thing
@@ -996,6 +945,33 @@ to the data work.
     counting coloured pairs only, colourless cards skipped). On most sets a
     MAJORITY of a card's best partners are cards it cannot cast alongside it in
     a two-colour deck. That needed no statistics to see, only a reader.
+
+14. **An instrument that builds its own copy of the thing it measures will go
+    on measuring the old one** (2026-08-20, `diagnose-offcolour.mjs`). The
+    harness has a paragraph refusing to reimplement "off-colour", and it imports
+    `isOnColor` and `committedColors` for exactly that reason. It then assembled
+    the scoring context BY HAND -- `{ colors, commitment, archetypes,
+    contextFor }` -- because `packScoringContext` also wants `needs` and the
+    harness did not care about needs.
+
+    So when the colour rule moved (decision #23), the app changed and the
+    instrument did not. It went on reporting the old rule's numbers, correctly,
+    with the right imports at the top of the file, and nothing anywhere could
+    have said so. It now calls `packScoringContext` like the mutation does.
+
+    **The second half is worse and is the general form.** The same file printed
+    "the colour terms charged it 0.34pp" under its table, from a filter naming
+    `splash` and `archetype`. That filter was written before the off-colour term
+    existed and nobody widened it -- so the number under a table measuring the
+    off-colour term **excluded the off-colour term**. It read as a healthy small
+    charge and it was a subtotal of the two terms that were not the subject. The
+    true figure was 1.28pp, which is still far too small, which is the finding
+    the instrument was built to surface and had been hiding for four days.
+
+    The rule: **a harness must not enumerate what it sums.** Sum everything and
+    exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+    the total by default rather than by somebody remembering. An allowlist in an
+    instrument is a silent undercount waiting for the next field.
 
 # Deferred trade-offs (revisit when the premise changes):
 
@@ -1443,6 +1419,11 @@ The architecture, the data pipeline and the deploy story are all documented in
     kept the name `colorPair` because renaming it is a schema migration for a
     label.
 
+    **Amended 2026-08-20, and the amendment is decision #23.** The rule below is
+    unchanged and still the one rule for a DECK's colours. What moved is that the
+    scorer stopped asking it about a POOL, where it answers a different question
+    and calls four fifths of them five-colour. See `deckColorsFor`.
+
     **The moment.** `draft.pick` writes the summary in its completion branch, and
     the player then spends the deck builder cutting cards — `draft.bench` has no
     status guard because that mutation IS the deck builder. So the stored colours
@@ -1718,3 +1699,88 @@ The architecture, the data pipeline and the deploy story are all documented in
     a fifteen card pack, and asserts the sentence names that number. Copy and
     the rule it describes are two places that can disagree, and this boundary
     has now produced two off-by-ones in one week.
+
+23. **A pool is not a deck, and the scorer spent a fortnight asking a deck's
+    question about a pool** (2026-08-20, notes.md #6). Decision #16 says a deck's
+    colours are `committedColors` -- two or more of a colour in the forty -- and
+    that ruling is untouched. What was wrong is where it was being asked.
+
+    Over a POOL the same rule answers something else entirely: two copies of
+    anything clears the bar. Measured over 12,000 real 17Lands drafts across
+    eight sets, by the last pick it calls **82% of pools four or five colours and
+    1.7% of them two**, while the top two colours hold **84.5% of the pool's
+    value**. Decision #16's own memory says this out loud -- "over a whole 42-card
+    draft POOL it gives four or five" -- and `leanColors` exists because the
+    challenge braid hit it. Nobody connected that to the scorer.
+
+    **Every colour term reads that set, so one wrong answer switched all of them
+    off at once, and none of them said so.** Nothing is off-colour when you are
+    in every colour. `splashCost` charges nothing to widen a deck already priced
+    at five. `commitment`'s value share pins near 1.0 because no card is outside
+    it. `archDelta` looks up "WUBRG", an archetype almost nobody drafted. Four
+    terms returning a confident zero, on a code path with no error in it.
+
+    **The fix is not a new rule.** `suggestDeck` has ranked all twenty candidate
+    colour sets by "best 23 castable cards, minus the measured cost of the width"
+    since it was written. That loop is now `deckColorsFor` and both callers share
+    it, so the grade and the deck the grade is about cannot name two decks for
+    one pool -- the failure `ScoringContext.needs` already has a paragraph about,
+    one level up. `scorePick`'s `onColor` and `targetOnColor` moved with it,
+    because leaving the "off your committed colors" warning on one definition and
+    the number that scored it on another is the same bug wearing a hat.
+
+    **NOT A CAP, which #16 forbids and meant.** The width is whatever the
+    archetype table can price: a third colour wins wherever the set says it is
+    cheap, which in snc (-0.3pp) is most of the time and in fdn (-4.3pp) is rare.
+
+    **What it is still wrong about, deliberately.** Candidates are ranked on the
+    cards the pool HAS, so while the pool is short of 23 playables a wider set
+    can win on slots that were counting as nothing rather than on cards -- which
+    mid-draft is every comparison. Padding those slots with a replacement card
+    was tried and put back: `formatBaseline` sits at about the median card, which
+    makes a colour set you hold three cards in beat one you hold twenty-four
+    mediocre cards in. The number that would work is what you will actually draft
+    into those slots, which depends on what is open, which is the thing nothing
+    here knows. A guess would have been worse than the known limitation.
+
+24. **`formatBaseline` is a deck's win rate and `cardValue` is a card's, and
+    they are close enough to swap by accident** (2026-08-20, the other half of
+    #6). The off-colour term shipped four days earlier shrank an uncastable card
+    "toward the format's own baseline", reasoning that a card which never gets
+    cast leaves your deck where it was.
+
+    The reasoning is right and the number was not on the right scale.
+    `formatBaseline` is a sample-weighted mean over ARCHETYPE win rates;
+    `cardValue` is a CARD's GIH win rate. Measured across all eighteen sets the
+    baseline lands at the **31st to 50th percentile of that set's own card
+    values** -- it IS the median card. So the term charged an uncastable card at
+    most its excess over a median playable: nothing at all for the half of every
+    set below that line, a point or two for the rest. Over 609,630 real picks it
+    charged **1.28pp against a 3.90pp winning margin**, and both cards a person
+    reported in #6 were charged exactly zero.
+
+    Decision #10 already had the right number and the right argument.
+    `SCORING.basicLandValue` is 0 because every other card's value answers "how
+    much better is a deck with this in it", and for a card that is never in the
+    deck the answer is zero by construction. **A card you cannot cast is the same
+    card as a Mountain.** `trapCorrection` keeps the baseline and should: it
+    distrusts a measurement and pulls it back toward the population it was
+    measured in. This one believes the measurement and says the card is in the
+    wrong deck. They were never the same anchor; they only looked like it.
+
+    **Still scaled by `commitment`, and that is generous rather than harsh.**
+    Measured forward over the same drafts -- take a card off your colours now,
+    does the deck you finish with cast it -- the real rate runs 0.71 under
+    commitment 0.1, 0.25 through the middle and 0.02 past 0.8, where
+    `1 - commitment` offers 0.95, 0.65 and 0.15. Charging the measured rate was
+    declined: it is observational, it sees only the off-colour cards drafters
+    CHOSE to take, and leaving a pivot open is the right direction to be wrong
+    in. Written down because the next person to look at this will find the term
+    lenient, not severe, and should know that was on purpose.
+
+    **What the two rulings bought, and what they cost.** Off-colour cards held up
+    as the better pick: **22.1% -> 4.4%**, against a human 10.3% on the same
+    packs. And the half that stings: over 122,238 decision picks the F rate goes
+    **3.7% -> 6.8%**, about one more per draft, on picks that spent a card the
+    deck cannot play -- while A+ goes UP, 40.3% -> 43.0%, because the uncastable
+    card is no longer beating the pick that was made.
