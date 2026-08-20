@@ -3,6 +3,7 @@ import {
   applyBench,
   benchChanges,
   benchedAsOf,
+  benchedOnArrival,
   normalizeBench,
   splitPool,
   type Bench,
@@ -144,5 +145,35 @@ describe("splitPool", () => {
     const { maindeck, sideboard } = splitPool(pool(8), bench, 8);
     expect(sideboard).toEqual(["card0", "card3"]);
     expect(maindeck.length + sideboard.length).toBe(8);
+  });
+});
+
+// notes.md #13. The rule the file header has described since it was written,
+// with nothing reading it until the coach needed to stop lecturing people about
+// a card they had already put away.
+describe("benchedOnArrival", () => {
+  it("is true when the card was set aside at the pick that took it", () => {
+    expect(benchedOnArrival([{ pos: 7, atPick: 7 }], 7)).toBe(true);
+  });
+
+  it("is false when it was picked to play and benched later", () => {
+    // The distinction the whole `atPick` clock exists for: deciding at pick 30
+    // that something is unplayable is not evidence about the pick at 7.
+    expect(benchedOnArrival([{ pos: 7, atPick: 30 }], 7)).toBe(false);
+  });
+
+  it("is false for a different card benched at this pick", () => {
+    expect(benchedOnArrival([{ pos: 2, atPick: 7 }], 7)).toBe(false);
+  });
+
+  it("is false when nothing is benched at all", () => {
+    expect(benchedOnArrival([], 7)).toBe(false);
+  });
+
+  // A legacy bench is a bare position, and `normalizeBench` reads it as
+  // `atPick = pos` on purpose. This asserts the consequence rather than leaving
+  // it to be rediscovered: those rows all answer true.
+  it("reads a legacy positional bench as benched on arrival", () => {
+    expect(benchedOnArrival(normalizeBench([4]), 4)).toBe(true);
   });
 });

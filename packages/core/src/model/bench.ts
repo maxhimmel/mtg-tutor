@@ -25,6 +25,29 @@ export function benchedAsOf(bench: readonly Bench[], pickIndex: number): Set<num
 }
 
 /**
+ * Was the card taken AT `pickIndex` set aside in the same breath?
+ *
+ * The statement the header above already names, finally with a reader. It had
+ * none, and the gap is notes.md #13: every prompt builder splits `poolBefore`
+ * into maindeck and sideboard, `poolBefore` is the pool BEFORE the pick, so the
+ * card being coached is in neither half and a card benched as it arrived read as
+ * an ordinary pick.
+ *
+ * A pick's own pool position IS its index -- `poolBefore` for pick n holds
+ * positions 0..n-1 and the picked card appends at exactly n, which is what
+ * `poolFromLastPick` relies on. So the question is only whether the bench set
+ * contains that one position, and no new bookkeeping is needed to answer it.
+ *
+ * A legacy bench normalises to `atPick === pos` and therefore answers true. That
+ * is the reading `normalizeBench` already documents -- positions alone carried
+ * no clock, and "sidelined from the moment it was drafted" is the one meaning
+ * that changes nothing about how they were treated before.
+ */
+export function benchedOnArrival(bench: readonly Bench[], pickIndex: number): boolean {
+  return benchedAsOf(bench, pickIndex).has(pickIndex);
+}
+
+/**
  * Set a position aside, or take it back.
  *
  * Idempotent in both directions rather than a toggle: every caller already knows
