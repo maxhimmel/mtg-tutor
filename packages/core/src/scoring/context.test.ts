@@ -9,6 +9,7 @@ import {
   colorKey,
   commitment,
   contextValue,
+  deckColorsFor,
   formatBaseline,
   splashCost,
 } from "./context.js";
@@ -53,6 +54,50 @@ describe("formatBaseline", () => {
   it("weights by games, so a tiny archetype cannot drag it", () => {
     const withFringe = [...ARCHETYPES, { colors: "WUBRG", n: 50, wr: 0.2 }];
     expect(formatBaseline(withFringe)).toBeCloseTo(formatBaseline(ARCHETYPES), 3);
+  });
+});
+
+describe("deckColorsFor", () => {
+  // A finished pool with a real WU core and one accidental pair of black cards,
+  // which is exactly the shape `committedColors` calls three colours and a deck
+  // is not. Full-sized on purpose: the ranking compares the best 23 of each
+  // colour set, so a pool with fewer than 23 in ANY set is the case where a
+  // third colour fills slots that were counting as nothing -- real mid-draft,
+  // and not what this test is about.
+  const strayBlack = [
+    ...Array.from({ length: 14 }, (_, i) => card(`W${i}`, ["W"], 0.62)),
+    ...Array.from({ length: 14 }, (_, i) => card(`U${i}`, ["U"], 0.62)),
+    card("B1", ["B"], 0.55),
+    card("B2", ["B"], 0.55),
+  ];
+
+  it("names the deck the pool is building, not every colour it has touched twice", () => {
+    expect(deckColorsFor(strayBlack, ARCHETYPES, 23).sort()).toEqual(["U", "W"]);
+  });
+
+  it("does take a third colour when the table prices one and the cards earn it", () => {
+    // Black now carries the pool's best cards by a wide margin, so WUB's best 23
+    // beat WU's by more than the measured -3.5pp the table charges for width.
+    const realSplash = [
+      ...Array.from({ length: 10 }, (_, i) => card(`W${i}`, ["W"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`U${i}`, ["U"], 0.56)),
+      ...Array.from({ length: 6 }, (_, i) => card(`B${i}`, ["B"], 0.68)),
+    ];
+    expect(deckColorsFor(realSplash, ARCHETYPES, 23)).toContain("B");
+  });
+
+  it("stays two-colour when the table cannot price a third", () => {
+    const pairsOnly = ARCHETYPES.filter((a) => a.colors.length === 2);
+    const wide = [
+      ...Array.from({ length: 10 }, (_, i) => card(`W${i}`, ["W"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`U${i}`, ["U"], 0.56)),
+      ...Array.from({ length: 10 }, (_, i) => card(`B${i}`, ["B"], 0.68)),
+    ];
+    expect(deckColorsFor(wide, pairsOnly, 23)).toHaveLength(2);
+  });
+
+  it("has no opinion about an empty pool, rather than the first pair in WUBRG order", () => {
+    expect(deckColorsFor([], ARCHETYPES, 23)).toEqual([]);
   });
 });
 
@@ -244,14 +289,16 @@ describe("contextValue", () => {
 describe("a card the deck is not going to play", () => {
   const committedWU = ctxOf({ colors: new Set<ColorCode>(["W", "U"]) });
 
-  it("is shrunk toward the baseline once the deck is committed", () => {
+  it("is worth nothing once the deck is certainly not playing it", () => {
     const green = card("Green Frog", ["G"], 0.64);
     const out = contextValue(green, { ...committedWU, commitment: 1 });
     const off = out.terms.find((t) => t.label === "off-color");
 
-    // Everything it was worth ABOVE the format's own rate, which is what a card
-    // that never gets cast adds to a deck: nothing it did not already have.
-    expect(off?.delta).toBeCloseTo(-(0.64 - formatBaseline(ARCHETYPES)), 10);
+    // All of it. A card that is never cast adds what a Mountain adds, which
+    // decision #10 already puts at zero -- not "its excess over a median card",
+    // which is what the format baseline turned out to be and which charged
+    // nothing at all to the half of every set below it.
+    expect(off?.delta).toBeCloseTo(-0.64, 10);
   });
 
   it("keeps its whole value while the draft is still open", () => {
@@ -284,17 +331,17 @@ describe("a card the deck is not going to play", () => {
     expect(contextValue(green, early).value).toBeGreaterThan(contextValue(onColour, early).value);
   });
 
-  it("is not paid for being off colour when it was weak to begin with", () => {
-    // One-sided, exactly as `trapCorrection` is: shrinking a card that is
-    // already below the baseline would move it UP, and read as "unplayable in
-    // your deck" being a point in its favour.
+  it("charges a weak card too, which the baseline anchor never did", () => {
+    // The regression this whole term existed for and did not catch. Under the
+    // old anchor a card below the format's own rate was charged NOTHING for
+    // being uncastable -- 31% to 50% of every set, by rarity -- so the two
+    // reports in notes.md #6 were both ordinary commons the scorer held up for
+    // free. There is no longer anything one-sided to protect: the anchor is
+    // zero, so the term cannot turn upward whatever the card is worth.
     const weak = card("Weak Green", ["G"], 0.5);
     const out = contextValue(weak, { ...committedWU, commitment: 1 });
-    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
-    // Not "nothing charges it" -- `splash` still does, because a green card in
-    // a WU deck still widens the deck that plays it. The claim here is only
-    // that this term never turns upward.
-    expect(out.terms.every((t) => t.label === "off-color" || t.delta <= 0)).toBe(true);
+    expect(out.terms.find((t) => t.label === "off-color")?.delta).toBeCloseTo(-0.5, 10);
+    expect(out.terms.every((t) => t.delta <= 0)).toBe(true);
   });
 
   it("says nothing about a colourless card, which every deck can cast", () => {

@@ -96,6 +96,128 @@ export function splashCost(archetypes: readonly ColorWinRate[], width: number): 
   return Math.max(0, worst);
 }
 
+const COLOR_SETS = (() => {
+  const pairs: ColorCode[][] = [];
+  const triples: ColorCode[][] = [];
+  for (let i = 0; i < WUBRG.length; i++)
+    for (let j = i + 1; j < WUBRG.length; j++) {
+      pairs.push([WUBRG[i], WUBRG[j]]);
+      for (let k = j + 1; k < WUBRG.length; k++) triples.push([WUBRG[i], WUBRG[j], WUBRG[k]]);
+    }
+  return { pairs, triples };
+})();
+
+// Whether the table prices this exact width, rather than falling back to a mean.
+//
+// `splashCost` answers for any width, because the pick path needs an answer for
+// the deck it is actually in. CHOOSING to go wider is a different question: an
+// unmeasured width falls back to the format's own rate, which the two-colour
+// decks it is being compared against dominate, so the gap collapses and the
+// extra colour reads as nearly free. Both sides of the comparison have to have
+// been played by somebody for the difference between them to be a measurement.
+//
+// The width itself, not "something at least this wide". A format with three-
+// and five-colour rows and nothing at four says nothing about four.
+const measures = (archetypes: readonly ColorWinRate[], width: number) =>
+  archetypes.some((a) => a.colors.length === width);
+
+/**
+ * Which deck this pile of cards is becoming: the colour set whose best
+ * `spellCount` castable cards are worth the most, after paying for its width.
+ *
+ * WHY THIS EXISTS RATHER THAN `committedColors`
+ *
+ * `committedColors` is a rule about a DECK -- two or more of a colour in the
+ * forty -- and decision #16 is that it is the one rule for a deck's colours.
+ * That ruling is untouched. What was wrong is that the SCORER was asking it
+ * about a POOL, and over a pool it answers a different question: two copies of
+ * anything clears the bar, so by the last pick it calls 82% of real 17Lands
+ * pools four or five colours and only 1.7% of them two, while the top two
+ * colours hold 84.5% of the pool's value. Measured over 12,000 drafts across
+ * eight sets by `scripts/diagnose-offcolour.mjs`'s cache.
+ *
+ * Every colour term downstream reads that set, so a five-colour answer switched
+ * all of them off at once and none of them said so: nothing is off-colour when
+ * you are in every colour, `splashCost` charges nothing to widen a deck already
+ * priced at five, `commitment`'s value share pins at ~1.0 because no card is
+ * outside, and `archDelta` looks up "WUBRG" -- an archetype almost nobody
+ * drafted. That is the whole of notes.md issues #4, #18 and #6: the app holding
+ * up a card the deck cannot cast, having charged it nothing, because by its own
+ * reckoning the deck was in that colour.
+ *
+ * NOT A CAP, WHICH DECISION #16 FORBIDS AND MEANT
+ *
+ * The count is not fixed at two. It is whatever the archetype table can price:
+ * a three-colour set wins here whenever its 23 best cards beat the pair's by
+ * more than the measured cost of the third colour, which in snc (-0.3pp) is
+ * most of the time and in fdn (-4.3pp) is rare. The width is read off the set,
+ * exactly as `splashCost` is.
+ *
+ * THE SAME CHOICE `suggestDeck` ALREADY MAKES
+ *
+ * The deck builder has ranked all twenty candidate colour sets this way since it
+ * was written; this is that loop, lifted out so the scorer and the builder
+ * cannot answer differently. Two authorities over one pool is the failure
+ * `ScoringContext.needs` already has a paragraph about, and it would have been
+ * worse here -- the grade and the deck the grade is about.
+ *
+ * Lands are the caller's to exclude: `suggestDeck` holds whole cards and tests
+ * the type line, the pick path holds engine cards and has `role`. One predicate
+ * here would have to pick one of those and be wrong for the other caller.
+ *
+ * WHAT IT IS STILL WRONG ABOUT, AND WHY THAT WAS LEFT ALONE
+ *
+ * Candidates are ranked on the cards the pool HAS, so while the pool is short of
+ * `spellCount` a wider set can win on slots that were counting as nothing rather
+ * than on cards. `DeckOptions.archetypes` already names this shape for the case
+ * where width cannot be priced at all, and mid-draft it is every comparison --
+ * so the colours run wider at pick 15 than at pick 40.
+ *
+ * Padding the missing slots with a replacement card was tried and put back.
+ * There is no honest value for one: `formatBaseline` sits at about the median
+ * card, which makes a colour set you hold THREE cards in beat one you hold
+ * twenty-four mediocre cards in -- it is credited twenty slots of median value
+ * it has no way to fill. The number that would work is what you will actually
+ * draft into those slots, and that depends on what is open, which is the thing
+ * nothing here knows. Left as it was rather than replaced with a guess.
+ */
+export function deckColorsFor(
+  spells: readonly EngineCard[],
+  archetypes: readonly ColorWinRate[],
+  spellCount: number,
+): ColorCode[] {
+  // No cards, no deck. Every candidate would otherwise total zero and the first
+  // pair in WUBRG order would win the tie, so an empty pool came out committed
+  // to WU -- harmless downstream only because `commitment` is 0 there too, which
+  // is exactly the kind of accident that stops being harmless when someone reads
+  // the colours for something else.
+  if (spells.length === 0) return [];
+
+  const priced = measures(archetypes, 2) && measures(archetypes, 3);
+  const candidates = priced ? [...COLOR_SETS.pairs, ...COLOR_SETS.triples] : COLOR_SETS.pairs;
+
+  let best: ColorCode[] = [];
+  let bestTotal = -Infinity;
+  for (const colors of candidates) {
+    const playable = spells
+      .filter((c) => c.colors.every((col) => colors.includes(col)))
+      .sort((a, b) => cardValue(b) - cardValue(a))
+      // Compared over the SAME number of cards, always `spellCount`, whatever
+      // each would end up playing -- otherwise the comparison adds a card's
+      // worth of win rate to whichever colour set happened to want more spells.
+      .slice(0, spellCount);
+    // Per CARD rather than per deck, which is what keeps a splash you cannot
+    // fill from paying a whole deck's width. See `deck.test.ts`, which pins it.
+    const width = priced ? splashCost(archetypes, colors.length) : 0;
+    const total = playable.reduce((s, c) => s + cardValue(c) - width, 0);
+    if (total > bestTotal) {
+      bestTotal = total;
+      best = colors;
+    }
+  }
+  return best;
+}
+
 /**
  * How committed the deck is to its colours, 0-1, and therefore how much any
  * context term is worth.
@@ -244,31 +366,49 @@ export function archDelta(
  * 0-1 scale, built out of value share and progress for exactly this purpose.
  *
  * A card that does not make your deck leaves your deck where it was, so it is
- * worth the format's own baseline: not zero, which is not on this scale, but
- * "nothing you did not already have" -- the same argument decision #10 makes
- * for a basic land being worth 0, one level up. So this shrinks an off-colour
- * card toward `formatBaseline` in proportion to commitment, which is the same
- * shape and the same anchor as `trapCorrection` below. Two terms shrinking
- * toward the same point for two different reasons is a coincidence worth
- * noticing rather than a duplication: one distrusts the measurement, this one
- * believes it and says the card is in the wrong deck.
+ * worth "nothing you did not already have" -- which decision #10 already puts a
+ * number on. `SCORING.basicLandValue` is 0 and its comment says why: every other
+ * card's value answers "how much better is a deck with this in it", and for a
+ * card that is never in the deck the answer is zero by construction. A card you
+ * cannot cast is the same card as a Mountain, one level up.
  *
- * One-sided, for `trapCorrection`'s reason. A card worth less than the baseline
- * has nothing to shrink, and letting the term go negative would PAY a weak card
- * for being off-colour.
+ * SO THE ANCHOR IS ZERO, AND FOR A FORTNIGHT IT WAS THE FORMAT BASELINE
+ *
+ * That was wrong, and wrong in a way that made this term almost never fire.
+ * `formatBaseline` is a mean over DECK win rates and `cardValue` is a CARD's win
+ * rate; the two are numerically similar and answer different questions. Measured
+ * across all eighteen sets, the baseline sits at the 31st to 50th percentile of
+ * the set's own card values -- it IS about the median card. So the old term
+ * charged an off-colour card at most its excess over a median playable, which is
+ * nothing for the half of the set below it and a point or two for the rest.
+ * Over 609,630 real picks it charged 1.28pp against a 3.90pp winning margin,
+ * and the two reports in notes.md #6 are both cards it charged nothing at all.
+ *
+ * `trapCorrection` below still shrinks toward the baseline and still should:
+ * it distrusts a MEASUREMENT and pulls it back toward the population it was
+ * measured in. This one believes the measurement and says the card is in the
+ * wrong deck. They were never the same anchor; they only looked like it.
+ *
+ * WHAT THE MEASUREMENT SAYS ABOUT THE SCALING, AND WHY IT IS STILL COMMITMENT
+ *
+ * `commitment` is how sure we are the colours are settled, so `1 - commitment`
+ * is what is left of an off-colour card. Measured against what actually happens
+ * -- take a card off your colours now, does the deck you finish with cast it --
+ * that is generous, not harsh: the real rate runs 0.71 at commitment under 0.1,
+ * 0.25 through the middle of the draft and 0.02 past 0.8, where `1 - commitment`
+ * offers 0.95, 0.65 and 0.15. Charging the measured rate instead was declined:
+ * it is observational, it only sees the off-colour cards drafters CHOSE to take,
+ * and erring toward keeping a pivot open is the right direction to be wrong in.
+ *
+ * One-sided is gone with the baseline. There is nothing below zero to protect
+ * against, and the guard was what excluded every below-median card.
  *
  * At zero commitment it is zero, so nothing about the early draft moves -- P1P1
  * still has no opinion about colours, which is what makes staying open free.
  */
-function offColorCost(
-  ctx: ScoringContext,
-  card: EngineCard,
-  baseline: number,
-): number {
+function offColorCost(ctx: ScoringContext, card: EngineCard): number {
   if (isOnColor(ctx.colors, card.colors)) return 0;
-  const value = cardValue(card);
-  if (value <= baseline) return 0;
-  return ctx.commitment * (value - baseline);
+  return ctx.commitment * cardValue(card);
 }
 
 /**
@@ -354,7 +494,7 @@ export function contextValue(card: EngineCard, ctx: ScoringContext): ContextValu
   const terms: ValueTerm[] = [
     { label: "archetype", delta: ctx.commitment * archDelta(ctx, card, context) },
     { label: "splash", delta: -ctx.commitment * splash },
-    { label: "off-color", delta: -offColorCost(ctx, card, baseline) },
+    { label: "off-color", delta: -offColorCost(ctx, card) },
     { label: "trust", delta: trapCorrection(card, context, baseline) },
   ].filter((t) => t.delta !== 0);
 

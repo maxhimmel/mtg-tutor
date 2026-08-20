@@ -30,9 +30,12 @@
 // deck's committed colours -- for the human, and for whatever `contextValue`
 // currently ranks first. The gap between those two columns IS the bug.
 //
-// `isOnColor` and `committedColors` are imported rather than reimplemented, on
+// `isOnColor` and the context itself are imported rather than reimplemented, on
 // purpose. A harness that defined "off-colour" for itself would be measuring a
 // rule the app does not run, and the two would drift the first time one moved.
+// The context comes from `packScoringContext`, the same call the mutation makes,
+// for the same reason: this file spent its first life building a ctx by hand and
+// it went stale the moment the colour rule moved underneath it.
 //
 // WHAT IT DELIBERATELY DOES NOT DO
 //
@@ -49,13 +52,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  cardValue,
-  commitment,
-  committedColors,
-  contextValue,
-  isOnColor,
-} from "@mtg-tutor/core";
+import { cardValue, contextValue, isOnColor, packScoringContext } from "@mtg-tutor/core";
 import { draftPicks } from "./lib/draftCache.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -191,11 +188,11 @@ async function run(setCode) {
     // below for exactly that reason.
     const pool = [];
     for (const row of rows) {
-      const committed = committedColors(pool);
-      const commit = commitment(pool, committed, pool.length, rows.length);
+      const ctx = packScoringContext(pool, pool.length, rows.length, archetypes, contextFor);
+      const committed = ctx.colors;
+      const commit = ctx.commitment;
 
       if (row.picked && row.pack.length > 1 && committed.size > 0) {
-        const ctx = { colors: committed, commitment: commit, archetypes, contextFor };
 
         let best = null;
         let bestOn = null;
@@ -209,12 +206,14 @@ async function run(setCode) {
 
         const oursOff = offColour(committed, best.card);
         // What the colour terms actually charged the card we nominated, in win
-        // rate points. Printed because the ceiling on that charge is the whole
-        // mechanism: `commitment` is a linear ramp, so at P2P1 it can only be a
-        // third of `splashCost` whatever the pool looks like.
+        // rate points. Every colour term, which for a fortnight it was not: the
+        // filter named `splash` and `archetype` and predated `off-color`, so the
+        // number under the table was the charge MINUS the term the table exists
+        // to measure. `trust` is the only one excluded, because it is about the
+        // win rate rather than about the colour.
         const penalty = oursOff
           ? contextValue(best.card, ctx)
-              .terms.filter((t) => t.label === "splash" || t.label === "archetype")
+              .terms.filter((t) => t.label !== "trust")
               .reduce((a, t) => a + t.delta, 0)
           : null;
 

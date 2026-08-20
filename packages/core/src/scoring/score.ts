@@ -6,13 +6,14 @@ import type {
   EngineCard,
   PoolCard,
 } from "../model/card.js";
-import { SCORING } from "../config.js";
+import { DECK, SCORING } from "../config.js";
 import { cardValue, clamp } from "./value.js";
 import {
   type ScoringContext,
   type ValueTerm,
   commitment,
   contextValue,
+  deckColorsFor,
   isOnColor,
   marginBetween,
 } from "./context.js";
@@ -230,7 +231,22 @@ export function packScoringContext(
   archetypes: readonly ColorWinRate[],
   contextFor: (card: EngineCard) => CardContext | undefined,
 ): ScoringContext {
-  const colors = committedColors(maindeck);
+  // The deck this pool is BECOMING, not the colours it has touched twice. See
+  // `deckColorsFor`: `committedColors` is decision #16's rule about a finished
+  // forty, and asking it about a 40-card pool calls four fifths of them
+  // five-colour -- which switched off every colour term at once.
+  //
+  // Lands are excluded by `role`, which is the engine's half of the type line.
+  // A pool's drafted lands are mostly colourless and would otherwise pad every
+  // candidate colour set equally; the ones that are not are fixing, and fixing
+  // arguing for the colours it fixes is circular.
+  const colors = new Set(
+    deckColorsFor(
+      maindeck.filter((c) => c.role !== "land"),
+      archetypes,
+      DECK.spellCount,
+    ),
+  );
   return {
     colors,
     commitment: commitment(maindeck, colors, picksMade, totalPicks),
@@ -305,7 +321,19 @@ export function scorePick<C extends EngineCard>(
     contextBestValue = bestSoFar;
   }
 
-  const committed = committedColors(pool);
+  // The SAME colours the value terms were computed against, whenever there are
+  // any. `onColor` and `targetOnColor` read this, and both are shown to a
+  // person: the "⚠️ off your committed colors" line under the verdict, and the
+  // rate at which we hold up a card the deck cannot play. Leaving them on
+  // `committedColors` while `contextValue` moved to `deckColorsFor` would have
+  // put the warning and the number that scored it on two different definitions
+  // of the same word -- which is the failure `isOnColor` has a paragraph
+  // refusing, one level up.
+  //
+  // Without a context there is nothing better to ask: the engine replaying a
+  // draft has no archetype table, and `committedColors` is then the only rule
+  // available.
+  const committed = ctx ? ctx.colors : committedColors(pool);
   const onColor = isOnColor(committed, picked.colors);
 
   // Graded against whichever question could actually be answered. With a
