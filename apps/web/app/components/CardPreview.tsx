@@ -354,6 +354,10 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
       named: tokens.length,
       withArt: drawable.length,
       drawn: Math.max(0, pos.lefts.length - cardFaces),
+      // Whether the stats panel got a place beside all that. The pictures
+      // yielding is a design question; the panel yielding is a defect, because
+      // it is what names the pictures that did not fit.
+      panel: pos.panelLeft != null,
       viewport: window.innerWidth,
     });
   }, [pos, tokens, drawable, faces]);
