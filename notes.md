@@ -158,6 +158,69 @@ deliberate choice to fix a stale default is the worse of the two errors.
 - A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
 - B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
 
+5. This is the coach giving bad feedback/having a misunderstanding:
+
+```
+Last pick
+A
+92/100
+You took
+Burst Lightning
+Graded against
+−1.0pp ± 0.7pp
+Micromancer
+That gap is larger than the margin of error on the two win rates.
+
+Coach
+Cheap efficient removal that's flexible early or late thanks to kicker fits your
+ shell perfectly. Micromancer edges it out by a margin outside the error bar, since it's a solid body plus tutors back one of your Burst Lightnings/tricks, but the gap is small enough that Burst Lightning is a fine, defensible take here.
+```
+
+- Its reasoning for the Micromancer (which can go get a 1-cost instant/sorcery) is erroneous because I literally picked the burst lightening RATHER THAN the micromancer which means I didnt have the burst lightening for it to go retrieve.
+
+6. I thought we just fixed issues with the scoring making judgments with off-color stuff:
+
+```
+Last pick
+D
+51/100
+You took
+Electroduplicate
+Graded against
+−6.5pp ± 3.1pp
+Dazzling Angel
+That gap is larger than the margin of error on the two win rates.
+
+Coach
+Electroduplicate is a fine role-player with your Balmor and big creatures like Shivan Dragon to copy, but it's low-impact and only sings if you already have a strong board. Dazzling Angel was clearly the strongest card in the pack and outperformed this by a margin well outside the error bar, but it's off your committed
+ colors this late, so passing it for on-color consistency isn't unreasonable. Just don't expect Electroduplicate to carry games by itself — it needs a good target to matter.
+```
+
+- That was P2P4 and I have 14 cards in my maindeck that are either blue/red so the white pick suggestion (w/only 1 white in my sideboard) feels incorrectly assessed as a "D".
+
+Another example:
+
+```
+Last pick
+C+
+72/100
+You took
+Frenzied Goblin
+Graded against
+−3.7pp ± 1.3pp
+Gnarlid Colony
+That gap is larger than the margin of error on the two win rates.
+
+Coach
+Frenzied Goblin already has a second copy in your pool and adds cheap aggressive pressure with an evasion-enabling ability, but a fourth off-color green card at this point does you no good — Gnarlid Colony isn't castable in your
+ deck, so the raw win-rate gap doesn't even apply here. The real comparison was Homunculus Horde or Goblin Boarders, both on-color and both viable four-of/curve-fillers for a
+ deck; either likely beats a third one-drop.
+```
+
+- That occurred at P3P7. And you give me a "C" for that?! Seems so incorrect - I thought we just fixed this.
+
+7. Weird new bug I'm seeing in the draft screen: When I hover over the first card in a pack (dunno if it matters but they have been coinceidentally rare - but instinct tells me that matters less than what I'm about to say) I can't see the stats popup. Each of these cards has had a token to render in the side popup, too.
+
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -458,6 +521,8 @@ It'd be extremely rad to do some deep research, find some blog posts or somethin
 
 - I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
 - It'd be cool to empower users to move sections where they like
+
+15. Could we have some kinda UI element that shows HOW a score is being added up to give the results it's giving when I make a pick? Some kinda snazzy infographic that explains the weights/calculations.heuristics/etc???
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
