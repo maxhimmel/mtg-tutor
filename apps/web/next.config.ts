@@ -59,6 +59,18 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  // `/drills` was the route for the whole life of the feature, and the nav
+  // called it Practice the whole time. The route is Practice now too, and this
+  // is what the old URL costs: three lines, forever, because the people this
+  // app was built for are a handful of friends and at least one of them has the
+  // misses drill bookmarked.
+  //
+  // Permanent, not temporary. The old path is not coming back, and a 307 asks
+  // every browser and every crawler to keep trying it.
+  async redirects() {
+    return [{ source: "/drills/:path*", destination: "/practice/:path*", permanent: true }];
+  },
+
   // PostHog's ingestion endpoints end in a slash (/e/, /s/). Without this Next
   // redirects them to the slashless form and every capture is lost.
   skipTrailingSlashRedirect: true,

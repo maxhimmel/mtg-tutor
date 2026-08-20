@@ -327,7 +327,7 @@ function Mistakes({ data }: { data: Stats }) {
       // wrong, so it is the one place where "play them again" is an offer rather
       // than an interruption.
       footer={
-        <Link href="/drills/misses" className="btn btn-sm btn-primary">
+        <Link href="/practice/misses" className="btn btn-sm btn-primary">
           Take these picks again
         </Link>
       }

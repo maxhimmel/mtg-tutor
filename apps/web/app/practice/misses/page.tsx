@@ -12,7 +12,7 @@ export default function MissesPage() {
       <SignedOut>
         <section className="max-w-2xl py-6">
           <h1 className="font-display text-4xl font-semibold leading-[1.05] tracking-tight">
-            Take the pick back.
+            Missed picks.
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-base-content/70">
             The packs you got wrong, dealt again — the same fourteen cards, the same deck
