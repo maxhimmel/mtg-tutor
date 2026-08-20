@@ -28,6 +28,11 @@ function listPack(pick: StoredPick): string {
       const marks = [
         c.name === pick.picked.name ? "YOU TOOK THIS" : "",
         c.name === pick.bestName ? "raw-power best" : "",
+        // The card the grade was measured against. Marked because the model was
+        // being asked to name one of these itself while the app already had the
+        // answer -- so its verdict could nominate a card the score never
+        // considered, on a screen read after the fact.
+        c.name === pick.contextBestName ? "best for this deck (what the score used)" : "",
       ].filter(Boolean);
       const head = marks.length ? `${describeCard(c)}  [${marks.join(", ")}]` : describeCard(c);
       return `  - ${head}\n    ${statLine(c)}`;
@@ -66,6 +71,14 @@ export function buildReviewContext(
     `  ${statLine(pick.picked)}`,
     "",
     `The raw-power best (highest 17Lands win rate available): ${pick.bestName}.`,
+    // Both answers, always, for the reason `pickCoach` gives for doing the same:
+    // the gap between them is the lesson, and a model left to work out the
+    // second one alone cannot know the colour rules the scorer was taught.
+    pick.contextBestName === pick.bestName
+      ? `The strongest card was also the best one for this deck.`
+      : `The best card for THIS deck, which is what the score was measured ` +
+        `against: ${pick.contextBestName}. It already accounts for the pool's ` +
+        `colours -- a card the deck cannot cast is not held up as the pick.`,
     "",
     "Full pack, strongest-first:",
     listPack(pick),
