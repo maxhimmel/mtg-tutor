@@ -791,6 +791,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         grade: score.grade,
         isBest: score.isBest,
         onColor: score.onColor,
+        targetOnColor: score.targetOnColor,
         rankInPack: score.rankInPack,
         packSize: packBefore.length,
         benched: bench ?? false,

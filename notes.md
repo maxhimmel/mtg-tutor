@@ -312,9 +312,7 @@ on 2026-08-15.
      already wants to play twice. The events say whether that is true before any
      of it is designed.
 
-7. Is it possible to continue a draft we left in progress? Is a draft that isn't completed even tracked on the DB? It'd be pretty rad if we could just continue from where we left off with a draft we abandoned. Answer my question about this and tell me the answer before you start doing the work for this.
-
-8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
+7. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
    drafts side by side. What it is and how to test one alone are in `README.md`;
    the rulings that came out of building it are decisions #17 and #18. The
    design write-up that used to sit here is gone with the idea, as a shipped
