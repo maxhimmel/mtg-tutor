@@ -118,11 +118,25 @@ Please, take my complaint with a grain of salt because I'm not an MTG expert and
     coach reads it as an ordinary pick. Taking something into the sideboard on
     purpose and being lectured about your colours for it is the failure.
 
-16. What the heck is going on with this drill/practice vernacular?
+14. What the heck is going on with this drill/practice vernacular?
 
 - We have a route called /drills/<some-feature>
 - We call the label on the nav "Practice"
 - "Take the pick back" navigates to /drills/misses --> why is it called "misses"? The word "miss" isn't even used once in the link describing this drill.
+
+17. See screenshot in my /Documents:
+
+- "Screenshot 2026-08-19 at 10.57.13 AM.png"
+- The compact scroll view is casting a shadow on the top even though there is nothing scrolled - it should only show shadow if it's scrolled.
+
+18. See screenshot in my /Documents:
+
+- "Screenshot 2026-08-19 at 10.56.35 AM.png"
+- This feels like terrible coaching/scoring algorithm.
+- Look at all the cards I've already drafted here.
+- In WHAT WORLD at P3P9 would taking this green frog be correct?!
+- I'm certain the stats on the frog is great, but it makes absolutely zero sense here.
+- Whatever is the algorithm to judge/score cards needs a lot of work because it's clearly not adapting to the colors we're committed to.
 
 # Ideas:
 
@@ -334,7 +348,6 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
     The number keeps a stub rather than being left empty, because the honesty
     question this was waiting on is not answered by shipping it, only opened:
-
     - **A reason written for yourself is not a reason written for a friend.**
       Whether people stay honest in that box now that it is readable is the
       thing that decides whether this was a good idea, and it is measurable —
@@ -464,7 +477,7 @@ CLI's review quiz printing the answer beside the question) shipped 2026-08-19.
    - Also, related kinda but not really: it'd be very rad if we could have some kinda
      mock-auth so, as a dev, I could sign in offline - but low priority.
 
-4. **The drill's deck rail stops short of the fold once it pins** (2026-08-18).
+3. **The drill's deck rail stops short of the fold once it pins** (2026-08-18).
    Its height is measured at rest, where the masthead and the page heading sit
    above it; pinned, the masthead has scrolled away and that much screen goes
    unused at the bottom. No `calc` can be right in both states — see
