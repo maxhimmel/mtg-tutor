@@ -817,6 +817,15 @@ export function feedbackRefused(p: {
  * belongs shrunk into the panel. Both outcomes render something plausible, so
  * nothing else would ever say which.
  *
+ * `panel` is the third silence and the one a person found first. The token
+ * pictures used to be taken against the whole width and the stats panel placed
+ * in whatever was left, so a wide block could leave nothing -- and the panel is
+ * the half that names the tokens there was no room to draw, so it took the
+ * report of its own absence with it. notes.md #7: hovering the first card in a
+ * pack showed the card and its token and no stats, while the same card three
+ * slots along was fine. False here means it is still happening on somebody's
+ * real screen, which is the only way anyone would find out again.
+ *
  * Once per provider, not once per hover. A draft is hundreds of hovers and the
  * answer does not move between them; sending it every time would spend the
  * quota on the same fact repeatedly.
@@ -825,6 +834,7 @@ export function tokensPreviewed(p: {
   named: number;
   withArt: number;
   drawn: number;
+  panel: boolean;
   viewport: number;
 }): void {
   if (!on()) return;

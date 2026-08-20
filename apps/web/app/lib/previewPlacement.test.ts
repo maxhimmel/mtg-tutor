@@ -89,15 +89,50 @@ describe("the keyword panel", () => {
     expect(at.panelLeft).toBe(at.lefts[0] + PREVIEW_W + GAP);
   });
 
-  it("falls back to the near side when there is no room beyond", () => {
-    const at = place(tile(205, 300, 80), { width: 900, height: 900, wall: null }, true, [
+  // It used to be able to sit on the near side instead, for a block placed hard
+  // against the wall with nothing past it. Reserving the panel's room before
+  // the block is placed is what made that case unreachable: the block moves
+  // left instead, so there is always something past it.
+  it("is always beyond the block, never before it", () => {
+    const walled = place(tile(600, 300), { width: 1400, height: 900, wall: 1000 }, true, [
       UPRIGHT,
     ])!;
-    expect(at.panelLeft).toBeLessThan(at.lefts[0]);
+    expect(walled.panelLeft).toBe(walled.lefts[0] + PREVIEW_W + GAP);
+    expect(walled.panelLeft! + 260).toBeLessThanOrEqual(1000 - GAP);
   });
 
-  it("is dropped rather than moving the card image", () => {
-    const at = place(tile(20, 300, 80), { width: 700, height: 900, wall: null }, true, [
+  // notes.md #7. The first card in a pack sits at the far left, so the block
+  // hangs to its RIGHT and runs toward the wall -- and a token adds a whole
+  // second card's width to it. The panel was placed after the faces had already
+  // taken the room, so it came out null: the player hovered a rare, got the card
+  // and its token, and no stats at all. The same card in the middle of the pack
+  // is fine, because the block flips left and leaves room beyond it.
+  //
+  // The token block's own comment says it "never yields SILENTLY: the panel
+  // names every token the card makes whether or not there was room to draw it".
+  // The panel was the thing being dropped, so it yielded silently and took the
+  // naming with it.
+  it("keeps its room when a token would otherwise take it", () => {
+    const board: Viewport = { width: 1440, height: 900, wall: 1060 };
+    const first = place(tile(40, 300), board, true, [UPRIGHT, UPRIGHT])!;
+    expect(first.panelLeft).not.toBeNull();
+  });
+
+  it("gives the panel up before the card image, but only when it must", () => {
+    // No room for a second face AND a panel: the face is what yields, because
+    // the panel is the half that can say what was dropped.
+    const tight: Viewport = { width: 900, height: 900, wall: null };
+    const at = place(tile(40, 300), tight, true, [UPRIGHT, UPRIGHT])!;
+    expect(at.lefts).toHaveLength(1);
+    expect(at.panelLeft).not.toBeNull();
+  });
+
+  // The image still wins, and this is what winning means now: the panel can
+  // move the block sideways inside the room the block already had, and it can
+  // never cost the block a face or a pixel. 600px cannot hold a card and a
+  // panel side by side at all, so the panel is what goes.
+  it("is dropped rather than shrinking the card image", () => {
+    const at = place(tile(20, 300, 80), { width: 600, height: 900, wall: null }, true, [
       UPRIGHT,
     ])!;
     expect(at.panelLeft).toBeNull();

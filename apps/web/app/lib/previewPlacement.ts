@@ -98,23 +98,55 @@ export function place(
   const right =
     viewport.wall != null && viewport.wall > anchor.right ? viewport.wall : viewport.width;
 
+  // How much of the page the block may take. The panel's share is subtracted
+  // FIRST, and that ordering is the whole of notes.md #7.
+  //
+  // The extra faces used to be taken against the full width and the panel
+  // placed in whatever was left, so on a wide-enough block there was nothing
+  // left: the first card in a pack hangs its block to the RIGHT (there is no
+  // room to its left to flip into), a token adds a second card's width to it,
+  // and the panel came back null. Same card in the middle of the pack, fine --
+  // the block flips left and leaves room beyond. A stats panel that depends on
+  // which slot of the pack you are pointing at.
+  //
+  // The order is not arbitrary, and the token block's own comment already
+  // states it: the pictures are "the first thing to yield on a narrow screen"
+  // and "it never yields SILENTLY -- the panel names every token the card makes
+  // whether or not there was room to draw it". The panel is the half that can
+  // report the loss, so it cannot be the half that is lost first.
+  const forPanel = wantsPanel ? PANEL_W + GAP : 0;
+  const room = right - GAP * 2 - forPanel;
+
   // How many fit, decided before the horizontal placement because everything
   // below positions against the block as a whole. Measured face by face rather
   // than as a multiple of PREVIEW_W, because a Battle's front is landscape, its
   // back is not, and a token is a third width again.
+  //
+  // The front is exempt: it is what the player pointed at and is never dropped,
+  // so a panel is what yields when even the card alone cannot make room for
+  // both -- which is what `panelLeft` being null still means.
   let width = faces[0].w;
   let shown = 1;
-  while (shown < faces.length && width + GAP + faces[shown].w + GAP * 2 <= right) {
+  while (shown < faces.length && width + GAP + faces[shown].w <= room) {
     width += GAP + faces[shown].w;
     shown += 1;
   }
   const drawn = faces.slice(0, shown);
   const height = Math.max(...drawn.map((f) => f.h));
 
-  // Prefer the right of the anchor; flip left when it would overflow.
+  // The block's own right-hand limit, with the panel's side already taken out
+  // of it. `fits` is false when the page cannot hold both, and then the panel
+  // is what goes -- the image is what the player pointed at and still wins.
+  const limit = right - GAP - width;
+  const fits = wantsPanel && limit - GAP - PANEL_W >= GAP;
+  const rightmost = fits ? limit - GAP - PANEL_W : limit;
+
+  // Prefer the right of the anchor; flip left when it would overflow. The flip
+  // now tests the panel's limit rather than the page's, which is what keeps the
+  // panel's room without the block ever losing a face or a pixel to it.
   let left = anchor.right + GAP;
-  if (left + width > right - GAP) left = anchor.left - GAP - width;
-  left = Math.max(GAP, Math.min(left, right - GAP - width));
+  if (left > rightmost) left = anchor.left - GAP - width;
+  left = Math.max(GAP, Math.min(left, rightmost));
 
   const lefts: number[] = [];
   let x = left;
@@ -127,15 +159,11 @@ export function place(
   let top = anchor.top + anchor.height / 2 - height / 2;
   top = Math.max(GAP, Math.min(top, viewport.height - GAP - height));
 
-  // The panel sits beyond the preview, so the image never has to move to make
-  // room for it.
-  let panelLeft: number | null = null;
-  if (wantsPanel) {
-    const beyond = left + width + GAP;
-    const before = left - GAP - PANEL_W;
-    if (beyond + PANEL_W <= right - GAP) panelLeft = beyond;
-    else if (before >= GAP) panelLeft = before;
-  }
+  // Always beyond the block, never before it. There used to be a near-side
+  // fallback for when the block had been placed hard against the wall with
+  // nothing past it; the block reserving the room is what made that case
+  // unreachable, and a branch nothing can reach is worse than one side.
+  const panelLeft = fits ? left + width + GAP : null;
 
   return { lefts, top, height, panelLeft };
 }
