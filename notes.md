@@ -21,6 +21,19 @@ term shipped for 4 and 18 was correct and never fired, for two independent
 reasons, and neither of them was visible in any number the app collected. The
 rulings are decisions #23 and #24; the trap the instrument fell into is #14.
 
+6 had a third half nobody reported, found while three agents were re-checking
+the first two. **The review screen was never asking the scorer at all.**
+`review.ts` put only `rawBest` on a stored pick, so the CONTEXT_BEST mark was
+the review model's own nomination -- or, with no verdict fetched, the raw-power
+best, which is the exact defect `Verdict.tsx` was fixed for on the live board
+and which sat unfixed two screens away. So both of the day's scoring fixes
+stopped at the board: a screen read AFTER the draft went on nominating cards the
+deck cannot cast, from a model that had never been told the colour rule.
+
+The general shape is worth more than the fix: **a rule taught to a scorer only
+reaches the surfaces that ask the scorer.** Three did and one did not, and the
+one that did not was the one nobody had a complaint about yet.
+
 15 shipped in two parts, and the second is worth reading before touching the
 floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
 which had been the number since the review quiz was written and had never been
