@@ -187,6 +187,10 @@ describe("review.load on a draft the engine can no longer rebuild", () => {
 
     expect(review.picks.map((p) => p.score)).toEqual([77, 77]);
     expect(review.picks[0].bestName).toBe("Passed");
+    // Both answers travel, and this is the one the grade beside them was
+    // measured against. Carrying only the raw-power best is how the review
+    // screen came to mark it as though it were the deck-aware answer.
+    expect(review.picks[0].contextBestName).toBeTypeOf("string");
   });
 
   it("still names the deck's colours, off the last row's pool", async () => {

@@ -28,17 +28,41 @@ describe("buildReviewContext", () => {
   const picked = card("Lightning Strike", { colors: ["R"], gihWinRate: 0.58 });
   const best = card("Big Bomb", { colors: ["R"], gihWinRate: 0.62 });
 
+  // A third card, on colour and weaker than the bomb, so the two "best" answers
+  // can differ -- which is the case the prompt has to carry and the fixture
+  // could not express while it only had one.
+  const fit = card("Solid Common", { colors: ["R"], gihWinRate: 0.6 });
+
   const pick: StoredPick = {
     pickIndex: 4,
     packNo: 1,
     pickNo: 5,
-    pack: [picked, best],
+    pack: [picked, best, fit],
     picked,
     bestName: best.name,
+    contextBestName: fit.name,
     score: 72,
     isBest: false,
     onColor: true,
   };
+
+  // The model used to be told only the raw-power best and asked to work the
+  // other one out, so a screen read after the fact could nominate a card the
+  // grade never considered -- including one the deck cannot cast, after the
+  // board had been taught not to. Both answers now, as the live coach has
+  // always had them.
+  it("names both bests, and says which one the score used", () => {
+    const ctx = buildReviewContext(pick, []);
+    expect(ctx).toContain("The raw-power best (highest 17Lands win rate available): Big Bomb.");
+    expect(ctx).toContain("what the score was measured against: Solid Common");
+    expect(ctx).toContain("best for this deck (what the score used)");
+  });
+
+  it("says so in one line when the two are the same card", () => {
+    const agreed = buildReviewContext({ ...pick, contextBestName: best.name }, []);
+    expect(agreed).toContain("The strongest card was also the best one for this deck.");
+    expect(agreed).not.toContain("what the score was measured against");
+  });
 
   it("says nothing about a sideboard when nothing was set aside", () => {
     expect(buildReviewContext(pick, [card("Storm Fox", { colors: ["U"] })])).not.toContain(
