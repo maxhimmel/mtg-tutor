@@ -230,6 +230,95 @@ describe("contextValue", () => {
   });
 });
 
+// notes.md issues #4 and #18, as tests. Both are the same report -- a card the
+// deck on screen was never going to play, held up as the pick that should have
+// been made -- and neither could have gone red before this block existed: every
+// fixture above that is "off colour" is a B card against WU, which is a splash
+// candidate rather than a bench card, so the only assertions on it were about
+// `splashCost`.
+//
+// The measured version of this is `pnpm diagnose-offcolour`, which reads real
+// pools and reports the rate against the human one. These pin the RULE; that
+// pins the BEHAVIOUR. Neither substitutes for the other: a unit test cannot
+// know that 12.4% was too high, and the harness cannot fail in CI.
+describe("a card the deck is not going to play", () => {
+  const committedWU = ctxOf({ colors: new Set<ColorCode>(["W", "U"]) });
+
+  it("is shrunk toward the baseline once the deck is committed", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const out = contextValue(green, { ...committedWU, commitment: 1 });
+    const off = out.terms.find((t) => t.label === "off-color");
+
+    // Everything it was worth ABOVE the format's own rate, which is what a card
+    // that never gets cast adds to a deck: nothing it did not already have.
+    expect(off?.delta).toBeCloseTo(-(0.64 - formatBaseline(ARCHETYPES)), 10);
+  });
+
+  it("keeps its whole value while the draft is still open", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const out = contextValue(green, { ...committedWU, commitment: 0 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+    expect(out.value).toBeCloseTo(out.base, 10);
+  });
+
+  // The frog at P3P9. A strong off-colour card beat a decent on-colour one for
+  // the whole life of the scorer, because the only thing standing against it
+  // was `splashCost` -- about four points, against gaps that routinely run
+  // wider. This is the assertion that would have failed before the fix.
+  it("loses to a weaker card the deck can actually cast", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const onColour = card("Fine Blue Common", ["U"], 0.60);
+    const late = { ...committedWU, commitment: 0.85 };
+
+    expect(contextValue(green, late).value).toBeLessThan(contextValue(onColour, late).value);
+  });
+
+  // And the other half of the same rule, which is the one a bigger toll would
+  // have broken: early, taking the best card in the pack is correct, and the
+  // scorer must still say so.
+  it("still beats it at P1P1, where staying open is free", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const onColour = card("Fine Blue Common", ["U"], 0.60);
+    const early = { ...committedWU, commitment: 0 };
+
+    expect(contextValue(green, early).value).toBeGreaterThan(contextValue(onColour, early).value);
+  });
+
+  it("is not paid for being off colour when it was weak to begin with", () => {
+    // One-sided, exactly as `trapCorrection` is: shrinking a card that is
+    // already below the baseline would move it UP, and read as "unplayable in
+    // your deck" being a point in its favour.
+    const weak = card("Weak Green", ["G"], 0.5);
+    const out = contextValue(weak, { ...committedWU, commitment: 1 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+    // Not "nothing charges it" -- `splash` still does, because a green card in
+    // a WU deck still widens the deck that plays it. The claim here is only
+    // that this term never turns upward.
+    expect(out.terms.every((t) => t.label === "off-color" || t.delta <= 0)).toBe(true);
+  });
+
+  it("says nothing about a colourless card, which every deck can cast", () => {
+    const rock = card("Mana Rock", [], 0.62);
+    const out = contextValue(rock, { ...committedWU, commitment: 1 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+  });
+
+  it("says nothing about a card that shares one of the deck's colours", () => {
+    // A WB card in a WU deck is castable and pays `splashCost` for the black,
+    // which is a different charge for a different reason.
+    const partly = card("Half On Colour", ["W", "B"], 0.62);
+    const out = contextValue(partly, { ...committedWU, commitment: 1 });
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+    expect(out.terms.find((t) => t.label === "splash")).toBeDefined();
+  });
+
+  it("does not fire before the deck has colours at all", () => {
+    const green = card("Green Frog", ["G"], 0.64);
+    const out = contextValue(green, ctxOf({ colors: new Set<ColorCode>(), commitment: 1 }));
+    expect(out.terms.find((t) => t.label === "off-color")).toBeUndefined();
+  });
+});
+
 describe("splashCost is monotone in width", () => {
   // fdn's shape: nothing at four colours, so the width falls back to the
   // format's own rate -- which is higher than the measured three-colour rate.

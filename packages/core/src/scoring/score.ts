@@ -13,8 +13,15 @@ import {
   type ValueTerm,
   commitment,
   contextValue,
+  isOnColor,
   marginBetween,
 } from "./context.js";
+
+// Moved to `context.js` when the off-colour term needed it, and re-exported
+// here so `scoring/score.js` stays the import path every existing caller and
+// `situation.ts` already use. The rule itself did not change: it is still the
+// one definition, which is the whole of why its own comment refuses a copy.
+export { isOnColor };
 import { type TiebreakReason, bandOf, deckNeeds, tiebreak } from "./tiebreak.js";
 
 /**
@@ -170,17 +177,6 @@ export function committedColors(pool: readonly PoolCard[]): Set<ColorCode> {
   const counts = new Map<ColorCode, number>();
   for (const c of pool) for (const col of c.colors) counts.set(col, (counts.get(col) ?? 0) + 1);
   return new Set([...counts].filter(([, n]) => n >= 2).map(([c]) => c));
-}
-
-// Whether a card belongs to what the pool is building. Before any commitment
-// nothing can be off-color -- early picks are expendable and staying open is
-// correct -- and a colorless card fits whatever the pool becomes.
-//
-// Shared rather than inlined because the prompt says this out loud ("this pick
-// is OFF those colors") next to the colors it computed, and the two saying
-// different things is the bug that sentence is most able to hide.
-export function isOnColor(committed: ReadonlySet<ColorCode>, colors: readonly ColorCode[]): boolean {
-  return committed.size === 0 || colors.length === 0 || colors.some((c) => committed.has(c));
 }
 
 /**

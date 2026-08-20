@@ -15,6 +15,21 @@ import { cardValue } from "./value.js";
 
 const WUBRG: ColorCode[] = ["W", "U", "B", "R", "G"];
 
+// Whether a card belongs to what the pool is building. Before any commitment
+// nothing can be off-color -- early picks are expendable and staying open is
+// correct -- and a colorless card fits whatever the pool becomes.
+//
+// Shared rather than inlined because the prompt says this out loud ("this pick
+// is OFF those colors") next to the colors it computed, and the two saying
+// different things is the bug that sentence is most able to hide.
+//
+// It lived in `score.ts` until `offColorCost` below needed it, and score.ts
+// imports this file -- so it moved down rather than being copied up, which is
+// what the paragraph above exists to forbid. `score.ts` re-exports it.
+export function isOnColor(committed: ReadonlySet<ColorCode>, colors: readonly ColorCode[]): boolean {
+  return committed.size === 0 || colors.length === 0 || colors.some((c) => committed.has(c));
+}
+
 /** Canonical colour string, matching how 17Lands keys an archetype. */
 export function colorKey(colors: Iterable<ColorCode>): string {
   const held = new Set(colors);
@@ -200,6 +215,63 @@ export function archDelta(
 // drafters do -- see the circularity note in scripts/backtest-scoring.mjs.
 
 /**
+ * What a card the deck is not going to play is worth to it.
+ *
+ * THE CLAIM `splashCost` MAKES, AND WHERE IT STOPS BEING TRUE
+ *
+ * `splashCost` is a measured number and it is not wrong -- it is the win rate a
+ * deck gave up by running three colours instead of two, and for a drafter who
+ * is genuinely deciding whether to widen it is exactly the right charge. But it
+ * is measured over decks that PLAYED the extra colour, so quoting it assumes
+ * the card ends up in the forty. At P3P9 in front of a finished two-colour
+ * deck, that assumption is simply false: the card is going to the sideboard,
+ * and what it costs you is not four points of win rate, it is everything.
+ *
+ * That is the whole of notes.md issues #4 and #18. A black land held up against
+ * a nine-card UG pool and a green frog held up against a finished deck are the
+ * same sentence -- the scorer pricing a bench card as though it were a splash,
+ * and finding it a bargain, because at 4.3pp the toll is smaller than the win
+ * rate gaps it is competing against. Measured over 160,184 real picks before
+ * this existed: drafters take an off-colour card 2.3% of the time in pack 3 and
+ * the scorer nominated one 12.4% of the time, having charged it 0.43pp.
+ *
+ * SO THE TERM IS NOT A BIGGER TOLL
+ *
+ * Raising `splashCost` would be answering a measurement with a knob, and it
+ * would be wrong at P1P5 where widening is free and correct. What changes with
+ * the draft is not the price of a colour, it is the PROBABILITY the card is
+ * ever cast -- and `commitment` is already this app's measure of that, on a
+ * 0-1 scale, built out of value share and progress for exactly this purpose.
+ *
+ * A card that does not make your deck leaves your deck where it was, so it is
+ * worth the format's own baseline: not zero, which is not on this scale, but
+ * "nothing you did not already have" -- the same argument decision #10 makes
+ * for a basic land being worth 0, one level up. So this shrinks an off-colour
+ * card toward `formatBaseline` in proportion to commitment, which is the same
+ * shape and the same anchor as `trapCorrection` below. Two terms shrinking
+ * toward the same point for two different reasons is a coincidence worth
+ * noticing rather than a duplication: one distrusts the measurement, this one
+ * believes it and says the card is in the wrong deck.
+ *
+ * One-sided, for `trapCorrection`'s reason. A card worth less than the baseline
+ * has nothing to shrink, and letting the term go negative would PAY a weak card
+ * for being off-colour.
+ *
+ * At zero commitment it is zero, so nothing about the early draft moves -- P1P1
+ * still has no opinion about colours, which is what makes staying open free.
+ */
+function offColorCost(
+  ctx: ScoringContext,
+  card: EngineCard,
+  baseline: number,
+): number {
+  if (isOnColor(ctx.colors, card.colors)) return 0;
+  const value = cardValue(card);
+  if (value <= baseline) return 0;
+  return ctx.commitment * (value - baseline);
+}
+
+/**
  * How much of a card's win rate to believe.
  *
  * A card taken and then left out of the deck was played in the games someone
@@ -273,9 +345,16 @@ export function contextValue(card: EngineCard, ctx: ScoringContext): ContextValu
     splashCost(ctx.archetypes, widened.size) - splashCost(ctx.archetypes, ctx.colors.size),
   );
 
+  // `splash` and `off-color` both answer "what does this card's colour cost
+  // you", and they do not double-charge: `splashCost` floors at width 2 and an
+  // off-colour card is by definition adding a colour, so the deck it is priced
+  // against is a wider one either way. What separates them is which future they
+  // are about. `splash` is the price of the deck you would become; `off-color`
+  // is the price of not becoming it, which is the one nothing was charging.
   const terms: ValueTerm[] = [
     { label: "archetype", delta: ctx.commitment * archDelta(ctx, card, context) },
     { label: "splash", delta: -ctx.commitment * splash },
+    { label: "off-color", delta: -offColorCost(ctx, card, baseline) },
     { label: "trust", delta: trapCorrection(card, context, baseline) },
   ].filter((t) => t.delta !== 0);
 
