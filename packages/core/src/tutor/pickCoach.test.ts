@@ -96,6 +96,17 @@ describe("buildPickContext", () => {
     expect(ctx).toContain("ALSA 6.0");
   });
 
+  // The pool the coach is shown includes the card just taken, on purpose -- it
+  // is what the player is holding. What it is not is the pool an argument FOR a
+  // passed card gets to use, and nothing said so: a real answer argued that
+  // Micromancer "tutors back one of your Burst Lightnings" on a pick where Burst
+  // Lightning was taken INSTEAD of Micromancer. notes.md #5.
+  it("says the passed cards are a world where the pick was not made", () => {
+    expect(ctx).toContain("these were PASSED");
+    expect(ctx).toContain("would have meant NOT taking Lightning Strike");
+    expect(ctx).toContain("Lightning Strike is not in the pool");
+  });
+
   it("says nothing about a sideboard when nothing has been benched", () => {
     expect(ctx).not.toContain("Sideboard");
   });

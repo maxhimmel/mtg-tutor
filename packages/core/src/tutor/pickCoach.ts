@@ -188,7 +188,27 @@ export function buildPickContext(
     // Null rather than "" so dropping an empty pack list does not also drop the
     // blank lines above -- each entry now spans two lines, and run together they
     // read as one block instead of five labelled sections.
-    passed ? `Other cards in the pack:\n${passed}` : null,
+    // Said out loud, because the pool above deliberately includes the card that
+    // was just taken and nothing else in the prompt marks the difference between
+    // "your pool" and "your pool in the world where you took something else".
+    //
+    // The model reads the pool for synergies -- that is the whole point of
+    // giving it one -- and then argues for an alternative using a card that only
+    // exists because the alternative was NOT taken. Reported: "Micromancer edges
+    // it out, since it tutors back one of your Burst Lightnings", on a pick
+    // where Burst Lightning was the card taken INSTEAD of Micromancer. The
+    // sentence is coherent and describes a pool nobody has ever held. notes.md #5.
+    //
+    // Fixed here rather than by dropping the pick from the pool: the pool with
+    // the pick in it is the true one, it is what the player is looking at, and
+    // every other line in this block is about the world where they took it.
+    // Only the argument FOR an alternative happens in the other world, so only
+    // that argument needs the caveat.
+    passed
+      ? `Other cards in the pack — these were PASSED, and taking any of them would ` +
+        `have meant NOT taking ${picked.name}. So ${picked.name} is not in the pool ` +
+        `that a case for one of these gets to lean on:\n${passed}`
+      : null,
     "",
     // Two different jobs, said out loud. Without the second sentence the model
     // reads the player's words as colour and coaches the card anyway, which is
