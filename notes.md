@@ -1246,7 +1246,8 @@ The architecture, the data pipeline and the deploy story are all documented in
     stranding a draft. FOUR terms now, none tuned — archetype fit and splash
     cost are measured win rates carried in their own units, the trust correction
     is one-sided because self-selection flatters in one direction only, and the
-    off-colour charge added on 2026-08-20 is one-sided for the same reason.
+    off-colour charge added on 2026-08-20 charges a card the deck cannot cast
+    its whole value, because that is what it adds to the deck.
 
     **Re-litigated on 2026-08-20, and the disagreement was right.** The note
     that used to sit here — "card scores should be impacted by what is currently
@@ -1259,28 +1260,45 @@ The architecture, the data pipeline and the deploy story are all documented in
 
     So the answer is not "the score should read the pool" — it always did — but
     **which claim the pool is being used to make.** A term was added for the
-    other future: an off-colour card is shrunk toward `formatBaseline` in
-    proportion to commitment, because a card that does not make your deck leaves
-    your deck where it was. `pnpm diagnose-offcolour` is the harness, and the
-    before/after is in the commit. What is still NOT read is the sideboard, and
-    the maindeck only through colour and value share — the curve and the roles
-    reach the tiebreak, not the score.
+    other future: an off-colour card is worth what a Mountain is worth, in
+    proportion to commitment, because a card that does not make your deck adds
+    nothing you did not already have. `pnpm diagnose-offcolour` is the harness.
+    What is still NOT read is the sideboard, and the maindeck only through
+    colour and value share — the curve and the roles reach the tiebreak, not the
+    score.
+
+    **That term then did nothing for four days and the numbers below said it was
+    working.** Both halves of why are decisions #23 and #24: it was asked about a
+    colour set that called four fifths of pools five-colour, and its anchor was a
+    deck win rate standing in for a card's. Do not read the paragraph above
+    without them.
 
     **Confirmed on five sets it was not built on**, which the roadmap's
     `turnFour` post-mortem is the reason for: a term checked only on the sets it
     was developed against has been selected on them. Developed on fdn/dsk/woe,
-    run over all eight cached sets, 338,892 picks — off-colour nomination rate,
-    human first:
+    run over all eight cached sets — off-colour nomination rate, human first:
 
-        pack        P1              P2              P3
-        human      23.3%            4.0%            1.9%
-        ours       47.2%           13.4%            4.3%
+        pack        P1              P2              P3            all
+        human      15.3%            6.6%            9.4%          10.3%
+        ours        5.9%            2.6%            4.8%           4.4%
 
-    Every set moves the same way and none changes sign. The P1 column barely
-    moved and should not have: commitment is 0.17 there, staying open is
-    correct, and a version of this that pushed P1 down would be a worse scorer
-    that scored better on the metric. That is the whole reason the human column
-    is printed beside ours rather than a target being fitted to.
+    Every set moves the same way and none changes sign.
+
+    **Both columns moved when the colour rule did, and that is not a mistake in
+    the table.** "Off-colour" is defined by `deckColorsFor` now, so the HUMAN
+    figure is a different measurement than the one this note used to carry
+    (23.3/4.0/1.9 against the old rule). A drafter taking a card outside their
+    best two or three colours late is common and mostly a sideboard or hate
+    pick; against a five-colour reading of their own pool it barely registered.
+    Comparing a number here to a number in an older commit is comparing two
+    questions.
+
+    We now sit BELOW the human rate everywhere rather than at twice it, and when
+    we do name an off-colour card it beats the best on-colour card by 11.7pp —
+    so it is mostly packs holding nothing the deck can play. That is the right
+    direction to be wrong in for this app, and it is still a direction: a scorer
+    that never nominated one would be broken the other way, which is what the
+    floor of about 4.8% at P3 is measuring rather than a success.
 
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
     is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
