@@ -6,6 +6,7 @@ import {
   canonicalName,
   deckColors,
   loadPrinciples,
+  benchedOnArrival,
   normalizeBench,
   pivots,
   splitPool,
@@ -306,6 +307,7 @@ export const verdictContext = internalQuery({
         maindeck,
         sideboard,
         pivots(row.poolBefore, bench, args.pickIndex),
+        benchedOnArrival(bench, args.pickIndex),
       ),
     };
   },

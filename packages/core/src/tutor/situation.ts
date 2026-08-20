@@ -32,15 +32,41 @@ export function situationLine(packNo: number, pickNo: number, cardsInPack: numbe
 // On/off color is derived here rather than taken from the stored score, because
 // the pool this renders is not always the pool the score was computed against:
 // benching a card removes it from the commitments without rewriting history.
-export function commitmentLine(pool: readonly PoolCard[], picked: PoolCard): string {
+export function commitmentLine(
+  pool: readonly PoolCard[],
+  picked: PoolCard,
+  /**
+   * The player sent this card to the sideboard in the same breath as taking it.
+   *
+   * `poolBefore` is the pool before the pick, so the card being graded is in
+   * neither half of the sideboard split -- a card benched EARLIER is handled,
+   * and a card benched AS IT IS PICKED was invisible. The coach read it as an
+   * ordinary pick and lectured the player about their colors for a card they
+   * had already, deliberately, put away. notes.md #13.
+   *
+   * It is worth a sentence rather than silence because the pick is still worth
+   * coaching -- there is a real question about whether spending a pick on
+   * something you will not play was right. What has to stop is the answer to a
+   * question nobody asked.
+   */
+  benchedNow = false,
+): string {
   const committed = committedColors(pool);
   const onColor = isOnColor(committed, picked.colors);
+  // Said whether or not any color is committed: at pick 3 with an open pool
+  // there is no color line to hang it on, and "they benched it immediately" is
+  // the more important fact either way.
+  const aside = benchedNow
+    ? " The player sent this card STRAIGHT TO THE SIDEBOARD as they took it, so they " +
+      "are not planning to play it and already know what it is. Do not tell them about " +
+      "their colors; coach whether the card was worth spending the pick on."
+    : "";
   if (committed.size === 0) {
-    return "Committed colors: none yet (no color has 2+ cards) — the pool is still open.";
+    return `Committed colors: none yet (no color has 2+ cards) — the pool is still open.${aside}`;
   }
   const subject = committed.size === 1 ? "that color" : "those colors";
   const status = onColor ? `is on ${subject}` : `is OFF ${subject}`;
-  return `Committed colors: ${colorNames([...committed])} (2+ cards in the pool). This pick ${status}.`;
+  return `Committed colors: ${colorNames([...committed])} (2+ cards in the pool). This pick ${status}.${aside}`;
 }
 
 export interface Pivot {

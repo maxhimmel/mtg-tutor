@@ -61,12 +61,22 @@ export function buildPickContext(
   benched: readonly PoolCard[] = [],
   pivots: readonly Pivot[] = [],
   defense?: PickDefense,
+  /** See `commitmentLine` -- the card was benched in the act of picking it. */
+  benchedNow = false,
 ): string {
   const { picked, score, pack } = rec;
   // The pool the player is looking at includes what they just took; the
   // commitments they were judged against do not. Both come from `poolBefore` so
   // the two cannot drift apart.
-  const pool = [...poolBefore, picked];
+  //
+  // Unless they benched it as they took it, in which case it goes to the other
+  // list. Showing a card in "your pool so far" that the player has already set
+  // aside is the same error as the colour lecture one line down, and it is the
+  // one the model would have believed: the sideboard block says out loud that
+  // these do not count toward the colours, and the pool block says nothing,
+  // because everything in it is supposed to.
+  const pool = benchedNow ? [...poolBefore] : [...poolBefore, picked];
+  const sideboard = benchedNow ? [...benched, picked] : benched;
 
   const others = pack
     .filter((c) => c.name !== picked.name)
@@ -156,7 +166,7 @@ export function buildPickContext(
 
   return [
     situationLine(rec.packNo, rec.pickNo, pack.length),
-    commitmentLine(poolBefore, picked),
+    commitmentLine(poolBefore, picked, benchedNow),
     pivotLines(pivots),
     "",
     `Your pool so far (${pool.length} cards):`,
@@ -164,10 +174,10 @@ export function buildPickContext(
     "",
     // Only when there is one. An empty sideboard is the normal case and a line
     // saying so would be a rule the model has to hold for nothing.
-    benched.length > 0
-      ? `Sideboard (${benched.length} cards) — drafted, then set aside. The player is NOT ` +
+    sideboard.length > 0
+      ? `Sideboard (${sideboard.length} cards) — drafted, then set aside. The player is NOT ` +
         `building with these, so do not count them toward their colors or their curve:\n` +
-        `${summarizePool(benched)}\n`
+        `${summarizePool(sideboard)}\n`
       : null,
     `You picked: ${describeCard(picked)}`,
     `  ${statLine(picked)}`,

@@ -147,3 +147,49 @@ describe("pivotLines", () => {
     expect(line).toContain("Storm Fox");
   });
 });
+
+// notes.md #13. `poolBefore` is the pool BEFORE the pick, so the card being
+// coached is in neither half of the sideboard split -- which made a card benched
+// as it arrived indistinguishable from one the player meant to play, and got
+// them lectured about their colours for a card they had deliberately put away.
+describe("commitmentLine on a pick sent straight to the sideboard", () => {
+  const pool = (...colors: string[][]): PoolCard[] =>
+    colors.map((c, i) => ({ name: `Card ${i}`, colors: c as PoolCard["colors"] }));
+  const [blue] = pool(["U"]);
+
+  const committedRed = pool(["R"], ["R"]);
+
+  it("says the player put it away, and tells the coach not to relitigate colours", () => {
+    const line = commitmentLine(committedRed, blue, true);
+    expect(line).toContain("STRAIGHT TO THE SIDEBOARD");
+    expect(line).toContain("Do not tell them about their colors");
+  });
+
+  // The colour fact is still true and still stated -- what changes is that it
+  // stops being the thing to coach. Dropping it would leave the model guessing
+  // why the card was benched.
+  it("still states the colours, so the model is not left inferring them", () => {
+    expect(commitmentLine(committedRed, blue, true)).toContain("This pick is OFF that color.");
+  });
+
+  it("says nothing extra for an ordinary pick", () => {
+    const line = commitmentLine(committedRed, blue);
+    expect(line).not.toContain("SIDEBOARD");
+    expect(line).toBe(commitmentLine(committedRed, blue, false));
+  });
+
+  // An open pool has no colour line to hang it on, and "they benched it
+  // immediately" is the more important half either way.
+  it("is said even before any colour is committed", () => {
+    expect(commitmentLine(pool(["U"], ["R"]), blue, true)).toContain("STRAIGHT TO THE SIDEBOARD");
+  });
+
+  // Benching an ON-colour card is legal and means something different -- a
+  // playable you have too many of. The sentence must not claim otherwise.
+  it("does not call an on-colour card off-colour just because it was benched", () => {
+    const [red] = pool(["R"]);
+    const line = commitmentLine(committedRed, red, true);
+    expect(line).toContain("This pick is on that color.");
+    expect(line).toContain("STRAIGHT TO THE SIDEBOARD");
+  });
+});

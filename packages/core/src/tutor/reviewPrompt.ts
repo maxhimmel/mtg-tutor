@@ -46,10 +46,12 @@ export function buildReviewContext(
   poolBefore: readonly PoolCard[],
   benched: readonly PoolCard[] = [],
   pivots: readonly Pivot[] = [],
+  /** See `commitmentLine` -- the card was benched in the act of picking it. */
+  benchedNow = false,
 ): string {
   return [
     situationLine(pick.packNo, pick.pickNo, pick.pack.length),
-    commitmentLine(poolBefore, pick.picked),
+    commitmentLine(poolBefore, pick.picked, benchedNow),
     pivotLines(pivots),
     "",
     `Pool before this pick (${poolBefore.length} cards):`,
