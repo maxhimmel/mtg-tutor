@@ -267,8 +267,47 @@ const POLICIES = {
     }
     return best;
   },
-  // And what actually ships: a draw from the fitted distribution, which is how
-  // seven seats come to disagree the way seven people do.
+  // THE SHIPPED POD, AND ITS NUMBER IS NOT COMPARABLE TO ANY ROW ABOVE IT.
+  //
+  // `table3` reads `tableValue`, which is built from ALSA -- an aggregate of the
+  // very picks this file scores against. That is precisely what `crowd` is a
+  // baseline here rather than a candidate for. So these two rows are reported
+  // for the shape of the argmax/sampled gap and for nothing else; reading their
+  // top-1 as an improvement over `table2` is reading a policy that was shown the
+  // answers. `bench-packs` is what gates them, and no coefficient was fitted to
+  // what it measures.
+  //
+  // Kept rather than omitted because somebody would otherwise add them later and
+  // read them bare.
+  table3: (pack, memory, progress) => {
+    let best = pack[0];
+    let bestScore = -Infinity;
+    for (const c of pack) {
+      const s = policyScore(c, memory, progress, FITTED_POLICIES.table3, pack.length);
+      if (s > bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+    return best;
+  },
+  "table3~": (pack, memory, progress, rng) => {
+    let best = pack[0];
+    let bestScore = -Infinity;
+    for (const c of pack) {
+      const u = Math.min(1 - 1e-12, Math.max(1e-12, rng()));
+      const s =
+        policyScore(c, memory, progress, FITTED_POLICIES.table3, pack.length) -
+        Math.log(-Math.log(u));
+      if (s > bestScore) {
+        bestScore = s;
+        best = c;
+      }
+    }
+    return best;
+  },
+  // And the first pod that sampled: a draw from the fitted distribution, which is
+  // how seven seats come to disagree the way seven people do.
   //
   // It scores LOWER than `table` by construction and that is not a regression --
   // top-1 agreement rewards always guessing the mode, and a pod where every seat
@@ -405,7 +444,14 @@ console.log();
 console.log("top-1 agreement with the human pick");
 console.log(`  random  ${pct(randomExpected)}   (exact, not sampled)`);
 for (const name of names) {
-  const note = name === "crowd" ? "   <- consensus only, and has seen the answers" : "";
+  // A pod reading `tableValue` has been shown these answers in aggregate, so its
+  // row is not comparable to the ones above it. Printed beside the number rather
+  // than in a footnote, because a footnote is not where anybody reads.
+  const note = name === "crowd"
+    ? "   <- consensus only, and has seen the answers"
+    : name.startsWith("table3")
+      ? "   <- reads pick order; NOT comparable, see bench-packs"
+      : "";
   console.log(`  ${name.padEnd(7)} ${pct(hits.get(name))}${note}`);
 }
 

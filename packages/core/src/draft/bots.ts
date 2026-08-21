@@ -1,6 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import { FITTED_POLICIES, type PolicyWeights, policyScore } from "./policy.js";
+import { FITTED_POLICIES, POD_TEMPERATURE, type PolicyWeights, policyScore } from "./policy.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
 // and biases future picks toward its strongest colors, producing readable
@@ -124,7 +124,7 @@ export function botScore(card: EngineCard, memory: BotMemory): number {
  * editing the weights under an existing one. `BOT_FINGERPRINT` exists to go red
  * if somebody does.
  */
-export type PodPolicy = "legacy" | "table" | "sharks" | "table2" | "sharks2";
+export type PodPolicy = "legacy" | StoredPod;
 
 /**
  * The pods a draft can be STARTED against, which is not the same set.
@@ -135,17 +135,33 @@ export type PodPolicy = "legacy" | "table" | "sharks" | "table2" | "sharks2";
  * would mean the same thing by convention rather than by construction. Nobody
  * chooses the old bot; you get it by having drafted before pods existed.
  */
-// What a session may CARRY, which is every pod but `legacy` -- that one is what
-// an absent `pod` means, so it is never written down.
-export type StoredPod = Exclude<PodPolicy, "legacy">;
+/**
+ * What a session may CARRY, which is every pod but `legacy` -- that one is what
+ * an absent `pod` means, so it is never written down.
+ *
+ * A VALUE, AND THE TYPE COMES OFF IT RATHER THAN THE OTHER WAY ROUND. It used
+ * to be `Exclude<PodPolicy, "legacy">`, which no test could iterate -- and for a
+ * year `corpus.test.ts` pinned the deal for `table` and `sharks` while `table2`,
+ * the pod every real draft has used since it was fitted, went unpinned. A list
+ * something can walk is what turns "remember to add a golden hash" into a red
+ * test on the day the pod is added.
+ */
+export const STORED_PODS = ["table", "sharks", "table2", "sharks2", "table3", "sharks3"] as const;
+export type StoredPod = (typeof STORED_PODS)[number];
 
 /**
  * What a new draft may be started AS, which is a smaller set and has to be.
  *
- * `table` and `sharks` are superseded fits. They stay in `PodPolicy` and in the
- * schema forever, because the drafts that recorded them replay against them and
- * would strand otherwise -- but nobody should be offered one, any more than
- * anybody is offered `legacy`.
+ * `table`, `sharks`, `table2` and `sharks2` are superseded fits. They stay in
+ * `PodPolicy` and in the schema forever, because the drafts that recorded them
+ * replay against them and would strand otherwise -- but nobody should be
+ * offered one, any more than anybody is offered `legacy`.
+ *
+ * `OfferedPod` STAYS TWO WIDE, and that is a constraint rather than a
+ * coincidence: `PodToggle` in the web app is a two-way switch that finds "the
+ * other one" by taking the first entry that is not the current one. A third
+ * offered pod would silently turn it into a broken toggle whose aria-label
+ * lies. Widening this means rewriting that control first.
  *
  * SEPARATE FROM `StoredPod` BECAUSE `challenges.accept` PROVES THEY DIFFER. It
  * deals the friend a session carrying the CHALLENGER's pod, whatever that was,
@@ -154,7 +170,7 @@ export type StoredPod = Exclude<PodPolicy, "legacy">;
  * which is exactly the thing this type must not permit anyone to choose. One
  * type doing both jobs made that a typecheck error, which is how this was found.
  */
-export type OfferedPod = Extract<PodPolicy, "table2" | "sharks2">;
+export type OfferedPod = Extract<PodPolicy, "table3" | "sharks3">;
 
 /**
  * The pod a new draft gets when nobody says otherwise.
@@ -164,16 +180,21 @@ export type OfferedPod = Extract<PodPolicy, "table2" | "sharks2">;
  * other a different table -- the CLI is not a lesser client. It began that way
  * and the CLI got `legacy` while the browser got this.
  *
- * `table2` and not `sharks2`: a pod fitted to 3-0 drafters sends the signals a
+ * `table3` and not `sharks3`: a pod fitted to 3-0 drafters sends the signals a
  * strong table sends, and reading those is not the skill anybody drafting here
  * is trying to practise. Harder to learn from, not just harder to beat.
  *
- * The `2` is a storage key and never reaches a person -- the web app's `PODS`
+ * The `3` is a storage key and never reaches a person -- the web app's `PODS`
  * still labels this one "A real table", which is what it has always been called
  * and what it still is. A refit gets a new NAME because a name is frozen the
  * moment a session records it; it does not get a new identity.
+ *
+ * MOVING THIS IS THE MIGRATION, and there is no other one. `sanitize` in the web
+ * app drops a `pod` that is no longer offered, so every browser holding "table2"
+ * in localStorage falls back to whatever this says. Drafts already taken keep
+ * their own stored pod and replay against it, untouched.
  */
-export const DEFAULT_POD: OfferedPod = "table2";
+export const DEFAULT_POD: OfferedPod = "table3";
 
 /**
  * Gumbel noise, which is what turns an argmax into a draw from the softmax.
@@ -186,9 +207,23 @@ export const DEFAULT_POD: OfferedPod = "table2";
  * invariant under a swapped pick. A sampler that drew once per PICK would be
  * cheaper and would silently turn fork weights into noise.
  *
- * Temperature is 1 and is not a knob. The fit is a model of how real drafters
- * disagree, so sampling at 1 reproduces the measured spread; any other value is
- * a number with no derivation behind it.
+ * TEMPERATURE IS PART OF A POD, AND EVERY POD SHIPPED SO FAR SETS IT TO 1.
+ *
+ * The original argument for 1 was that the fit models how real drafters
+ * disagree, so sampling at 1 reproduces the measured spread -- and that any
+ * other value would be a number with no derivation behind it. The second half
+ * still stands and is why the parameter below is not a free knob. The first half
+ * does not: a conditional logit's residual entropy is everything the model
+ * CANNOT SEE, and sampling at 1 re-emits all of it as independent per-card coin
+ * flips. Real drafters differ because they hold different pools and are chasing
+ * different decks -- correlated within a seat and across a draft -- not because
+ * each of them re-rolls at every card. Seven seats each deviating independently
+ * pass cards no real table passes, which `bench-packs` measures and which no
+ * pick-accuracy number can see.
+ *
+ * So a temperature has to be DERIVED, from a quantity the coefficients were not
+ * fitted to. `bench-packs` is that quantity: how long a card survives in a pack
+ * across eight seats, taken from real Arena pods. See `POD_TEMPERATURE`.
  */
 function gumbel(u: number): number {
   // mulberry32 returns [0, 1), and both ends send this to an infinity.
@@ -199,13 +234,20 @@ function gumbel(u: number): number {
 export class Bot {
   private readonly memory = new BotMemory();
   private readonly weights: PolicyWeights | null;
+  private readonly temperature: number;
 
   constructor(
     private readonly policy: PodPolicy = "legacy",
     private readonly rng: () => number = Math.random,
     private readonly noise: number = 0.01,
+    // Overridden only by `bench-packs`, which sweeps it to derive the value a
+    // new pod should ship with. Nothing in the app passes this: a pod's
+    // temperature is bound to its NAME, like its weights, because it decides
+    // what wheels and a stored session replays against it.
+    temperature?: number,
   ) {
     this.weights = policy === "legacy" ? null : FITTED_POLICIES[policy];
+    this.temperature = temperature ?? POD_TEMPERATURE[policy];
   }
 
   get pool(): readonly EngineCard[] {
@@ -220,7 +262,8 @@ export class Bot {
       // before it is used so the two branches consume the stream identically.
       const u = this.rng();
       const s = this.weights
-        ? policyScore(card, this.memory, progress, this.weights, pack.length) + gumbel(u)
+        ? policyScore(card, this.memory, progress, this.weights, pack.length) / this.temperature +
+          gumbel(u)
         : botScore(card, this.memory) + (u - 0.5) * this.noise;
       if (s > bestScore) {
         bestScore = s;

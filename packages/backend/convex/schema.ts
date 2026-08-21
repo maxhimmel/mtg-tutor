@@ -286,6 +286,8 @@ export default defineSchema({
         v.literal("sharks"),
         v.literal("table2"),
         v.literal("sharks2"),
+        v.literal("table3"),
+        v.literal("sharks3"),
       ),
     ),
   }).index("by_user", ["userId"]),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fakeSet } from "../testing/fakeSet.js";
 import { mulberry32 } from "../util/rng.js";
 import { cardValue } from "../scoring/value.js";
+import { DEFAULT_POD } from "./bots.js";
 import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 import {
@@ -222,8 +223,14 @@ describe("forkImpact", () => {
    *
    * Every test above plays `legacy` and asks about `legacy`, so all three stayed
    * green through the whole life of the bug -- trap #4, a battery that cannot
-   * notice the thing it exists to catch. `DEFAULT_POD` is `table2`, so the case
-   * that was actually shipping is the one nothing here covered.
+   * notice the thing it exists to catch. The case that was actually shipping is
+   * the one nothing here covered.
+   *
+   * WHICH IS WHY THIS READS `DEFAULT_POD` RATHER THAN NAMING A POD. Written
+   * against the literal "table2" it reopened the same trap the moment `table3`
+   * shipped: still green, still covering a pod nobody is dealt. A test whose
+   * whole point is "cover what actually ships" has to be told what ships by the
+   * same constant that decides it.
    *
    * Both of these fail without the pod parameter: the first because the deal
    * would be walked by the wrong bots and truncate on a name they had taken,
@@ -231,12 +238,19 @@ describe("forkImpact", () => {
    * anything.
    */
   describe("the pod it is replayed under", () => {
-    const podded = draft(undefined, "table2");
+    const podded = draft(undefined, DEFAULT_POD);
     const poddedNames = podded.map((s) => s.pickedName);
 
-    it("measures a table2 draft when it is told the draft was table2", () => {
-      const theirs = draft(DIVERGE, "table2")[DIVERGE].pickedName;
-      const impact = forkImpact(dealDraft(set, SEED), SEED, poddedNames, DIVERGE, theirs, "table2");
+    it(`measures a ${DEFAULT_POD} draft when it is told the draft was ${DEFAULT_POD}`, () => {
+      const theirs = draft(DIVERGE, DEFAULT_POD)[DIVERGE].pickedName;
+      const impact = forkImpact(
+        dealDraft(set, SEED),
+        SEED,
+        poddedNames,
+        DIVERGE,
+        theirs,
+        DEFAULT_POD,
+      );
 
       // The denominator is the point: every later pack was reachable, which is
       // what a walk that ran to the end of the draft looks like.

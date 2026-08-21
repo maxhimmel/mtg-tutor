@@ -124,20 +124,21 @@ export const DIFF_LAYOUTS: readonly { id: DiffLayout; label: string; blurb: stri
  */
 // A POD ID IS A STORAGE KEY AND THE LABEL IS THE PRODUCT, and keeping those two
 // apart is what lets a pod be refitted without anything a person reads changing.
-// `table` and `sharks` are still real -- every draft that stored one replays
-// against it -- and neither is offered any more, exactly as `legacy` is not.
+// `table`, `sharks`, `table2` and `sharks2` are all still real -- every draft
+// that stored one replays against it -- and none is offered any more, exactly as
+// `legacy` is not.
 // "A real table" goes on meaning the current best fit of how people actually
 // pick, which is the only thing the label ever claimed.
 export type Pod = OfferedPod;
 
 export const PODS: readonly { id: Pod; label: string; blurb: string }[] = [
   {
-    id: "table2",
+    id: "table3",
     label: "A real table",
     blurb: "Seven drafters fitted to how people actually pick, disagreements and all",
   },
   {
-    id: "sharks2",
+    id: "sharks3",
     label: "Sharks",
     blurb: "The same, fitted to drafters who went 3-0. Good cards wheel less",
   },

@@ -1,6 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import type { BotMemory } from "./bots.js";
+import type { BotMemory, PodPolicy, StoredPod } from "./bots.js";
 
 // What a fitted bot policy looks at.
 //
@@ -228,6 +228,25 @@ export const POLICY_FEATURES = [
   // to zero while this main effect did not. See the block above this list for
   // what it is worth and what it cost to be sure of that.
   "removal",
+  // THE SAME QUESTION AS `value`, ASKED OF PICK ORDER INSTEAD OF WIN RATE.
+  //
+  // Every feature above this line was fitted against a raw-power number that is
+  // a win rate, and a win rate is conditioned on the card already being in a
+  // deck. `scoring/tableValue.ts` is the whole argument; the short version is
+  // that gih win rate ranks Cyclonic Rift 288th of 305 in sos and a real table
+  // takes it first pick, every time.
+  //
+  // Two columns rather than one, mirroring `value`/`valueOpen`, because the
+  // sharpness-resets-every-pack finding that produced `valueOpen` is about the
+  // PACK and not about which number is on the card -- it applies to any measure
+  // of raw power, so a new one gets the interaction too or it is being fitted
+  // with one hand tied.
+  //
+  // The main effects are kept side by side deliberately. They answer different
+  // questions -- what a table WANTS and what actually WINS -- and the fit is
+  // allowed to decide it wants both, which is a thing worth knowing either way.
+  "tableValue",
+  "tableValueOpen",
 ] as const;
 
 export type PolicyWeights = readonly number[];
@@ -313,7 +332,7 @@ export type PolicyWeights = readonly number[];
  * DESCRIBES signal-reading did not make it a better predictor of what drafters
  * DO. The script's header carries the rest.
  */
-export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", PolicyWeights> = {
+export const FITTED_POLICIES: Record<StoredPod, PolicyWeights> = {
   table: [3.7889, 43.0546, 1.8065, -0.3002, 1.5222, 7.9243, -16.2986],
   sharks: [3.7963, 47.934, 1.8479, -0.3142, 1.4838, 7.8993, -16.4302],
 
@@ -337,7 +356,163 @@ export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", 
   // coefficient that really moves between the tiers (43.6 against 48.0).
   table2: [3.3236, 43.6123, 1.9992, -0.3877, 1.6652, 7.0121, -13.6627, 0.3557],
   sharks2: [3.3956, 48.0251, 2.0645, -0.1621, 1.3524, 6.9176, -13.9007, 0.3564],
+
+  // THE FIRST PODS THAT PICK BY WHAT A TABLE WANTS RATHER THAN BY WHAT WINS.
+  //
+  // Same eighteen sets, same split, same protocol as `table2`; the only change
+  // is the two columns at the end and what they let the fit drop.
+  //
+  //   table3    all drafters      571,996 train / 284,334 held-out
+  //   sharks3   3-0 drafters      109,420 train /  55,475 held-out
+  //
+  // WHAT THE FIT DID WITH THEM, WHICH IS THE INTERESTING PART
+  //
+  //                  table2    table3      sharks2   sharks3
+  //   value           3.3236   -1.5932      3.3956   -1.3695
+  //   valueOpen      43.6123   17.1665     48.0251   20.8165
+  //   laneFit         1.9992    2.1109      2.0645    2.1833
+  //   rare           -0.3877   -0.0570     -0.1621    0.1564
+  //   rareOpen        1.6652   -0.3178      1.3524   -0.6309
+  //   laneFitLate     7.0121    7.6196      6.9176    7.4877
+  //   opennessLate  -13.6627  -15.4165    -13.9007  -15.6680
+  //   removal         0.3557    0.0515      0.3564    0.0515
+  //   tableValue           -    5.2458           -    5.6623
+  //   tableValueOpen       -   61.3379           -   61.8967
+  //
+  // `rareOpen` GOES NEGATIVE, AND THAT IS THE CONFIRMATION. It went in because
+  // "humans take rares beyond what their win rate justifies, and they do it from
+  // a full pack" -- a real effect, worth +1.67 to the field, and a PATCH over a
+  // ranking that was wrong about bombs for the reason `tableValue.ts` sets out.
+  // Told what a table actually wants, the fit does not merely stop needing it,
+  // it reverses: -0.32 for the field and -0.63 for the sharks. Rarity out of a
+  // full pack is now a small NEGATIVE once pick order is known, which is the
+  // same shape `value` takes and for the same reason. A feature that exists only
+  // to correct a bad input is supposed to vanish when the input is fixed.
+  //
+  // THESE ARE THE SECOND FIT. The first was run against a `tableValue` that had
+  // been matched to pick order on the raw card name, which silently missed every
+  // split and adventure card -- 36 of them in sos -- so those fell back to
+  // `value` in the fit while the app gave them their real pick order. Refitted
+  // on the corrected column, held-out top-1 went 55.7% to 56.0% and 57.1% to
+  // 57.4%, and `rareOpen` stopped merely collapsing and reversed outright. Safe
+  // to redo in place only because no session had recorded either name yet; a day
+  // later it would have needed `table4`. `verify-table-value` is the check that
+  // would have caught it, and now does.
+  //
+  // `removal` goes the same way, 0.36 to 0.08 -- it was worth +0.10pp pooled and
+  // shipped on the argument that it made the pods act more human. Most of what
+  // it was carrying was "drafters take removal earlier than its win rate says",
+  // which is now in the column where it belongs.
+  //
+  // `value` TURNS NEGATIVE, and reads correctly rather than oddly: conditioned
+  // on what a table wants, a card whose win rate is HIGHER than its pick order
+  // suggests is one drafters have been shown to under-take. That is the
+  // selection effect in `tableValue.ts` seen from the other side, and the fit
+  // finding it twice, independently, in two tiers, is what says it is real.
+  //
+  // The three structural terms barely move. `laneFit`, `laneFitLate` and
+  // `opennessLate` are within 8% of `table2` in both tiers -- so the lane and
+  // the signal, which is what `human-bots` was actually built to model, were
+  // right all along. What was wrong was the number they multiplied.
+  //
+  // WHAT THE ABLATION SAYS, AND WHY IT IS THE WRONG INSTRUMENT HERE
+  //
+  // `fit-bot-policy --ablate`, held-out top-1 with one term held at zero:
+  //
+  //   opennessLate  +1.10pp    rare            +0.02pp
+  //   laneFitLate   +1.02pp    rareOpen        +0.00pp
+  //   tableValueOpen +0.59pp   removal         +0.00pp
+  //   laneFit       +0.40pp    value           -0.00pp
+  //   valueOpen     +0.03pp    tableValue      -0.01pp
+  //
+  // Read straight, that prices the whole point of these pods at six tenths of a
+  // point -- below the bar this file sets for shipping a feature. It is wrong,
+  // and the reason generalises: AN ABLATION REFITS, so a column with a
+  // correlated substitute still in the vector reports only what it adds OVER
+  // that substitute. Zero `tableValue` and `valueOpen` climbs back from 16 to
+  // something like 43 and does the job badly, which costs six tenths of a point
+  // of accuracy and most of the pack.
+  //
+  // Measured the other way -- `bench-packs --ranks gih`, which makes `table3`
+  // rank by win rate while changing nothing else -- the same removal costs:
+  //
+  //          table3   forced onto win rate      (mean |sim - real|, picks)
+  //   sos     0.402                  0.840
+  //   mh3     0.353                  0.934
+  //   ktk     0.330                  0.890
+  //
+  // All the way back to `table2`. The feature is worth the entire improvement,
+  // and the only reason the first number disagrees is that top-1 was never
+  // asked about the pack.
+  //
+  // AND THE TOP-1 IS NOT COMPARABLE TO THE ROW ABOVE IT. See the warning under
+  // `FITTED_POLICIES`.
+  table3: [
+    -1.5932, 17.1665, 2.1109, -0.057, -0.3178, 7.6196, -15.4165, 0.0515, 5.2458, 61.3379,
+  ],
+  sharks3: [
+    -1.3695, 20.8165, 2.1833, 0.1564, -0.6309, 7.4877, -15.668, 0.0515, 5.6623, 61.8967,
+  ],
 };
+
+/**
+ * How sharply each pod samples from its own scores. Frozen with the name.
+ *
+ * A pod's logits go through `softmax(score / temperature)`, so 1 samples exactly
+ * the fitted distribution and lower values sharpen toward its argmax. Every pod
+ * shipped before `bench-packs` existed samples at 1, and has to keep doing so
+ * forever: a stored session replays against its pod, and a sharper table takes
+ * different cards, which changes what wheels back to the human.
+ *
+ * See the header of `gumbel` in bots.ts for why 1 is the wrong value and
+ * `bench-packs.mjs` for the measurement that says what the right one is.
+ */
+export const POD_TEMPERATURE: Record<PodPolicy, number> = {
+  legacy: 1,
+  table: 1,
+  sharks: 1,
+  table2: 1,
+  sharks2: 1,
+  // MEASURED, AND THE ANSWER IS STILL 1.
+  //
+  // `bench-packs --temps` sweeps it against a curve no coefficient was fitted
+  // to. Against the shipped ranking, sharpening helps early and then saturates
+  // -- pick-8 survival goes 10% to 7% between t=1 and t=0.25 against a real 1%
+  // -- while the error over every card gets WORSE, 0.900 to 0.995. Sharpening a
+  // wrong ranking only makes a pod more certain about the wrong card.
+  //
+  // With the ranking fixed the sweep is tighter and still lands on 1. t=1.3
+  // tracks the first four picks slightly better (56/32/19 against a real
+  // 49/27/16) and costs 0.02 picks on the aggregate. Neither direction pays.
+  //
+  // So the original claim survives its own disproof: the argument for 1 was
+  // wrong -- a logit's residual entropy is not a model of how drafters disagree
+  // -- and 1 is right anyway, now for a measured reason instead of an assumed
+  // one.
+  table3: 1,
+  sharks3: 1,
+};
+
+/**
+ * The pods whose weights actually read the pick-order columns.
+ *
+ * DERIVED FROM THE WEIGHTS, never listed. A pod that reads `tableValue` must not
+ * be dealt a pool that has none -- `policyFeatures` would fall back to `value`
+ * and the pod would quietly deal from the ranking it exists to stop using -- and
+ * a hand-kept list of which pods those are is a thing that goes stale on the day
+ * somebody adds the fifth one. `draft.start` refuses on this.
+ *
+ * Walks `FITTED_POLICIES` rather than `STORED_PODS`, which holds exactly the
+ * same names -- importing the latter would make this module need a VALUE out of
+ * bots.ts while bots.ts needs one out of this file, and a cycle whose loser is
+ * decided by whichever module an app imports first is not a thing to leave lying
+ * around for a `const` in its temporal dead zone to find.
+ */
+export const POD_READS_PICK_ORDER: ReadonlySet<StoredPod> = new Set(
+  (Object.keys(FITTED_POLICIES) as StoredPod[]).filter((pod) =>
+    FITTED_POLICIES[pod].slice(POLICY_FEATURES.indexOf("tableValue")).some((w) => w !== 0),
+  ),
+);
 
 /** How far into the draft this pick is, in [0, 1]. */
 export function draftProgress(pickIndex: number, totalPicks: number): number {
@@ -385,6 +560,15 @@ export function policyFeatures(
   out[5] = laneFit * progress;
   out[6] = memory.openness(card) * progress;
   out[7] = card.role === "removal" ? 1 : 0;
+  // Falls back to `value`, which is what makes a pod reading these columns safe
+  // to run against a pool ingested before `tableValue` existed: it degrades to
+  // the old raw-power number rather than to zero. A zero here would have looked
+  // like "the table wants nothing", and every card would have been equally
+  // unwanted -- a silent, uniform wrong answer of the kind this file's header
+  // spends its length trying to prevent.
+  const table = (card.tableValue ?? card.value) - 0.5;
+  out[8] = table;
+  out[9] = table * packOpenness(packSize);
   return out;
 }
 

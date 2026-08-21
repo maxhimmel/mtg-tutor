@@ -59,6 +59,7 @@ describe("packDeal / unpackDeal", () => {
     value: c.value,
     ...(c.slot === undefined ? {} : { slot: c.slot }),
     ...(c.packRate === undefined ? {} : { packRate: c.packRate }),
+    ...(c.tableValue === undefined ? {} : { tableValue: c.tableValue }),
   });
 
   it("round-trips every booster, card for card, in order", () => {

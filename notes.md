@@ -431,6 +431,8 @@ It'd be extremely rad to do some deep research, find some blog posts or somethin
 - I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
 - It'd be cool to empower users to move sections where they like
 
+15. Maybe this could be an "issue" too. We keep making changes to the bots and how they pick. Do we have a benchmark or anything to see if the bots get better/worse with these changes? I KNOW we have a BUNCH of data from real life drafters - some of which went 3-0 who I think we refer to as "trophy" drafters or something (I think). So, what if we built real drafting benchmarks based on real data from the best of the best? And not just one, but a comprehensive set from different sets we could test against. I just want the packs I'm being passed to feel believable - like I'm actually drafting with real humans.
+
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
@@ -639,6 +641,92 @@ draft through the data rather than through the weights.
 All eighteen 17Lands draft datasets are cached in `datasets/` (308MB,
 gitignored), so the next experiment of this kind costs seconds.
 
+`believable-packs` shipped 2026-08-21, and it started from two screenshots of
+packs that could not be real. It is the first time a bot change was gated on
+something other than pick accuracy, and that is most of the story.
+
+**The complaint was right twice, for two different reasons.** SOS P2P10 had
+Moseo, Vein's New Dean still in the pack at pick 10 — real ALSA 0.98, so a real
+table never passes it once — and the pod had it ranked 164th of 346 because its
+GIH win rate is 0.6277. MH3 P1P8 had Subtlety, which the pod ranks 11th of 294
+and passed seven times anyway. One is a ranking failure and one looks like a
+sampling failure, and `bench-bots` is structurally blind to both: top-1 scores
+one seat's decision, and both complaints are about what happens to a card across
+eight seats.
+
+**So the first thing built was `pnpm bench-packs`**, which compares SURVIVAL —
+of the packs that opened a card, what fraction still hold it at pick k — against
+real Arena pods, where the wheel was produced by seven actual humans passing to
+an eighth. Nothing was fitted to that curve, which is what makes it usable as a
+gate for a policy that reads pick order.
+
+**Win rate is not pick order, and that is a selection effect rather than noise.**
+A bomb everyone first-picks ends up in every deck that opened it, bad ones
+included, so its win rate regresses toward the mean; a narrow synergy card only
+reaches decks built to support it, so its win rate is inflated by the company it
+keeps. Spearman between `value` and ALSA runs 0.40–0.71 across the eighteen sets.
+`cardValue` ranks Cyclonic Rift 288th of 305 in SOS.
+
+**Three candidates were measured before the one that shipped.** `iwd` is the
+textbook fix — a within-deck contrast that should divide out deck quality — and
+it is WORSE than raw win rate on every column and every set (mean spearman 0.596
+against 0.682). So are `ohWr`, `gdWr` and `deckWr`. `maindeckRate` is the only
+game-side statistic that beats win rate (0.865) and closes about a quarter of
+the pack gap. Real, and not enough.
+
+**Temperature was the obvious answer to the second screenshot and is not one.**
+`policy.ts` had refused a temperature on the grounds that any value but 1 would
+be a number with no derivation; `bench-packs --temps` is that derivation, and it
+says 1. Against the shipped ranking, sharpening helps early and saturates —
+pick-8 survival 10% → 7% between t=1 and t=0.25, against a real 1% — while the
+error over every card gets worse. Sharpening a wrong ranking only makes a pod
+more certain about the wrong card. With the ranking fixed, t=1.3 tracks the
+first four picks slightly better and costs 0.02 picks on the aggregate. **The
+original claim survives its own disproof:** the ARGUMENT for 1 was wrong (a
+logit's residual entropy is not a model of how drafters disagree) and 1 is right
+anyway, now for a measured reason.
+
+**What shipped is `tableValue`** — the set's own spread of `value`, handed back
+out in the order a real table takes cards. Ordering from ALSA, spacing from the
+existing distribution, because ALSA is compressed at the top and a policy reading
+it raw would think the twenty best cards in SOS were interchangeable.
+`table3`/`sharks3` are refitted on it and `table3` is `DEFAULT_POD`.
+
+    survival of the alsa<=1.5 cards, mean |sim − real| over every card
+
+      sos 0.877 → 0.402    ktk 0.971 → 0.330    blb 0.683 → 0.368
+      mh3 0.929 → 0.353    otj 0.807 → 0.355    dsk 0.783 → 0.272
+      woe 0.903 → 0.406    lci 0.735 → 0.267    fdn 0.767 → 0.332
+      eoe 0.896 → 0.352
+
+Ten sets, no exceptions, ~2.4x on every one.
+
+**`rareOpen` collapsing from +1.67 to +0.05 is the confirmation the whole thing
+was right.** That feature shipped because humans take rares beyond what their
+win rate justifies and do it from a full pack — a real effect, and a patch over
+a ranking that was wrong about bombs. Told what a table actually wants, the fit
+has no use for it, and prices it NEGATIVE for the sharks. `removal` goes the
+same way, 0.36 → 0.08. `value` turns negative in both tiers, which reads
+correctly: conditioned on what a table wants, a card whose win rate is higher
+than its pick order suggests is one drafters have been shown to under-take. The
+three structural terms — `laneFit`, `laneFitLate`, `opennessLate` — move less
+than 8%. **The lane and the signal were right all along; what was wrong was the
+number they multiplied.**
+
+**Held-out top-1 goes 49.3% → 55.7% and that is not six points of progress.**
+`tableValue` is built from an aggregate of the very picks the fit is scored
+against, which is exactly what `bench-bots` refuses `crowd` for. The rule is
+kept and the exception is argued rather than smuggled: these pods are not a
+claim that a model understands drafting, they are a simulation of a table, and
+what a table wants is a fact about tables. `bench-bots` prints the caveat beside
+the number; `bench-packs` is the gate.
+
+**Nothing about the scorer moved.** `tableValue` is read only by bots, by rule:
+it is derived from what the field DID, so grading a person against it is marking
+them against the crowd rather than against what wins — the circularity
+`trophyPickRate` is kept out of the scorer for.
+
+
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
    Also what `contextValue`'s speed term is waiting on: the axis is stored and
@@ -735,7 +823,6 @@ gitignored), so the next experiment of this kind costs seconds.
    A person hovering a card is currently the only thing that closes that loop.
 
    Two rungs, and the first is worth having even if the second never ships.
-
    - **Name the layout in TS and assert the real geometry in vitest.** One
      module owning the rail widths, the gutter, the gap and the `wide`
      breakpoint, read by the board's classes AND by a test that walks the widths
@@ -1060,24 +1147,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-    So when the colour rule moved (decision #23), the app changed and the
-    instrument did not. It went on reporting the old rule's numbers, correctly,
-    with the right imports at the top of the file, and nothing anywhere could
-    have said so. It now calls `packScoringContext` like the mutation does.
+            So when the colour rule moved (decision #23), the app changed and the
+            instrument did not. It went on reporting the old rule's numbers, correctly,
+            with the right imports at the top of the file, and nothing anywhere could
+            have said so. It now calls `packScoringContext` like the mutation does.
 
-    **The second half is worse and is the general form.** The same file printed
-    "the colour terms charged it 0.34pp" under its table, from a filter naming
-    `splash` and `archetype`. That filter was written before the off-colour term
-    existed and nobody widened it -- so the number under a table measuring the
-    off-colour term **excluded the off-colour term**. It read as a healthy small
-    charge and it was a subtotal of the two terms that were not the subject. The
-    true figure was 1.28pp, which is still far too small, which is the finding
-    the instrument was built to surface and had been hiding for four days.
+            **The second half is worse and is the general form.** The same file printed
+            "the colour terms charged it 0.34pp" under its table, from a filter naming
+            `splash` and `archetype`. That filter was written before the off-colour term
+            existed and nobody widened it -- so the number under a table measuring the
+            off-colour term **excluded the off-colour term**. It read as a healthy small
+            charge and it was a subtotal of the two terms that were not the subject. The
+            true figure was 1.28pp, which is still far too small, which is the finding
+            the instrument was built to surface and had been hiding for four days.
 
-    The rule: **a harness must not enumerate what it sums.** Sum everything and
-    exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-    the total by default rather than by somebody remembering. An allowlist in an
-    instrument is a silent undercount waiting for the next field.
+            The rule: **a harness must not enumerate what it sums.** Sum everything and
+            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+            the total by default rather than by somebody remembering. An allowlist in an
+            instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
@@ -1171,6 +1258,48 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     answered in seconds a question that a screenshot can only pose. Worth
     remembering the next time a Tailwind override "should" apply — the stylesheet
     is on disk and it is checkable.
+
+18. **An ablation refits, so a feature with a correlated substitute still in the
+    vector reports only what it adds OVER the substitute** (2026-08-21,
+    `believable-packs`). `fit-bot-policy --ablate` priced `tableValueOpen` — the
+    entire point of the `table3` fit — at +0.59pp held-out top-1, below the bar
+    this repo sets for shipping a feature at all, and comfortably arguable as
+    "not worth a pod name".
+
+    It is measuring the wrong thing. Zeroing that column lets `valueOpen` climb
+    back from 16 to something near its old 43 and do the job badly, and doing it
+    badly costs six tenths of a point of ACCURACY and most of the PACK. Measured
+    the other way — `bench-packs --ranks gih`, which makes `table3` rank by win
+    rate and changes nothing else — the same removal costs 0.402 → 0.840 picks
+    on sos, 0.353 → 0.934 on mh3, 0.330 → 0.890 on ktk. All the way back to the
+    pod it replaced.
+
+    **The general form:** an ablation answers "what does this column add to a
+    model free to re-arrange itself around its absence". That is the right
+    question for a feature with no substitute — `opennessLate` has none, and its
+    +1.10pp is honest — and the wrong one for a second measure of something the
+    vector already has. Two correlated columns will each ablate cheap and the
+    pair will be load-bearing. Trap #13 is the same confusion about a maximum.
+
+19. **17Lands `pick_number` is zero-indexed, and reading it as one-indexed fails
+    silently in the shape of a slightly-too-good baseline** (2026-08-21). A fresh
+    14-card booster is pick 0. `bench-packs` compared it against a simulation
+    counting from one, so every real column landed one pick early: the real table
+    looked a pick faster than it is and the pod looked worse than it is.
+
+    Nothing about the output said so. Both curves were the right shape, both
+    monotone, both ending at zero, and the conclusion the run supported — the
+    pod passes bombs far too long — was TRUE, which is what made it survive. It
+    was caught by an unrelated check noticing that "real pick 1" packs averaged
+    exactly 13.00 cards.
+
+    It had already produced one wrong finding and put it in a commit message:
+    that our packs open a first-pick card twice as often as real ones, blamed on
+    the bonus sheet. Aligned properly the two are 47% and 48%. `build-set-stats`
+    reads the same column correctly (`row[pickNoI] === "0"`), which is what makes
+    this a reading error rather than a data one — **and the correctly-written
+    line was three files away from the incorrectly-written one the whole time.**
+
 
 # Deferred trade-offs (revisit when the premise changes):
 

@@ -12,6 +12,8 @@ import {
   curveTurn,
   detectRole,
   observedRarityBaselines,
+  tableValueShift,
+  tableValues,
   packSize,
   withPackSlots,
 } from "@mtg-tutor/core";
@@ -62,6 +64,13 @@ export interface IngestResult {
   // and naming it here is the only way anybody would notice one. Absent on the
   // cached paths, which fetch nothing.
   tokensWithoutArt?: string[];
+  // How far this set's pick order disagrees with its win rates, as the spearman
+  // between the two orderings and the count of cards that moved more than a
+  // tenth of the pool. Reported because the failure mode of `tableValue` is
+  // being silently INERT: a set whose two orderings already agreed would store
+  // a column identical to `value`, change no pick, and look exactly like a set
+  // where the whole pass had been skipped. Absent on the cached paths.
+  tableValueShift?: { moved: number; spearman: number };
 }
 
 const USER_AGENT =
@@ -125,7 +134,16 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // re-ingest rather than a migration -- and until one runs, a set simply has no
 // stored margins and grades exactly as it always has. That is the safe
 // direction: absent means "cannot say these are the same", never "they are".
-const POOL_REVISION = `14-adventure-colors.${VALUE_FINGERPRINT}`;
+//
+// `15-table-value` stamps `tableValue` onto every card: the set's own spread of
+// `value`, handed back out in the order a real table takes cards. IT HAD TO BE
+// A MANUAL BUMP, and that is worth saying because the automatic one looks like
+// it should cover it. `VALUE_FINGERPRINT` moves when `computeCardValue` moves,
+// and this changes no card's `value` at all -- it adds a second number beside
+// it. So nothing would have invalidated a single pool, `ingest-sets` would have
+// printed "unchanged, skipped" eighteen times, and no card would ever have got
+// one.
+const POOL_REVISION = `15-table-value.${VALUE_FINGERPRINT}`;
 const META_REVISION = "2-name-icon-released";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
@@ -526,6 +544,20 @@ export const ingest = action({
       };
     });
 
+    // A SECOND PASS, because this one cannot be done a card at a time. A quantile
+    // map needs the whole distribution -- it hands the set's own spread of
+    // `value` back out in the order a real table takes cards -- so it has to run
+    // after every card above has settled its own. See scoring/tableValue.ts.
+    const table = tableValues(cards);
+    const withTable = cards.map((c) => {
+      const tv = table.get(c.name);
+      // Written even where it equals `value`, so absent means one thing only:
+      // 17Lands published no pick order for this card. A field that meant either
+      // "no data" or "no disagreement" would make the inert case unreadable.
+      return tv == null ? c : { ...c, tableValue: tv };
+    });
+    const shift = tableValueShift(cards);
+
     // Every archetype the format actually produced, at every colour count. The
     // two-colour filter that used to be here threw away the majority archetype
     // of ktk and snc, and with it the only measure of what a third colour costs
@@ -596,7 +628,7 @@ export const ingest = action({
       iconUri: scryfall.meta.icon_svg_uri,
       releasedAt: scryfall.meta.released_at,
       format,
-      cards,
+      cards: withTable,
       colorWinRates,
       contexts,
       packComposition: stats.packComposition,
@@ -604,7 +636,7 @@ export const ingest = action({
       metaRevision: META_REVISION,
     });
 
-    return { ...stored, missingPackCards, tokensWithoutArt };
+    return { ...stored, missingPackCards, tokensWithoutArt, tableValueShift: shift };
   },
 });
 

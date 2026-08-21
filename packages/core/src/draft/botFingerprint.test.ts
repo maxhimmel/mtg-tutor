@@ -27,7 +27,7 @@ describe("the fitted pods' fingerprint", () => {
         "weights deal different packs. Those drafts are not repairable.",
         "",
         "The safe change is a NEW pod name, leaving the existing ones alone:",
-        "  1. add it to PodPolicy and FITTED_POLICIES",
+        "  1. add it to STORED_PODS and FITTED_POLICIES",
         "  2. add it to draftSessions.pod in the schema",
         "  3. update the fingerprint below",
         "",
@@ -35,7 +35,7 @@ describe("the fitted pods' fingerprint", () => {
         "needs re-ingesting and no existing draft should be badged stale.",
         "",
       ].join("\n"),
-    ).toBe("1y55bb7");
+    ).toBe("fc92jj");
   });
 
   // Guards the guard. A fingerprint that cannot notice the two changes it exists
