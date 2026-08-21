@@ -230,9 +230,17 @@ export const lines = query({
   handler: async (ctx, args) => {
     const session = await ownedSession(ctx, args.sessionId);
 
-    // A replay apiece, and a caller could otherwise ask for thousands. Forty-two
-    // is every pick in a draft, so nothing legitimate is refused.
-    const forks = args.forks.slice(0, 42);
+    // A replay apiece, and a caller could otherwise ask for thousands.
+    //
+    // OFF THE SESSION, not a constant. "Forty-two is every pick in a draft" was
+    // wrong for three sets we ship: lci, mom and neo deal fifteen-card packs, so
+    // their drafts are 45 picks and the last three were refused in silence. The
+    // draft's own pick count cannot be wrong about the draft it belongs to, and
+    // a cap read off the thing it is capping cannot drift the way a literal did.
+    //
+    // Still a cap rather than a trust: `pickedNames` is bounded by the deal, so
+    // this bounds the work at exactly one replay per real pick and no more.
+    const forks = args.forks.slice(0, session.pickedNames.length);
     if (forks.length === 0) return [];
 
     try {
