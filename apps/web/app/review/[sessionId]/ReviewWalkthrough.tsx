@@ -15,6 +15,7 @@ import { Panel } from "../../components/Panel";
 import { SetIcon } from "../../components/SetIcon";
 import { pct } from "../../lib/format";
 import { PickReveal } from "../PickReveal";
+import { useLines } from "../useLines";
 import { PickMarksKey } from "../../components/PickMarks";
 import { ReviewFrame } from "../ReviewFrame";
 import { ReviewViews } from "../ReviewViews";
@@ -37,6 +38,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
 
   const picks = draft?.picks;
   const { get, request, refused } = useVerdicts(id, picks);
+  const lines = useLines(id);
 
   // The verdicts and the two frames can all be refused by the same thing, and
   // the first of them to hear about it is whichever mounted first -- so they
@@ -272,6 +274,8 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
                       guess={guess}
                       correct={correct}
                       draft={{ sessionId: id, setCode: draft.setCode, format: draft.format }}
+                      line={lines.lineFor(current.pickIndex)}
+                      onAskLine={(card, which) => lines.ask(current.pickIndex, card, which)}
                     />
                   </>
                 ) : (

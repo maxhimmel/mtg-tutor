@@ -548,6 +548,53 @@ export function forkOpened(p: {
 }
 
 /**
+ * Somebody asked what one of their own picks would have done to the draft.
+ *
+ * ITS OWN EVENT RATHER THAN A WIDENED `fork_opened`, which is the closer name
+ * and the wrong one. A fork on the challenge diff is a place two drafts already
+ * came apart -- the reader is shown it and opens it. This is a counterfactual
+ * that did not happen until somebody asked for it, on a card they chose, about
+ * a draft with no second party in it. Same function underneath, different
+ * question, and `fork_opened.challengeId` is required because every one of them
+ * has one. Decision #22's `where: "settings"` is the precedent: a value poured
+ * into an existing bucket cannot be split back out.
+ *
+ * The one it answers is whether this teaches anything, and the shape of the
+ * answer is not "was it used". `reach` is the finding. If nearly every line
+ * comes back at zero, the honest reading is that single-ply lines mostly say
+ * "your pick changed nothing", and a feature whose answer is almost always the
+ * same answer is a toy rather than a lesson -- that is a decision to pull it,
+ * and no count of clicks would have said so.
+ */
+export function lineExplored(p: {
+  sessionId: string;
+  pickIndex: number;
+  /**
+   * Whether the card asked about is the one the grade was computed against, or
+   * one the reader went looking for themselves.
+   *
+   * The default is one click and any other card is several, so these are
+   * different amounts of interest and averaging them hides the engaged half.
+   */
+  card: "graded" | "chosen";
+  /**
+   * How many later packs came out different, and out of how many.
+   *
+   * Both, because `reach` alone cannot be read: 3 is a lot at pick 40 and
+   * nothing at pick 2. Sent even when zero -- a zero IS the measurement here,
+   * and dropping it would leave the feed showing only the times the answer was
+   * interesting.
+   */
+  reach: number;
+  of: number;
+  /** Picks until the first pack changed. Absent when none ever did. */
+  delay?: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("line_explored", p);
+}
+
+/**
  * Somebody went back into a draft they had walked away from.
  *
  * The one measurement the resume list exists to earn. Nothing was BUILT to make
