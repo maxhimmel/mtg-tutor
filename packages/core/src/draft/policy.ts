@@ -1,6 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import type { BotMemory } from "./bots.js";
+import type { BotMemory, PodPolicy } from "./bots.js";
 
 // What a fitted bot policy looks at.
 //
@@ -337,6 +337,26 @@ export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", 
   // coefficient that really moves between the tiers (43.6 against 48.0).
   table2: [3.3236, 43.6123, 1.9992, -0.3877, 1.6652, 7.0121, -13.6627, 0.3557],
   sharks2: [3.3956, 48.0251, 2.0645, -0.1621, 1.3524, 6.9176, -13.9007, 0.3564],
+};
+
+/**
+ * How sharply each pod samples from its own scores. Frozen with the name.
+ *
+ * A pod's logits go through `softmax(score / temperature)`, so 1 samples exactly
+ * the fitted distribution and lower values sharpen toward its argmax. Every pod
+ * shipped before `bench-packs` existed samples at 1, and has to keep doing so
+ * forever: a stored session replays against its pod, and a sharper table takes
+ * different cards, which changes what wheels back to the human.
+ *
+ * See the header of `gumbel` in bots.ts for why 1 is the wrong value and
+ * `bench-packs.mjs` for the measurement that says what the right one is.
+ */
+export const POD_TEMPERATURE: Record<PodPolicy, number> = {
+  legacy: 1,
+  table: 1,
+  sharks: 1,
+  table2: 1,
+  sharks2: 1,
 };
 
 /** How far into the draft this pick is, in [0, 1]. */

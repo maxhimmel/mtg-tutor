@@ -1,6 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import { FITTED_POLICIES, type PolicyWeights, policyScore } from "./policy.js";
+import { FITTED_POLICIES, POD_TEMPERATURE, type PolicyWeights, policyScore } from "./policy.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
 // and biases future picks toward its strongest colors, producing readable
@@ -186,9 +186,23 @@ export const DEFAULT_POD: OfferedPod = "table2";
  * invariant under a swapped pick. A sampler that drew once per PICK would be
  * cheaper and would silently turn fork weights into noise.
  *
- * Temperature is 1 and is not a knob. The fit is a model of how real drafters
- * disagree, so sampling at 1 reproduces the measured spread; any other value is
- * a number with no derivation behind it.
+ * TEMPERATURE IS PART OF A POD, AND EVERY POD SHIPPED SO FAR SETS IT TO 1.
+ *
+ * The original argument for 1 was that the fit models how real drafters
+ * disagree, so sampling at 1 reproduces the measured spread -- and that any
+ * other value would be a number with no derivation behind it. The second half
+ * still stands and is why the parameter below is not a free knob. The first half
+ * does not: a conditional logit's residual entropy is everything the model
+ * CANNOT SEE, and sampling at 1 re-emits all of it as independent per-card coin
+ * flips. Real drafters differ because they hold different pools and are chasing
+ * different decks -- correlated within a seat and across a draft -- not because
+ * each of them re-rolls at every card. Seven seats each deviating independently
+ * pass cards no real table passes, which `bench-packs` measures and which no
+ * pick-accuracy number can see.
+ *
+ * So a temperature has to be DERIVED, from a quantity the coefficients were not
+ * fitted to. `bench-packs` is that quantity: how long a card survives in a pack
+ * across eight seats, taken from real Arena pods. See `POD_TEMPERATURE`.
  */
 function gumbel(u: number): number {
   // mulberry32 returns [0, 1), and both ends send this to an infinity.
@@ -199,13 +213,20 @@ function gumbel(u: number): number {
 export class Bot {
   private readonly memory = new BotMemory();
   private readonly weights: PolicyWeights | null;
+  private readonly temperature: number;
 
   constructor(
     private readonly policy: PodPolicy = "legacy",
     private readonly rng: () => number = Math.random,
     private readonly noise: number = 0.01,
+    // Overridden only by `bench-packs`, which sweeps it to derive the value a
+    // new pod should ship with. Nothing in the app passes this: a pod's
+    // temperature is bound to its NAME, like its weights, because it decides
+    // what wheels and a stored session replays against it.
+    temperature?: number,
   ) {
     this.weights = policy === "legacy" ? null : FITTED_POLICIES[policy];
+    this.temperature = temperature ?? POD_TEMPERATURE[policy];
   }
 
   get pool(): readonly EngineCard[] {
@@ -220,7 +241,8 @@ export class Bot {
       // before it is used so the two branches consume the stream identically.
       const u = this.rng();
       const s = this.weights
-        ? policyScore(card, this.memory, progress, this.weights, pack.length) + gumbel(u)
+        ? policyScore(card, this.memory, progress, this.weights, pack.length) / this.temperature +
+          gumbel(u)
         : botScore(card, this.memory) + (u - 0.5) * this.noise;
       if (s > bestScore) {
         bestScore = s;
