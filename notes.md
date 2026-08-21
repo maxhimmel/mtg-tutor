@@ -713,6 +713,52 @@ gitignored), so the next experiment of this kind costs seconds.
      citation density and breadth hold. Regenerate the baseline first, change
      the prompt second, compare third.
 
+5. **`ui-regression-harness`** — the class of defect the two-column rail
+   produced twice in one afternoon, and the reason no test suite saw either.
+
+   Both were geometry. The rail overflowed its own track by 324px because an
+   arbitrary Tailwind variant sorts ahead of a named one (trap #17). Then the
+   card preview stopped drawing a double-faced card's back, because that same
+   324px moved `[data-preview-edge]` inside the 652px a front and a back need
+   side by side — reported 2026-08-21 from a screenshot, fixed by letting the
+   block stand past the wall rather than lose a side. `previewPlacement.test.ts`
+   was green through both and deserved to be: `place` is pure, thoroughly
+   covered, and correct at every viewport it is handed. Nothing hands it the
+   board's.
+
+   **The numbers the rule depends on live in CSS, and nothing in TypeScript
+   knows them.** 1440, 300, 360, 684, the 24px gutters and the 24px gap are
+   literals inside `className` strings plus one `@theme` variable; the wall is
+   whatever those compute to at runtime. So the pure function gets tested
+   exhaustively at invented widths — 1400, 900, 660 — while the widths the app
+   actually renders at go unasserted, and moving the layout moves them silently.
+   A person hovering a card is currently the only thing that closes that loop.
+
+   Two rungs, and the first is worth having even if the second never ships.
+
+   - **Name the layout in TS and assert the real geometry in vitest.** One
+     module owning the rail widths, the gutter, the gap and the `wide`
+     breakpoint, read by the board's classes AND by a test that walks the widths
+     friends actually run (1280, 1440, 1512, 1600, 1728, 1920) checking what the
+     rules promise at each: the track holds the rail, a two-sided card draws two
+     boxes, the panel is never dropped for a token. No browser, no server, runs
+     in milliseconds — and it is the rung that would have caught both defects,
+     #17 as arithmetic and this one as a face count.
+   - **A real browser over a seeded draft.** Playwright at three widths against
+     a fixed session: nothing overflows the viewport, hovering a transforming
+     card yields two images, the stats panel is never on top of the card the
+     pointer is on. This is the rung that catches what arithmetic cannot — the
+     emitted cascade, stacking contexts, `inert` — and it is also the one that
+     drags in a running server, a fixture draft and a flake budget.
+
+   **It reverses a standing preference, which is why it is a roadmap item and
+   not a task.** UI work here is verified by opening localhost, on the grounds
+   that a screenshot harness for a card game is a lot of machinery to maintain
+   for someone who can just look. That holds for defects that are visual. These
+   two were arithmetic wearing a layout — invisible until somebody hovered the
+   right card at the right width — and the first rung answers them without any
+   of the machinery the preference was refusing.
+
 Separate track: the **review features** in "Deferred" above (alternate draft
 lines, review-quiz trend tracking) and the archetype quiz (Ideas #1) — unrelated
 to the data work.
