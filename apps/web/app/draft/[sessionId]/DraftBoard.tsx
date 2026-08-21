@@ -1011,7 +1011,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           onDragEnd={onDragEnd}
           onDragCancel={endDrag}
         >
-          <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] min-[1440px]:grid-cols-[minmax(0,1fr)_684px]">
             {/* The set's mark, stamped on the board the way it is stamped on every
                 card in the pack: oversized and sitting behind the pack rather than
                 beside it. Quiet enough at 5% to be chrome, until the sheen crosses
@@ -1024,17 +1024,29 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 half of what the side panel and its gap take (384px), which is
                 where the middle of the pack column falls at any width the page is
                 capped and guttered to. Below lg the panel stacks under the pack
-                and the middle is simply the middle. */}
-            <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)]">
+                and the middle is simply the middle.
+
+                From 1440px the rail is two columns wide rather than one -- see the
+                comment on `<aside>` below -- so the 384px becomes 684px (the
+                rail's new width) plus the same 24px gap, and the offset re-derives
+                to 354px the same way 192px did. */}
+            <div
+              aria-hidden
+              className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+            >
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)] min-[1440px]:left-[calc(50vw-354px)]">
                 {/* Two and a half rows of cards tall, measured rather than
                     guessed: the pack's own grid, dealt one item two and a half
                     cards tall (488x680 is a card, so 488x1700 is two and a half of
                     them) at the width the pack column has -- the page's 1500px cap
                     and gutters, less the side panel and the gap beside it. So the
                     mark is sized in cards at any viewport width, and stays that way
-                    if the grid's columns ever change. */}
-                <div className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)]`}>
+                    if the grid's columns ever change. 756px past 1440 is the same
+                    sum with the wider rail: 684 (rail) + 24 (gap) + 48 (the two
+                    px-6 gutters). */}
+                <div
+                  className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)] min-[1440px]:w-[calc(min(1500px,100vw)-756px)]`}
+                >
                   <span style={{ aspectRatio: "488 / 1700" }} />
                 </div>
 
@@ -1169,10 +1181,32 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 would move committedColors under a challenge already computed
                 against the old pool, which the reveal would catch as a
                 disagreement and answer by saying nothing at all. */}
+            {/* One rail, stacked, below 1440px: the coach panel above the picks
+                column, same as before this was split. Above 1440px there is room
+                to stand them side by side -- coach first, then the deck, reading
+                left to right the same order they already read top to bottom --
+                and 1440 is not just "wide enough", it is the narrowest point
+                `useRailEdge` (Commitment.tsx) still agrees a rail beside the pack
+                counts as a rail: that hook zeroes the ceremony's inset unless this
+                element's left edge sits past the viewport's midpoint, and at the
+                two-column width (684px, see the grid above) that stops being true
+                below roughly 1417px. 1440 clears it with a 12px margin at the
+                threshold itself and the margin only grows from there -- picked
+                over the exact minimum so a resize a pixel either side of the
+                switch cannot flip the dim to full-bleed.
+
+                300px and 360px, not two equal columns. 360 is unchanged from the
+                single-column rail -- PicksColumn's placards (CardPlacard.tsx's
+                NATURAL_W) already use nearly all of that width once the bench
+                button and the panel's own padding are counted, so it is not
+                spare room to give away. 300 is what is left to the coach once
+                that is settled; it is enough for the verdict's prose and badges
+                to read as paragraphs rather than a ladder of half-words, without
+                asking the pack to give up a column it would otherwise have kept. */}
             <aside
               data-preview-edge
               inert={standing !== undefined}
-              className="flex flex-col gap-4"
+              className="flex flex-col gap-4 min-[1440px]:grid min-[1440px]:grid-cols-[300px_360px] min-[1440px]:items-start min-[1440px]:gap-6"
             >
               <Panel title="Last pick" bodyClassName="gap-3">
                 {lastView ? (
