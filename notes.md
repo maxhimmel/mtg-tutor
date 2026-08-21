@@ -139,6 +139,16 @@ which is live in `apps/web/app/layout.tsx` as "P1P1 — Draft on instinct. Leave
 with reasons." — and 12 (principle marks) and 13 (mana symbols in prose) shipped
 on 2026-08-15.
 
+15 (the score's own working, drawn) shipped on 2026-08-21, and is deleted rather
+than stubbed because nothing cited it. Worth one line on what it turned out to
+be: no new computation at all. `contextValue` has returned a named, signed term
+per adjustment since it was written, summing exactly to the value the grade is
+computed from, and for the whole life of that field the only reader was the
+coach PROMPT — the model was told why a card was worth what it was and the
+player looking at the same panel was not. The "infographic" is a diverging bar
+over data that was already on the wire. The half that was real work is in trap
+#16, which is what the write path was doing to it.
+
 1. A quiz on what archetype a mono-colored card belongs to.
 
 - Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
@@ -421,8 +431,6 @@ It'd be extremely rad to do some deep research, find some blog posts or somethin
 - I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
 - It'd be cool to empower users to move sections where they like
 
-15. Could we have some kinda UI element that shows HOW a score is being added up to give the results it's giving when I make a pick? Some kinda snazzy infographic that explains the weights/calculations.heuristics/etc???
-
 # Deferred (from Draft Review grilling, 2026-07-21):
 
 Out-of-scope for the Draft Review MVP, noted so we don't lose them:
@@ -441,6 +449,18 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
      human draws none — so the rng stream position is invariant and swapping a
      pick changes which cards are where and nothing else. A finished draft
      replays in ~0.16ms, so a handful of lines costs under a millisecond.
+   - **It is now readable about your own draft, not only a challenge**
+     (2026-08-21). `review.lines` runs the same function over your own stored
+     boosters and the review's pick panels offer it on the graded card or on any
+     of the pack's best. The two numbers are drawn as different kinds of claim,
+     which is the whole discipline this entry is about: `delay` is exact, and
+     `reach` carries the policy below and says so on screen. `line_explored`
+     records `reach` and `of`, because if `reach` is almost always zero then a
+     single-ply line mostly says "your pick changed nothing" and this is a toy
+     rather than a lesson — a count of clicks could not tell us that.
+   - **The function was answering about a draft nobody played until then**, which
+     is trap #15 and is worth reading before trusting any fork number recorded
+     before that date.
    - What it cannot do is the multi-ply part, and the obstacle is not cost. Past
      the wheel your real next pick may not exist in the counterfactual pack, so
      something has to decide what you would have done — and every answer to that
@@ -502,6 +522,15 @@ CLI's review quiz printing the answer beside the question) shipped 2026-08-19.
    in its rail, which is what that screen probably wants to be anyway. Deferred
    because it changes how the whole route lays out to buy back a strip of empty
    panel.
+
+   **Still open, and the draft board's two-column rail did NOT touch it**
+   (2026-08-21). That change split the DRAFT board's side panel into a coach
+   column and a picks column above 1440px; this item is about the PRACTICE
+   drill's rail, which is a separate implementation (`MissesDrill.tsx`, sharing
+   only the primitives) and the only place `useRailHeight` is used. The draft
+   board's rail is still not sticky and so still cannot reproduce this — the
+   split deliberately did not make it sticky, precisely because pinning it would
+   inherit this defect on a second screen.
 
 # Roadmap (pick per future session):
 
@@ -1003,6 +1032,99 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
     the total by default rather than by somebody remembering. An allowlist in an
     instrument is a silent undercount waiting for the next field.
+
+15. **A default that is only correct for history will be silently wrong for
+    everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
+    `new DraftEngine(deal, botRng(seed))` and took the third parameter's default.
+    That default is `"legacy"`, and it is right: an absent `pod` on a stored
+    session means the bot that was running before pods existed, so the default
+    encodes a real fact about old rows. `replayDraft` two files over takes `pod`
+    explicitly and says why — "bots decide what wheels, so replaying under the
+    wrong policy diverges below".
+
+    `DEFAULT_POD` is `table2`. Every draft anyone has played since pods shipped
+    carries one, so the default applied to none of them, and both walks ran a pod
+    that had never dealt to the player. The baseline then met a card the wrong
+    bots had taken and `walk` answers a card it cannot find by stopping.
+
+    Measured by calling the real function on 200 `table2` drafts, forking at pick
+    5 with 36 later packs available: **`of` came back 0.2 and `reach` was 0.0 in
+    all 200**. The challenge diff had been printing "Changed 0 of your 0 later
+    packs" for every modern draft. With the pod threaded through, `of` is 36.0.
+
+    **The sting is which answer it produced.** Zero reach is not a broken-looking
+    number — it is the most interesting thing the function can say, "this pick
+    changed nothing", arrived at by not running. Trap #9's family, and the
+    specific lesson is narrower: a default that describes the PAST is a landmine
+    the moment the present stops matching it, because nothing about the call site
+    changes on the day that happens.
+
+    Two things followed. The baseline is loud now — running out of NAMES is an
+    unfinished draft and an honest stop, but a name that is not in the pack it was
+    taken from means this is not the draft that was played, and that throws into
+    the "weights unavailable" the readers already draw. And the three existing
+    tests played legacy and asked about legacy, so they stayed green throughout:
+    trap #4, in a battery that looked thorough because it had three cases and
+    every one of them shared the assumption.
+
+16. **An omitted empty value and an absent one are the same shape, and the
+    saving that creates them is free** (2026-08-21, `draftPicks.recordPick`).
+    `terms` carries a distinction the panel that draws it depends on: `[]` means
+    the deck made no difference to this card, absent means the row never recorded
+    any. `recordPick` wrote
+
+        ...(rec.score.terms.length > 0 ? { terms: rec.score.terms } : {})
+
+    which costs nothing in bytes and collapses the two forever.
+
+    **The empty case is not exotic, which is what made it bite.** `commitment` is
+    `share * min(1, picksMade / totalPicks)`, so it is exactly 0 at the first pick
+    of every draft; that zeroes the archetype, splash and off-colour terms, a
+    well-maindecked card takes no trust correction, and `contextValue` filters the
+    zeros out. So P1P1 stores `[]` routinely — and the review told people that
+    pick predated a field it did not.
+
+    **Both comments asserting the distinction held blamed the wrong layer.** They
+    named `toRecordedPick`'s `?? []`, which is downstream and correct — `PickScore`
+    requires an array. The information was already gone. The general form:
+    **when a distinction matters, check the WRITER, because a reader can only
+    preserve what it was given** — and a conditional spread is the cheapest way
+    in the language to throw one away without looking like you have.
+
+    It was found in review rather than by anything running, and the test that
+    pins it had to be written twice: the first version had no `draftPools` row,
+    so the query it drove refused either way and was green against both
+    implementations. Trap #4 again, in a test written the same afternoon as the
+    note citing trap #4.
+
+17. **Tailwind sorts an arbitrary breakpoint variant ahead of the named ones, so
+    it cannot beat them** (2026-08-21, the draft board's two-column rail). The
+    rail was told to be 684px wide inside a 360px track and hung 324px of the
+    picks column off the right of the screen.
+
+    Not the arithmetic, which was right in every particular. At 1440px both
+    `min-[1440px]:grid-cols-[minmax(0,1fr)_684px]` and
+    `lg:grid-cols-[minmax(0,1fr)_360px]` match, at the same specificity, and
+    Tailwind emits every arbitrary `min-[…]` variant in a block BEFORE the
+    named-breakpoint blocks — so the `lg:` rule is later in the sheet and wins at
+    every width the other was written to own.
+
+    **It broke asymmetrically, which is why it looked like a layout bug rather
+    than a cascade one.** The `<aside>`'s own `min-[1440px]:grid-cols-[300px_360px]`
+    DID apply, because its base class is a bare `flex` and any variant outranks a
+    bare utility. So the inner grid took the new width while the track containing
+    it kept the old one — the one combination of the two that overflows.
+
+    `--breakpoint-wide: 90rem` in `@theme` fixes it, because named breakpoints
+    sort by value. 90rem rather than 1440px so it sits unambiguously between the
+    stock `xl` (80rem) and `2xl` (96rem) instead of resting on a unit comparison.
+
+    **What actually settled it was reading the emitted CSS**, not reasoning about
+    the cascade: the 1440 block opened at byte 243708 and the `lg:` rule that beat
+    it sat at 247911. Three lines of Python over `.next/static/css/app/layout.css`
+    answered in seconds a question that a screenshot can only pose. Worth
+    remembering the next time a Tailwind override "should" apply — the stylesheet
+    is on disk and it is checkable.
 
 # Deferred trade-offs (revisit when the premise changes):
 
