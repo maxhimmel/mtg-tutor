@@ -11,6 +11,7 @@ import {
   pivots,
   splitPool,
   summarizeDraft,
+  forkImpact,
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
 import { z } from "zod";
@@ -20,6 +21,7 @@ import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
+import { dealFor } from "./draftPools.js";
 import {
   poolFromLastPick,
   storedPick,
@@ -169,6 +171,21 @@ export const load = query({
           score: rec.score.score,
           isBest: rec.score.isBest,
           onColor: rec.score.onColor,
+          // The score's own working, so the review can show what the board can.
+          // Same reasoning as `defense` below: `storedPicks` has already paid
+          // for the whole document, and four terms plus two numbers is tens of
+          // bytes against a query measured at 262.7KB.
+          //
+          // OFF THE ROW, NOT OFF `rec`. `toRecordedPick` fills `terms` with
+          // `?? []` because `PickScore` requires an array -- which is right for
+          // that type and destroys the one distinction this field carries. A
+          // pick scored with no context and a pick nothing moved both store
+          // `[]`; a pick from before the field existed stores nothing at all,
+          // and only the raw row still knows which of those happened. See
+          // ScoreBreakdown, which draws the two differently.
+          pickedValue: rec.score.pickedValue,
+          pickedContextValue: rec.score.pickedContextValue,
+          terms: row.score.terms,
           // What the player said for this pick BEFORE anything was revealed.
           // Absent on a pick made through the passive flow, which is not a gap
           // to paper over -- a row without one did not go through the ceremony,
@@ -182,6 +199,72 @@ export const load = query({
         };
       }),
     };
+  },
+});
+
+/**
+ * What one of your own picks would have done to the rest of your draft.
+ *
+ * The single-ply alternate line the seed was stored to keep possible, pointed at
+ * your own review instead of at a challenge. Same function and the same refusal
+ * as `challenges.forkImpacts` -- deliberately, because the two screens make the
+ * same claim and a second implementation of it is a second thing to be wrong.
+ *
+ * SEPARATE FROM `load`, and not folded into it. `load` reads no set document and
+ * no pool row at all (see its comment), which is most of what makes a review
+ * openable at all; this needs the ~45KB deal. Charging every reader of every
+ * review for a counterfactual almost nobody asks for is the `sets.list` mistake
+ * one screen along. Asked for by hand, paid for by hand.
+ *
+ * The forks come in from the client rather than being derived here for the same
+ * reason they do on the challenge: the browser already holds every pack, so it
+ * can name the card being swapped in without this query reading a single row to
+ * find out. It is also what lets a reader ask about ANY card in the pack rather
+ * than only the one the grade named.
+ */
+export const lines = query({
+  args: {
+    sessionId: v.id("draftSessions"),
+    forks: v.array(v.object({ pickIndex: v.number(), theirs: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    const session = await ownedSession(ctx, args.sessionId);
+
+    // A replay apiece, and a caller could otherwise ask for thousands.
+    //
+    // OFF THE SESSION, not a constant. "Forty-two is every pick in a draft" was
+    // wrong for three sets we ship: lci, mom and neo deal fifteen-card packs, so
+    // their drafts are 45 picks and the last three were refused in silence. The
+    // draft's own pick count cannot be wrong about the draft it belongs to, and
+    // a cap read off the thing it is capping cannot drift the way a literal did.
+    //
+    // Still a cap rather than a trust: `pickedNames` is bounded by the deal, so
+    // this bounds the work at exactly one replay per real pick and no more.
+    const forks = args.forks.slice(0, session.pickedNames.length);
+    if (forks.length === 0) return [];
+
+    try {
+      const { deal } = await dealFor(ctx, args.sessionId);
+      return forks.map((f) =>
+        forkImpact(
+          deal,
+          session.seed,
+          session.pickedNames,
+          f.pickIndex,
+          f.theirs,
+          // Absent means the bot that was running before pods existed, the same
+          // reading `replayFor` takes. The wrong one here does not fail, it
+          // answers about a draft nobody played.
+          session.pod ?? "legacy",
+        ),
+      );
+    } catch {
+      // Either the boosters were never stored, or the replay diverged from the
+      // picks. Null rather than an empty array: "we did not measure" and "it
+      // changed nothing" are opposite answers and the screen draws them
+      // differently.
+      return null;
+    }
   },
 });
 

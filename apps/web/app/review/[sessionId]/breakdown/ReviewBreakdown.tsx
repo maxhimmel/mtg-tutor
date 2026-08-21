@@ -14,6 +14,7 @@ import { Panel } from "../../../components/Panel";
 import { SetIcon } from "../../../components/SetIcon";
 import { breakdownAsked } from "../../../lib/analytics";
 import { PickReveal } from "../../PickReveal";
+import { useLines } from "../../useLines";
 import { PickMarksKey } from "../../../components/PickMarks";
 import { ReviewFrame } from "../../ReviewFrame";
 import { ReviewViews } from "../../ReviewViews";
@@ -67,6 +68,7 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
 
   const picks = draft?.picks;
   const { get, request, requestMany, refused } = useVerdicts(id, picks);
+  const lines = useLines(id);
 
   // One line for the whole page: this fires seventeen verdicts and two frames,
   // and a refusal repeated per row would bury the breakdown it is explaining.
@@ -380,6 +382,8 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
                         pending={analyzing || asking.has(pick.pickIndex)}
                         onAsk={() => void askOne(pick.pickIndex)}
                         draft={{ sessionId: id, setCode: draft.setCode, format: draft.format }}
+                        line={lines.lineFor(pick.pickIndex)}
+                        onAskLine={(card, which) => lines.ask(pick.pickIndex, card, which)}
                       />
                     </Panel>
                   </div>

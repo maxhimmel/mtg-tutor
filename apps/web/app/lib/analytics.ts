@@ -548,6 +548,93 @@ export function forkOpened(p: {
 }
 
 /**
+ * Somebody opened the score's own working under a grade.
+ *
+ * `contextValue` has always returned a named, signed term per adjustment, and
+ * until now the only reader was the coach PROMPT -- the model was told why a
+ * card was worth what it was and the player was not. This counts whether that
+ * was worth surfacing.
+ *
+ * The decision it changes is where the panel lives. It is folded away on the
+ * board because a player mid-pack wants the verdict in a second; if it turns out
+ * to be opened often, the fold is costing a click on the thing people came for
+ * and it should be open by default. Near zero says the opposite -- either
+ * nobody wants it, or "Show how that was scored" is not a sentence anybody
+ * reads, and those are told apart by asking somebody rather than by more data.
+ *
+ * BOARD ONLY, deliberately. The review draws the same breakdown with no
+ * disclosure around it, so there is no interaction there to capture and an
+ * event fired on render would be counting page views through a second door.
+ *
+ * `terms` because an open with nothing in it is the failure worth catching.
+ * Zero means the reader asked how the grade was made and got one sentence
+ * saying their deck made no difference -- which is a true answer and a bad
+ * experience, and it is invisible in a count of opens.
+ *
+ * `grade` rather than a pick index, which was the first shape and asks a duller
+ * question. Where in the draft somebody opened this is nearly noise; whether
+ * they open it on an A or on an F is the actual hypothesis -- people
+ * interrogate a score they disagree with -- and if the opens cluster on the bad
+ * grades then the working is doing the job the margin already does one panel
+ * up, and belongs beside it rather than behind a fold.
+ */
+export function scoreWorkingViewed(p: { grade: string; terms: number }): void {
+  if (!on()) return;
+  posthog.capture("score_working_viewed", p);
+}
+
+/**
+ * Somebody asked what one of their own picks would have done to the draft.
+ *
+ * ITS OWN EVENT RATHER THAN A WIDENED `fork_opened`, which is the closer name
+ * and the wrong one. A fork on the challenge diff is a place two drafts already
+ * came apart -- the reader is shown it and opens it. This is a counterfactual
+ * that did not happen until somebody asked for it, on a card they chose, about
+ * a draft with no second party in it. Same function underneath, different
+ * question, and `fork_opened.challengeId` is required because every one of them
+ * has one. Decision #22's `where: "settings"` is the precedent: a value poured
+ * into an existing bucket cannot be split back out.
+ *
+ * The one it answers is whether this teaches anything, and the shape of the
+ * answer is not "was it used". `reach` is the finding. If nearly every line
+ * comes back at zero, the honest reading is that single-ply lines mostly say
+ * "your pick changed nothing", and a feature whose answer is almost always the
+ * same answer is a toy rather than a lesson -- that is a decision to pull it,
+ * and no count of clicks would have said so.
+ */
+export function lineExplored(p: {
+  sessionId: string;
+  pickIndex: number;
+  /**
+   * Whether the card asked about is the one the grade was computed against, or
+   * one the reader went looking for themselves.
+   *
+   * Decided by which card it IS -- `contextBestName` -- and never by where its
+   * button sits. The card the grade was computed against is the one the rest of
+   * the screen has already made a claim about, so asking about it is agreeing to
+   * a question the app posed; asking about any other card is the reader posing
+   * their own. Those are different amounts of interest and averaging them hides
+   * the engaged half.
+   */
+  card: "graded" | "chosen";
+  /**
+   * How many later packs came out different, and out of how many.
+   *
+   * Both, because `reach` alone cannot be read: 3 is a lot at pick 40 and
+   * nothing at pick 2. Sent even when zero -- a zero IS the measurement here,
+   * and dropping it would leave the feed showing only the times the answer was
+   * interesting.
+   */
+  reach: number;
+  of: number;
+  /** Picks until the first pack changed. Absent when none ever did. */
+  delay?: number;
+}): void {
+  if (!on()) return;
+  posthog.capture("line_explored", p);
+}
+
+/**
  * Somebody went back into a draft they had walked away from.
  *
  * The one measurement the resume list exists to earn. Nothing was BUILT to make

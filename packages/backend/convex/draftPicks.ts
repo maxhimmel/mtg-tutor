@@ -45,7 +45,18 @@ export async function recordPick(
       pickedContextValue: rec.score.pickedContextValue,
       rawBestValue: rec.score.rawBestValue,
       contextBestValue: rec.score.contextBestValue,
-      ...(rec.score.terms.length > 0 ? { terms: rec.score.terms } : {}),
+      // WRITTEN EVEN WHEN EMPTY, which the `...(x.length > 0 ? …)` this replaces
+      // is exactly what stopped. An empty array is an ANSWER here -- the deck
+      // made no difference to this card -- and omitting it stored that as the
+      // same absence a row from before the field existed has. The two are then
+      // indistinguishable forever, and the reader downstream has to guess.
+      //
+      // It reads as a harmless saving because it is one, in bytes. What it costs
+      // is the distinction: `commitment` is 0 at the first pick by construction,
+      // which zeroes the three colour terms, so a well-maindecked P1P1 filters to
+      // `[]` and every review of every draft said "recorded before the score kept
+      // its working" about a pick made that afternoon. Trap #9 in the writer.
+      terms: rec.score.terms,
       isBest: rec.score.isBest,
       indistinguishable: rec.score.indistinguishable,
       bandNames: rec.score.band.map((c) => c.name),
