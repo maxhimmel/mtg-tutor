@@ -403,6 +403,36 @@ export const FITTED_POLICIES: Record<StoredPod, PolicyWeights> = {
   // the signal, which is what `human-bots` was actually built to model, were
   // right all along. What was wrong was the number they multiplied.
   //
+  // WHAT THE ABLATION SAYS, AND WHY IT IS THE WRONG INSTRUMENT HERE
+  //
+  // `fit-bot-policy --ablate`, held-out top-1 with one term held at zero:
+  //
+  //   opennessLate  +1.10pp    rare            +0.02pp
+  //   laneFitLate   +1.02pp    rareOpen        +0.00pp
+  //   tableValueOpen +0.59pp   removal         +0.00pp
+  //   laneFit       +0.40pp    value           -0.00pp
+  //   valueOpen     +0.03pp    tableValue      -0.01pp
+  //
+  // Read straight, that prices the whole point of these pods at six tenths of a
+  // point -- below the bar this file sets for shipping a feature. It is wrong,
+  // and the reason generalises: AN ABLATION REFITS, so a column with a
+  // correlated substitute still in the vector reports only what it adds OVER
+  // that substitute. Zero `tableValue` and `valueOpen` climbs back from 16 to
+  // something like 43 and does the job badly, which costs six tenths of a point
+  // of accuracy and most of the pack.
+  //
+  // Measured the other way -- `bench-packs --ranks gih`, which makes `table3`
+  // rank by win rate while changing nothing else -- the same removal costs:
+  //
+  //          table3   forced onto win rate      (mean |sim - real|, picks)
+  //   sos     0.402                  0.840
+  //   mh3     0.353                  0.934
+  //   ktk     0.330                  0.890
+  //
+  // All the way back to `table2`. The feature is worth the entire improvement,
+  // and the only reason the first number disagrees is that top-1 was never
+  // asked about the pack.
+  //
   // AND THE TOP-1 IS NOT COMPARABLE TO THE ROW ABOVE IT. See the warning under
   // `FITTED_POLICIES`.
   table3: [
