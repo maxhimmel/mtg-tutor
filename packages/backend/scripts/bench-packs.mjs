@@ -72,6 +72,7 @@ const setCode = flag("set", "sos");
 const format = flag("format", "TradDraft");
 const pods = flag("pods", "table2").split(",");
 const temps = flag("temps", "").split(",").filter(Boolean).map(Number);
+const ranks = flag("ranks", "shipped").split(",");
 const drafts = Number(flag("drafts", 400));
 const jsonOut = flag("json");
 const log = (...a) => console.error(...a);
@@ -96,6 +97,62 @@ const realAlsa = new Map(
 // not qualify. What is being measured is what humans DO with the card.
 const BOMB_ALSA = 1.5;
 const isBomb = (card) => (realAlsa.get(card.name) ?? 99) <= BOMB_ALSA;
+
+// ---------------------------------------------------------------- rankings
+
+// A CANDIDATE ORDERING, PRICED BEFORE IT IS BUILT.
+//
+// `--ranks` reorders what the bots think cards are worth WITHOUT changing the
+// distribution of those numbers: the shipped values are handed out again, in the
+// candidate's order, to the same cards. Only the ranking moves.
+//
+// That is the whole point. The fitted coefficients are on the scale of
+// `cardValue` -- `valueOpen` is 43.6 -- so feeding in a raw maindeck rate would
+// change the logit spread as well as the order, and the run would price two
+// things at once. Rank-remapping isolates the question this file is asking,
+// which is whether the pod is ranking cards the way a table does.
+//
+// Cards the candidate has no number for keep their shipped value untouched, so
+// the permutation stays inside the subset the candidate can speak about.
+const RANKINGS = {
+  // The control.
+  shipped: null,
+  // The oracle, and not a candidate: it IS the pick order this file measures
+  // against, so it marks how much of the gap a ranking could close at best.
+  // `bench-bots` forbids a fitted policy from reading draft-dataset aggregates
+  // over the answers, and this is the most flagrant one there is.
+  alsa: (c) => (c.alsa != null ? -c.alsa : null),
+  // Of the times a card was taken, how often it made the deck. Conditioned on
+  // being taken, so it says nothing about how EARLY -- a card nobody takes can
+  // still maindeck at 1.0. That is what makes it usable where `alsa` is not.
+  maindeck: (c) => c.maindeckRate ?? null,
+  // Improvement when drawn: the within-deck contrast that is supposed to undo
+  // the deck-quality confound in raw win rate. Measured, and it is worse.
+  iwd: (c) => c.iwd ?? null,
+  // What a pick actually asks -- will this make my deck, and how much does it
+  // win when it does -- as the product of the two halves rather than only the
+  // second. Centred at the format baseline so a card that maindecks always and
+  // wins nothing is not rewarded for the first half alone.
+  both: (c) =>
+    c.maindeckRate != null && c.gihWr != null ? c.maindeckRate * (c.gihWr - 0.5) : null,
+};
+
+function ranked(name) {
+  const key = RANKINGS[name];
+  if (key === undefined) throw new Error(`unknown --ranks "${name}"; try ${Object.keys(RANKINGS).join(", ")}`);
+  if (key === null) return cache.cards;
+
+  const score = new Map();
+  for (const row of artifact.cards) {
+    const s = key(row);
+    if (s != null) score.set(row.name, s);
+  }
+  const movable = cache.cards.filter((c) => c.slot !== "land" && score.has(c.name));
+  const values = movable.map((c) => c.value).sort((a, b) => b - a);
+  const order = [...movable].sort((a, b) => score.get(b.name) - score.get(a.name));
+  const remap = new Map(order.map((c, i) => [c.name, values[i]]));
+  return cache.cards.map((c) => (remap.has(c.name) ? { ...c, value: remap.get(c.name) } : c));
+}
 
 // ---------------------------------------------------------------- counting
 
@@ -163,11 +220,14 @@ const maxPick = real.packs.length - 1;
 
 // ---------------------------------------------------------------- a pod
 
-function simulate(pod, temperature) {
+function simulate(pod, temperature, rank) {
+  // Rebuilt per ranking rather than per run: the pools hold the card objects the
+  // deal hands to the bots, so a remapped value has to reach them through here.
+  const dealtSet = buildSetData(setCode, ranked(rank), artifact.colorWinRates, artifact.packComposition);
   const t = tally();
   for (let s = 0; s < drafts; s++) {
     const seed = 90000 + s;
-    const deal = dealDraft(set, seed);
+    const deal = dealDraft(dealtSet, seed);
     const rng = botRng(seed);
     const bots = Array.from({ length: DRAFT.seats }, () => new Bot(pod, rng, undefined, temperature));
     for (let round = 0; round < deal.rounds.length; round++) {
@@ -229,27 +289,32 @@ const results = [];
 console.log(`${setCode}/${format}: ${realDrafts.toLocaleString()} real drafts, ${drafts} simulated`);
 console.log(`${bombs.length} cards a real table takes by pick ${BOMB_ALSA} (alsa <= ${BOMB_ALSA})\n`);
 
-const header = `      ${Array.from({ length: maxPick }, (_, i) => String(i + 1).padStart(4)).join("")}`;
+const runs = [];
+for (const pod of pods)
+  for (const rank of ranks)
+    for (const temperature of temps.length ? temps : [undefined]) {
+      const label =
+        pod +
+        (rank === "shipped" ? "" : `/${rank}`) +
+        (temperature === undefined ? "" : `@t${temperature}`);
+      runs.push({ pod, rank, temperature, label });
+    }
+
+const pad = Math.max(6, ...runs.map((r) => r.label.length + 1));
+const header = `${" ".repeat(pad)}${Array.from({ length: maxPick }, (_, i) => String(i + 1).padStart(4)).join("")}`;
 console.log("SURVIVAL of those cards, % of the packs that opened one that still hold it");
 console.log(header);
-console.log(`real  ${pct(survival(real, bombs, maxPick))}`);
-
-const runs = [];
-for (const pod of pods) {
-  if (temps.length === 0) runs.push({ pod, temperature: undefined, label: pod });
-  else for (const temperature of temps) runs.push({ pod, temperature, label: `${pod}@t${temperature}` });
-}
+console.log(`${"real".padEnd(pad)}${pct(survival(real, bombs, maxPick))}`);
 
 for (const run of runs) {
-  const t = simulate(run.pod, run.temperature);
-  run.tally = t;
-  console.log(`${run.label.padEnd(6)}${pct(survival(t, bombs, maxPick))}`);
+  run.tally = simulate(run.pod, run.temperature, run.rank);
+  console.log(`${run.label.padEnd(pad)}${pct(survival(run.tally, bombs, maxPick))}`);
 }
 
 console.log("\nP(the pack still holds one of them) by pick");
 console.log(header);
-console.log(`real  ${pct(bombPresence(real))}`);
-for (const run of runs) console.log(`${run.label.padEnd(6)}${pct(bombPresence(run.tally))}`);
+console.log(`${"real".padEnd(pad)}${pct(bombPresence(real))}`);
+for (const run of runs) console.log(`${run.label.padEnd(pad)}${pct(bombPresence(run.tally))}`);
 
 console.log("\nmean |simulated - real| over the pick a card is still being seen at");
 for (const run of runs) {
