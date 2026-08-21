@@ -71,7 +71,15 @@ import { ConvexHttpClient } from "convex/browser";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Bot, DRAFT, botRng, buildSetData, dealDraft, draftProgress } from "@mtg-tutor/core";
+import {
+  Bot,
+  DEFAULT_POD,
+  DRAFT,
+  botRng,
+  buildSetData,
+  dealDraft,
+  draftProgress,
+} from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { draftPicks } from "./lib/draftCache.mjs";
 
@@ -85,7 +93,7 @@ const flag = (name, fallback) => {
 
 const setCode = flag("set", "sos");
 const format = flag("format", "TradDraft");
-const pods = flag("pods", "table2").split(",");
+const pods = flag("pods", DEFAULT_POD).split(",");
 const temps = flag("temps", "").split(",").filter(Boolean).map(Number);
 const ranks = flag("ranks", "shipped").split(",");
 const drafts = Number(flag("drafts", 400));

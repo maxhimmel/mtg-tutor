@@ -23,6 +23,7 @@
 // replayed by definition, and this tool exists to compare against exactly those.
 
 import { ConvexHttpClient } from "convex/browser";
+import { DEFAULT_POD, STORED_PODS } from "@mtg-tutor/core";
 import { api } from "../convex/_generated/api.js";
 import { accessToken } from "./lib/auth.mjs";
 
@@ -34,9 +35,9 @@ const flag = (name, fallback) => {
 };
 
 const sessionId = process.argv[2];
-const pod = flag("pod", "table");
+const pod = flag("pod", DEFAULT_POD);
 if (!sessionId || sessionId.startsWith("--")) {
-  console.error("usage: redeal.mjs <sessionId> [--pod table|sharks]");
+  console.error(`usage: redeal.mjs <sessionId> [--pod ${STORED_PODS.join("|")}]`);
   console.error("  the session id is in the draft's URL: /draft/<sessionId>");
   process.exit(1);
 }
