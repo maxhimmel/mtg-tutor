@@ -19,6 +19,8 @@ import {
   splitPool,
   suggestDeck,
   summarizeDraft,
+  POD_READS_PICK_ORDER,
+  type EngineCard,
 } from "@mtg-tutor/core";
 import { internalQuery, mutation, query } from "./_generated/server.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
@@ -146,7 +148,9 @@ export async function startSession(
   if (args.dealFrom) {
     await copyDeal(ctx, args.dealFrom, sessionId);
   } else {
-    await storeDeal(ctx, sessionId, toSetData(await setCardsFor(ctx, setDoc)), seed);
+    const cardsDoc = await setCardsFor(ctx, setDoc);
+    requireTableValue(args.pod, setCode, format, cardsDoc.cards);
+    await storeDeal(ctx, sessionId, toSetData(cardsDoc), seed);
   }
 
   // After the insert and after the quota, so nothing is reported that did not
@@ -159,6 +163,36 @@ export async function startSession(
   await draftStarted(ctx, caller, { sessionId, setCode, format, pod: args.pod ?? "legacy" });
 
   return sessionId;
+}
+
+/**
+ * A pod that picks by pick order will not be dealt a pool that has none.
+ *
+ * `policyFeatures` falls back to `value` when `tableValue` is absent, which is
+ * right for a STORED deal -- a draft dealt before the column existed has to keep
+ * replaying exactly as it did. It is wrong for a NEW one: the pod would be
+ * recorded as `table3`, deal every pack off the win-rate ranking `table3` exists
+ * to stop using, and replay perfectly forever. Nothing would look broken. The
+ * packs would just be the old bad packs under the new name.
+ *
+ * The window is real and narrow: a deploy carries the new pods, and the pools
+ * only gain the column when `ingest-sets` runs afterwards. Anything started in
+ * between lands in it.
+ *
+ * So it refuses instead, naming the command that fixes it.
+ */
+function requireTableValue(
+  pod: StoredPod | undefined,
+  setCode: string,
+  format: string,
+  cards: readonly EngineCard[],
+): void {
+  if (!pod || !POD_READS_PICK_ORDER.has(pod)) return;
+  if (cards.some((c) => c.tableValue != null)) return;
+  throw new Error(
+    `${setCode}/${format} has not been ingested since pick order was added, so the ` +
+      `"${pod}" pod would deal from win rates alone. Run: pnpm ingest-sets ${setCode}`,
+  );
 }
 
 export const start = mutation({

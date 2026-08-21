@@ -451,6 +451,27 @@ export const POD_TEMPERATURE: Record<PodPolicy, number> = {
   sharks3: 1,
 };
 
+/**
+ * The pods whose weights actually read the pick-order columns.
+ *
+ * DERIVED FROM THE WEIGHTS, never listed. A pod that reads `tableValue` must not
+ * be dealt a pool that has none -- `policyFeatures` would fall back to `value`
+ * and the pod would quietly deal from the ranking it exists to stop using -- and
+ * a hand-kept list of which pods those are is a thing that goes stale on the day
+ * somebody adds the fifth one. `draft.start` refuses on this.
+ *
+ * Walks `FITTED_POLICIES` rather than `STORED_PODS`, which holds exactly the
+ * same names -- importing the latter would make this module need a VALUE out of
+ * bots.ts while bots.ts needs one out of this file, and a cycle whose loser is
+ * decided by whichever module an app imports first is not a thing to leave lying
+ * around for a `const` in its temporal dead zone to find.
+ */
+export const POD_READS_PICK_ORDER: ReadonlySet<StoredPod> = new Set(
+  (Object.keys(FITTED_POLICIES) as StoredPod[]).filter((pod) =>
+    FITTED_POLICIES[pod].slice(POLICY_FEATURES.indexOf("tableValue")).some((w) => w !== 0),
+  ),
+);
+
 /** How far into the draft this pick is, in [0, 1]. */
 export function draftProgress(pickIndex: number, totalPicks: number): number {
   if (totalPicks <= 1) return 0;
