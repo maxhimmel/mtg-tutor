@@ -1,6 +1,6 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import type { BotMemory, PodPolicy } from "./bots.js";
+import type { BotMemory, PodPolicy, StoredPod } from "./bots.js";
 
 // What a fitted bot policy looks at.
 //
@@ -332,7 +332,7 @@ export type PolicyWeights = readonly number[];
  * DESCRIBES signal-reading did not make it a better predictor of what drafters
  * DO. The script's header carries the rest.
  */
-export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", PolicyWeights> = {
+export const FITTED_POLICIES: Record<StoredPod, PolicyWeights> = {
   table: [3.7889, 43.0546, 1.8065, -0.3002, 1.5222, 7.9243, -16.2986],
   sharks: [3.7963, 47.934, 1.8479, -0.3142, 1.4838, 7.8993, -16.4302],
 
@@ -356,6 +356,61 @@ export const FITTED_POLICIES: Record<"table" | "sharks" | "table2" | "sharks2", 
   // coefficient that really moves between the tiers (43.6 against 48.0).
   table2: [3.3236, 43.6123, 1.9992, -0.3877, 1.6652, 7.0121, -13.6627, 0.3557],
   sharks2: [3.3956, 48.0251, 2.0645, -0.1621, 1.3524, 6.9176, -13.9007, 0.3564],
+
+  // THE FIRST PODS THAT PICK BY WHAT A TABLE WANTS RATHER THAN BY WHAT WINS.
+  //
+  // Same eighteen sets, same split, same protocol as `table2`; the only change
+  // is the two columns at the end and what they let the fit drop.
+  //
+  //   table3    all drafters      571,996 train / 284,334 held-out
+  //   sharks3   3-0 drafters      109,420 train /  55,475 held-out
+  //
+  // WHAT THE FIT DID WITH THEM, WHICH IS THE INTERESTING PART
+  //
+  //                  table2    table3      sharks2   sharks3
+  //   value           3.3236   -1.2731      3.3956   -0.8946
+  //   valueOpen      43.6123   16.0641     48.0251   19.4597
+  //   laneFit         1.9992    2.0973      2.0645    2.1708
+  //   rare           -0.3877   -0.2146     -0.1621   -0.0180
+  //   rareOpen        1.6652    0.0485      1.3524   -0.2211
+  //   laneFitLate     7.0121    7.5973      6.9176    7.4686
+  //   opennessLate  -13.6627  -15.3805    -13.9007  -15.6604
+  //   removal         0.3557    0.0774      0.3564    0.0787
+  //   tableValue           -    6.2022           -    6.7252
+  //   tableValueOpen       -   56.9663           -   56.9451
+  //
+  // `rareOpen` COLLAPSES, AND THAT IS THE CONFIRMATION. It went in because
+  // "humans take rares beyond what their win rate justifies, and they do it from
+  // a full pack" -- a real effect, worth +1.67 to the field, and a PATCH over a
+  // ranking that was wrong about bombs for the reason `tableValue.ts` sets out.
+  // Told what a table actually wants, the fit has no use for it: +0.05, and
+  // -0.22 for the sharks. A feature that exists only to correct a bad input is
+  // supposed to vanish when the input is fixed, and this one did.
+  //
+  // `removal` goes the same way, 0.36 to 0.08 -- it was worth +0.10pp pooled and
+  // shipped on the argument that it made the pods act more human. Most of what
+  // it was carrying was "drafters take removal earlier than its win rate says",
+  // which is now in the column where it belongs.
+  //
+  // `value` TURNS NEGATIVE, and reads correctly rather than oddly: conditioned
+  // on what a table wants, a card whose win rate is HIGHER than its pick order
+  // suggests is one drafters have been shown to under-take. That is the
+  // selection effect in `tableValue.ts` seen from the other side, and the fit
+  // finding it twice, independently, in two tiers, is what says it is real.
+  //
+  // The three structural terms barely move. `laneFit`, `laneFitLate` and
+  // `opennessLate` are within 8% of `table2` in both tiers -- so the lane and
+  // the signal, which is what `human-bots` was actually built to model, were
+  // right all along. What was wrong was the number they multiplied.
+  //
+  // AND THE TOP-1 IS NOT COMPARABLE TO THE ROW ABOVE IT. See the warning under
+  // `FITTED_POLICIES`.
+  table3: [
+    -1.2731, 16.0641, 2.0973, -0.2146, 0.0485, 7.5973, -15.3805, 0.0774, 6.2022, 56.9663,
+  ],
+  sharks3: [
+    -0.8946, 19.4597, 2.1708, -0.018, -0.2211, 7.4686, -15.6604, 0.0787, 6.7252, 56.9451,
+  ],
 };
 
 /**
@@ -376,6 +431,24 @@ export const POD_TEMPERATURE: Record<PodPolicy, number> = {
   sharks: 1,
   table2: 1,
   sharks2: 1,
+  // MEASURED, AND THE ANSWER IS STILL 1.
+  //
+  // `bench-packs --temps` sweeps it against a curve no coefficient was fitted
+  // to. Against the shipped ranking, sharpening helps early and then saturates
+  // -- pick-8 survival goes 10% to 7% between t=1 and t=0.25 against a real 1%
+  // -- while the error over every card gets WORSE, 0.900 to 0.995. Sharpening a
+  // wrong ranking only makes a pod more certain about the wrong card.
+  //
+  // With the ranking fixed the sweep is tighter and still lands on 1. t=1.3
+  // tracks the first four picks slightly better (56/32/19 against a real
+  // 49/27/16) and costs 0.02 picks on the aggregate. Neither direction pays.
+  //
+  // So the original claim survives its own disproof: the argument for 1 was
+  // wrong -- a logit's residual entropy is not a model of how drafters disagree
+  // -- and 1 is right anyway, now for a measured reason instead of an assumed
+  // one.
+  table3: 1,
+  sharks3: 1,
 };
 
 /** How far into the draft this pick is, in [0, 1]. */

@@ -181,7 +181,7 @@ export const start = mutation({
     // Only the pods a person may CHOOSE. The schema's union is wider on purpose
     // -- it has to accept the superseded ones a challenge copies forward -- and
     // this is the narrower question: what may a new draft be started as.
-    pod: v.optional(v.union(v.literal("table2"), v.literal("sharks2"))),
+    pod: v.optional(v.union(v.literal("table3"), v.literal("sharks3"))),
   },
   handler: async (ctx, args) => {
     return await startSession(ctx, await requireCaller(ctx), args);

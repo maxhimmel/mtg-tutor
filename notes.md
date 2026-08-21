@@ -431,7 +431,7 @@ It'd be extremely rad to do some deep research, find some blog posts or somethin
 - I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
 - It'd be cool to empower users to move sections where they like
 
-15. Maybe this could be an "issue" too. We keep making changes to the bots and how they pick. Do we have a benchmark or anything to see if the bots get better/worse with these changes? I KNOW we have a BUNCH of data from real life drafters - some of which went 3-0 who I think we refer to as "trophy" drafters or something (I think). So, what if we built real drafting benchmarks based on real data from the best of the best? And not just one, but a comprehensive set from different sets we could test against.
+15. Maybe this could be an "issue" too. We keep making changes to the bots and how they pick. Do we have a benchmark or anything to see if the bots get better/worse with these changes? I KNOW we have a BUNCH of data from real life drafters - some of which went 3-0 who I think we refer to as "trophy" drafters or something (I think). So, what if we built real drafting benchmarks based on real data from the best of the best? And not just one, but a comprehensive set from different sets we could test against. I just want the packs I'm being passed to feel believable - like I'm actually drafting with real humans.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -1061,24 +1061,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-        So when the colour rule moved (decision #23), the app changed and the
-        instrument did not. It went on reporting the old rule's numbers, correctly,
-        with the right imports at the top of the file, and nothing anywhere could
-        have said so. It now calls `packScoringContext` like the mutation does.
+            So when the colour rule moved (decision #23), the app changed and the
+            instrument did not. It went on reporting the old rule's numbers, correctly,
+            with the right imports at the top of the file, and nothing anywhere could
+            have said so. It now calls `packScoringContext` like the mutation does.
 
-        **The second half is worse and is the general form.** The same file printed
-        "the colour terms charged it 0.34pp" under its table, from a filter naming
-        `splash` and `archetype`. That filter was written before the off-colour term
-        existed and nobody widened it -- so the number under a table measuring the
-        off-colour term **excluded the off-colour term**. It read as a healthy small
-        charge and it was a subtotal of the two terms that were not the subject. The
-        true figure was 1.28pp, which is still far too small, which is the finding
-        the instrument was built to surface and had been hiding for four days.
+            **The second half is worse and is the general form.** The same file printed
+            "the colour terms charged it 0.34pp" under its table, from a filter naming
+            `splash` and `archetype`. That filter was written before the off-colour term
+            existed and nobody widened it -- so the number under a table measuring the
+            off-colour term **excluded the off-colour term**. It read as a healthy small
+            charge and it was a subtotal of the two terms that were not the subject. The
+            true figure was 1.28pp, which is still far too small, which is the finding
+            the instrument was built to surface and had been hiding for four days.
 
-        The rule: **a harness must not enumerate what it sums.** Sum everything and
-        exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-        the total by default rather than by somebody remembering. An allowlist in an
-        instrument is a silent undercount waiting for the next field.
+            The rule: **a harness must not enumerate what it sums.** Sum everything and
+            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+            the total by default rather than by somebody remembering. An allowlist in an
+            instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as

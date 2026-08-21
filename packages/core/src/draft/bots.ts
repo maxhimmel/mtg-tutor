@@ -146,16 +146,22 @@ export type PodPolicy = "legacy" | StoredPod;
  * something can walk is what turns "remember to add a golden hash" into a red
  * test on the day the pod is added.
  */
-export const STORED_PODS = ["table", "sharks", "table2", "sharks2"] as const;
+export const STORED_PODS = ["table", "sharks", "table2", "sharks2", "table3", "sharks3"] as const;
 export type StoredPod = (typeof STORED_PODS)[number];
 
 /**
  * What a new draft may be started AS, which is a smaller set and has to be.
  *
- * `table` and `sharks` are superseded fits. They stay in `PodPolicy` and in the
- * schema forever, because the drafts that recorded them replay against them and
- * would strand otherwise -- but nobody should be offered one, any more than
- * anybody is offered `legacy`.
+ * `table`, `sharks`, `table2` and `sharks2` are superseded fits. They stay in
+ * `PodPolicy` and in the schema forever, because the drafts that recorded them
+ * replay against them and would strand otherwise -- but nobody should be
+ * offered one, any more than anybody is offered `legacy`.
+ *
+ * `OfferedPod` STAYS TWO WIDE, and that is a constraint rather than a
+ * coincidence: `PodToggle` in the web app is a two-way switch that finds "the
+ * other one" by taking the first entry that is not the current one. A third
+ * offered pod would silently turn it into a broken toggle whose aria-label
+ * lies. Widening this means rewriting that control first.
  *
  * SEPARATE FROM `StoredPod` BECAUSE `challenges.accept` PROVES THEY DIFFER. It
  * deals the friend a session carrying the CHALLENGER's pod, whatever that was,
@@ -164,7 +170,7 @@ export type StoredPod = (typeof STORED_PODS)[number];
  * which is exactly the thing this type must not permit anyone to choose. One
  * type doing both jobs made that a typecheck error, which is how this was found.
  */
-export type OfferedPod = Extract<PodPolicy, "table2" | "sharks2">;
+export type OfferedPod = Extract<PodPolicy, "table3" | "sharks3">;
 
 /**
  * The pod a new draft gets when nobody says otherwise.
@@ -174,16 +180,21 @@ export type OfferedPod = Extract<PodPolicy, "table2" | "sharks2">;
  * other a different table -- the CLI is not a lesser client. It began that way
  * and the CLI got `legacy` while the browser got this.
  *
- * `table2` and not `sharks2`: a pod fitted to 3-0 drafters sends the signals a
+ * `table3` and not `sharks3`: a pod fitted to 3-0 drafters sends the signals a
  * strong table sends, and reading those is not the skill anybody drafting here
  * is trying to practise. Harder to learn from, not just harder to beat.
  *
- * The `2` is a storage key and never reaches a person -- the web app's `PODS`
+ * The `3` is a storage key and never reaches a person -- the web app's `PODS`
  * still labels this one "A real table", which is what it has always been called
  * and what it still is. A refit gets a new NAME because a name is frozen the
  * moment a session records it; it does not get a new identity.
+ *
+ * MOVING THIS IS THE MIGRATION, and there is no other one. `sanitize` in the web
+ * app drops a `pod` that is no longer offered, so every browser holding "table2"
+ * in localStorage falls back to whatever this says. Drafts already taken keep
+ * their own stored pod and replay against it, untouched.
  */
-export const DEFAULT_POD: OfferedPod = "table2";
+export const DEFAULT_POD: OfferedPod = "table3";
 
 /**
  * Gumbel noise, which is what turns an argmax into a draw from the softmax.

@@ -35,7 +35,7 @@ describe("the fitted pods' fingerprint", () => {
         "needs re-ingesting and no existing draft should be badged stale.",
         "",
       ].join("\n"),
-    ).toBe("4wnqdh");
+    ).toBe("1i1u7vn");
   });
 
   // Guards the guard. A fingerprint that cannot notice the two changes it exists
