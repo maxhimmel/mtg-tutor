@@ -19,13 +19,41 @@
 // be guessed.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tableValues } from "@mtg-tutor/core";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = `${HERE}/../../../../datasets`;
 
 const cachePath = (setCode, format) => `${CACHE_DIR}/cards.${setCode}.${format}.json`;
+
+// `tableValue` is DERIVED HERE rather than trusted off the cache, and that is
+// the opposite of how `value` is treated one line down.
+//
+// The cache above is written once and never refetched -- `existsSync` returns it
+// forever -- so a field added to the projection below reaches these files only
+// for a set nobody has cached yet. Eighteen of them are already on disk. Left
+// alone, every fitting and benchmark run would go on reading cards with no
+// `tableValue` after the re-ingest that gave the app one, and would fit weights
+// against a column the bots do not have. That is the train/serve skew
+// `policy.ts` opens by warning about, arriving through a disk cache.
+//
+// Recomputing is safe in a way that recomputing `value` would not be: this reads
+// the COMMITTED artifact, the same file `build-set-stats` writes and ingest
+// reads, through the same function ingest calls. There is no deployment in the
+// path and so nothing to drift from. `value` comes off a deployment and can.
+function withTableValue(cards, setCode, format) {
+  const path = resolve(HERE, "..", "..", "data", `${setCode}.${format}.json`);
+  if (!existsSync(path)) return cards;
+  const artifact = JSON.parse(readFileSync(path, "utf8"));
+  const alsa = new Map(artifact.cards.map((c) => [c.name, c.alsa]));
+  const table = tableValues(cards.map((c) => ({ ...c, alsa: alsa.get(c.name) })));
+  return cards.map((c) => {
+    const tv = table.get(c.name);
+    return tv == null ? c : { ...c, tableValue: tv };
+  });
+}
 
 /**
  * The engine half of a set's cards, from disk if it is there.
@@ -36,7 +64,7 @@ const cachePath = (setCode, format) => `${CACHE_DIR}/cards.${setCode}.${format}.
 export async function engineCards(client, api, setCode, format, log = () => {}) {
   const path = cachePath(setCode, format);
   if (existsSync(path)) {
-    return JSON.parse(readFileSync(path, "utf8"));
+    return withTableValue(JSON.parse(readFileSync(path, "utf8")), setCode, format);
   }
 
   const missing = () =>
@@ -75,10 +103,11 @@ export async function engineCards(client, api, setCode, format, log = () => {}) 
     // curated once.
     ...(c.turn === undefined ? {} : { turn: c.turn }),
     ...(c.role === undefined ? {} : { role: c.role }),
+    ...(c.tableValue === undefined ? {} : { tableValue: c.tableValue }),
   }));
 
   mkdirSync(CACHE_DIR, { recursive: true });
   writeFileSync(path, JSON.stringify(cards));
   log(`cached ${cards.length} cards for ${setCode}/${format}`);
-  return cards;
+  return withTableValue(cards, setCode, format);
 }

@@ -100,6 +100,11 @@ export const packedCards = v.object({
   values: v.array(v.number()),
   slots: v.optional(v.array(v.union(packSlot, v.null()))),
   packRates: v.optional(v.array(v.union(v.number(), v.null()))),
+  // Derives nothing from `engineCard` above, so it is the one validator a new
+  // engine field has to be added to by hand -- and forgetting it fails every
+  // `draftPools` write rather than silently dropping a column, which is the
+  // right direction for the mistake to go.
+  tableValues: v.optional(v.array(v.union(v.number(), v.null()))),
 });
 
 export const engineCard = v.object({
@@ -128,6 +133,14 @@ export const engineCard = v.object({
   // validates every stored document: this deploying is the proof that no pool
   // anywhere is still missing one.
   value: v.number(),
+  // What a real table pays for the card, as opposed to what it wins -- see
+  // EngineCard.tableValue for why a win rate cannot answer both.
+  //
+  // Optional, unlike `value` and unlike `turn`/`role`: a pool ingested before
+  // this existed has none, and a pod that reads it falls back to `value` rather
+  // than to zero. That is what lets the schema push land ahead of the re-ingest
+  // instead of needing the table cleared first.
+  tableValue: v.optional(v.number()),
 });
 
 // What a stored pick saw. Identical to `engineCard`, and that is worth saying

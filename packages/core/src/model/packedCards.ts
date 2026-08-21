@@ -43,6 +43,11 @@ export interface PackedCards {
   // from carrying 285 nulls to say so.
   slots?: (PackSlot | null)[];
   packRates?: (number | null)[];
+  // What a real table pays for the card, where it differs from what it wins.
+  // Absent for a pool ingested before `tableValue` existed, and for every card
+  // in a set 17Lands published no pick order for -- both of which a pod reading
+  // it falls back to `values` for, rather than to nothing.
+  tableValues?: (number | null)[];
 }
 
 const someDefined = <T>(xs: (T | null)[]): boolean => xs.some((x) => x !== null);
@@ -50,6 +55,9 @@ const someDefined = <T>(xs: (T | null)[]): boolean => xs.some((x) => x !== null)
 export function packCards(cards: readonly EngineCard[]): PackedCards {
   const slots = cards.map((c) => c.slot ?? null);
   const packRates = cards.map((c) => c.packRate ?? null);
+  // Not `tableValues`, which is the core function that computes these. Shadowing
+  // it here would compile and silently pack the wrong thing.
+  const tableVals = cards.map((c) => c.tableValue ?? null);
 
   return {
     names: cards.map((c) => c.name),
@@ -59,6 +67,7 @@ export function packCards(cards: readonly EngineCard[]): PackedCards {
     values: cards.map((c) => c.value),
     ...(someDefined(slots) ? { slots } : {}),
     ...(someDefined(packRates) ? { packRates } : {}),
+    ...(someDefined(tableVals) ? { tableValues: tableVals } : {}),
   };
 }
 
@@ -84,6 +93,7 @@ export function unpackCards(packed: PackedCards): EngineCard[] {
     ["values", packed.values],
     ["slots", packed.slots],
     ["packRates", packed.packRates],
+    ["tableValues", packed.tableValues],
   ];
   for (const [name, column] of columns) {
     if (column && column.length !== n) {
@@ -96,6 +106,7 @@ export function unpackCards(packed: PackedCards): EngineCard[] {
   return Array.from({ length: n }, (_, i) => {
     const slot = packed.slots?.[i] ?? null;
     const packRate = packed.packRates?.[i] ?? null;
+    const tableValue = packed.tableValues?.[i] ?? null;
     return {
       name: packed.names[i],
       colors: packed.colors[i],
@@ -104,6 +115,7 @@ export function unpackCards(packed: PackedCards): EngineCard[] {
       value: packed.values[i],
       ...(slot === null ? {} : { slot }),
       ...(packRate === null ? {} : { packRate }),
+      ...(tableValue === null ? {} : { tableValue }),
     };
   });
 }

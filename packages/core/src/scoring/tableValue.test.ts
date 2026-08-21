@@ -19,10 +19,13 @@ describe("tableValues", () => {
     expect(out.get("wins most, taken late")).toBe(0.55);
   });
 
-  it("leaves a card with no pick order on its own value", () => {
+  it("says nothing at all about a card with no pick order", () => {
     const cards = [card("rated", 0.60, 2.0), card("never opened", 0.51)];
     const out = tableValues(cards);
-    expect(out.get("never opened")).toBe(0.51);
+    // Absent, not equal-to-value: a stored `tableValue` that was always present
+    // would read the same whether 17Lands had no pick order for the card or the
+    // two orderings simply agreed, which are not the same fact.
+    expect(out.has("never opened")).toBe(false);
     // And the rated card keeps the only value in the ordered spread, which is
     // its own -- an unrated card must not donate its number to the pool.
     expect(out.get("rated")).toBe(0.6);
@@ -35,11 +38,7 @@ describe("tableValues", () => {
   });
 
   it("survives a set with nothing rated", () => {
-    const cards = [card("a", 0.7), card("b", 0.6)];
-    expect([...tableValues(cards).entries()]).toEqual([
-      ["a", 0.7],
-      ["b", 0.6],
-    ]);
+    expect([...tableValues([card("a", 0.7), card("b", 0.6)]).entries()]).toEqual([]);
   });
 });
 

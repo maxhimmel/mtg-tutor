@@ -93,13 +93,17 @@ export interface TableValueInputs {
  * takes survival of the first-pick cards from 100/57/38/26/20/16/13/10 to
  * 100/48/24/12/7/3/2/1 against a real 100/55/33/17/10/5/2/1.
  *
- * A card with no ALSA keeps its own value. Those are basics and cards no logged
- * draft ever opened, and neither is a card the table has an opinion about.
+ * ONLY CARDS WITH A PICK ORDER GET AN ENTRY, and the map is deliberately not
+ * total. Those without are basics and cards no logged draft ever opened, and
+ * neither is a card a table has an opinion about -- so the honest answer is
+ * nothing rather than a copy of `value`. Every reader falls back to `value`
+ * anyway (`policyFeatures` does it inline), and the difference shows up where it
+ * matters: an absent `tableValue` on a stored card means "17Lands published no
+ * pick order for this", and cannot be confused with "the two orderings agreed".
  */
 export function tableValues(cards: readonly TableValueInputs[]): Map<string, number> {
   const out = new Map<string, number>();
   const ordered = cards.filter((c) => c.alsa != null);
-  for (const c of cards) out.set(c.name, c.value);
   if (ordered.length === 0) return out;
 
   // Ascending ALSA is descending desirability: alsa 0.4 means the card is gone

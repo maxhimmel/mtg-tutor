@@ -30,6 +30,24 @@ describe("packCards / unpackCards", () => {
     const packed = packCards([card(), card({ name: "Shock" })]);
     expect(packed.slots).toBeUndefined();
     expect(packed.packRates).toBeUndefined();
+    expect(packed.tableValues).toBeUndefined();
+  });
+
+  // The column a pod picks by. A pool stored before it existed has none, and a
+  // deal packed from that pool has to come back with the field ABSENT rather
+  // than zero -- `policyFeatures` reads `tableValue ?? value`, so a zero here
+  // would tell every bot the table wants nothing, uniformly, and the pod would
+  // deal from the fallback while looking like it was working.
+  it("round-trips the pick-order column, absent where a card has none", () => {
+    const packed = packCards([
+      card({ name: "Cyclonic Rift", value: 0.5702, tableValue: 0.6753 }),
+      card({ name: "Plains", value: 0 }),
+    ]);
+    expect(packed.tableValues).toEqual([0.6753, null]);
+
+    const [rift, plains] = unpackCards(packed);
+    expect(rift.tableValue).toBe(0.6753);
+    expect(plains).not.toHaveProperty("tableValue");
   });
 
   it("keeps an optional column that some cards use, and leaves the others absent", () => {
