@@ -79,12 +79,20 @@ export function LineNotTaken({
 
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-sm text-base-content/60">What if you had taken</span>
-        {options.map((card, i) => (
+        {options.map((card) => (
           <button
             key={card.name}
             type="button"
             className={`btn btn-xs ${asked === card.name ? "btn-primary" : "btn-outline"}`}
-            onClick={() => onAsk(card.name, i === 0 ? "graded" : "chosen")}
+            onClick={() =>
+              // By IDENTITY, never by position. `candidates` only leads with the
+              // graded card when it is in the list at all, and it is not
+              // whenever the player TOOK it -- the common good-pick case. Keyed
+              // on the index, every one of those picks reported the pack's top
+              // win rate as "graded", which is the one value this field exists
+              // to tell apart from the others.
+              onAsk(card.name, card.name === pick.contextBestName ? "graded" : "chosen")
+            }
           >
             {card.name}
           </button>
@@ -106,13 +114,15 @@ export function LineNotTaken({
       )}
 
       {state && state !== "pending" && (
-        <div className="mt-2 flex flex-col gap-1">
+        // A button press that swaps a spinner for a paragraph is silent to a
+        // screen reader, and this one is the whole answer. Same treatment the
+        // draft's own after-action panel and the feedback box already use.
+        <div className="mt-2 flex flex-col gap-1" aria-live="polite">
           {state.reach === 0 ? (
             <p className="text-sm leading-relaxed">
               <span className="font-semibold">Nothing downstream changed.</span> All{" "}
-              {state.of} of your later packs came out exactly the same
-              {asked ? <> with {asked} in your pool instead</> : null} — the other seats took
-              the same cards regardless.
+              {state.of} of your later packs came out exactly the same with {asked} in
+              your pool instead — the other seats took the same cards regardless.
             </p>
           ) : (
             <p className="text-sm leading-relaxed">

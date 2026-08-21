@@ -107,13 +107,18 @@ function TermBar({ term, max }: { term: ValueTerm; max: number }) {
  * 4pp charge is a 4% one.
  *
  * ABSENT AND EMPTY ARE DIFFERENT ANSWERS, which is the only real subtlety here.
- * `terms: []` out of `scorePick` means either "no scoring context was supplied"
- * or "context was supplied and moved nothing", and those are trap #9's two
- * cases -- a gap and an answer wearing one shape. The live board always supplies
- * a context, so `[]` there is genuinely "nothing moved it". A stored row written
- * before the field existed has no terms at all, and `undefined` is how that
- * arrives, so the two are told apart here rather than collapsed by a `?? []`
- * somewhere upstream.
+ * `[]` means the deck made no difference to this card -- which is the ordinary
+ * answer at the first pick of a draft, where `commitment` is 0 by construction
+ * and zeroes all three colour terms. `undefined` means the row never recorded
+ * any, which is now only true of rows written before `recordPick` stopped
+ * dropping the empty case.
+ *
+ * That is worth stating because it was FALSE when this component was written.
+ * `recordPick` omitted `terms` whenever the array was empty -- a real saving in
+ * bytes and a total loss of the distinction -- so every stored `[]` arrived as
+ * `undefined` and this panel told people their P1P1 predated a field it did not.
+ * Trap #9 in the writer, caught in review. The read side here was always right;
+ * it was being lied to.
  */
 export function ScoreBreakdown({
   base,
@@ -126,7 +131,12 @@ export function ScoreBreakdown({
   total: number;
   terms: readonly ValueTerm[] | undefined;
 }) {
-  if (terms === undefined) {
+  // `== null`, catching undefined and null alike. Convex strips an unset optional
+  // and hands back undefined, but the field crosses a serialisation boundary and
+  // the test harness spells the same absence as null -- and the branch below this
+  // one reads `.length`, so guessing wrong here is a crash rather than a wrong
+  // sentence.
+  if (terms == null) {
     return (
       <p className="text-xs leading-relaxed text-base-content/50">
         This pick was recorded before the score kept its working, so there is nothing to

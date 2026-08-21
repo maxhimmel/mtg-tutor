@@ -609,8 +609,12 @@ export function lineExplored(p: {
    * Whether the card asked about is the one the grade was computed against, or
    * one the reader went looking for themselves.
    *
-   * The default is one click and any other card is several, so these are
-   * different amounts of interest and averaging them hides the engaged half.
+   * Decided by which card it IS -- `contextBestName` -- and never by where its
+   * button sits. The card the grade was computed against is the one the rest of
+   * the screen has already made a claim about, so asking about it is agreeing to
+   * a question the app posed; asking about any other card is the reader posing
+   * their own. Those are different amounts of interest and averaging them hides
+   * the engaged half.
    */
   card: "graded" | "chosen";
   /**
