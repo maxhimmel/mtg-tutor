@@ -13,6 +13,7 @@ import {
   type DiffSide,
 } from "./diff.js";
 import type { ColorCode, EngineCard, PoolCard } from "../model/card.js";
+import type { PodPolicy } from "./bots.js";
 
 /**
  * A seed whose pod actually comes apart when the human diverges.
@@ -34,8 +35,8 @@ const DIVERGE = 0;
  * else, which is how two people end up in the same seat of two pods that agree
  * about almost everything -- the case the whole feature has to survive.
  */
-function draft(divergeAt?: number): DiffSide[] {
-  const engine = new DraftEngine(dealDraft(fakeSet(), SEED), botRng(SEED));
+function draft(divergeAt?: number, pod: PodPolicy = "legacy"): DiffSide[] {
+  const engine = new DraftEngine(dealDraft(fakeSet(), SEED), botRng(SEED), pod);
   const sides: DiffSide[] = [];
 
   for (let i = 0; !engine.isComplete(); i++) {
@@ -193,7 +194,7 @@ describe("forkImpact", () => {
   const names = mine.map((s) => s.pickedName);
 
   it("reports nothing changed when the swap is the same card", () => {
-    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, names[DIVERGE]);
+    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, names[DIVERGE], "legacy");
     expect(impact.reach).toBe(0);
     expect(impact.delay).toBeUndefined();
   });
@@ -202,7 +203,7 @@ describe("forkImpact", () => {
     const theirs = draft(DIVERGE)[DIVERGE].pickedName;
     expect(theirs).not.toBe(names[0]);
 
-    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, theirs);
+    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, theirs, "legacy");
     expect(impact.reach).toBeGreaterThan(0);
     expect(impact.of).toBeGreaterThan(impact.reach - 1);
   });
@@ -212,7 +213,44 @@ describe("forkImpact", () => {
     // round. A delay of 1 would mean the pack in front of you changed because
     // of what you just took out of it, which is not how passing works.
     const theirs = draft(DIVERGE)[DIVERGE].pickedName;
-    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, theirs);
+    const impact = forkImpact(dealDraft(set, SEED), SEED, names, DIVERGE, theirs, "legacy");
     expect(impact.delay).toBeGreaterThanOrEqual(8);
+  });
+
+  /**
+   * The pod is an input, and for a fortnight it was a default.
+   *
+   * Every test above plays `legacy` and asks about `legacy`, so all three stayed
+   * green through the whole life of the bug -- trap #4, a battery that cannot
+   * notice the thing it exists to catch. `DEFAULT_POD` is `table2`, so the case
+   * that was actually shipping is the one nothing here covered.
+   *
+   * Both of these fail without the pod parameter: the first because the deal
+   * would be walked by the wrong bots and truncate on a name they had taken,
+   * the second because that truncation used to return `of: 0` instead of saying
+   * anything.
+   */
+  describe("the pod it is replayed under", () => {
+    const podded = draft(undefined, "table2");
+    const poddedNames = podded.map((s) => s.pickedName);
+
+    it("measures a table2 draft when it is told the draft was table2", () => {
+      const theirs = draft(DIVERGE, "table2")[DIVERGE].pickedName;
+      const impact = forkImpact(dealDraft(set, SEED), SEED, poddedNames, DIVERGE, theirs, "table2");
+
+      // The denominator is the point: every later pack was reachable, which is
+      // what a walk that ran to the end of the draft looks like.
+      expect(impact.of).toBe(poddedNames.length - DIVERGE - 1);
+    });
+
+    it("refuses to answer about a draft it cannot replay", () => {
+      // Same draft, wrong pod. The old behaviour was a confident `reach: 0` --
+      // "this pick changed nothing" -- from a walk that stopped after a handful
+      // of picks. Loud is the only safe direction here, and challenges.ts
+      // catches it into the reader-facing "weights unavailable".
+      expect(() =>
+        forkImpact(dealDraft(set, SEED), SEED, poddedNames, DIVERGE, poddedNames[DIVERGE], "legacy"),
+      ).toThrow(/diverged from the draft/);
+    });
   });
 });

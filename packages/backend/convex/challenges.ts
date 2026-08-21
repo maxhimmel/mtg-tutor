@@ -447,12 +447,23 @@ export const forkImpacts = query({
     try {
       const { deal } = await dealFor(ctx, mine);
       return forks.map((f) =>
-        forkImpact(deal, challenge.seed, mineSession.pickedNames, f.pickIndex, f.theirs),
+        forkImpact(
+          deal,
+          challenge.seed,
+          mineSession.pickedNames,
+          f.pickIndex,
+          f.theirs,
+          // Off the session, where absent means the bot that was running before
+          // pods existed -- the same reading `replayFor` takes. Passing the
+          // wrong one here does not fail, it answers about a different draft.
+          mineSession.pod ?? "legacy",
+        ),
       );
     } catch {
-      // The set has moved since this was drafted, so the counterfactual cannot
-      // be run. Not an error the reader can act on -- the diff beside it is
-      // still entirely valid, because it never replayed.
+      // The set has moved since this was drafted, or the replay diverged from
+      // the picks, so the counterfactual cannot be run. Not an error the reader
+      // can act on -- the diff beside it is still entirely valid, because it
+      // never replayed.
       return null;
     }
   },

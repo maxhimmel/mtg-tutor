@@ -1,6 +1,7 @@
 import type { ColorCode, EngineCard, PoolCard } from "../model/card.js";
 import { colorKey } from "../scoring/context.js";
 import { cardValue } from "../scoring/value.js";
+import type { PodPolicy } from "./bots.js";
 import { botRng, type Deal } from "./deal.js";
 import { DraftEngine } from "./engine.js";
 
@@ -275,8 +276,9 @@ function walk(
   deal: Deal,
   seed: number,
   choose: (pack: EngineCard[], index: number) => EngineCard | undefined,
+  pod: PodPolicy,
 ): string[][] {
-  const engine = new DraftEngine(deal, botRng(seed));
+  const engine = new DraftEngine(deal, botRng(seed), pod);
   const packs: string[][] = [];
 
   for (let i = 0; !engine.isComplete(); i++) {
@@ -316,6 +318,18 @@ const sameNames = (a: string[], b: string[]): boolean =>
  * drawing exactly one number per card in hand to keep a shared stream in step;
  * see deal.ts. That rule still holds and is still worth keeping, but breaking it
  * can no longer silently turn these weights into noise.
+ *
+ * `pod` IS NOT OPTIONAL, and the default it used to take is why. The deal fixes
+ * which cards are in every booster; the pod decides which of them the bots take,
+ * and therefore what wheels back to you. Replayed under the wrong policy the
+ * baseline stops being the draft that was played -- so `delay`, which claims to
+ * count picks until a pack YOU SAW changed, would be measuring somebody else's
+ * packs. `walk` defaulted to "legacy" while every draft since pods shipped is
+ * dealt `table2`, and the baseline then broke on the first name the wrong bots
+ * had taken: measured over 200 table2 drafts, `of` came back 0.2 where 36 was
+ * available and `reach` was 0.0 every single time. Trap #9, with the added sting
+ * that a zero here reads as "this pick changed nothing" -- the most interesting
+ * answer the function can give, arrived at by not running.
  */
 export function forkImpact(
   deal: Deal,
@@ -323,19 +337,44 @@ export function forkImpact(
   pickedNames: readonly string[],
   forkIndex: number,
   theirCardName: string,
+  pod: PodPolicy,
 ): ForkImpact {
   const byName = (pack: EngineCard[], name: string) => pack.find((c) => c.name === name);
   const bestOf = (pack: EngineCard[]) =>
     pack.reduce((best, c) => (cardValue(c) > cardValue(best) ? c : best), pack[0]);
 
-  const baseline = walk(deal, seed, (pack, i) => byName(pack, pickedNames[i]));
+  // Loud rather than short. Running out of NAMES is an unfinished draft and an
+  // honest place to stop; a name that is not in the pack it was taken from means
+  // this replay is not the draft that was played, and every number below would
+  // be about a pod that never dealt to anyone. The one caller catches it.
+  const baseline = walk(
+    deal,
+    seed,
+    (pack, i) => {
+      if (i >= pickedNames.length) return undefined;
+      const card = byName(pack, pickedNames[i]);
+      if (!card) {
+        throw new Error(
+          `forkImpact: "${pickedNames[i]}" is not in the pack at pick ${i}. ` +
+            `The replay has diverged from the draft -- check the pod ("${pod}") and the deal.`,
+        );
+      }
+      return card;
+    },
+    pod,
+  );
 
-  const counterfactual = walk(deal, seed, (pack, i) => {
-    if (i === forkIndex) return byName(pack, theirCardName) ?? bestOf(pack);
-    // Their card is gone from your pool now, so your real later pick is usually
-    // still there; when it is not, carry on the way the pod itself would.
-    return byName(pack, pickedNames[i]) ?? bestOf(pack);
-  });
+  const counterfactual = walk(
+    deal,
+    seed,
+    (pack, i) => {
+      if (i === forkIndex) return byName(pack, theirCardName) ?? bestOf(pack);
+      // Their card is gone from your pool now, so your real later pick is usually
+      // still there; when it is not, carry on the way the pod itself would.
+      return byName(pack, pickedNames[i]) ?? bestOf(pack);
+    },
+    pod,
+  );
 
   const upTo = Math.min(baseline.length, counterfactual.length);
   let delay: number | undefined;
