@@ -29,12 +29,27 @@
 // the card's own share at pick 1 gives survival: of the packs this card was
 // opened in, what fraction still hold it at pick k.
 //
-// Normalising by the card's own pick-1 share is what makes the two sides
-// comparable at all. Our pack model deals a card at its observed opened-rate but
-// not exactly -- bonus sheets in particular are dealt evenly where the real
-// sheet is rarity-weighted -- so raw presence differs for reasons that have
-// nothing to do with the bots. Survival divides that out: it asks only how long
-// a card lasts once it is in a pack, which is the question about the pod.
+// Normalising by the card's own pick-1 share is what keeps this a question
+// about the BOTS. Any difference in how often our packs open a card at all --
+// a pack model drifting from the observed rates, a bonus sheet dealt on the
+// wrong weights -- divides straight out, and what is left is only how long the
+// card lasts once it is there.
+//
+// The presence row printed under it is the one that does NOT divide that out,
+// and the pair is worth keeping for exactly that reason. Read together they
+// separate "the pod passes bombs" from "we deal too many bombs". On sos a fresh
+// pack holds a first-pick card 48% of the time for real and 47% for us, so the
+// pack model is not the story here -- and an earlier reading of this file said
+// it was, off a `pick_number` that turned out to be zero-indexed.
+//
+// `pick_number` IS ZERO-INDEXED, AND GETTING THAT WRONG IS SILENT
+//
+// A fresh 14-card booster is `pick_number` 0, not 1. Read naively against a
+// simulation that counts from one, every real column lands one pick early: the
+// real table looks a pick faster than it is and the pod looks worse than it is,
+// and nothing about the output says so -- the curves are the right shape and
+// both sides still end at zero. It was caught by noticing that "real pick 1"
+// packs averaged exactly 13.00 cards.
 //
 // THE 17LANDS SIDE IS A REAL EIGHT-HUMAN TABLE
 //
@@ -114,6 +129,13 @@ const isBomb = (card) => (realAlsa.get(card.name) ?? 99) <= BOMB_ALSA;
 //
 // Cards the candidate has no number for keep their shipped value untouched, so
 // the permutation stays inside the subset the candidate can speak about.
+//
+// BOTH RAW-POWER COLUMNS MOVE TOGETHER. A pod reads `value` or `tableValue`
+// depending on which generation it is, and `BotMemory` builds its colour lane
+// out of `value` whichever pod is running -- so remapping one and not the other
+// would ask a `table3` bot to rank by the candidate while committing to colours
+// by something else, and the run would price a chimera. `--ranks` means "what if
+// the pod thought THIS was how good cards are", and that has to be all of it.
 const RANKINGS = {
   // The control.
   shipped: null,
@@ -129,6 +151,10 @@ const RANKINGS = {
   // Improvement when drawn: the within-deck contrast that is supposed to undo
   // the deck-quality confound in raw win rate. Measured, and it is worse.
   iwd: (c) => c.iwd ?? null,
+  // Raw win rate, which is what every pod before `table3` picked by. Against a
+  // pod that reads `tableValue` this is the control that says how much the
+  // column is worth, by taking it away.
+  gih: (c) => c.gihWr ?? null,
   // What a pick actually asks -- will this make my deck, and how much does it
   // win when it does -- as the product of the two halves rather than only the
   // second. Centred at the format baseline so a card that maindecks always and
@@ -151,7 +177,9 @@ function ranked(name) {
   const values = movable.map((c) => c.value).sort((a, b) => b - a);
   const order = [...movable].sort((a, b) => score.get(b.name) - score.get(a.name));
   const remap = new Map(order.map((c, i) => [c.name, values[i]]));
-  return cache.cards.map((c) => (remap.has(c.name) ? { ...c, value: remap.get(c.name) } : c));
+  return cache.cards.map((c) =>
+    remap.has(c.name) ? { ...c, value: remap.get(c.name), tableValue: remap.get(c.name) } : c,
+  );
 }
 
 // ---------------------------------------------------------------- counting
@@ -214,7 +242,9 @@ const real = tally();
 let realDrafts = 0;
 for (const draft of cache.drafts) {
   realDrafts++;
-  for (const row of cache.rows(draft)) observe(real, row.pickNo, row.pack);
+  // +1: see the header. `pick_number` 0 is the fresh pack, and this file's pick
+  // numbers are the ones a person sees on the screen.
+  for (const row of cache.rows(draft)) observe(real, row.pickNo + 1, row.pack);
 }
 const maxPick = real.packs.length - 1;
 
