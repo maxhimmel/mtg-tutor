@@ -1011,7 +1011,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           onDragEnd={onDragEnd}
           onDragCancel={endDrag}
         >
-          <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] min-[1440px]:grid-cols-[minmax(0,1fr)_684px]">
+          <div className="relative isolate grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] wide:grid-cols-[minmax(0,1fr)_684px]">
             {/* The set's mark, stamped on the board the way it is stamped on every
                 card in the pack: oversized and sitting behind the pack rather than
                 beside it. Quiet enough at 5% to be chrome, until the sheen crosses
@@ -1034,7 +1034,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
               aria-hidden
               className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
             >
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)] min-[1440px]:left-[calc(50vw-354px)]">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 lg:left-[calc(50vw-192px)] wide:left-[calc(50vw-354px)]">
                 {/* Two and a half rows of cards tall, measured rather than
                     guessed: the pack's own grid, dealt one item two and a half
                     cards tall (488x680 is a card, so 488x1700 is two and a half of
@@ -1045,7 +1045,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                     sum with the wider rail: 684 (rail) + 24 (gap) + 48 (the two
                     px-6 gutters). */}
                 <div
-                  className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)] min-[1440px]:w-[calc(min(1500px,100vw)-756px)]`}
+                  className={`${PACK_GRID} invisible w-[calc(min(1500px,100vw)-432px)] wide:w-[calc(min(1500px,100vw)-756px)]`}
                 >
                   <span style={{ aspectRatio: "488 / 1700" }} />
                 </div>
@@ -1195,6 +1195,13 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
                 over the exact minimum so a resize a pixel either side of the
                 switch cannot flip the dim to full-bleed.
 
+                `wide:` is a NAMED breakpoint (globals.css defines it at 90rem)
+                and not the `min-[1440px]:` arbitrary variant this was written
+                with. Tailwind emits arbitrary min-width variants ahead of the
+                named ones, so that spelling lost the cascade to `lg:` on the
+                grid above at every width it was supposed to win, and the rail
+                was sized 684px inside a 360px track.
+
                 300px and 360px, not two equal columns. 360 is unchanged from the
                 single-column rail -- PicksColumn's placards (CardPlacard.tsx's
                 NATURAL_W) already use nearly all of that width once the bench
@@ -1206,7 +1213,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
             <aside
               data-preview-edge
               inert={standing !== undefined}
-              className="flex flex-col gap-4 min-[1440px]:grid min-[1440px]:grid-cols-[300px_360px] min-[1440px]:items-start min-[1440px]:gap-6"
+              className="flex flex-col gap-4 wide:grid wide:grid-cols-[300px_360px] wide:items-start wide:gap-6"
             >
               <Panel title="Last pick" bodyClassName="gap-3">
                 {lastView ? (

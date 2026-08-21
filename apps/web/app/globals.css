@@ -56,6 +56,25 @@
 @theme {
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  /* The width at which the draft board's rail splits into two columns.
+     
+     A NAMED breakpoint rather than the `min-[1440px]:` arbitrary variant it
+     replaces, and the difference is not style. Tailwind emits every arbitrary
+     `min-[…]` variant in a block BEFORE the named-breakpoint blocks, so at
+     1440px `min-[1440px]:grid-cols-[…684px]` and `lg:grid-cols-[…360px]` both
+     matched, same specificity, and the `lg:` rule -- being later in the sheet --
+     won. The rail was told to be 684px wide inside a 360px track and hung 324px
+     of the picks column off the right of the screen.
+     
+     Named breakpoints sort by their own value, so `wide` lands after `lg` and
+     wins. 90rem is 1440px, which also puts it unambiguously between the stock
+     `xl` (80rem) and `2xl` (96rem) rather than relying on a px/rem comparison.
+     
+     Why 1440 at all is on the `<aside>` in DraftBoard.tsx: it is the narrowest
+     width at which `useRailEdge` still agrees a rail beside the pack counts as
+     one. */
+  --breakpoint-wide: 90rem;
 }
 
 /* The card tile keeps MTG's fixed card proportions; nothing in daisyUI/Tailwind
