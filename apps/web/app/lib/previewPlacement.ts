@@ -47,13 +47,17 @@ export interface Viewport {
   // preview covering the thing you are drafting by, but a layout that stacks
   // that panel below the board (narrow viewports) has to fall back to the
   // viewport rather than clamp the preview to nothing.
+  //
+  // SOFT, and `place` says where it bends: a wall may cost the block a position
+  // and it may cost it a token, but it may not cost the card a side of itself.
   wall: number | null;
 }
 
 export interface Placement {
   // One x per face that fits, in the order they were asked for, and SHORTER
   // than that list when they do not all fit -- the front is what the player
-  // pointed at, so everything after it yields to the viewport in turn.
+  // pointed at, so everything after it yields in turn: the card's other side to
+  // the page, and a token to whichever of the page and the wall comes first.
   lefts: number[];
   top: number;
   // The tallest face that is actually being drawn. A Battle is a landscape
@@ -80,10 +84,28 @@ function onScreen(anchor: Anchor, viewport: Viewport): boolean {
 }
 
 /**
- * `faces` is the front, then whatever else is worth drawing beside it -- a back,
- * and the tokens the card makes. Ordered by claim on the space: the front is
- * what the player pointed at and is never dropped, and each one after it is
- * taken only if the whole of it still fits between the anchor and the wall.
+ * `sides` is the card as it is printed -- the front, and the back where there is
+ * one. `tokens` is what that card makes, drawn beside it. Both are ordered by
+ * claim on the space: the front is what the player pointed at and is never
+ * dropped, and each box after it is taken only if the whole of it still fits.
+ *
+ * THEY ARRIVE APART BECAUSE THEY ARE MEASURED AGAINST DIFFERENT EDGES.
+ *
+ * A token yields to the wall. It is another card, it is behind the card's own
+ * sides in the queue, and the panel names every token whether or not there was
+ * room to draw one -- so a token that does not fit is a loss the screen still
+ * reports.
+ *
+ * A side does not yield to the wall. It is THIS card, nothing else on the screen
+ * says what the other half of it is, and the wall is a preference the page
+ * stated rather than an edge the page has. Letting it swallow a back face makes
+ * a wider window show less than a narrower one, which is what the draft board's
+ * two-column rail did the day it shipped: the rail went from 360px to 684px, its
+ * left edge came 324px in, and between 1440px and roughly 1812px the room left
+ * of it dropped below the 652px a front and a back need side by side. So the
+ * block is allowed past the wall to keep a side -- by as little as it needs,
+ * because it is still pushed as far left as the page allows first -- and the
+ * rail gives up its left-hand margin rather than the card giving up its back.
  *
  * Null means there is nowhere to put it, which is the caller's cue to close.
  */
@@ -91,11 +113,13 @@ export function place(
   anchor: Anchor,
   viewport: Viewport,
   wantsPanel: boolean,
-  faces: Box[],
+  sides: Box[],
+  tokens: Box[] = [],
 ): Placement | null {
+  const faces = [...sides, ...tokens];
   if (faces.length === 0 || !onScreen(anchor, viewport)) return null;
 
-  const right =
+  const wall =
     viewport.wall != null && viewport.wall > anchor.right ? viewport.wall : viewport.width;
 
   // How much of the page the block may take. The panel's share is subtracted
@@ -115,19 +139,24 @@ export function place(
   // whether or not there was room to draw it". The panel is the half that can
   // report the loss, so it cannot be the half that is lost first.
   const forPanel = wantsPanel ? PANEL_W + GAP : 0;
-  const room = right - GAP * 2 - forPanel;
+  const roomTo = (edge: number) => edge - GAP * 2 - forPanel;
 
   // How many fit, decided before the horizontal placement because everything
   // below positions against the block as a whole. Measured face by face rather
   // than as a multiple of PREVIEW_W, because a Battle's front is landscape, its
   // back is not, and a token is a third width again.
   //
-  // The front is exempt: it is what the player pointed at and is never dropped,
-  // so a panel is what yields when even the card alone cannot make room for
-  // both -- which is what `panelLeft` being null still means.
+  // The front is exempt from all of it: it is what the player pointed at and is
+  // never dropped, so a panel is what yields when even the card alone cannot
+  // make room for both -- which is what `panelLeft` being null still means. The
+  // rest of the card's sides answer to the page, and only the tokens to the
+  // wall; see the note above the signature for why those are different edges.
   let width = faces[0].w;
   let shown = 1;
-  while (shown < faces.length && width + GAP + faces[shown].w <= room) {
+  while (
+    shown < faces.length &&
+    width + GAP + faces[shown].w <= roomTo(shown < sides.length ? viewport.width : wall)
+  ) {
     width += GAP + faces[shown].w;
     shown += 1;
   }
@@ -137,9 +166,21 @@ export function place(
   // The block's own right-hand limit, with the panel's side already taken out
   // of it. `fits` is false when the page cannot hold both, and then the panel
   // is what goes -- the image is what the player pointed at and still wins.
+  //
+  // The limit is the wall's while the wall can hold the whole arrangement, and
+  // the page's once it cannot. Measuring `fits` against the wall in that second
+  // case would answer a question nobody asked -- the block has already been let
+  // past it to keep a side -- and would drop the stats panel to protect a margin
+  // the block is standing on anyway.
+  const right = GAP + width + forPanel + GAP <= wall ? wall : viewport.width;
   const limit = right - GAP - width;
   const fits = wantsPanel && limit - GAP - PANEL_W >= GAP;
-  const rightmost = fits ? limit - GAP - PANEL_W : limit;
+
+  // Where the block may start, and this one is ALWAYS the wall's, which is what
+  // keeps the overflow to the minimum. A block too wide for the wall gets a
+  // negative rightmost, the clamp below floors it at the left margin, and what
+  // hangs past the wall is exactly the width the extra side needed and no more.
+  const rightmost = wall - GAP - width - (fits ? GAP + PANEL_W : 0);
 
   // Prefer the right of the anchor; flip left when it would overflow. The flip
   // now tests the panel's limit rather than the page's, which is what keeps the
