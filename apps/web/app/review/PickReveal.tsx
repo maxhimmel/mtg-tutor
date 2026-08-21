@@ -19,6 +19,8 @@ import {
   TOOK,
 } from "../components/PickMarks";
 import { pct } from "../lib/format";
+import { LineNotTaken } from "./LineNotTaken";
+import type { Line } from "./useLines";
 import type { ReviewPick } from "./types";
 import type { VerdictState } from "./useVerdicts";
 
@@ -139,6 +141,8 @@ export function PickReveal({
   correct,
   draft,
   onAsk,
+  line,
+  onAskLine,
 }: {
   pick: ReviewPick;
   verdict: VerdictState;
@@ -156,6 +160,11 @@ export function PickReveal({
   // Ask for this one pick's verdict. Only the breakdown passes it -- the
   // walkthrough asks on arrival, so there is nothing there to offer.
   onAsk?: () => void;
+  // The alternate line for this pick, and the way to ask for one. Both come
+  // from the parent because the query is batched across every pick on the
+  // screen -- see useLines. Absent together on any screen not offering it.
+  line?: Line;
+  onAskLine?: (card: string, which: "graded" | "chosen") => void;
 }) {
   const contextBest = pick.contextBestName;
   const shown = useMemo(() => cardsToShow(pick, contextBest, guess), [pick, contextBest, guess]);
@@ -262,6 +271,11 @@ export function PickReveal({
             </div>
           </AiResponse>
         )}
+
+        {/* Last in the column on purpose. The reveal argues about which card was
+            better; this asks what the choice actually DID, which only reads as a
+            question once the argument has been made. */}
+        {onAskLine && <LineNotTaken pick={pick} line={line} onAsk={onAskLine} />}
       </div>
     </div>
   );

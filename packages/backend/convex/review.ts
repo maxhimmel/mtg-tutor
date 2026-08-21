@@ -11,6 +11,7 @@ import {
   pivots,
   splitPool,
   summarizeDraft,
+  forkImpact,
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
 import { z } from "zod";
@@ -20,6 +21,7 @@ import type { Id } from "./_generated/dataModel.js";
 import { api, internal } from "./_generated/api.js";
 import { loadBoard, ownSessions, ownedSession } from "./sessions.js";
 import { cardTextFor } from "./cardText.js";
+import { dealFor } from "./draftPools.js";
 import {
   poolFromLastPick,
   storedPick,
@@ -182,6 +184,64 @@ export const load = query({
         };
       }),
     };
+  },
+});
+
+/**
+ * What one of your own picks would have done to the rest of your draft.
+ *
+ * The single-ply alternate line the seed was stored to keep possible, pointed at
+ * your own review instead of at a challenge. Same function and the same refusal
+ * as `challenges.forkImpacts` -- deliberately, because the two screens make the
+ * same claim and a second implementation of it is a second thing to be wrong.
+ *
+ * SEPARATE FROM `load`, and not folded into it. `load` reads no set document and
+ * no pool row at all (see its comment), which is most of what makes a review
+ * openable at all; this needs the ~45KB deal. Charging every reader of every
+ * review for a counterfactual almost nobody asks for is the `sets.list` mistake
+ * one screen along. Asked for by hand, paid for by hand.
+ *
+ * The forks come in from the client rather than being derived here for the same
+ * reason they do on the challenge: the browser already holds every pack, so it
+ * can name the card being swapped in without this query reading a single row to
+ * find out. It is also what lets a reader ask about ANY card in the pack rather
+ * than only the one the grade named.
+ */
+export const lines = query({
+  args: {
+    sessionId: v.id("draftSessions"),
+    forks: v.array(v.object({ pickIndex: v.number(), theirs: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    const session = await ownedSession(ctx, args.sessionId);
+
+    // A replay apiece, and a caller could otherwise ask for thousands. Forty-two
+    // is every pick in a draft, so nothing legitimate is refused.
+    const forks = args.forks.slice(0, 42);
+    if (forks.length === 0) return [];
+
+    try {
+      const { deal } = await dealFor(ctx, args.sessionId);
+      return forks.map((f) =>
+        forkImpact(
+          deal,
+          session.seed,
+          session.pickedNames,
+          f.pickIndex,
+          f.theirs,
+          // Absent means the bot that was running before pods existed, the same
+          // reading `replayFor` takes. The wrong one here does not fail, it
+          // answers about a draft nobody played.
+          session.pod ?? "legacy",
+        ),
+      );
+    } catch {
+      // Either the boosters were never stored, or the replay diverged from the
+      // picks. Null rather than an empty array: "we did not measure" and "it
+      // changed nothing" are opposite answers and the screen draws them
+      // differently.
+      return null;
+    }
   },
 });
 
