@@ -21,7 +21,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tableValues } from "@mtg-tutor/core";
+import { normalizeName, tableValues } from "@mtg-tutor/core";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CACHE_DIR = `${HERE}/../../../../datasets`;
@@ -47,8 +47,15 @@ function withTableValue(cards, setCode, format) {
   const path = resolve(HERE, "..", "..", "data", `${setCode}.${format}.json`);
   if (!existsSync(path)) return cards;
   const artifact = JSON.parse(readFileSync(path, "utf8"));
-  const alsa = new Map(artifact.cards.map((c) => [c.name, c.alsa]));
-  const table = tableValues(cards.map((c) => ({ ...c, alsa: alsa.get(c.name) })));
+  // NORMALIZED, because ingest matches this way and the two columns have to be
+  // the same column. Keyed on the raw name it silently missed all 36 split and
+  // adventure cards in sos -- "Emeritus of Truce // Swords to Plowshares" and
+  // its kind -- which then fell back to `value` in every fit and benchmark while
+  // the app gave them their real pick order. The fit would have been weighting a
+  // column the bots do not have, which is the exact failure `policy.ts` opens by
+  // warning about.
+  const alsa = new Map(artifact.cards.map((c) => [normalizeName(c.name), c.alsa]));
+  const table = tableValues(cards.map((c) => ({ ...c, alsa: alsa.get(normalizeName(c.name)) })));
   return cards.map((c) => {
     const tv = table.get(c.name);
     return tv == null ? c : { ...c, tableValue: tv };

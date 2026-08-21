@@ -50,6 +50,7 @@
     "typecheck": "tsc --noEmit -p convex/tsconfig.json",
     "validate-pack-model": "node scripts/validate-pack-model.mjs",
     "validate-set-stats": "node scripts/validate-set-stats.mjs",
+    "verify-table-value": "node scripts/verify-table-value.mjs",
     "verify-tiebreak": "node scripts/verify-tiebreak.mjs",
     "wipe-drafts": "node scripts/wipe-drafts.mjs"
   },

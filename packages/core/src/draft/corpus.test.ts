@@ -133,8 +133,8 @@ describe("the fitted pods deal the same way they always have", () => {
     sharks: [2348276992, 3307669095, 166620893],
     table2: [671376058, 488123354, 1009150014],
     sharks2: [1917749292, 500239768, 2941289290],
-    table3: [2084947050, 4035501132, 4250295512],
-    sharks3: [1721068440, 1311214066, 1012923862],
+    table3: [2711786398, 3126148802, 416024865],
+    sharks3: [3556175615, 555810693, 331530055],
   };
 
   for (const [pod, hashes] of Object.entries(GOLDEN) as [StoredPod, number[]][])

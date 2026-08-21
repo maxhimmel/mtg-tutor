@@ -368,24 +368,36 @@ export const FITTED_POLICIES: Record<StoredPod, PolicyWeights> = {
   // WHAT THE FIT DID WITH THEM, WHICH IS THE INTERESTING PART
   //
   //                  table2    table3      sharks2   sharks3
-  //   value           3.3236   -1.2731      3.3956   -0.8946
-  //   valueOpen      43.6123   16.0641     48.0251   19.4597
-  //   laneFit         1.9992    2.0973      2.0645    2.1708
-  //   rare           -0.3877   -0.2146     -0.1621   -0.0180
-  //   rareOpen        1.6652    0.0485      1.3524   -0.2211
-  //   laneFitLate     7.0121    7.5973      6.9176    7.4686
-  //   opennessLate  -13.6627  -15.3805    -13.9007  -15.6604
-  //   removal         0.3557    0.0774      0.3564    0.0787
-  //   tableValue           -    6.2022           -    6.7252
-  //   tableValueOpen       -   56.9663           -   56.9451
+  //   value           3.3236   -1.5932      3.3956   -1.3695
+  //   valueOpen      43.6123   17.1665     48.0251   20.8165
+  //   laneFit         1.9992    2.1109      2.0645    2.1833
+  //   rare           -0.3877   -0.0570     -0.1621    0.1564
+  //   rareOpen        1.6652   -0.3178      1.3524   -0.6309
+  //   laneFitLate     7.0121    7.6196      6.9176    7.4877
+  //   opennessLate  -13.6627  -15.4165    -13.9007  -15.6680
+  //   removal         0.3557    0.0515      0.3564    0.0515
+  //   tableValue           -    5.2458           -    5.6623
+  //   tableValueOpen       -   61.3379           -   61.8967
   //
-  // `rareOpen` COLLAPSES, AND THAT IS THE CONFIRMATION. It went in because
+  // `rareOpen` GOES NEGATIVE, AND THAT IS THE CONFIRMATION. It went in because
   // "humans take rares beyond what their win rate justifies, and they do it from
   // a full pack" -- a real effect, worth +1.67 to the field, and a PATCH over a
   // ranking that was wrong about bombs for the reason `tableValue.ts` sets out.
-  // Told what a table actually wants, the fit has no use for it: +0.05, and
-  // -0.22 for the sharks. A feature that exists only to correct a bad input is
-  // supposed to vanish when the input is fixed, and this one did.
+  // Told what a table actually wants, the fit does not merely stop needing it,
+  // it reverses: -0.32 for the field and -0.63 for the sharks. Rarity out of a
+  // full pack is now a small NEGATIVE once pick order is known, which is the
+  // same shape `value` takes and for the same reason. A feature that exists only
+  // to correct a bad input is supposed to vanish when the input is fixed.
+  //
+  // THESE ARE THE SECOND FIT. The first was run against a `tableValue` that had
+  // been matched to pick order on the raw card name, which silently missed every
+  // split and adventure card -- 36 of them in sos -- so those fell back to
+  // `value` in the fit while the app gave them their real pick order. Refitted
+  // on the corrected column, held-out top-1 went 55.7% to 56.0% and 57.1% to
+  // 57.4%, and `rareOpen` stopped merely collapsing and reversed outright. Safe
+  // to redo in place only because no session had recorded either name yet; a day
+  // later it would have needed `table4`. `verify-table-value` is the check that
+  // would have caught it, and now does.
   //
   // `removal` goes the same way, 0.36 to 0.08 -- it was worth +0.10pp pooled and
   // shipped on the argument that it made the pods act more human. Most of what
@@ -436,10 +448,10 @@ export const FITTED_POLICIES: Record<StoredPod, PolicyWeights> = {
   // AND THE TOP-1 IS NOT COMPARABLE TO THE ROW ABOVE IT. See the warning under
   // `FITTED_POLICIES`.
   table3: [
-    -1.2731, 16.0641, 2.0973, -0.2146, 0.0485, 7.5973, -15.3805, 0.0774, 6.2022, 56.9663,
+    -1.5932, 17.1665, 2.1109, -0.057, -0.3178, 7.6196, -15.4165, 0.0515, 5.2458, 61.3379,
   ],
   sharks3: [
-    -0.8946, 19.4597, 2.1708, -0.018, -0.2211, 7.4686, -15.6604, 0.0787, 6.7252, 56.9451,
+    -1.3695, 20.8165, 2.1833, 0.1564, -0.6309, 7.4877, -15.668, 0.0515, 5.6623, 61.8967,
   ],
 };
 
