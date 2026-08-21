@@ -171,6 +171,21 @@ export const load = query({
           score: rec.score.score,
           isBest: rec.score.isBest,
           onColor: rec.score.onColor,
+          // The score's own working, so the review can show what the board can.
+          // Same reasoning as `defense` below: `storedPicks` has already paid
+          // for the whole document, and four terms plus two numbers is tens of
+          // bytes against a query measured at 262.7KB.
+          //
+          // OFF THE ROW, NOT OFF `rec`. `toRecordedPick` fills `terms` with
+          // `?? []` because `PickScore` requires an array -- which is right for
+          // that type and destroys the one distinction this field carries. A
+          // pick scored with no context and a pick nothing moved both store
+          // `[]`; a pick from before the field existed stores nothing at all,
+          // and only the raw row still knows which of those happened. See
+          // ScoreBreakdown, which draws the two differently.
+          pickedValue: rec.score.pickedValue,
+          pickedContextValue: rec.score.pickedContextValue,
+          terms: row.score.terms,
           // What the player said for this pick BEFORE anything was revealed.
           // Absent on a pick made through the passive flow, which is not a gap
           // to paper over -- a row without one did not go through the ceremony,
