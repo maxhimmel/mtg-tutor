@@ -329,9 +329,20 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     if (!hover) return;
     const { el } = hover;
     const boxes = faces.map((f) => f.box);
+    // The card's own sides lead the list and the tokens follow -- which is how
+    // `faces` is built above -- and `place` is handed them as two lists because
+    // it measures them against different edges: a wall the page nominated may
+    // cost a token its picture, and may not cost the card a side of itself.
+    const sides = boxes.length - drawable.length;
 
     const follow = () => {
-      const next = place(el.getBoundingClientRect(), viewport(), panel, boxes);
+      const next = place(
+        el.getBoundingClientRect(),
+        viewport(),
+        panel,
+        boxes.slice(0, sides),
+        boxes.slice(sides),
+      );
       if (next) setPos(next);
       else hide();
     };
@@ -356,7 +367,7 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
       window.removeEventListener("scroll", follow, { capture: true });
       window.removeEventListener("resize", follow);
     };
-  }, [hover, panel, faces, hide]);
+  }, [hover, panel, faces, drawable, hide]);
 
   // Reported from here rather than from `place`, because the question is how
   // many token pictures a REAL screen had room for and only the placement that

@@ -71,7 +71,7 @@ describe("faces that do not all fit", () => {
 
   it("drops from the tail and never the front", () => {
     const narrow: Viewport = { ...SCREEN, wall: 660 };
-    const at = place(tile(100, 300), narrow, false, [UPRIGHT, UPRIGHT, UPRIGHT])!;
+    const at = place(tile(100, 300), narrow, false, [UPRIGHT], [UPRIGHT, UPRIGHT])!;
     expect(at.lefts).toHaveLength(1);
   });
 
@@ -125,7 +125,7 @@ describe("the keyword panel", () => {
   // naming with it.
   it("keeps its room when a token would otherwise take it", () => {
     const board: Viewport = { width: 1440, height: 900, wall: 1060 };
-    const first = place(tile(40, 300), board, true, [UPRIGHT, UPRIGHT])!;
+    const first = place(tile(40, 300), board, true, [UPRIGHT], [UPRIGHT])!;
     expect(first.panelLeft).not.toBeNull();
   });
 
@@ -137,7 +137,7 @@ describe("the keyword panel", () => {
   it("drops the token rather than the panel on a laptop-width board", () => {
     const laptop: Viewport = { width: 1280, height: 900, wall: 848 };
     for (const at of [40, 300, 560]) {
-      const placed = place(tile(at, 300), laptop, true, [UPRIGHT, UPRIGHT])!;
+      const placed = place(tile(at, 300), laptop, true, [UPRIGHT], [UPRIGHT])!;
       expect(placed.lefts).toHaveLength(1);
       expect(placed.panelLeft).not.toBeNull();
     }
@@ -162,6 +162,53 @@ describe("the keyword panel", () => {
     ])!;
     expect(at.panelLeft).toBeNull();
     expect(at.lefts).toHaveLength(1);
+  });
+});
+
+// The draft board's two-column rail, at the widths where it broke. Splitting the
+// rail took it from 360px to 684px above 1440, which brought its left edge --
+// the wall -- 324px further in, and the room left of it fell below the 652px a
+// front and a back need side by side. A double-faced card in the pack lost its
+// back face on every laptop-width screen, and got it back somewhere north of
+// 1800px where the centred 1500px content leaves a wide enough left margin. A
+// window that is wider showing less is the whole of the report.
+describe("a card with two sides, against a wall that moved in", () => {
+  // Measured off the board as shipped: content capped at 1500 and centred in a
+  // 1651px window, a 24px gutter, a 744px pack column, a 24px rail gap.
+  const split: Viewport = { width: 1651, height: 950, wall: 867 };
+  // The same window before the split, where the rail was 360 and its edge 1267.
+  const single: Viewport = { width: 1651, height: 950, wall: 1267 };
+  // The second card of the pack's top row, which is where it was reported from.
+  const packCard = tile(293, 300, 165, 230);
+
+  it("draws the back the single-column rail had room for", () => {
+    expect(place(packCard, single, true, [UPRIGHT, UPRIGHT])!.lefts).toHaveLength(2);
+    expect(place(packCard, split, true, [UPRIGHT, UPRIGHT])!.lefts).toHaveLength(2);
+  });
+
+  it("keeps the stats panel it is now standing past the wall for", () => {
+    expect(place(packCard, split, true, [UPRIGHT, UPRIGHT])!.panelLeft).not.toBeNull();
+  });
+
+  it("borrows from the rail only what the second side needed", () => {
+    const at = place(packCard, split, true, [UPRIGHT, UPRIGHT])!;
+    // Hard against the left of the page first: the overflow is what is left
+    // over once the block has moved as far from the wall as the page allows.
+    expect(at.lefts[0]).toBe(GAP);
+    expect(at.panelLeft! + 260 - split.wall!).toBeLessThan(PREVIEW_W / 4);
+  });
+
+  it("still makes a token yield to the wall", () => {
+    // A token is another card and the panel names it either way, so the wall
+    // costs it its picture -- which is the line the exemption stops at.
+    const at = place(packCard, split, true, [UPRIGHT], [UPRIGHT])!;
+    expect(at.lefts).toHaveLength(1);
+    expect(at.panelLeft).not.toBeNull();
+  });
+
+  it("leaves a one-sided card entirely inside the wall", () => {
+    const at = place(packCard, split, true, [UPRIGHT])!;
+    expect(at.panelLeft! + 260).toBeLessThanOrEqual(split.wall! - GAP);
   });
 });
 
