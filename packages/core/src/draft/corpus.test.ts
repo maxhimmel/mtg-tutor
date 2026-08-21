@@ -5,7 +5,7 @@ import { cardValue } from "../scoring/value.js";
 import { mulberry32 } from "../util/rng.js";
 import { botRng, dealDraft } from "./deal.js";
 import { DraftEngine } from "./engine.js";
-import type { PodPolicy } from "./bots.js";
+import { STORED_PODS, type PodPolicy, type StoredPod } from "./bots.js";
 
 // The net under any change to how a card's value is stored or computed.
 //
@@ -113,29 +113,47 @@ describe("the deal is stable across a corpus of seeds", () => {
 // So both guards are needed, and they fail differently on purpose: the
 // fingerprint says "you changed the weights", these say "you changed the deal".
 describe("the fitted pods deal the same way they always have", () => {
-  const GOLDEN: [string, () => SetData, number, number][] = [
-    ["a fixed-shape set", fakeSet, 3316268996, 2348276992],
-    ["a Play Booster set", fakePlayBoosterSet, 2404736845, 3307669095],
-    ["a set with rated, thin and unrated cards", fakeMixedSet, 1634392860, 166620893],
+  const SETS: [string, () => SetData][] = [
+    ["a fixed-shape set", fakeSet],
+    ["a Play Booster set", fakePlayBoosterSet],
+    ["a set with rated, thin and unrated cards", fakeMixedSet],
   ];
 
-  for (const [label, build, table, sharks] of GOLDEN) {
-    it(`deals ${label} to the table pod`, () => {
-      expect(dealHash(build(), SEEDS, "table")).toBe(table);
+  // Keyed by pod and generated from `STORED_PODS` below, because for a year
+  // this block pinned `table` and `sharks` and nothing else -- the two pods
+  // NOBODY DRAFTS AGAINST. `table2` has been the default since it was fitted,
+  // so every draft anyone has taken since replays against a policy no test
+  // held still, which is the one case the whole file exists for.
+  //
+  // Adding a pod without adding a row here is now a failure rather than an
+  // omission: the coverage test below reads `STORED_PODS`, which is derived
+  // from the type, so a new name arrives with an empty column and says so.
+  const GOLDEN: Record<StoredPod, number[]> = {
+    table: [3316268996, 2404736845, 1634392860],
+    sharks: [2348276992, 3307669095, 166620893],
+    table2: [671376058, 488123354, 1009150014],
+    sharks2: [1917749292, 500239768, 2941289290],
+  };
+
+  for (const [pod, hashes] of Object.entries(GOLDEN) as [StoredPod, number[]][])
+    SETS.forEach(([label, build], i) => {
+      it(`deals ${label} to the ${pod} pod`, () => {
+        expect(dealHash(build(), SEEDS, pod)).toBe(hashes[i]);
+      });
     });
-    it(`deals ${label} to the sharks pod`, () => {
-      expect(dealHash(build(), SEEDS, "sharks")).toBe(sharks);
-    });
-  }
+
+  it("pins every pod a session can carry", () => {
+    expect(Object.keys(GOLDEN).sort()).toEqual([...STORED_PODS].sort());
+    for (const hashes of Object.values(GOLDEN)) expect(hashes).toHaveLength(SETS.length);
+  });
 
   // The control. Two pods that dealt identically would make every hash above
   // pass while measuring nothing -- and `sharks` differs from `table` mostly in
   // one coefficient, so this is not a hypothetical.
-  it("deals the two pods differently, and both differently from legacy", () => {
-    const legacy = dealHash(fakeSet(), 50, "legacy");
-    const table = dealHash(fakeSet(), 50, "table");
-    const sharks = dealHash(fakeSet(), 50, "sharks");
-
-    expect(new Set([legacy, table, sharks]).size).toBe(3);
+  it("deals every pod differently from every other", () => {
+    const hashes = ["legacy" as const, ...STORED_PODS].map((pod) =>
+      dealHash(fakeSet(), 50, pod),
+    );
+    expect(new Set(hashes).size).toBe(hashes.length);
   });
 });

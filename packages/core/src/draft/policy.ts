@@ -228,6 +228,25 @@ export const POLICY_FEATURES = [
   // to zero while this main effect did not. See the block above this list for
   // what it is worth and what it cost to be sure of that.
   "removal",
+  // THE SAME QUESTION AS `value`, ASKED OF PICK ORDER INSTEAD OF WIN RATE.
+  //
+  // Every feature above this line was fitted against a raw-power number that is
+  // a win rate, and a win rate is conditioned on the card already being in a
+  // deck. `scoring/tableValue.ts` is the whole argument; the short version is
+  // that gih win rate ranks Cyclonic Rift 288th of 305 in sos and a real table
+  // takes it first pick, every time.
+  //
+  // Two columns rather than one, mirroring `value`/`valueOpen`, because the
+  // sharpness-resets-every-pack finding that produced `valueOpen` is about the
+  // PACK and not about which number is on the card -- it applies to any measure
+  // of raw power, so a new one gets the interaction too or it is being fitted
+  // with one hand tied.
+  //
+  // The main effects are kept side by side deliberately. They answer different
+  // questions -- what a table WANTS and what actually WINS -- and the fit is
+  // allowed to decide it wants both, which is a thing worth knowing either way.
+  "tableValue",
+  "tableValueOpen",
 ] as const;
 
 export type PolicyWeights = readonly number[];
@@ -405,6 +424,15 @@ export function policyFeatures(
   out[5] = laneFit * progress;
   out[6] = memory.openness(card) * progress;
   out[7] = card.role === "removal" ? 1 : 0;
+  // Falls back to `value`, which is what makes a pod reading these columns safe
+  // to run against a pool ingested before `tableValue` existed: it degrades to
+  // the old raw-power number rather than to zero. A zero here would have looked
+  // like "the table wants nothing", and every card would have been equally
+  // unwanted -- a silent, uniform wrong answer of the kind this file's header
+  // spends its length trying to prevent.
+  const table = (card.tableValue ?? card.value) - 0.5;
+  out[8] = table;
+  out[9] = table * packOpenness(packSize);
   return out;
 }
 

@@ -124,7 +124,7 @@ export function botScore(card: EngineCard, memory: BotMemory): number {
  * editing the weights under an existing one. `BOT_FINGERPRINT` exists to go red
  * if somebody does.
  */
-export type PodPolicy = "legacy" | "table" | "sharks" | "table2" | "sharks2";
+export type PodPolicy = "legacy" | StoredPod;
 
 /**
  * The pods a draft can be STARTED against, which is not the same set.
@@ -135,9 +135,19 @@ export type PodPolicy = "legacy" | "table" | "sharks" | "table2" | "sharks2";
  * would mean the same thing by convention rather than by construction. Nobody
  * chooses the old bot; you get it by having drafted before pods existed.
  */
-// What a session may CARRY, which is every pod but `legacy` -- that one is what
-// an absent `pod` means, so it is never written down.
-export type StoredPod = Exclude<PodPolicy, "legacy">;
+/**
+ * What a session may CARRY, which is every pod but `legacy` -- that one is what
+ * an absent `pod` means, so it is never written down.
+ *
+ * A VALUE, AND THE TYPE COMES OFF IT RATHER THAN THE OTHER WAY ROUND. It used
+ * to be `Exclude<PodPolicy, "legacy">`, which no test could iterate -- and for a
+ * year `corpus.test.ts` pinned the deal for `table` and `sharks` while `table2`,
+ * the pod every real draft has used since it was fitted, went unpinned. A list
+ * something can walk is what turns "remember to add a golden hash" into a red
+ * test on the day the pod is added.
+ */
+export const STORED_PODS = ["table", "sharks", "table2", "sharks2"] as const;
+export type StoredPod = (typeof STORED_PODS)[number];
 
 /**
  * What a new draft may be started AS, which is a smaller set and has to be.

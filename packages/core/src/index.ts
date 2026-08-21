@@ -23,6 +23,7 @@ export * from "./model/feedback.js";
 
 export * from "./scoring/score.js";
 export * from "./scoring/value.js";
+export * from "./scoring/tableValue.js";
 export * from "./scoring/explain.js";
 export * from "./scoring/context.js";
 export * from "./scoring/tiebreak.js";

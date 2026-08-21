@@ -119,6 +119,26 @@ export interface EngineCard {
   // without this cannot be scored at all. Ingestion writes it for every card and
   // the schema push is what proves no stored pool is missing one.
   value: number;
+
+  /**
+   * What a real table pays for this card, which is not what it wins.
+   *
+   * `value` is a win rate and therefore conditioned on the card already being in
+   * a deck; a bomb everybody first-picks is in every deck that opened it,
+   * including the bad ones, so its win rate regresses while its pick order does
+   * not. `scoring/tableValue.ts` carries the full argument and the numbers.
+   *
+   * READ ONLY BY BOTS, AND THAT IS A RULE RATHER THAN A CURRENT FACT. It is
+   * derived from what the field DID, so grading a person against it would be
+   * marking them against the crowd instead of against what wins -- which is the
+   * circularity `trophyPickRate` was kept out of the scorer for. `scorePick`
+   * reads `value` and must go on reading `value`.
+   *
+   * Optional because a set ingested before it existed has none, and a pod that
+   * reads it falls back to `value` for those -- which is exactly the behaviour
+   * that keeps `legacy`, `table` and `table2` dealing what they always dealt.
+   */
+  tableValue?: number;
 }
 
 /**
