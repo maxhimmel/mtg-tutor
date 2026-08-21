@@ -3,7 +3,9 @@
 import type { Card, PickScore } from "@mtg-tutor/core";
 import { gapMargin, loadPrinciples, splitCitations, tiebreakLine } from "@mtg-tutor/core";
 import { gradeColor, points } from "../lib/format";
+import { scoreWorkingViewed } from "../lib/analytics";
 import { CardPlacard } from "./CardPlacard";
+import { ScoreBreakdown } from "./ScoreBreakdown";
 import { PrincipleBadge } from "./PrincipleBadge";
 
 const PRINCIPLES = loadPrinciples();
@@ -178,6 +180,36 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
             </p>
           </div>
         )}
+
+        {/* Folded away by default, and that is not timidity about the feature.
+            The panel's job is the verdict -- grade, card, gap, margin -- and a
+            player mid-pack is reading it in a second or two. The working is what
+            you open when you disagree with the answer, which is a different
+            moment and a rarer one. `<details>` rather than state because the
+            board already re-mounts this block on every pick (the `key` on its
+            animation wrapper), so an open breakdown closing itself as the next
+            pack lands is the correct behaviour and comes for free. */}
+        <details
+          className="group"
+          onToggle={(e) => {
+            // Only the opening. `toggle` fires both ways, and counting the close
+            // too would double every reader who folded it back up.
+            if (!e.currentTarget.open) return;
+            scoreWorkingViewed({ grade: score.grade, terms: score.terms.length });
+          }}
+        >
+          <summary className="cursor-pointer list-none text-xs text-base-content/50 transition-colors hover:text-base-content/80">
+            <span className="group-open:hidden">Show how that was scored</span>
+            <span className="hidden group-open:inline">Hide how that was scored</span>
+          </summary>
+          <div className="mt-2">
+            <ScoreBreakdown
+              base={score.pickedValue}
+              total={score.pickedContextValue}
+              terms={score.terms}
+            />
+          </div>
+        </details>
       </div>
     </div>
   );

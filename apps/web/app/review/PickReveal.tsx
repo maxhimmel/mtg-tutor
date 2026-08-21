@@ -7,6 +7,7 @@ import { confidenceLevel, loadPrinciples, splitCitations } from "@mtg-tutor/core
 import { AiResponse } from "../components/AiResponse";
 import { CardPlacard } from "../components/CardPlacard";
 import { CardText } from "../components/CardText";
+import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import { PrincipleBadges } from "../components/PrincipleBadge";
 import { Reasoning } from "../components/Reasoning";
 import {
@@ -271,6 +272,20 @@ export function PickReveal({
             </div>
           </AiResponse>
         )}
+
+        {/* The same working the draft board shows under its grade, on the
+            screen that reads a pick back afterwards. Not folded away here: the
+            board hides it because a player mid-pack wants the verdict in a
+            second, and nobody on a review is in a hurry -- this IS the reason
+            they opened the pick. */}
+        <div className="border-t border-base-300 pt-3">
+          <div className="eyebrow mb-1.5">How that was scored</div>
+          <ScoreBreakdown
+            base={pick.pickedValue}
+            total={pick.pickedContextValue}
+            terms={pick.terms}
+          />
+        </div>
 
         {/* Last in the column on purpose. The reveal argues about which card was
             better; this asks what the choice actually DID, which only reads as a
