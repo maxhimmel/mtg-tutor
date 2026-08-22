@@ -12,6 +12,8 @@ import {
   splitPool,
   summarizeDraft,
   forkImpact,
+  gapMargin,
+  marginVerdict,
 } from "@mtg-tutor/core";
 import type { ReviewVerdict } from "@mtg-tutor/core";
 import { z } from "zod";
@@ -393,6 +395,22 @@ export const verdictContext = internalQuery({
         sideboard,
         pivots(row.poolBefore, bench, args.pickIndex),
         benchedOnArrival(bench, args.pickIndex),
+        // The gap and its error bars, off the score that produced the grade
+        // this screen is already showing. `record.score` is the whole
+        // `PickScore`, so `indistinguishable` is the scorer's own answer and
+        // not a second opinion formed here -- the same rule the live board
+        // follows, reaching the surface that never asked. Nothing is stored for
+        // it and `review.load` is untouched: the verdict prompt is built from a
+        // replayed pick, which already holds every number this needs.
+        record.score.isBest
+          ? null
+          : marginVerdict({
+              betterName: record.score.contextBest.name,
+              pickedName: record.picked.name,
+              gap: record.score.contextBestValue - record.score.pickedContextValue,
+              margin: gapMargin(record.score.contextBest, record.picked),
+              indistinguishable: record.score.indistinguishable,
+            }),
       ),
     };
   },

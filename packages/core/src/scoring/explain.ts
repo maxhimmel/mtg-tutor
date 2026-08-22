@@ -66,7 +66,10 @@ export function explainPick(ps: PickScore<Card>): string[] {
     // Whether the gap is real is the SCORE's answer, not a fourth opinion formed
     // here -- `gapMargin` is asked only for the size of the bars. The branch
     // above owns the inside-the-margin case entirely, so this one is a miss the
-    // data can actually see.
+    // data can actually see -- and it now SAYS so, because two numbers a reader
+    // has to compare are two numbers a reader gets wrong. `1.2pp` against
+    // `±1.1pp` reads as a tie to anyone not doing the arithmetic, which is how
+    // the coach came to call a real miss a coin flip off the same pair.
     const margin = gapMargin(contextBest, picked);
     const size = `${(gap * 100).toFixed(1)}pp`;
     lines.push(
@@ -74,7 +77,8 @@ export function explainPick(ps: PickScore<Card>): string[] {
         `${contextBest.name} was worth ${size} more to this deck` +
         (margin == null
           ? ", though one of the two is unrated so there are no error bars on that."
-          : `, against a ±${(margin * 100).toFixed(1)}pp margin of error.`),
+          : `, against a ±${(margin * 100).toFixed(1)}pp margin of error — a gap the data ` +
+            `can see.`),
     );
     // Only when it is a third card. The lesson is the divergence between raw
     // power and deck fit, and there is none to draw when the strongest card in

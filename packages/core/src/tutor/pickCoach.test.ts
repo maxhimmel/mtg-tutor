@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Card } from "../model/card.js";
 import type { RecordedPick } from "../model/pick.js";
 import type { PickScore } from "../scoring/score.js";
-import { buildPickContext } from "./pickCoach.js";
+import { buildPickContext, claimsTie } from "./pickCoach.js";
 
 function card(name: string, over: Partial<Card> = {}): Card {
   return {
@@ -229,6 +229,43 @@ describe("buildPickContext showing the verdict's working", () => {
     expect(out).toContain("cannot tell these two cards apart");
   });
 
+  // The other half of the same sentence, and the half that was missing. The
+  // inside case said INSIDE in words; the outside case handed over 1.2pp and
+  // ±1.1pp and stopped, so the model did the comparison itself and called a real
+  // miss "within the margin of error, so this pick is essentially a coin flip"
+  // under a panel saying the gap was larger than the margin. Both verdicts are
+  // now stated, so neither side of the branch leaves a number to be interpreted.
+  it("says outright when the gap is outside the margin, so the pick is marked down", () => {
+    const out = buildPickContext(
+      base({
+        isBest: false,
+        contextBest: other,
+        contextBestValue: 0.62,
+        indistinguishable: false,
+      }),
+      [],
+    );
+    expect(out).toContain("OUTSIDE the margin");
+    expect(out).toContain("CAN tell these two cards apart");
+  });
+
+  // The narrow miss is the case that produced the complaint: at one significant
+  // figure the two numbers look like a tie, and the prompt has to be louder than
+  // the arithmetic.
+  it("states the verdict even when the gap only just clears the margin", () => {
+    const out = buildPickContext(
+      base({
+        isBest: false,
+        contextBest: other,
+        contextBestValue: 0.5921,
+        indistinguishable: false,
+      }),
+      [],
+    );
+    expect(out).toContain("OUTSIDE the margin");
+    expect(out).not.toContain("INSIDE the margin");
+  });
+
   // The anti-regression for the whole three-opinions problem: the prompt must
   // follow the grade even where its own arithmetic would say otherwise, because
   // a coach explaining a verdict the app did not reach is the failure mode that
@@ -446,5 +483,45 @@ describe("buildPickContext on a pick sent straight to the sideboard", () => {
     expect(out).toContain("Your pool so far (4 cards)");
     expect(out.slice(poolAt)).toContain("Doom Blade");
     expect(out).not.toContain("Sideboard (");
+  });
+});
+
+// The instrument for issue #5. It has to fire on the sentence that was actually
+// reported and stay quiet on the ordinary ones, or the number it produces is
+// noise dressed as evidence.
+describe("claimsTie", () => {
+  it("catches the sentence that was reported", () => {
+    expect(
+      claimsTie(
+        "Brush Off is a fine counterspell that fits your shell. Sundering Archaic edges " +
+          "it out by removing a permanent unconditionally on a 3/3 body, but the gap is " +
+          "within the margin of error, so this pick is essentially a coin flip — no need " +
+          "to second-guess it.",
+      ),
+    ).toBe(true);
+  });
+
+  it("catches the app's own inside-the-margin wording", () => {
+    expect(claimsTie("That is inside the margin of error, so this pick stands.")).toBe(true);
+    expect(claimsTie("The two are indistinguishable in the data.")).toBe(true);
+    expect(claimsTie("It is too close to call.")).toBe(true);
+  });
+
+  // A coach that MENTIONS the margin while respecting it is the answer the fix
+  // is trying to produce. Counting it as a contradiction would make the metric
+  // go the wrong way on success.
+  it("stays quiet when the answer respects the margin it names", () => {
+    expect(
+      claimsTie(
+        "Sundering Archaic is worth 1.2pp more here against a ±1.1pp margin, so the data " +
+          "can see the difference — take the removal.",
+      ),
+    ).toBe(false);
+  });
+
+  it("stays quiet on an ordinary answer", () => {
+    expect(
+      claimsTie("Good pick — cheap removal is what this deck is short of [DECK-08]."),
+    ).toBe(false);
   });
 });
