@@ -200,6 +200,16 @@ export interface Settings {
   // `showStats`, and a setting whose name is the name of the thing it sets is
   // one indirection fewer to hold.
   showStats: boolean;
+  // Whether a model is asked at all. Off is the deterministic readout for every
+  // pick -- the same one a forced pick, a spent quota or a missing key already
+  // fall back to.
+  //
+  // It exists because those three states were indistinguishable from a broken
+  // app: the panel said "Coach" and showed arithmetic, so being without a coach
+  // could only ever look like a failure. Making it something you can CHOOSE is
+  // what turns that readout into a mode rather than a degradation, and it is the
+  // honest setting for anyone who wants their picks graded without prose.
+  coachVoice: boolean;
   // Smallest pack the AI coach will comment on. Below it the pick is forced and
   // the deterministic explanation is shown instead, spending no tokens.
   coachMinPackCards: number;
@@ -220,6 +230,9 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   showStats: true,
+  // On. The coach is the product, and a default is not a neutral position --
+  // it is the answer for everybody who never opens the control.
+  coachVoice: true,
   coachMinPackCards: COACH.minPackCards,
   // The challenge, because it is the one with no evidence behind it yet. A mode
   // nobody is put in teaches nobody anything, and which of the two teaches

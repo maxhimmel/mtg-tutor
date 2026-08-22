@@ -31,14 +31,13 @@ import {
   claimOutcome,
   claimsTie,
   explainPick,
+  type ExplainLine,
   hydrate,
   hydrateScore,
   isDecisionPick,
   jargonHits,
-  loadPrinciples,
   normalizeName,
   packScoringContext,
-  splitCitations,
   splitPool,
   textIndex,
 } from "@mtg-tutor/core";
@@ -51,12 +50,11 @@ import { CardText } from "../../components/CardText";
 import { CardFace, CardTile } from "../../components/CardTile";
 import { Panel } from "../../components/Panel";
 import { PicksColumn } from "../../components/PicksColumn";
-import { PrincipleBadges } from "../../components/PrincipleBadge";
 import { Results } from "../../components/Results";
 import { SetIcon } from "../../components/SetIcon";
 import { Verdict } from "../../components/Verdict";
+import { CoachPanel, type CoachVoice } from "./CoachPanel";
 import { useSuspendPreview } from "../../components/CardPreview";
-import { AiResponse } from "../../components/AiResponse";
 import { useFeedbackAnchor, useSuspendFeedback } from "../../components/Feedback";
 import { coachShown, coachUnavailable, pickMade } from "../../lib/analytics";
 import { type PickCeremony, useSettings } from "../../lib/useSettings";
@@ -79,7 +77,6 @@ import { useChallenge } from "./Commitment";
 import { humanError } from "../../lib/humanError";
 
 const SITE = convexSiteUrl;
-const PRINCIPLES = loadPrinciples();
 
 // The pack grid, shared by the pack, the pack being passed on, and the
 // placeholder that stands in between them, so a pack arriving or leaving cannot
@@ -271,11 +268,21 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   // way out is.
   const [commitError, setCommitError] = useState<string | null>(null);
   const [coach, setCoach] = useState("");
-  const [skipped, setSkipped] = useState(false);
-  // Said once for the draft rather than on every pick: the coach being spent
-  // is a fact about the day, and repeating it 45 times would be the loudest
-  // thing on a board whose picks still work perfectly well.
-  const [coachSpent, setCoachSpent] = useState<string | null>(null);
+  // The deterministic readout, kept apart from the model's prose rather than
+  // stringified into the same box. They are different KINDS of answer and the
+  // panel now says which one is talking, so they cannot share a variable.
+  const [numbers, setNumbers] = useState<ExplainLine[]>([]);
+  const [voice, setVoice] = useState<CoachVoice>({ kind: "model" });
+  // The coach being spent is a fact about the DAY, so once the server has said
+  // so the remaining picks stop asking. A ref rather than state because nothing
+  // renders off it -- the panel renders off `voice`, which every path sets --
+  // and a dependency here would rebuild `streamCoach` mid-draft.
+  //
+  // It used to be state, and it only held a warning line rendered ABOVE prose
+  // that still said "Coach": forty more picks each paid a round trip to be told
+  // no, and each one was told so in a sentence stacked on top of a heading that
+  // was now lying.
+  const coachSpent = useRef<string | null>(null);
   const [picking, setPicking] = useState(false);
 
   // Guards against an earlier pick's stream overwriting a later one when the
@@ -365,14 +372,16 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
   const streamCoach = useCallback(
     async (pickIndex: number, score: PickScore<Card>, cardsInPack: number, force = false) => {
       const run = ++streamRun.current;
-      const fallback = () => {
-        if (run === streamRun.current) setCoach(explainPick(score).join("\n"));
+      // Every non-model path goes through here, so the panel can never end up
+      // showing arithmetic under a heading that says Coach. That was true of
+      // three of the five states -- and two of them said nothing at all, so a
+      // coach that was off read as a coach that had got worse.
+      const fallback = (kind: CoachVoice["kind"], detail?: string) => {
+        if (run !== streamRun.current) return;
+        setNumbers(explainPick(score));
+        setVoice({ kind, detail } as CoachVoice);
       };
-      const skip = () => {
-        if (run === streamRun.current) setSkipped(true);
-        fallback();
-      };
-      const unavailable = (reason: "declined" | "quota" | "unconfigured" | "error") =>
+      const unavailable = (reason: "declined" | "quota" | "unconfigured" | "error" | "off") =>
         coachUnavailable({ sessionId, pickIndex, reason });
 
       // Forcing means "coach this one regardless": a floor of 1 passes any pack
@@ -380,7 +389,8 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       const minPackCards = force ? 1 : settings.coachMinPackCards;
 
       setCoach("");
-      setSkipped(false);
+      setNumbers([]);
+      setVoice({ kind: "model" });
 
       // Checked here as well as server-side so a forced pick costs no round
       // trip, not just no tokens.
@@ -388,13 +398,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
       // fact about the pick, and both are counted -- a coach that is silent
       // because the pack is forced looks identical, from the outside, to one
       // that is broken.
+      // Chosen rather than broken. A player who has turned the coach off is not
+      // waiting on anything, so this never reaches the network and never
+      // apologises -- it is the readout they asked for.
+      if (!settings.coachVoice) {
+        unavailable("off");
+        return fallback("off");
+      }
+      // Already told no today. Asking again would spend a round trip on a
+      // refusal the server has no reason to change before tomorrow.
+      if (coachSpent.current) return fallback("spent", coachSpent.current);
       if (!isDecisionPick(cardsInPack, minPackCards)) {
         unavailable("declined");
-        return skip();
+        return fallback("forced");
       }
       if (!SITE) {
         unavailable("unconfigured");
-        return fallback();
+        return fallback("unconfigured");
       }
 
       const startedAt = Date.now();
@@ -440,16 +460,23 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         // rather than re-raised per pick: it is one fact about today, and the
         // answer to it does not change between picks. The fallback still runs,
         // so the pick keeps its deterministic explanation.
-        if (e instanceof CoachQuotaExceeded) setCoachSpent(e.message);
         if (e instanceof CoachDeclined) {
           unavailable("declined");
-          return skip();
+          return fallback("forced");
         }
-        unavailable(e instanceof CoachQuotaExceeded ? "quota" : "error");
-        fallback();
+        if (e instanceof CoachQuotaExceeded) {
+          coachSpent.current = e.message;
+          unavailable("quota");
+          // The server's own sentence, carried rather than restated -- it is the
+          // only thing in the app that knows when the coach comes back, and it
+          // quotes retryAfter so it stays true in any timezone.
+          return fallback("spent", e.message);
+        }
+        unavailable("error");
+        fallback("error");
       }
     },
-    [sessionId, getAccessToken, settings.coachMinPackCards],
+    [sessionId, getAccessToken, settings.coachMinPackCards, settings.coachVoice],
   );
 
   // Every card the coach could plausibly name: what is in front of you, what you
@@ -651,10 +678,6 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
     // will never fire would leave the sheen class on for the rest of the draft.
     if (!packReady && glyphPhase === "idle") setGlyphPhase(motionOK() ? "sweeping" : "done");
   }, [packReady, glyphPhase]);
-
-  // Recomputed on every streamed chunk, which is why splitCitations tolerates a
-  // half-arrived citation rather than flashing "[EVA" into the prose.
-  const advice = useMemo(() => splitCitations(coach, PRINCIPLES), [coach]);
 
   // A click never spends the pick: it pulls the card out of the row, and the
   // pick is confirmed separately, because taking the wrong card by a stray click
@@ -1290,47 +1313,45 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
 
                     {lastView.signal && <p className="text-sm text-info">{lastView.signal}</p>}
 
-                    {/* `quote` is the contract that makes a complaint about the
-                        coach actionable at all: this prose streams out of an
-                        httpAction and is written down nowhere, so the copy in
-                        `coach` is the only one that exists. Stop passing it and
-                        every coach note becomes a shrug -- which is what
-                        feedback_left's hasQuote is watching for. */}
-                    <AiResponse
-                      surface="coach"
-                      title={skipped ? "Coach — skipped, this pick was forced" : "Coach"}
-                      quote={coach || undefined}
-                      // Nothing to rate until the stream has said something.
-                      ready={Boolean(coach)}
+                    {/* Who is talking, and never "Coach" when it is not the
+                        coach. See CoachPanel for the five states this used to
+                        title three ways. */}
+                    <CoachPanel
+                      voice={voice}
+                      prose={coach}
+                      numbers={numbers}
                       anchor={{
                         sessionId: id,
                         pickIndex: lastView.pickIndex,
                         setCode: state.setCode,
                         format: state.format,
                       }}
-                    >
-                      {coachSpent && (
-                        <p className="mb-1.5 text-sm text-warning">{coachSpent}</p>
-                      )}
-                      <div className="min-h-[3.2rem] whitespace-pre-wrap leading-relaxed">
-                        {coach ? (
-                          <CardText text={advice.prose} cards={boardCards} />
-                        ) : (
-                          <span className="text-base-content/60">thinking…</span>
-                        )}
-                      </div>
-                      <PrincipleBadges principles={advice.principles} />
-                      {skipped && (
-                        <button
-                          className="btn btn-outline btn-xs mt-3"
-                          onClick={() =>
-                            void streamCoach(lastView.pickIndex, lastView.score, lastView.pack.length, true)
-                          }
-                        >
-                          Coach this pick anyway
-                        </button>
-                      )}
-                    </AiResponse>
+                      render={(text) => <CardText text={text} cards={boardCards} />}
+                      footer={
+                        <>
+                          {/* Only where asking again could work. A forced pick
+                              is the coach declining, not failing, so the way
+                              past it is a button; a spent quota or a missing
+                              key would refuse the same way every time, and a
+                              button that cannot succeed is worse than none. */}
+                          {voice.kind === "forced" && (
+                            <button
+                              className="btn btn-outline btn-xs mt-3"
+                              onClick={() =>
+                                void streamCoach(
+                                  lastView.pickIndex,
+                                  lastView.score,
+                                  lastView.pack.length,
+                                  true,
+                                )
+                              }
+                            >
+                              Coach this pick anyway
+                            </button>
+                          )}
+                        </>
+                      }
+                    />
                   </>
                 ) : (
                   // The ceremony's own line, because it is the one that knows

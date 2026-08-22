@@ -142,6 +142,18 @@ export const mine = query({
             .value,
           reviews: (await rateLimiter.getValue(ctx, "reviews", { key: identity.tokenIdentifier }))
             .value,
+          // The one limit a player could not see coming. Drafts and reviews are
+          // rationed and said out loud; the coach was a silent backstop, so the
+          // first anybody knew of it was a panel that stopped being a coach
+          // mid-draft. "You will never need telling" and "you cannot be told"
+          // are different claims, and only the first one was ever argued.
+          //
+          // Rounded DOWN to a whole number of picks: this is a token bucket, so
+          // the raw value is fractional, and offering somebody 12.7 coached
+          // picks is precision about an allowance nobody counts in decimals.
+          coach: Math.floor(
+            (await rateLimiter.getValue(ctx, "coach", { key: identity.tokenIdentifier })).value,
+          ),
         }
       : null;
 
@@ -152,7 +164,11 @@ export const mine = query({
       orgId: typeof identity.org_id === "string" ? identity.org_id : null,
       limited,
       remaining,
-      of: { drafts: LIMITS.drafts.rate, reviews: LIMITS.reviews.rate },
+      of: {
+        drafts: LIMITS.drafts.rate,
+        reviews: LIMITS.reviews.rate,
+        coach: LIMITS.coach.rate,
+      },
     };
   },
 });

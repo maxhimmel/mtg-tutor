@@ -8,6 +8,7 @@ import {
   cardValue,
   decksAgree,
   explainPick,
+  type ExplainTone,
   hydrate,
   hydrateScore,
   isDecisionPick,
@@ -129,7 +130,17 @@ async function showPickFeedback(
 
   if (coachable && (await streamCoaching(sessionId, pickIndex, head))) return;
 
-  const lines = explainPick(score);
+  // The glyphs live here now rather than in `explainPick`, because a terminal
+  // has nothing else to mark a line with and a browser has type and colour. Core
+  // says what each line is FOR; this is what "for" looks like in a terminal.
+  const marks: Record<ExplainTone, string> = {
+    headline: pc.green("✅"),
+    caution: pc.yellow("⚠️"),
+    detail: " ",
+  };
+  const lines = explainPick(score).map((l) =>
+    l.tone === "detail" ? l.text : `${marks[l.tone]} ${l.text}`,
+  );
   if (signal) lines.push(pc.cyan(signal));
   p.note(lines.join("\n"), head);
 }
