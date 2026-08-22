@@ -206,6 +206,11 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "- The 'raw-power best' is the highest-win-rate card by data. The 'context-best' is",
     "  the card that best serves THIS player's deck — often the same, but not always.",
     "  When they differ, that gap is the lesson: explain it plainly.",
+    // Review had none of this. It was told two card names and that the gap
+    // between them was the lesson, with no size on the gap and no error bars --
+    // so it decided for itself how big a lesson it was, on a screen read after
+    // the draft where nothing on the page could contradict it.
+    ...GAP_RULE,
     "- Do NOT treat an on-color, disciplined pick as a mistake just because a stronger",
     "  off-color card was passed [SIG-01]. Staying open early is correct.",
     "- The Situation line gives the pick's position in the WHOLE draft and the colors the",

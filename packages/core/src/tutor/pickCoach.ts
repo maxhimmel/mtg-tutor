@@ -55,6 +55,45 @@ function defenseBlock(defense: PickDefense, picked: Card): string {
     .join("\n");
 }
 
+/**
+ * The one sentence in this app that says how big a miss was and whether the data
+ * can see it.
+ *
+ * ONE BUILDER BECAUSE TWO SURFACES ASK THE SAME QUESTION
+ *
+ * The live coach had this sentence and the review coach had nothing at all --
+ * no gap, no margin, no verdict -- so the screen a player reads AFTER the draft
+ * was free to call a graded miss close and a real tie a blunder, with no fact in
+ * front of it either way. That is the shape notes.md keeps writing down: a rule
+ * taught to the scorer reaches only the surfaces that ask the scorer, and the
+ * one that does not ask is always the one nobody has complained about yet.
+ *
+ * `indistinguishable` is the SCORE's answer and is never recomputed here. The
+ * margin is the size of the error bars and nothing more.
+ *
+ * Both branches state their verdict in words. Only the inside one used to, and
+ * the outside one handed over `1.2pp` and `±1.1pp` and left the model to
+ * compare them -- which it did, and called the miss "essentially a coin flip"
+ * under a panel saying the gap was larger than the margin.
+ */
+export function marginVerdict(v: {
+  betterName: string;
+  pickedName: string;
+  gap: number;
+  margin: number | undefined;
+  indistinguishable: boolean;
+}): string {
+  const head =
+    `${v.betterName} was worth ${pp(v.gap)} more to this deck than ${v.pickedName}`;
+  if (v.margin == null) return `${head}.`;
+  const bars = `, against a ±${pp(v.margin)} margin of error on those win rates. The gap is `;
+  return v.indistinguishable
+    ? `${head}${bars}INSIDE the margin: the data cannot tell these two cards apart, and ` +
+      `the pick is not marked down for it.`
+    : `${head}${bars}OUTSIDE the margin: the data CAN tell these two cards apart, and ` +
+      `the pick is marked down for it.`;
+}
+
 export function buildPickContext(
   rec: RecordedPick<Card>,
   poolBefore: readonly PoolCard[],
@@ -114,35 +153,19 @@ export function buildPickContext(
   // This recomputed it with `gapMargin`, which made three places in the app
   // deciding one question: the grade (server, from `CardContext.se`), the
   // verdict panel, and here. Two of those disagreeing is what put a "the data
-  // cannot tell these apart" sentence under a 94/100 -- so the prompt now reads
+  // cannot tell these apart" sentence under a 94/100 -- so the prompt reads
   // `score.indistinguishable` and the size of the bars is all `gapMargin` is
-  // still asked for.
-  //
-  // BOTH VERDICTS ARE STATED, BECAUSE ONLY ONE OF THEM USED TO BE
-  //
-  // The inside case said "INSIDE the margin" in words and the outside case
-  // handed over two numbers and stopped -- so on a miss the model was doing the
-  // comparison itself, off `1.2pp` against `±1.1pp`, and calling it "within the
-  // margin of error, so this pick is essentially a coin flip" under a panel that
-  // said the gap was larger than the margin. The player got both answers on one
-  // screen. A number a model is asked to compare is a number it is allowed to
-  // round, and at one significant figure every real miss in this app looks like
-  // a tie.
-  const gap = score.contextBestValue - score.pickedContextValue;
-  const margin = gapMargin(score.contextBest, picked);
+  // still asked for. The sentence itself is `marginVerdict`, shared with the
+  // review prompt, which had none of this at all.
   const gapLine = score.isBest
     ? null
-    : `${score.contextBest.name} was worth ${pp(gap)} more to this deck than ` +
-      `${picked.name}` +
-      (margin == null
-        ? "."
-        : score.indistinguishable
-          ? `, against a ±${pp(margin)} margin of error on those win rates. The gap is ` +
-            `INSIDE the margin: the data cannot tell these two cards apart, and the ` +
-            `pick is not marked down for it.`
-          : `, against a ±${pp(margin)} margin of error on those win rates. The gap is ` +
-            `OUTSIDE the margin: the data CAN tell these two cards apart, and the pick ` +
-            `is marked down for it.`);
+    : marginVerdict({
+        betterName: score.contextBest.name,
+        pickedName: picked.name,
+        gap: score.contextBestValue - score.pickedContextValue,
+        margin: gapMargin(score.contextBest, picked),
+        indistinguishable: score.indistinguishable,
+      });
 
   // What the deck wanted out of a tie the data could not settle, in the corpus's
   // own terms. The model already cites principle ids in its answers and is given
