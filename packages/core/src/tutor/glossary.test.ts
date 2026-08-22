@@ -25,7 +25,7 @@ describe("glossary corpus", () => {
   // guard.
   it("keeps the ids the hover panel renders rows for", () => {
     const ids = new Set(CARD_STAT_GLOSSARY.map((e) => e.id));
-    for (const id of ["gih", "iwd", "pick-order", "maindeck", "gpwr"]) {
+    for (const id of ["gih", "iih", "pick-order", "maindeck", "gpwr"]) {
       expect(ids, id).toContain(id);
     }
   });

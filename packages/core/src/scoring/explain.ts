@@ -18,6 +18,33 @@ function wheelNote(alsa?: number): string {
   return `often wheels (last seen ~pick ${Math.round(alsa)})`;
 }
 
+/**
+ * What a line of the deterministic explanation is FOR, so each client can draw
+ * it rather than being handed somebody else's glyphs.
+ *
+ * These used to be strings with "✅" and "⚠️" baked in, which suited exactly one
+ * of the two clients. A terminal has nothing but glyphs; a browser has type,
+ * weight and colour, and rendering ✅ into `whitespace-pre-wrap` under a heading
+ * that said "Coach" is most of why this readout was called ugly. It is not prose
+ * and it never was -- it is a small table of findings that had been typeset as a
+ * paragraph. Same rule as everywhere else here: core decides WHAT is said and
+ * the client decides how it looks.
+ *
+ * `headline` is the verdict on the pick and there is exactly one. `caution` is
+ * something being flagged rather than reported. `detail` is everything else.
+ */
+export type ExplainTone = "headline" | "detail" | "caution";
+
+export interface ExplainLine {
+  tone: ExplainTone;
+  text: string;
+}
+
+/** The old shape, for a terminal that wants one string. */
+export function explainLines(lines: readonly ExplainLine[]): string[] {
+  return lines.map((l) => l.text);
+}
+
 // Reads the rules text to name what the best card actually does, so it wants a
 // hydrated score rather than the engine's.
 //
@@ -26,23 +53,29 @@ function wheelNote(alsa?: number): string {
 // took X; the data favors X — a 0.0% gap". The gap is quoted in the units the
 // grade was computed in for the same reason -- `pickedContextValue` exists so
 // that pair cannot be mixed across two scales.
-export function explainPick(ps: PickScore<Card>): string[] {
-  const lines: string[] = [];
+export function explainPick(ps: PickScore<Card>): ExplainLine[] {
+  const lines: ExplainLine[] = [];
   const { picked, contextBest, rawBest } = ps;
+  const say = (tone: ExplainTone, text: string) => lines.push({ tone, text });
 
   if (ps.isBest) {
-    lines.push(`✅ Best available. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ${wheelNote(picked.alsa)}.`);
+    say(
+      "headline",
+      `Best available. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ${wheelNote(picked.alsa)}.`,
+    );
   } else if (ps.indistinguishable) {
     // Not a miss, and it must not read as one. The pick scored 100 because the
     // data cannot separate it from the top of the pack, so this names the set it
     // tied with rather than a single card that "beat" it -- which `contextBest`
     // would be, and which is a coin flip at this margin.
     const others = ps.band.length > 0 ? ps.band : [ps.contextBest];
-    lines.push(
-      `✅ Nothing measurably better. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ` +
+    say(
+      "headline",
+      `Nothing measurably better. ${picked.name} — GIH WR ${pct(picked.gihWinRate)}, ` +
         `${wheelNote(picked.alsa)}.`,
     );
-    lines.push(
+    say(
+      "detail",
       `The data cannot separate it from ${others.map((c) => c.name).join(", ")}, so the pick is ` +
         `not marked down.`,
     );
@@ -50,7 +83,8 @@ export function explainPick(ps: PickScore<Card>): string[] {
     // a principle actually decided it -- `reasons` is empty when the deck and
     // the win rates agreed, and citing one there credits a rule that did nothing.
     if (ps.preferred && ps.reasons.length > 0) {
-      lines.push(
+      say(
+        "detail",
         `${ps.preferred.name} is the one this deck wanted: ${ps.reasons[0].note} ` +
           `[${ps.reasons[0].principle}].`,
       );
@@ -66,29 +100,34 @@ export function explainPick(ps: PickScore<Card>): string[] {
     // Whether the gap is real is the SCORE's answer, not a fourth opinion formed
     // here -- `gapMargin` is asked only for the size of the bars. The branch
     // above owns the inside-the-margin case entirely, so this one is a miss the
-    // data can actually see.
+    // data can actually see -- and it now SAYS so, because two numbers a reader
+    // has to compare are two numbers a reader gets wrong. `1.2pp` against
+    // `±1.1pp` reads as a tie to anyone not doing the arithmetic, which is how
+    // the coach came to call a real miss a coin flip off the same pair.
     const margin = gapMargin(contextBest, picked);
     const size = `${(gap * 100).toFixed(1)}pp`;
-    lines.push(
+    say(
+      "headline",
       `You took ${picked.name} (GIH WR ${pct(picked.gihWinRate)}); ` +
         `${contextBest.name} was worth ${size} more to this deck` +
         (margin == null
           ? ", though one of the two is unrated so there are no error bars on that."
-          : `, against a ±${(margin * 100).toFixed(1)}pp margin of error.`),
+          : `, against a ±${(margin * 100).toFixed(1)}pp margin of error — a gap the data ` +
+            `can see.`),
     );
     // Only when it is a third card. The lesson is the divergence between raw
     // power and deck fit, and there is none to draw when the strongest card in
     // the pack is the one you took or the one you are being pointed at.
     if (rawBest.name !== contextBest.name && rawBest.name !== picked.name)
-      lines.push(`Strongest card in the pack was ${rawBest.name} (GIH WR ${pct(rawBest.gihWinRate)}).`);
+      say("detail", `Strongest card in the pack was ${rawBest.name} (GIH WR ${pct(rawBest.gihWinRate)}).`);
     if (roleOf(contextBest) === "removal")
-      lines.push(`${contextBest.name} is efficient removal — premium in most archetypes.`);
+      say("detail", `${contextBest.name} is efficient removal — premium in most archetypes.`);
     if (contextBest.alsa != null)
-      lines.push(`${contextBest.name} ${wheelNote(contextBest.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);
+      say("detail", `${contextBest.name} ${wheelNote(contextBest.alsa)}; ${picked.name} ${wheelNote(picked.alsa)}.`);
   }
 
   if (!ps.onColor) {
-    lines.push(`⚠️ Off your committed colors — splashing costs consistency unless the payoff is high.`);
+    say("caution", `Off your committed colors — splashing costs consistency unless the payoff is high.`);
   }
   return lines;
 }

@@ -178,13 +178,21 @@ function CoachTerm() {
         // one thing rather than as a box that happens to be nearby.
         className={`rounded-r-[7px] ${open ? "bg-base-300 text-base-content" : ""}`}
         icon={<CoachIcon />}
-        title={`The coach stays quiet on picks with fewer than ${settings.coachMinPackCards} cards left — click to change`}
-        label={`Coach skips picks with fewer than ${settings.coachMinPackCards} cards left. Change the threshold.`}
+        title={
+          settings.coachVoice
+            ? `The coach stays quiet on picks with fewer than ${settings.coachMinPackCards} cards left — click to change`
+            : "The coach is off; every pick gets the numbers instead — click to change"
+        }
+        label={
+          settings.coachVoice
+            ? `Coach skips picks with fewer than ${settings.coachMinPackCards} cards left. Change the threshold.`
+            : "Coach off. Every pick shows the plain readout. Turn it back on."
+        }
         aria-haspopup="true"
         aria-expanded={open}
         onClick={() => setOpen((wasOpen) => !wasOpen)}
       >
-        Coach ≥{settings.coachMinPackCards}
+        {settings.coachVoice ? `Coach ≥${settings.coachMinPackCards}` : "Coach off"}
         <span aria-hidden className="text-base-content/40">
           ▾
         </span>
@@ -204,25 +212,52 @@ function CoachTerm() {
         // w-80 rather than w-64: nine segments and a sentence describing the
         // chosen one both want more room than five bare numbers did.
         <div className="popup-surface absolute right-0 top-full z-30 mt-2 w-80 p-3">
-          <div className="mb-2 flex flex-col gap-0.5">
-            <span className="text-sm text-base-content">
-              Smallest pack the coach comments on
+          {/* On/off above the threshold, because it is the question the
+              threshold is a refinement of -- and because being without a coach
+              had until now no way of being a CHOICE. A forced pick, a spent
+              quota and a missing key all showed the same readout under a
+              heading that said "Coach", so drafting without prose could only
+              ever look like the app was broken. */}
+          <label className="mb-3 flex cursor-pointer items-start justify-between gap-3">
+            <span className="flex flex-col gap-0.5">
+              <span className="text-sm text-base-content">Ask the coach</span>
+              <span className="text-xs text-base-content/60">
+                Off reads you the numbers on every pick instead. Your picks are
+                graded either way.
+              </span>
             </span>
-            <span className="text-xs text-base-content/60">
-              Below it the pick is forced, and you get the plain explanation
-              instead.
-            </span>
-          </div>
-          <Segmented
-            label="Smallest pack the AI coach comments on"
-            options={COACH_THRESHOLDS}
-            value={settings.coachMinPackCards}
-            onChange={(n) => update({ coachMinPackCards: n }, "board")}
-            size="xs"
-            fill
-          />
-          <div className="mt-2">
-            <SegmentedBlurb options={COACH_THRESHOLDS} value={settings.coachMinPackCards} />
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary mt-0.5 shrink-0"
+              checked={settings.coachVoice}
+              onChange={(e) => update({ coachVoice: e.target.checked }, "board")}
+            />
+          </label>
+
+          {/* Dimmed rather than removed when the coach is off: a control that
+              vanishes takes its own explanation with it, and somebody turning
+              the coach back on should find the threshold where they left it. */}
+          <div className={settings.coachVoice ? "" : "pointer-events-none opacity-40"}>
+            <div className="mb-2 flex flex-col gap-0.5">
+              <span className="text-sm text-base-content">
+                Smallest pack the coach comments on
+              </span>
+              <span className="text-xs text-base-content/60">
+                Below it the pick is forced, and you get the plain explanation
+                instead.
+              </span>
+            </div>
+            <Segmented
+              label="Smallest pack the AI coach comments on"
+              options={COACH_THRESHOLDS}
+              value={settings.coachMinPackCards}
+              onChange={(n) => update({ coachMinPackCards: n }, "board")}
+              size="xs"
+              fill
+            />
+            <div className="mt-2">
+              <SegmentedBlurb options={COACH_THRESHOLDS} value={settings.coachMinPackCards} />
+            </div>
           </div>
         </div>
       )}

@@ -53,6 +53,23 @@ export function buildReviewContext(
   pivots: readonly Pivot[] = [],
   /** See `commitmentLine` -- the card was benched in the act of picking it. */
   benchedNow = false,
+  /**
+   * `marginVerdict` for this pick: the size of the gap the grade was made of and
+   * whether the data can see it.
+   *
+   * Absent from this prompt entirely until now, which is the same defect the
+   * live board was fixed for, sitting one screen later. The board's coach was
+   * taught that most gaps here are smaller than the error bars on the win rates
+   * they came from (trap #3); the review model was handed two card names, told
+   * the gap between them was the lesson, and left to decide on its own how big
+   * a lesson it was. A screen read after the draft cannot be the one surface
+   * still guessing at that.
+   *
+   * Optional because the caller may not hold a score -- a pick with no stored
+   * scoring row has no gap to report, and inventing one is the thing this line
+   * exists to stop.
+   */
+  marginNote: string | null = null,
 ): string {
   return [
     situationLine(pick.packNo, pick.pickNo, pick.pack.length),
@@ -79,6 +96,7 @@ export function buildReviewContext(
       : `The best card for THIS deck, which is what the score was measured ` +
         `against: ${pick.contextBestName}. It already accounts for the pool's ` +
         `colours -- a card the deck cannot cast is not held up as the pick.`,
+    marginNote,
     "",
     "Full pack, strongest-first:",
     listPack(pick),

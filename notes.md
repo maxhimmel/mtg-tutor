@@ -59,6 +59,112 @@ the `Coach >=N` control on the board is where it changes. Deliberately not
 migrated: 5 is a legal value somebody could have chosen, and rewriting a
 deliberate choice to fix a stale default is the worse of the two errors.
 
+4 (the coach on picks nobody grades, and the coach with no tokens left) and 5
+(the coach and the scorer disagreeing about the margin of error) shipped on
+2026-08-22. Three things worth keeping:
+
+**The instrument was built and the screen was never told.** Three of the coach
+panel's five states were titled "Coach" and two of them said nothing at all, so
+it read as a coach that had got worse rather than one that was off — while
+`coach_unavailable.reason` had separated every case since it was written. The
+inverse of this file's usual failure, and worth the same shelf space.
+
+**A number a model is asked to compare is a number it is allowed to round.** The
+gap line said "INSIDE the margin" in words on one branch and printed `1.2pp`
+against `±1.1pp` on the other; at one significant figure every narrow miss looks
+like a tie. Both branches state their verdict now.
+
+And the review prompt had no margin at all — the same shape as #6's third half,
+on the surface nobody had complained about yet.
+
+5 (the coach arguing for a card using the one you took instead), 6 (the scorer
+still holding up cards the deck cannot cast, which was 4 and 18 not actually
+fixed) and 7 (the stats panel losing its room to a token picture) shipped later
+the same day. 6 is the one worth reading about rather than only counting: the
+term shipped for 4 and 18 was correct and never fired, for two independent
+reasons, and neither of them was visible in any number the app collected. The
+rulings are decisions #23 and #24; the trap the instrument fell into is #14.
+
+6 had a third half nobody reported, found while three agents were re-checking
+the first two. **The review screen was never asking the scorer at all.**
+`review.ts` put only `rawBest` on a stored pick, so the CONTEXT_BEST mark was
+the review model's own nomination -- or, with no verdict fetched, the raw-power
+best, which is the exact defect `Verdict.tsx` was fixed for on the live board
+and which sat unfixed two screens away. So both of the day's scoring fixes
+stopped at the board: a screen read AFTER the draft went on nominating cards the
+deck cannot cast, from a model that had never been told the colour rule.
+
+The general shape is worth more than the fix: **a rule taught to a scorer only
+reaches the surfaces that ask the scorer.** Three did and one did not, and the
+one that did not was the one nobody had a complaint about yet.
+
+15 shipped in two parts, and the second is worth reading before touching the
+floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
+which had been the number since the review quiz was written and had never been
+measured. The test is `cardsInPack >= this`, so 5 KEPT the pick that sees five
+cards -- the tenth of fourteen -- and dropped only the last four of a pack. The
+first real drill run dealt exactly that pick and it was reported as a miss that
+was not one. Raised to 6 the same day, which drops the last five.
+
+**A metric was added to settle this and a person settled it first.**
+`stats_viewed.forced` counts the misses the floor withholds and it is still
+worth having, but it answers "how many does the floor withhold" where the
+question was "is the floor in the right place" -- and no size of number answers
+that. Worth remembering the next time an instrument goes in beside a threshold:
+the instrument measures the setting, and only somebody standing in front of the
+result can say whether the setting is wrong.
+
+The floor is shared with the coach on purpose (`COACH.minPackCards` reads off
+it) so both moved: three fewer coached picks per draft out of about thirty, on
+picks whose advice was always going to be "you had no choice". The stored
+per-player `coachMinPackCards` is a localStorage setting and does NOT move with
+it -- anyone who drafted before this keeps the 5 they were serialised at, and
+the `Coach >=N` control on the board is where it changes. Deliberately not
+migrated: 5 is a legal value somebody could have chosen, and rewriting a
+deliberate choice to fix a stale default is the worse of the two errors.
+
+4 (the coach on picks nobody grades, and the coach with no tokens left) and 5
+(the coach and the scorer disagreeing about the margin of error) shipped on
+2026-08-22. Three things worth keeping:
+
+**The instrument was built and the screen was never told.** Three of the coach
+panel's five states were titled "Coach" and two of them said nothing at all, so
+it read as a coach that had got worse rather than one that was off — while
+`coach_unavailable.reason` had separated every case since it was written. The
+inverse of this file's usual failure, and worth the same shelf space.
+
+**A number a model is asked to compare is a number it is allowed to round.** The
+gap line said "INSIDE the margin" in words on one branch and printed `1.2pp`
+against `±1.1pp` on the other; at one significant figure every narrow miss looks
+like a tie. Both branches state their verdict now.
+
+And the review prompt had no margin at all — the same shape as #6's third half,
+on the surface nobody had complained about yet.
+
+5 (the coach and the scorer saying two different things about the margin of
+error) shipped on 2026-08-22, and the asymmetry is the whole of it. `gapLine` said
+"INSIDE the margin" in words when the score called two cards indistinguishable,
+and on the other branch printed `1.2pp` and `±1.1pp` and stopped -- so on a real
+miss the model made the comparison itself and answered "within the margin of
+error, so this pick is essentially a coin flip" under a panel saying the gap was
+larger than the margin. **A number a model is asked to compare is a number it is
+allowed to round**, and at one significant figure every narrow miss in this app
+looks like a tie. Both verdicts are stated now, off `score.indistinguishable`
+and nothing else.
+
+Two things came with it. `explainPick` had the identical shape -- it printed the
+pair and left a PERSON to compare them -- and now says the data can see the gap.
+And **the review prompt had no margin at all**: two card names, "the gap between
+them is the lesson", and nothing about how big a lesson it was, on the screen a
+player reads after the draft where nothing on the page could contradict it. That
+is the shape this file keeps recording, and issue #6's third half was this exact
+sentence about this exact screen. `marginVerdict` is one builder for both
+prompts now.
+
+`coach_shown.contradicted` is the metric: tie language in an answer on a pick the
+score graded as a real miss. It answers whether the prompt fix took, which
+re-reading a prompt cannot.
+
 2.  It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
 
     **Still open, and the cause is NOT missing data.** Investigated 2026-08-20;
@@ -69,57 +175,9 @@ deliberate choice to fix a stale default is the worse of the two errors.
     theme in. The experiment worth running is the pool's rules text. Nothing
     has been built.
 
-3.  **A re-ingest can still strand a draft, through the half nobody guarded**
-    (rewritten 2026-08-18). Everything this item used to describe is gone.
-    `draftPools` gives every session its own packed cards, so the PACKS are
-    beyond a re-ingest's reach, and `draftSessions.sourceHash`, `staleAgainst`,
-    the stale badge and the "can no longer be rebuilt" error were all deleted
-    with the hazard they existed for.
-
-    **The card TEXT was not.** `sets.ingest` replaces a set's `setCardText` rows
-    wholesale, so a card that leaves a pool loses its row while a draft in
-    progress goes on holding that card in boosters nothing can reach to update.
-    The board joins the two halves by name and `hydrateCard` throws on a name it
-    cannot find — deliberately, because a blank frame with no name is worse — and
-    it throws during RENDER, so the board went white with the reason in the
-    console and the back button as the only way out.
-
-    Handled on 2026-08-18: the board asks before the answer can take the page
-    down, names the cards that left, and puts a delete on that screen. A FINISHED
-    draft lands there too and is offered its review first, because `review.load`
-    reads the rows each pick wrote and rebuilds nothing.
-
-    **Never reproduced live.** The mechanism is read off the code and verified
-    there; nobody has watched it happen. Worth knowing before trusting the copy
-    on that screen.
-
-    Not a hazard the eighteen-set re-ingest of 2026-08-17 hit: card counts held
-    for every set, all 29 distinct cards of a pre-re-ingest draft still resolved,
-    and every pool card in all 18 sets has a text row.
-
-4.  Something that's been bothering me is the coaching section when we take unimportant picks that aren't meant to be graded. As well as the coach when we've run out of tokens.
-
-- A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
-- B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
-
-5. Kinda weird the coach and the scorer text say two different things about the margin of error:
-
-```
-Last pick
-A
-91/100
-You took
-Brush Off
-Graded against
-−1.2pp ± 1.1pp
-Sundering Archaic
-That gap is larger than the margin of error on the two win rates.
-
-Coach
-Brush Off is a fine counterspell that fits your
- shell and stays cheap when it counters a spell. Sundering Archaic edges it out by removing a permanent unconditionally on a 3/3 body, but the gap is within the margin of error, so this pick is essentially a coin flip — no need to second-guess it.
-```
-
+3. --
+4. --
+5. --
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -148,6 +206,27 @@ coach PROMPT — the model was told why a card was worth what it was and the
 player looking at the same panel was not. The "infographic" is a diverging bar
 over data that was already on the wire. The half that was real work is in trap
 #16, which is what the write path was doing to it.
+
+13 (the app's vernacular) shipped on 2026-08-22, in three phases. The corpus is
+`packages/core/docs/vernacular.yaml`, with its evidence in `vernacular.md`
+beside it; both are built the way the principles corpus is.
+
+**The diagnosis was grammar, not vocabulary.** "Floor" is real Limited
+vernacular — LSV writes "the floor is pretty high here, as a 3-mana 2/2 flier is
+solid", the abstraction as the predicate of a clause. "A cheaper, higher-floor
+flyer" is the same word stacked in front of a noun. A word list would not have
+touched the sentence that started this, which is why the corpus is rules about
+sentence shape. `defensible` turned out to have no MTG provenance at all.
+
+**A style rule nobody measures silently does not work**, so `coach_shown.jargon`
+counts the banned phrases in what the model actually wrote.
+
+**The labels pass is a coverage problem, not a taste problem.** It missed the
+challenge screens entirely, and what caught that was the string inventory, not
+the sweep. Deciding what a word should be was never the hard part.
+
+**IWD is a year out of date**: 17Lands renamed it IIH on 2025-08-01. The label
+moved everywhere a player reads it; the stored field stays `iwd`.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -304,16 +383,7 @@ over data that was already on the wire. The half that was real work is in trap
      already wants to play twice. The events say whether that is true before any
      of it is designed.
 
-7. **Shipped, and the note went with it** — resuming an abandoned draft. The
-   question this held ("is a draft that isn't completed even tracked on the
-   DB?") is answered yes: `draftSessions.status` carries `"active"`, and
-   `draft.unfinished` lists every open draft on the screen the app opens on,
-   with a picks-so-far count and a `promised` flag so a draft a friend is on the
-   other side of cannot be thrown away. `draft_resumed` is the event.
-
-   The number is kept rather than reused, because the entry below cites 8 and
-   the renumbering that briefly closed this gap took 8's number with it.
-
+7. --
 8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
    drafts side by side. What it is and how to test one alone are in `README.md`;
    the rulings that came out of building it are decisions #17 and #18. The
@@ -407,25 +477,7 @@ flying or trample rather than have it; and 44 fight/bite spells sit in
 nothing. Fixing those is its own re-ingest, so seeing them first is the
 cheap half.
 
-13. I want to improve the coach's (actually the AI being used anywhere in the app) vernacular. I want the AI to talk more like a seasoned friendly MTG player.
-
-Here's an example I don't like:
-
-```
-Fine pick, but the gap to Spectral Sailor is right at the margin, so they're essentially indistinguishable in the data. Balmor is a strong payoff card that pushes you toward spells-matter, while Spectral Sailor is a cheaper, higher-floor flyer that fits nearly any blue deck — either is defensible at pick 1.
-```
-
-- I don't like "higher-floor" and "defensible". What the heck does higher-floor mean in this context?
-
-It'd be extremely rad to do some deep research, find some blog posts or something, and collect a list of terms off the internet and store them as a reference here in the project.
-
-- Secondarily, I think YOU (the AI helping me develop this app) should also be aware of that same vernacular because you make some wacky suggestions for things I really don't like/never heard before such as "The Forty" when the term "Deck" is the norm.
-
-- Lastly, I think this particular idea should be done in a minimum of 2 phases:
-  1. Research and author the list of vernacular.
-  2. Improve the runtime app's usage of AI with proper terminology.
-  3. Do a pass of everything in the app and update labels, title, etc, EVERYTHING.
-
+13. --
 14. Can we look into some tried and true plugins/packages for resizing, window-drag-n-drop, etc as a standard the app could use?
 
 - I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
@@ -725,7 +777,6 @@ the number; `bench-packs` is the gate.
 it is derived from what the field DID, so grading a person against it is marking
 them against the crowd rather than against what wins — the circularity
 `trophyPickRate` is kept out of the scorer for.
-
 
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
@@ -1147,24 +1198,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-            So when the colour rule moved (decision #23), the app changed and the
-            instrument did not. It went on reporting the old rule's numbers, correctly,
-            with the right imports at the top of the file, and nothing anywhere could
-            have said so. It now calls `packScoringContext` like the mutation does.
+                                So when the colour rule moved (decision #23), the app changed and the
+                                instrument did not. It went on reporting the old rule's numbers, correctly,
+                                with the right imports at the top of the file, and nothing anywhere could
+                                have said so. It now calls `packScoringContext` like the mutation does.
 
-            **The second half is worse and is the general form.** The same file printed
-            "the colour terms charged it 0.34pp" under its table, from a filter naming
-            `splash` and `archetype`. That filter was written before the off-colour term
-            existed and nobody widened it -- so the number under a table measuring the
-            off-colour term **excluded the off-colour term**. It read as a healthy small
-            charge and it was a subtotal of the two terms that were not the subject. The
-            true figure was 1.28pp, which is still far too small, which is the finding
-            the instrument was built to surface and had been hiding for four days.
+                                **The second half is worse and is the general form.** The same file printed
+                                "the colour terms charged it 0.34pp" under its table, from a filter naming
+                                `splash` and `archetype`. That filter was written before the off-colour term
+                                existed and nobody widened it -- so the number under a table measuring the
+                                off-colour term **excluded the off-colour term**. It read as a healthy small
+                                charge and it was a subtotal of the two terms that were not the subject. The
+                                true figure was 1.28pp, which is still far too small, which is the finding
+                                the instrument was built to surface and had been hiding for four days.
 
-            The rule: **a harness must not enumerate what it sums.** Sum everything and
-            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-            the total by default rather than by somebody remembering. An allowlist in an
-            instrument is a silent undercount waiting for the next field.
+                                The rule: **a harness must not enumerate what it sums.** Sum everything and
+                                exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                                the total by default rather than by somebody remembering. An allowlist in an
+                                instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
@@ -1299,7 +1350,6 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     reads the same column correctly (`row[pickNoI] === "0"`), which is what makes
     this a reading error rather than a data one — **and the correctly-written
     line was three files away from the incorrectly-written one the whole time.**
-
 
 # Deferred trade-offs (revisit when the premise changes):
 

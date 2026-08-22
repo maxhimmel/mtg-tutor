@@ -98,7 +98,7 @@ export function statLine(c: DisplayCard): string {
   // Percentage POINTS, with a sign. It is the gap between two rates, and
   // formatting it like the rates above would read as one.
   if (c.iwd != null) {
-    parts.push(`IWD ${c.iwd >= 0 ? "+" : ""}${(c.iwd * 100).toFixed(1)}pp`);
+    parts.push(`IIH ${c.iwd >= 0 ? "+" : ""}${(c.iwd * 100).toFixed(1)}pp`);
   }
   if (c.avgPick != null) parts.push(`ATA ${c.avgPick.toFixed(1)}`);
   if (c.alsa != null) parts.push(`ALSA ${c.alsa.toFixed(1)}`);
@@ -144,16 +144,16 @@ export const STAT_LEGEND = [
   ...statBullets,
   "",
   "Reading them together:",
-  "- A high GIH with a flat IWD is a card riding its deck; a high IWD is a card",
+  "- A high GIH with a flat IIH is a card riding its deck; a high IIH is a card",
   "  that wins games by itself.",
   "- The SIZE OF THE ATA/ALSA GAP is the signal, not either number alone.",
   "- The data verdict now reads the pool as well as the card, and shows its",
   "  working: the two answers it gives are the RAW BEST, the strongest card in",
   "  the pack on win rate alone, and the CONTEXT BEST, the one that serves this",
   "  deck. When they differ, the gap between them is the lesson and the reasons",
-  "  are listed for you — archetype fit, what a third colour costs in this set,",
-  "  and how much of a card's win rate to believe.",
-  "- It still cannot see everything. IWD and the ATA/ALSA gap are shown to you",
+  "  are listed for you — what the archetype wants, what a third colour costs in",
+  "  this set, and how much of a card's win rate to believe.",
+  "- It still cannot see everything. IIH and the ATA/ALSA gap are shown to you",
   "  and are NOT in the verdict, so a card whose row argues against its own win",
   "  rate is still yours to point out.",
   "",

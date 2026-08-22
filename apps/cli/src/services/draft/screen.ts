@@ -8,6 +8,7 @@ import {
   cardValue,
   decksAgree,
   explainPick,
+  type ExplainTone,
   hydrate,
   hydrateScore,
   isDecisionPick,
@@ -22,7 +23,7 @@ import { gradeColor, pct } from "../../core/ui/format.js";
 import { pickFromPack } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { CoachQuotaExceeded, streamCoach } from "../../core/tutor/coach.js";
-import { buildTheForty, managePiles } from "./deck.js";
+import { buildTheDeck, managePiles } from "./deck.js";
 import { humanError } from "../../core/ui/humanError.js";
 
 // The draft loop drives the deployment: the engine, the bots and the scoring all
@@ -129,7 +130,17 @@ async function showPickFeedback(
 
   if (coachable && (await streamCoaching(sessionId, pickIndex, head))) return;
 
-  const lines = explainPick(score);
+  // The glyphs live here now rather than in `explainPick`, because a terminal
+  // has nothing else to mark a line with and a browser has type and colour. Core
+  // says what each line is FOR; this is what "for" looks like in a terminal.
+  const marks: Record<ExplainTone, string> = {
+    headline: pc.green("✅"),
+    caution: pc.yellow("⚠️"),
+    detail: " ",
+  };
+  const lines = explainPick(score).map((l) =>
+    l.tone === "detail" ? l.text : `${marks[l.tone]} ${l.text}`,
+  );
   if (signal) lines.push(pc.cyan(signal));
   p.note(lines.join("\n"), head);
 }
@@ -176,7 +187,11 @@ async function streamCoaching(
       }
       return false;
     }
-    p.log.warn(`AI coaching unavailable (${humanError(e)}).`);
+    // Named the same way the board names it, because a player who uses both
+    // should not have to learn two words for one state. The web panel's title
+    // becomes "Reading the numbers" wherever the model did not answer; the
+    // terminal has no title, so it says it in the line.
+    p.log.warn(`Reading the numbers — the coach did not answer (${humanError(e)}).`);
     return false;
   }
 
@@ -204,7 +219,7 @@ export async function finishDraft(convex: ConvexHttpClient, sessionId: Id<"draft
         "the rest wants. The suggested build and your grade are behind the lock.",
       "Draft complete",
     );
-    if (!(await buildTheForty(convex, sessionId, results.pool, results.sideboard))) {
+    if (!(await buildTheDeck(convex, sessionId, results.pool, results.sideboard))) {
       p.cancel(
         "Deck not built. Your picks are saved — finish it any time: " +
           `mtg-tutor draft --resume ${sessionId}`,

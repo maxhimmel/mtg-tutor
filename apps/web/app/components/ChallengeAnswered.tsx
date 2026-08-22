@@ -78,7 +78,7 @@ function StillToBuild({ them }: { them?: string }) {
       bodyClassName="gap-4"
     >
       <h3 className="font-display text-xl font-semibold leading-snug tracking-tight sm:text-2xl">
-        {them ?? "Your challenger"} can see your picks. Not your forty.
+        {them ?? "Your challenger"} can see your picks. Not your deck.
       </h3>
       <p className="max-w-prose text-sm leading-relaxed text-base-content/70">
         All forty-two are in and already counted against theirs. Cut to forty and the two
@@ -93,15 +93,15 @@ function StillToBuild({ them }: { them?: string }) {
  * Three stops, because there are three and the order is the information.
  *
  * The one place in this app where numbered progress is honest: picks, then a
- * forty, then two forties beside each other is a real sequence somebody is
+ * deck, then two decks beside each other is a real sequence somebody is
  * partway along, not a decoration borrowed from an onboarding flow. Hence the
  * shape it is drawn in -- the draft board's own gold tick with its halo marks
  * where you are standing, exactly as it does under a pack.
  */
 const STEPS = [
   { label: "Forty-two picks", state: "done" },
-  { label: "Your forty", state: "here" },
-  { label: "Both forties", state: "waiting" },
+  { label: "Your deck", state: "here" },
+  { label: "Both decks", state: "waiting" },
 ] as const;
 
 /**

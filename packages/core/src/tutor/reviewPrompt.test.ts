@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Card } from "../model/card.js";
 import type { StoredPick } from "../model/review.js";
+import { marginVerdict } from "./pickCoach.js";
 import { buildReviewContext } from "./reviewPrompt.js";
 
 function card(name: string, over: Partial<Card> = {}): Card {
@@ -62,6 +63,30 @@ describe("buildReviewContext", () => {
     const agreed = buildReviewContext({ ...pick, contextBestName: best.name }, []);
     expect(agreed).toContain("The strongest card was also the best one for this deck.");
     expect(agreed).not.toContain("what the score was measured against");
+  });
+
+  // Issue #5, one screen later. The review prompt carried two card names and no
+  // gap at all, so the model decided for itself how big the lesson was on the
+  // screen a player reads AFTER the draft -- the surface nobody had complained
+  // about yet, which is the one this codebase keeps finding rules have not
+  // reached. The sentence is `marginVerdict`, the same one the live coach gets.
+  it("carries the gap and its verdict when the caller has a score", () => {
+    const note = marginVerdict({
+      betterName: "Solid Common",
+      pickedName: "Lightning Strike",
+      gap: 0.012,
+      margin: 0.011,
+      indistinguishable: false,
+    });
+    const ctx = buildReviewContext(pick, [], [], [], false, note);
+    expect(ctx).toContain("OUTSIDE the margin");
+    expect(ctx).toContain("±1.1pp margin of error");
+  });
+
+  // A pick with no stored scoring row has no gap to report, and a prompt that
+  // invents one is the thing the line exists to stop.
+  it("says nothing about a margin when the caller has no score", () => {
+    expect(buildReviewContext(pick, [])).not.toContain("margin of error");
   });
 
   it("says nothing about a sideboard when nothing was set aside", () => {

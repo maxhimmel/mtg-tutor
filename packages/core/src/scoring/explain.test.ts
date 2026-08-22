@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Card } from "../model/card.js";
 import type { PickScore } from "./score.js";
-import { explainPick } from "./explain.js";
+import { explainLines, explainPick } from "./explain.js";
 
 function card(name: string, over: Partial<Card> = {}): Card {
   return {
@@ -55,9 +55,19 @@ describe("explainPick on a pick that was not the best", () => {
   });
 
   it("never names a better card without the margin on the gap", () => {
-    const line = explainPick(score()).join("\n");
+    const line = explainLines(explainPick(score())).join("\n");
     expect(line).toContain("4.2pp more to this deck");
     expect(line).toContain("margin of error");
+  });
+
+  // Issue #5. The inside branch says the data cannot separate the cards; this
+  // one used to print `1.2pp` beside `±1.1pp` and leave the reader to compare
+  // them. Nobody does, so the narrow miss reads as a tie -- which is the same
+  // mistake the coach made off the same two numbers.
+  it("says the data can see the gap, rather than leaving two numbers to compare", () => {
+    const line = explainLines(explainPick(score({ contextBestValue: 0.5901 }))).join("\n");
+    expect(line).toContain("margin of error");
+    expect(line).toContain("a gap the data can see");
   });
 
   // At 5000 games each the error bars run to roughly ±1pp, so a 0.4pp gap is
@@ -65,9 +75,9 @@ describe("explainPick on a pick that was not the best", () => {
   // one; this used to decide for itself, which made four places in the app hold
   // an opinion about a single question.
   it("says outright when the gap is inside the margin", () => {
-    const line = explainPick(
+    const line = explainLines(explainPick(
       score({ contextBestValue: 0.582, indistinguishable: true, band: [better] }),
-    ).join("\n");
+    )).join("\n");
     // It names the tie rather than a card that beat it, and says the pick was
     // not marked down -- which is now true of the grade as well as the prose.
     expect(line).toContain("Nothing measurably better");
@@ -77,13 +87,13 @@ describe("explainPick on a pick that was not the best", () => {
   });
 
   it("does not claim a tie when the gap is real", () => {
-    expect(explainPick(score()).join("\n")).not.toContain("cannot separate it from");
+    expect(explainLines(explainPick(score())).join("\n")).not.toContain("cannot separate it from");
   });
 
   // The corpus id the app itself acted on, so the fallback panel and the CLI
   // say the same thing the coach and the verdict do.
   it("names the card the deck wanted out of the tie, and the principle", () => {
-    const line = explainPick(
+    const line = explainLines(explainPick(
       score({
         contextBestValue: 0.582,
         indistinguishable: true,
@@ -91,16 +101,16 @@ describe("explainPick on a pick that was not the best", () => {
         preferred: better,
         reasons: [{ principle: "CURVE-04", note: "nothing comes down on turn 3" }],
       }),
-    ).join("\n");
+    )).join("\n");
 
     expect(line).toContain("Big Bomb is the one this deck wanted");
     expect(line).toContain("[CURVE-04]");
   });
 
   it("says nothing about a preference when no principle decided one", () => {
-    const line = explainPick(
+    const line = explainLines(explainPick(
       score({ contextBestValue: 0.582, indistinguishable: true, band: [better] }),
-    ).join("\n");
+    )).join("\n");
 
     expect(line).not.toContain("this deck wanted");
   });
@@ -109,13 +119,31 @@ describe("explainPick on a pick that was not the best", () => {
   // error bars over. Saying so is honest; inventing a margin is not.
   it("says there are no error bars rather than inventing them", () => {
     const unrated = card("No Data", { gihWinRate: undefined, gihGames: undefined });
-    const line = explainPick(score({ contextBest: unrated })).join("\n");
+    const line = explainLines(explainPick(score({ contextBest: unrated }))).join("\n");
     expect(line).toContain("no error bars");
     expect(line).not.toContain("±");
   });
 
+  // The lines carry what they are FOR now, so the browser can draw a table and
+  // the terminal can keep its glyphs. Issue #4A: this was never prose, and
+  // typesetting it as prose under a heading that said "Coach" is most of why it
+  // read as an ugly coach rather than as a readout.
+  it("marks exactly one line as the verdict, and flags a caution as a caution", () => {
+    const lines = explainPick(score({ onColor: false }));
+    expect(lines.filter((l) => l.tone === "headline")).toHaveLength(1);
+    expect(lines[0].tone).toBe("headline");
+    const caution = lines.find((l) => l.tone === "caution");
+    expect(caution?.text).toContain("Off your committed colors");
+  });
+
+  it("carries no glyphs of its own, because the client owns those", () => {
+    for (const l of explainPick(score({ isBest: true, contextBest: picked, onColor: false }))) {
+      expect(l.text).not.toMatch(/[\u2705\u26a0]/);
+    }
+  });
+
   it("says nothing about a gap when the player took the best card", () => {
-    const line = explainPick(score({ isBest: true, contextBest: picked })).join("\n");
+    const line = explainLines(explainPick(score({ isBest: true, contextBest: picked }))).join("\n");
     expect(line).toContain("Best available");
     expect(line).not.toContain("margin of error");
   });

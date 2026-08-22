@@ -1,6 +1,7 @@
 import { STAT_LEGEND } from "./cardLine.js";
 import { CONFIDENCE } from "./challenge.js";
 import type { PrinciplesDoc } from "./principles.js";
+import { voiceBlock } from "./vernacular.js";
 
 // Renders the principles corpus into a grounding block, grouped by category.
 function principlesBlock(doc: PrinciplesDoc): string {
@@ -61,13 +62,25 @@ const CARD_TEXT_RULE = [
 // The verdict names a better card; without the gap the model read every
 // divergence as a blunder. `gapMargin` is what makes "inside the margin"
 // a measured fact rather than a threshold someone picked.
+//
+// And the verdict is HANDED OVER, never derived. The gap line now says INSIDE
+// or OUTSIDE in words on both branches, because a model given `1.2pp` and
+// `±1.1pp` and asked which is bigger answered "within the margin of error, so
+// this pick is essentially a coin flip" while the panel beside it said the gap
+// was larger than the margin. Two sentences about one pick, disagreeing, on one
+// screen. The rule below is what stops the model reopening a question the score
+// already closed.
 const GAP_RULE = [
-  "- When you were not the best card for the deck, the verdict says by how much and",
-  "  gives the margin of error on it. Match the advice to that gap. If the gap is inside",
-  "  the margin the two cards are indistinguishable in the data — the pick is fine, say",
-  "  what it does for the deck, and do NOT tell the player to take the other card. Only",
-  "  recommend a swap when the gap is outside the margin, and keep the strength of the",
-  "  recommendation in proportion to its size.",
+  "- When you were not the best card for the deck, the verdict says by how much, gives",
+  "  the margin of error on it, and states whether the gap is INSIDE or OUTSIDE that",
+  "  margin. That verdict is the app's, not yours: never compare the two numbers",
+  "  yourself and never contradict it, however close they look.",
+  "- Inside the margin, the two cards are indistinguishable in the data — the pick is",
+  "  fine, say what it does for the deck, and do NOT tell the player to take the other",
+  "  card. Outside the margin, the data can see the difference: do not call the pick a",
+  "  coin flip, a wash, or too close to call. Only recommend a swap when the gap is",
+  "  outside the margin, and keep the strength of the recommendation in proportion to",
+  "  its size.",
 ];
 
 // The player now states a reason and a confidence BEFORE anything is revealed,
@@ -133,6 +146,8 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     // budget does not grow; what it is spent on shifts, and answering what the
     // player actually said is worth more than a third sentence about the card.
     "- Keep it to 1-3 sentences. No preamble, no restating the situation.",
+    "- Write it the way \"How to write\" below says. Those rules are about the sentence,",
+    "  not the judgment: they never change which card is right, only how you say it.",
     ...NAME_RULE,
     ...COLOR_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
@@ -162,6 +177,10 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "  count them toward colors or curve, and do not coach them back into the deck.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
     "",
+    // Sits between the rules and the data on purpose: it is the last thing said
+    // about HOW to answer before the model is handed what to answer WITH.
+    voiceBlock(),
+    "",
     STAT_LEGEND,
     "",
     "# Principles",
@@ -182,7 +201,8 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "pool, but stay grounded in the principles below — they are your fact-check reference.",
     "",
     "Rules:",
-    "- Be concrete and specific; no filler or restating the situation back.",
+    "- Be concrete and specific; no filler or restating the situation back. Write it the",
+    "  way \"How to write\" below says.",
     ...NAME_RULE,
     ...COLOR_RULE,
     ...CARD_TEXT_RULE,
@@ -194,6 +214,11 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "- The 'raw-power best' is the highest-win-rate card by data. The 'context-best' is",
     "  the card that best serves THIS player's deck — often the same, but not always.",
     "  When they differ, that gap is the lesson: explain it plainly.",
+    // Review had none of this. It was told two card names and that the gap
+    // between them was the lesson, with no size on the gap and no error bars --
+    // so it decided for itself how big a lesson it was, on a screen read after
+    // the draft where nothing on the page could contradict it.
+    ...GAP_RULE,
     "- Do NOT treat an on-color, disciplined pick as a mistake just because a stronger",
     "  off-color card was passed [SIG-01]. Staying open early is correct.",
     "- The Situation line gives the pick's position in the WHOLE draft and the colors the",
@@ -209,6 +234,11 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "- Cards in the Sideboard are ones the player has said they will not play. Do not",
     "  count them toward colors or curve.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
+    "",
+    // The same voice on both surfaces, which is the point of a corpus over a
+    // paragraph typed into whichever prompt somebody was editing that day. The
+    // review answer is longer than the coach's and drifts further without it.
+    voiceBlock(),
     "",
     STAT_LEGEND,
     "",

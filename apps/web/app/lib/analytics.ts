@@ -200,12 +200,42 @@ export function ceremonyAbandoned(p: {
   posthog.capture("ceremony_abandoned", p);
 }
 
-/** The coach said something. `ms` is how long the player waited to see it. */
+/**
+ * The coach said something. `ms` is how long the player waited to see it.
+ *
+ * `contradicted` is the coach telling the player the two cards were a tie on a
+ * pick the panel beside it graded as a miss the data can see. That is issue #5,
+ * and it shipped for months because nothing counted it: the coach arriving and
+ * the coach arriving WRONG are the same event from the outside, so the only
+ * detector was somebody reading an answer and a panel in the same glance and
+ * noticing they disagreed.
+ *
+ * The question it answers is whether the prompt fix took. A rate that does not
+ * fall says the model is still overruling a verdict it is now handed in words,
+ * which is a different repair from the one that was made — and no amount of
+ * re-reading the prompt would tell you that.
+ *
+ * `jargon` is the phrases from the vernacular corpus that the answer used
+ * anyway — "defensible", "higher-floor", the rest of `avoid`. A style rule is
+ * the easiest thing in this app to ship and never check: it costs tokens on
+ * every call, it raises nothing when it is ignored, and the only detector is
+ * somebody reading an answer and finding it stilted. That is exactly how the
+ * corpus came to be asked for, months after the prose went out.
+ *
+ * The array rather than a count, because which phrase survives is the thing that
+ * would change what gets done: one term stuck at the top says that rule needs
+ * rewriting, a flat spread says the whole block is being skimmed.
+ *
+ * Neither field measures whether the answer is GOOD. Both catch a failure that
+ * has a name; the rest needs a person.
+ */
 export function coachShown(p: {
   sessionId: string;
   pickIndex: number;
   ms: number;
   chars: number;
+  contradicted: boolean;
+  jargon: string[];
 }): void {
   if (!on()) return;
   posthog.capture("coach_shown", p);
@@ -214,15 +244,22 @@ export function coachShown(p: {
 /**
  * The coach did not.
  *
- * `reason` separates three different bugs that look identical from the outside:
- * "declined" is the pick being forced and no tokens being spent on purpose,
- * "quota" is the friend having run out, and "error"/"unconfigured" are the app
- * being broken. Only one of them is a thing to fix.
+ * `reason` separates bugs that look identical from the outside: "declined" is
+ * the pick being forced and no tokens being spent on purpose, "quota" is the
+ * friend having run out, and "error"/"unconfigured" are the app being broken.
+ * Only one of them is a thing to fix.
+ *
+ * "off" is new, and it is the one this event was missing. A player can now turn
+ * the coach off — which exists so that drafting without prose is a CHOICE rather
+ * than something that looks like a broken app — and without a row per pick,
+ * `setting_changed` would say somebody flipped a toggle once and nothing would
+ * say how much of this app's central feature is being deliberately skipped.
+ * Those are different questions and only the second one changes anything.
  */
 export function coachUnavailable(p: {
   sessionId: string;
   pickIndex: number;
-  reason: "declined" | "quota" | "unconfigured" | "error";
+  reason: "declined" | "quota" | "unconfigured" | "error" | "off";
 }): void {
   if (!on()) return;
   posthog.capture("coach_unavailable", p);
