@@ -3,7 +3,7 @@
 // One corpus, three consumers: the hover panel's labels and hold-Shift reveal,
 // the /glossary page, and the coach's system prompt (see STAT_LEGEND in
 // cardLine.ts, which is built from CARD_STAT_GLOSSARY). Written once because the
-// alternative is three descriptions of IWD that slowly stop agreeing -- the same
+// alternative is three descriptions of IIH that slowly stop agreeing -- the same
 // reason the principles corpus feeds both the prompt and /principles.
 //
 // `short` and `caveat` go into the LLM legend as well as the UI, so they are
@@ -37,15 +37,29 @@ export const CARD_STAT_GLOSSARY: GlossaryEntry[] = [
       "It is confounded by deck quality: a merely fine card in a strong archetype posts a high GIH because the decks playing it win.",
   },
   {
-    id: "iwd",
-    label: "IWD",
-    name: "Improvement when drawn",
+    // 17Lands renamed this metric on 2025-08-01: Improvement When Drawn (IWD)
+    // became Improvement In Hand (IIH), in their own words "to better reflect
+    // the definition of the metric. The definition remains the same."
+    //
+    // Quoting the old name without a `from` in front of it, because
+    // check-purity.ts reads `from "..."` as an import and a comment can trip it.
+    // The number never moved; the word did, and this app was a year behind it.
+    //
+    // The old name was imprecise in a way worth knowing: the other half of the
+    // subtraction is games-not-seen, which excludes cards TUTORED to hand as
+    // well as drawn — so "in hand" is the honest description and "when drawn"
+    // was not. The stored field is still `iwd`, because that is a column name
+    // and renaming it is a re-ingest for no gain.
+    id: "iih",
+    label: "IIH",
+    name: "Improvement in hand",
     short:
-      "The same decks' win rate with the card drawn minus without it, in percentage points.",
+      "The same decks' win rate with the card in hand minus the games it was never seen, in percentage points.",
     detail: [
-      "Take every deck that played this card and split its games in two: the ones where the card was drawn, and the ones where it sat in the library all game. IWD is the gap between those two win rates.",
+      "Take every deck that played this card and split its games in two: the ones where it reached your hand, and the ones where it sat unseen in the deck all game. IIH is the gap between those two win rates.",
       "Because both halves come from the same decks, deck quality cancels out. What is left is the card's own contribution — which is exactly what GIH WR cannot tell you.",
-      "A high GIH with a flat IWD is a card riding its deck. A high IWD is a card that wins games by itself.",
+      "A high GIH with a flat IIH is a card riding its deck. A high IIH is a card that wins games by itself.",
+      "17Lands called this IWD, for improvement when drawn, until August 2025. Same number, older name — you will still see it written that way elsewhere.",
     ],
     caveat:
       "It runs structurally high for expensive, high-impact cards and near zero for cheap efficient ones and lands, so it is a second axis, not a better ranking.",
@@ -87,12 +101,12 @@ export const CARD_STAT_GLOSSARY: GlossaryEntry[] = [
       "Because games where the card was never drawn are included, most of what this measures is how good the decks that play it are — not the card.",
     ],
     caveat:
-      "The most deck-dominated number here and the weakest evidence about the card itself; when it disagrees with IWD, believe IWD.",
+      "The most deck-dominated number here and the weakest evidence about the card itself; when it disagrees with IIH, believe IIH.",
   },
 ];
 
 // The vocabulary the app invented, as opposed to the stats it imported. Someone
-// confused by IWD is just as likely to be confused by why a pick scored 61.
+// confused by IIH is just as likely to be confused by why a pick scored 61.
 export const SCORING_GLOSSARY: GlossaryEntry[] = [
   {
     id: "score",

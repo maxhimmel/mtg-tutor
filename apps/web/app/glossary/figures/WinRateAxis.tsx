@@ -50,7 +50,7 @@ const at = (v: number) => round((v - MIN) / (MAX - MIN));
 // the noise straight back.
 const span = (from: number, to: number) => round((to - from) / (MAX - MIN));
 
-const iwdLabel = CARD_STAT_GLOSSARY.find((s) => s.id === "iwd")?.label ?? "IWD";
+const iwdLabel = CARD_STAT_GLOSSARY.find((s) => s.id === "iih")?.label ?? "IIH";
 
 // Three values can land on one x -- that is exactly what the second row does --
 // so each gets a lane of its own rather than a collision rule. The lanes are
@@ -165,7 +165,7 @@ export function WinRateAxis() {
           Now look at the games those same decks played{" "}
           <em className="not-italic text-primary">without</em> ever drawing the card. Globe&apos;s
           decks won 57.1%. Rush&apos;s won 62.1% — they were winning just as often with it stuck in
-          the library. That gap is <Term id="iwd" />, and it is the difference between a card that
+          the library. That gap is <Term id="iih" />, and it is the difference between a card that
           wins games and a card along for the ride. The tick between the two ends is{" "}
           <Term id="gpwr" />: every game the card was in the deck, drawn or not, which is the two
           halves averaged back together. It can only ever land between them, and it can never tell

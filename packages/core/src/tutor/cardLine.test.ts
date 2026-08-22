@@ -90,19 +90,19 @@ describe("rulesText", () => {
 describe("statLine", () => {
   it("renders every stat, with the sample size on the win rate", () => {
     expect(statLine(card())).toBe(
-      "GIH 55.2% (n 3.8k) · IWD +3.6pp · ATA 4.9 · ALSA 9.2 · maindecked 44.2% · GP WR 60.4%",
+      "GIH 55.2% (n 3.8k) · IIH +3.6pp · ATA 4.9 · ALSA 9.2 · maindecked 44.2% · GP WR 60.4%",
     );
   });
 
-  // IWD is a difference between two rates, not a rate. Formatting it like the
+  // IIH is a difference between two rates, not a rate. Formatting it like the
   // win rates beside it would read as one, which is the whole misreading risk.
-  it("renders IWD in signed percentage points, never as a percentage", () => {
-    expect(statLine(card({ iwd: 0.149 }))).toContain("IWD +14.9pp");
-    expect(statLine(card({ iwd: -0.021 }))).toContain("IWD -2.1pp");
+  it("renders IIH in signed percentage points, never as a percentage", () => {
+    expect(statLine(card({ iwd: 0.149 }))).toContain("IIH +14.9pp");
+    expect(statLine(card({ iwd: -0.021 }))).toContain("IIH -2.1pp");
   });
 
-  it("keeps a zero IWD signed so it reads as a difference", () => {
-    expect(statLine(card({ iwd: 0 }))).toContain("IWD +0.0pp");
+  it("keeps a zero IIH signed so it reads as a difference", () => {
+    expect(statLine(card({ iwd: 0 }))).toContain("IIH +0.0pp");
   });
 
   // A thin set would otherwise spend most of a fifteen-card pack listing what it
