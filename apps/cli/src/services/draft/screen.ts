@@ -187,7 +187,11 @@ async function streamCoaching(
       }
       return false;
     }
-    p.log.warn(`AI coaching unavailable (${humanError(e)}).`);
+    // Named the same way the board names it, because a player who uses both
+    // should not have to learn two words for one state. The web panel's title
+    // becomes "Reading the numbers" wherever the model did not answer; the
+    // terminal has no title, so it says it in the line.
+    p.log.warn(`Reading the numbers — the coach did not answer (${humanError(e)}).`);
     return false;
   }
 

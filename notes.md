@@ -164,6 +164,66 @@ which is live in `apps/web/app/layout.tsx` as "P1P1 — Draft on instinct. Leave
 with reasons." — and 12 (principle marks) and 13 (mana symbols in prose) shipped
 on 2026-08-15.
 
+13 (the app's vernacular) shipped in three phases on 2026-08-22.
+
+`packages/core/docs/vernacular.yaml` is the corpus, built the way the principles
+corpus is: YAML canonical, codegen to TS so Convex's V8 runtime needs no
+filesystem, schema validated at codegen. Sixteen sources, all read.
+
+**The diagnosis was grammar, not vocabulary, and that is the finding worth
+keeping.** "Floor" is real Limited vernacular; LSV writes "The floor is pretty
+high here, as a 3-mana 2/2 flier is solid" -- the abstraction as the PREDICATE of
+a clause. "A cheaper, higher-floor flyer" is the same word stacked in front of a
+noun as a hyphenated modifier, and no Limited writer writes that way. So `voice`
+is ten rules about sentence SHAPE and `avoid` is twelve phrases with their
+replacements. A word list would not have touched the sentence that started this,
+and a blacklist without replacements sends a model to the nearest synonym, which
+is the same register one word over.
+
+`defensible` has no MTG provenance in any source read. It is debate-club register
+that arrived from somewhere other than this game.
+
+The fifty `terms` are NOT sent to the model, which already knows what a bomb is.
+They are for the people and the agents working here, which is the half of the
+idea about my own vocabulary -- CLAUDE.md carries that rule now.
+
+`coach_shown.jargon` counts the `avoid` list in what the model actually wrote.
+**A style rule nobody measures is a style rule that silently does not work**: it
+costs tokens on every call, raises nothing when ignored, and the only detector is
+a person finding the prose stilted, which is how this got asked for months after
+the prose went out.
+
+Cost: ~690 tokens on a ~4,900-token system prompt, prompt-cached at 0.1x, so ~69
+effective tokens per coached pick.
+
+**Phase 3 found less than expected, which is the useful part.** Every player-
+facing string in both clients was inventoried and read against the corpus. The
+app's own voice was already close; almost everything that drifted was the model's
+prose. Five things moved:
+
+- "Your forty" and "Lock in the forty" in the deck builder, on both clients, and
+  `buildTheForty` in the CLI source -- the coinage the idea was filed about.
+- "Archetype fit", which was a label in the score breakdown AND a phrase in
+  `STAT_LEGEND`, i.e. inside a prompt that bans it eight lines earlier.
+- "Divergence" as an eyebrow, which is a nominalisation of what the paragraph
+  under it says.
+- The review screen's "Coach unavailable" and the CLI's "AI coaching
+  unavailable", now saying what the board says.
+
+**And IWD is a year out of date.** 17Lands renamed *Improvement When Drawn* to
+*Improvement In Hand* on 2025-08-01 -- read off their own changelog, not recalled.
+The old name was imprecise in a way worth knowing: the other half of the
+subtraction is games-not-seen, which excludes cards TUTORED to hand as well as
+drawn, so "in hand" is the honest description. The label moves everywhere a player
+reads it; the stored field stays `iwd`, because that is a column name and
+renaming it is a re-ingest for no gain. The glossary keeps a line saying what it
+used to be called.
+
+Judgment calls left alone, so they are decisions rather than misses: lowercase
+"forty" used as a COUNT stays ("Forty-five went into the pool and forty come
+out", "the same forty, card for card"). The rule bans naming the deck "the
+Forty"; it does not ban counting to forty.
+
 15 (the score's own working, drawn) shipped on 2026-08-21, and is deleted rather
 than stubbed because nothing cited it. Worth one line on what it turned out to
 be: no new computation at all. `contextValue` has returned a named, signed term
@@ -423,55 +483,7 @@ flying or trample rather than have it; and 44 fight/bite spells sit in
 nothing. Fixing those is its own re-ingest, so seeing them first is the
 cheap half.
 
-13. **Phases 1 and 2 shipped 2026-08-22. Phase 3 -- the labels pass -- is what
-    is left**, and it is deliberately not started, because it changes words on
-    screens rather than words a model writes.
-
-    `packages/core/docs/vernacular.yaml` is the corpus, built exactly as the
-    principles corpus is: YAML canonical, codegen to TS so Convex's V8 runtime
-    needs no filesystem, schema validated at codegen so a bad corpus breaks the
-    build. Sixteen sources, all read.
-
-    **The diagnosis was grammar, not vocabulary, and that is the finding worth
-    keeping.** "Floor" is real Limited vernacular; LSV writes "The floor is
-    pretty high here, as a 3-mana 2/2 flier is solid" -- the abstraction as the
-    PREDICATE of a clause. "A cheaper, higher-floor flyer" is the same word
-    stacked in front of a noun as a hyphenated modifier, and no Limited writer
-    writes that way. So the corpus is ten rules about sentence SHAPE plus twelve
-    phrases with replacements, not a dictionary. A word list would not have
-    touched the sentence that started this.
-
-    `defensible` turned out to have no MTG provenance at all -- it appears in no
-    source read. It is debate-club register that arrived from somewhere else.
-
-    The fifty `terms` are NOT sent to the model, which already knows what a bomb
-    is; they are for the people and the agents working here, which is the half of
-    this idea about my own vocabulary. CLAUDE.md carries that rule now.
-
-    `coach_shown.jargon` counts the `avoid` list in what the model actually
-    wrote. **A style rule nobody measures is a style rule that silently does not
-    work** -- it costs tokens on every call, raises nothing when ignored, and the
-    only detector is a person finding the prose stilted, which is how this got
-    asked for months after the prose went out. The array rather than a count,
-    because which phrase survives is what decides the next move.
-
-    Cost: ~690 tokens on a ~4,900-token system prompt, prompt-cached at 0.1x, so
-    ~69 effective tokens per coached pick.
-
-    **One thing found and deliberately NOT done.** 17Lands renamed *Improvement
-    When Drawn* to *Improvement In Hand* on 2025-08-01 -- verified on their own
-    changelog, definition unchanged. So `IWD` is a year-stale label, and it is in
-    `STAT_LEGEND`, the hover panel, `/glossary` and the stored field name. That is
-    a labels decision and belongs to phase 3; shipping it through the voice
-    corpus would have had the prompt telling the model to write IIH while the
-    legend two blocks below it said IWD.
-
-    **What phase 3 still wants**, and why it is a decision rather than a task:
-    every label, heading, empty state and button in `apps/web` and the CLI, read
-    against the corpus. It is the one phase that changes what a player sees
-    rather than what a model writes, and the IWD/IIH rename is the case that
-    shows why it needs a person: the number does not change, the word does, and
-    everyone who has been reading this app for a month knows the old one.
+13. --
 
 14. Can we look into some tried and true plugins/packages for resizing, window-drag-n-drop, etc as a standard the app could use?
 
