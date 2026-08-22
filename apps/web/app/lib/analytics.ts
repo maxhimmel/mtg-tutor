@@ -200,12 +200,27 @@ export function ceremonyAbandoned(p: {
   posthog.capture("ceremony_abandoned", p);
 }
 
-/** The coach said something. `ms` is how long the player waited to see it. */
+/**
+ * The coach said something. `ms` is how long the player waited to see it.
+ *
+ * `contradicted` is the coach telling the player the two cards were a tie on a
+ * pick the panel beside it graded as a miss the data can see. That is issue #5,
+ * and it shipped for months because nothing counted it: the coach arriving and
+ * the coach arriving WRONG are the same event from the outside, so the only
+ * detector was somebody reading an answer and a panel in the same glance and
+ * noticing they disagreed.
+ *
+ * The question it answers is whether the prompt fix took. A rate that does not
+ * fall says the model is still overruling a verdict it is now handed in words,
+ * which is a different repair from the one that was made — and no amount of
+ * re-reading the prompt would tell you that.
+ */
 export function coachShown(p: {
   sessionId: string;
   pickIndex: number;
   ms: number;
   chars: number;
+  contradicted: boolean;
 }): void {
   if (!on()) return;
   posthog.capture("coach_shown", p);

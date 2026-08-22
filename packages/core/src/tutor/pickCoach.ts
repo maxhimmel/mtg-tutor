@@ -117,6 +117,17 @@ export function buildPickContext(
   // cannot tell these apart" sentence under a 94/100 -- so the prompt now reads
   // `score.indistinguishable` and the size of the bars is all `gapMargin` is
   // still asked for.
+  //
+  // BOTH VERDICTS ARE STATED, BECAUSE ONLY ONE OF THEM USED TO BE
+  //
+  // The inside case said "INSIDE the margin" in words and the outside case
+  // handed over two numbers and stopped -- so on a miss the model was doing the
+  // comparison itself, off `1.2pp` against `±1.1pp`, and calling it "within the
+  // margin of error, so this pick is essentially a coin flip" under a panel that
+  // said the gap was larger than the margin. The player got both answers on one
+  // screen. A number a model is asked to compare is a number it is allowed to
+  // round, and at one significant figure every real miss in this app looks like
+  // a tie.
   const gap = score.contextBestValue - score.pickedContextValue;
   const margin = gapMargin(score.contextBest, picked);
   const gapLine = score.isBest
@@ -129,7 +140,9 @@ export function buildPickContext(
           ? `, against a ±${pp(margin)} margin of error on those win rates. The gap is ` +
             `INSIDE the margin: the data cannot tell these two cards apart, and the ` +
             `pick is not marked down for it.`
-          : `, against a ±${pp(margin)} margin of error on those win rates.`);
+          : `, against a ±${pp(margin)} margin of error on those win rates. The gap is ` +
+            `OUTSIDE the margin: the data CAN tell these two cards apart, and the pick ` +
+            `is marked down for it.`);
 
   // What the deck wanted out of a tie the data could not settle, in the corpus's
   // own terms. The model already cites principle ids in its answers and is given
@@ -217,4 +230,26 @@ export function buildPickContext(
   ]
     .filter((l) => l !== null)
     .join("\n");
+}
+
+// Whether an answer told the player the two cards were a tie.
+//
+// The instrument for issue #5, and it exists because the defect was invisible.
+// The coach called a 1.2pp miss "within the margin of error, so this pick is
+// essentially a coin flip" beside a panel saying the gap was larger than the
+// margin, and nothing in the app counted that — `coach_shown` recorded that
+// prose arrived and how long it took, which is true of a contradiction and of a
+// good answer alike. Crossed with `indistinguishable` it says whether the
+// prompt fix took, on real drafts, without anyone reading forty answers.
+//
+// Deliberately one-directional. Tie language is a small closed set of phrases a
+// regex can be trusted on; the opposite claim — "clearly the better card" over
+// a gap the data cannot see — is said a hundred ways and a pattern for it would
+// report a number nobody could act on. Measuring the half that can be measured
+// beats a wider net full of holes.
+const TIE_LANGUAGE =
+  /\b(?:within|inside)\s+(?:the\s+)?margin|margin\s+of\s+error\b[^.]*\b(?:so|and)\b[^.]*\bcoin\s*flip|coin\s*flip|too\s+close\s+to\s+call|essentially\s+(?:a\s+)?(?:tie|wash)|can(?:no|')t\s+(?:really\s+)?(?:tell|separate)\s+the(?:se)?\s+two|indistinguishable/i;
+
+export function claimsTie(prose: string): boolean {
+  return TIE_LANGUAGE.test(prose);
 }

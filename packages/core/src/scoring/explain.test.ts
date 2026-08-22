@@ -60,6 +60,16 @@ describe("explainPick on a pick that was not the best", () => {
     expect(line).toContain("margin of error");
   });
 
+  // Issue #5. The inside branch says the data cannot separate the cards; this
+  // one used to print `1.2pp` beside `±1.1pp` and leave the reader to compare
+  // them. Nobody does, so the narrow miss reads as a tie -- which is the same
+  // mistake the coach made off the same two numbers.
+  it("says the data can see the gap, rather than leaving two numbers to compare", () => {
+    const line = explainPick(score({ contextBestValue: 0.5901 })).join("\n");
+    expect(line).toContain("margin of error");
+    expect(line).toContain("a gap the data can see");
+  });
+
   // At 5000 games each the error bars run to roughly ±1pp, so a 0.4pp gap is
   // not a gap -- and this must not read as a miss. The SCORE says whether it is
   // one; this used to decide for itself, which made four places in the app hold

@@ -29,6 +29,7 @@ import {
   applyBench,
   calibrationLine,
   claimOutcome,
+  claimsTie,
   explainPick,
   hydrate,
   hydrateScore,
@@ -414,7 +415,20 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
         // `ms` is what the player waited, not what the model took -- the whole
         // stream, from the click to the last token. If it routinely outlasts the
         // gap to the next pick, the coach is being written to nobody.
-        coachShown({ sessionId, pickIndex, ms: Date.now() - startedAt, chars: prose.length });
+        //
+        // `contradicted` is issue #5 counted rather than waited for. The prompt
+        // now states INSIDE or OUTSIDE the margin in words on both branches, so
+        // a coach still calling a graded miss a coin flip is overruling a
+        // verdict it was handed -- which is a different defect from the one that
+        // was fixed, and invisible without this. Read here because this is where
+        // the answer and the score are both in hand.
+        coachShown({
+          sessionId,
+          pickIndex,
+          ms: Date.now() - startedAt,
+          chars: prose.length,
+          contradicted: !score.indistinguishable && !score.isBest && claimsTie(prose),
+        });
       } catch (e) {
         // The server can disagree with us about whether this pick was forced,
         // since it owns the clamp and we do not. Everything else -- no key, a

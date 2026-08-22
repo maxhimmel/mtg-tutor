@@ -61,13 +61,25 @@ const CARD_TEXT_RULE = [
 // The verdict names a better card; without the gap the model read every
 // divergence as a blunder. `gapMargin` is what makes "inside the margin"
 // a measured fact rather than a threshold someone picked.
+//
+// And the verdict is HANDED OVER, never derived. The gap line now says INSIDE
+// or OUTSIDE in words on both branches, because a model given `1.2pp` and
+// `±1.1pp` and asked which is bigger answered "within the margin of error, so
+// this pick is essentially a coin flip" while the panel beside it said the gap
+// was larger than the margin. Two sentences about one pick, disagreeing, on one
+// screen. The rule below is what stops the model reopening a question the score
+// already closed.
 const GAP_RULE = [
-  "- When you were not the best card for the deck, the verdict says by how much and",
-  "  gives the margin of error on it. Match the advice to that gap. If the gap is inside",
-  "  the margin the two cards are indistinguishable in the data — the pick is fine, say",
-  "  what it does for the deck, and do NOT tell the player to take the other card. Only",
-  "  recommend a swap when the gap is outside the margin, and keep the strength of the",
-  "  recommendation in proportion to its size.",
+  "- When you were not the best card for the deck, the verdict says by how much, gives",
+  "  the margin of error on it, and states whether the gap is INSIDE or OUTSIDE that",
+  "  margin. That verdict is the app's, not yours: never compare the two numbers",
+  "  yourself and never contradict it, however close they look.",
+  "- Inside the margin, the two cards are indistinguishable in the data — the pick is",
+  "  fine, say what it does for the deck, and do NOT tell the player to take the other",
+  "  card. Outside the margin, the data can see the difference: do not call the pick a",
+  "  coin flip, a wash, or too close to call. Only recommend a swap when the gap is",
+  "  outside the margin, and keep the strength of the recommendation in proportion to",
+  "  its size.",
 ];
 
 // The player now states a reason and a confidence BEFORE anything is revealed,
