@@ -8,7 +8,8 @@ export const VERNACULAR_DOC: VernacularDoc = {
   "meta": {
     "title": "How Limited players talk",
     "note": "Register and vocabulary for every surface of this app that writes English about Magic.",
-    "sources": "./vernacular-sources.md"
+    "sources": "./vernacular-sources.md",
+    "companion": "./vernacular.md"
   },
   "voice": [
     {

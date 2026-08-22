@@ -38,6 +38,10 @@ meta:
   title: "How Limited players talk"
   note: "Register and vocabulary for every surface of this app that writes English about Magic."
   sources: "./vernacular-sources.md"
+  # The human companion: the quotes each voice rule was derived from, the
+  # contested terms, and what could not be sourced. Same relationship
+  # draft-principles.md has with its YAML -- THIS file wins where they differ.
+  companion: "./vernacular.md"
 
 # The rules the model is actually given. Ordered by how often they fire on real
 # coach output, worst first.

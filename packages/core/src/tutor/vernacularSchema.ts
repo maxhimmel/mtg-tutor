@@ -44,6 +44,8 @@ export interface VernacularMeta {
   title: string;
   note?: string;
   sources?: string;
+  /** The human-readable companion: the quotes each voice rule was derived from. */
+  companion?: string;
 }
 
 export interface VernacularDoc {

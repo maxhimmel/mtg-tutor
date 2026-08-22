@@ -72,7 +72,8 @@ that kind of decision.
 
 This is a Magic app and it should sound like one — in the coach's prose, in
 labels and headings, in commit messages, and in what you say to me in chat. The
-corpus is `packages/core/docs/vernacular.yaml`. Read it before naming anything.
+corpus is `packages/core/docs/vernacular.yaml`, with the evidence behind every
+rule in `vernacular.md` beside it. Read them before naming anything.
 
 It exists because the coach wrote "Spectral Sailor is a cheaper, higher-floor
 flyer that fits nearly any blue deck — either is defensible at pick 1." Nothing
