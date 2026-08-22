@@ -1,6 +1,7 @@
 import { STAT_LEGEND } from "./cardLine.js";
 import { CONFIDENCE } from "./challenge.js";
 import type { PrinciplesDoc } from "./principles.js";
+import { voiceBlock } from "./vernacular.js";
 
 // Renders the principles corpus into a grounding block, grouped by category.
 function principlesBlock(doc: PrinciplesDoc): string {
@@ -133,6 +134,8 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     // budget does not grow; what it is spent on shifts, and answering what the
     // player actually said is worth more than a third sentence about the card.
     "- Keep it to 1-3 sentences. No preamble, no restating the situation.",
+    "- Write it the way \"How to write\" below says. Those rules are about the sentence,",
+    "  not the judgment: they never change which card is right, only how you say it.",
     ...NAME_RULE,
     ...COLOR_RULE,
     "- Cite the principle id(s) your judgment rests on in brackets, e.g. [EVAL-02].",
@@ -162,6 +165,10 @@ export function buildSystemPrompt(doc: PrinciplesDoc): string {
     "  count them toward colors or curve, and do not coach them back into the deck.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
     "",
+    // Sits between the rules and the data on purpose: it is the last thing said
+    // about HOW to answer before the model is handed what to answer WITH.
+    voiceBlock(),
+    "",
     STAT_LEGEND,
     "",
     "# Principles",
@@ -182,7 +189,8 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "pool, but stay grounded in the principles below — they are your fact-check reference.",
     "",
     "Rules:",
-    "- Be concrete and specific; no filler or restating the situation back.",
+    "- Be concrete and specific; no filler or restating the situation back. Write it the",
+    "  way \"How to write\" below says.",
     ...NAME_RULE,
     ...COLOR_RULE,
     ...CARD_TEXT_RULE,
@@ -209,6 +217,11 @@ export function buildReviewSystemPrompt(doc: PrinciplesDoc): string {
     "- Cards in the Sideboard are ones the player has said they will not play. Do not",
     "  count them toward colors or curve.",
     "- Admit uncertainty rather than inventing rules that aren't grounded here.",
+    "",
+    // The same voice on both surfaces, which is the point of a corpus over a
+    // paragraph typed into whichever prompt somebody was editing that day. The
+    // review answer is longer than the coach's and drifts further without it.
+    voiceBlock(),
     "",
     STAT_LEGEND,
     "",

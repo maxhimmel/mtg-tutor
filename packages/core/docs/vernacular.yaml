@@ -1,0 +1,381 @@
+# How Limited players actually talk — CANONICAL machine-readable source.
+#
+# Compiled into src/tutor/vernacular.generated.ts by scripts/generate-principles.ts,
+# so edit THIS file and re-run `pnpm --filter @mtg-tutor/core generate`.
+#
+# WHY THIS EXISTS, AND WHY IT IS NOT THE PRINCIPLES CORPUS
+#
+# draft-principles.yaml is what the coach is allowed to BELIEVE. This is how it
+# is allowed to SAY it. They are separate because they fail separately: a coach
+# can be entirely right about a pick and still write "Spectral Sailor is a
+# cheaper, higher-floor flyer that fits nearly any blue deck -- either is
+# defensible at pick 1", which is the sentence that started this file.
+#
+# THE DIAGNOSIS IS GRAMMAR, NOT VOCABULARY
+#
+# "Floor" is real Limited vernacular and LSV uses it. What he writes is "The
+# floor is pretty high here, as a 3-mana 2/2 flier is solid" -- the abstraction
+# as the PREDICATE of a clause. "A higher-floor flyer" is the same word stacked
+# in front of a noun as a hyphenated modifier, and no Limited writer does that.
+# Same term, different grammar, completely different register. So this corpus is
+# mostly rules about sentence shape, plus a short list of phrases with no MTG
+# provenance at all ("defensible" is the clearest: no source uses it).
+#
+# THREE CONSUMERS, AND ONLY TWO OF THEM ARE THE MODEL
+#
+#   voice  -> the coach and review system prompts. Kept SHORT on purpose: the
+#             system prompt is re-read on every call, and roadmap #4 priced
+#             prompt growth at +947 input tokens per coached pick for a much
+#             bigger addition than this one.
+#   avoid  -> the same prompts, AND `jargonHits` at runtime, which counts these
+#             phrases in what the model actually wrote. A voice rule nobody
+#             measures is a voice rule that silently does not work.
+#   terms  -> humans and the agents working on this repo. NOT sent to the model:
+#             it knows what a bomb is. What it lacks is the register, which is
+#             what `voice` carries.
+
+meta:
+  title: "How Limited players talk"
+  note: "Register and vocabulary for every surface of this app that writes English about Magic."
+  sources: "./vernacular-sources.md"
+
+# The rules the model is actually given. Ordered by how often they fire on real
+# coach output, worst first.
+voice:
+  - id: VOICE-01
+    text: "Never stack an abstraction in front of a noun as a hyphenated modifier. Not 'a higher-floor flyer', 'a high-ceiling build-around', 'a low-variance pick'. Put the abstraction in a clause of its own: 'the floor is high here', 'the ceiling on this is much higher'."
+  - id: VOICE-02
+    text: "Name the concrete thing the card does before you name the abstraction, and often instead of it. 'It draws you a card every turn the game goes long' beats 'it generates value'."
+  - id: VOICE-03
+    text: "Do not turn a verb into a noun. 'You are light on two-drops', not 'curve considerations'. 'This does nothing in your deck', not 'poor archetype fit'."
+  - id: VOICE-04
+    text: "Say closeness the way a person says it — 'it's close', 'I'd take either', 'not by much' — never with borrowed precision like 'essentially equivalent' or 'roughly comparable in expectation'."
+  - id: VOICE-05
+    text: "Do not use a statistic as the verdict. The numbers are already on screen beside you. 17Lands' own guidance is that win rate is a starting point rather than the end of a discussion, and a card review by a strong player quotes mana costs and power/toughness in prose and almost nothing else."
+  - id: VOICE-06
+    text: "Write like one player talking to another: short declaratives, joined with 'and' or 'but' rather than subordinated. First person where you have an opinion — 'I'd take', 'I'm not high on this'. Second person for the player — 'you're short of removal'."
+  - id: VOICE-07
+    text: "Concede the weakness in an aside rather than hedging the whole sentence. 'A 1/1 flier does something, even if it's not much' is how this is done; 'moderately impactful' is not."
+  - id: VOICE-08
+    text: "Do not explain the obvious. If it is a 4/4 flier for four, say so and move on."
+  - id: VOICE-09
+    text: "Call the deck a deck. It is 'your deck', 'your 40', or 'your 23' — never 'the Forty' and never a name this app made up."
+  - id: VOICE-10
+    text: "Say whether a card makes the deck, because that is the scale Limited evaluation is denominated in: it always makes the cut, it rarely gets cut, it gets cut about half the time. 'Filler' is the real word for a card near that line."
+
+# Phrases with no Limited provenance, or real terms in a register that is not
+# this game's. `instead` is what a drafter says. Every one of these is a literal
+# string `jargonHits` looks for, so keep them lowercase and keep them phrases
+# rather than single common words -- "value" alone would fire on every sentence.
+avoid:
+  - id: AVOID-01
+    phrase: "defensible"
+    instead: "it's fine, I wouldn't argue with either"
+    why: "No MTG source uses it. It reads as debate-club, and it was one of the two words in the sentence that started this corpus."
+  - id: AVOID-02
+    phrase: "higher-floor"
+    instead: "the floor is higher — it's never a dead card"
+    why: "The term is real, the hyphenated pre-nominal grammar is not. See VOICE-01."
+  - id: AVOID-03
+    phrase: "high-ceiling"
+    instead: "the ceiling is much higher — when it lines up it just wins"
+    why: "Same grammar problem as higher-floor."
+  - id: AVOID-04
+    phrase: "the forty"
+    instead: "your deck, your 40"
+    why: "Invented here. No source calls the deck that."
+  - id: AVOID-05
+    phrase: "curve considerations"
+    instead: "you're light on two-drops"
+    why: "A nominalisation of a real word. Say which drop is missing."
+  - id: AVOID-06
+    phrase: "archetype fit"
+    instead: "it's exactly what the UB deck wants"
+    why: "'Archetype' is standard; 'fit' as an abstract noun is padding."
+  - id: AVOID-07
+    phrase: "generically good"
+    instead: "it goes in any blue deck"
+    why: "The idea is standard; the adverb is not."
+  - id: AVOID-08
+    phrase: "expected value"
+    instead: "how often it's good"
+    why: "Finance register. 'Upside' is the one word from that family Limited actually uses."
+  - id: AVOID-09
+    phrase: "risk-adjusted"
+    instead: "how often it goes wrong"
+    why: "Finance register, no MTG provenance."
+  - id: AVOID-10
+    phrase: "synergy potential"
+    instead: "what it does with the rest of your deck"
+    why: "Nominalisation. Name the synergy or drop the sentence."
+  - id: AVOID-11
+    phrase: "solid choice"
+    instead: "solid removal, solid two-drop — say what it is"
+    why: "Filler praise with no content. A strong player always names the concrete reason."
+  - id: AVOID-12
+    phrase: "reasonable option"
+    instead: "it's a fine playable"
+    why: "Same. 'Playable' is the real word and it means something precise."
+# NOT here, deliberately: "iwd" -> "IIH". 17Lands renamed Improvement When Drawn
+# to Improvement In Hand on 2025-08-01 (their changelog, verified on the page),
+# so the app's label is a year stale -- but STAT_LEGEND, the hover panel and the
+# /glossary page all still say IWD, and the stored field is `iwd`. A rule telling
+# the model to write IIH while the legend two blocks below it says IWD is a rule
+# that argues with its own prompt. The rename is a labels decision, and it is
+# recorded in notes.md rather than smuggled in through the voice corpus.
+
+# The lexicon. NOT sent to the model -- this is for the people and the agents
+# working on this repo, and for any page that wants to show its work. `sourced:
+# false` means it is standard in speech and I could not find a page defining it;
+# treat those as lower confidence rather than as citations.
+terms:
+  - id: bomb
+    category: evaluation
+    short: "A card powerful enough to win the game on its own."
+    usage: "If you open a bomb, you take the bomb."
+    source: 9
+  - id: playable
+    category: evaluation
+    short: "A card good enough to make your 40. A noun in Limited — you need 23 of them."
+    usage: "It's a solid playable."
+    source: 3
+  - id: filler
+    category: evaluation
+    short: "The unexciting cards that make up the bulk of a deck. The real word for 'marginal'."
+    usage: "Filler. Gets cut about half the time."
+    source: 9
+  - id: floor
+    category: evaluation
+    short: "What a card does with no help from the rest of your deck."
+    usage: "The floor is pretty high here, as a 3-mana 2/2 flier is solid."
+    source: 4
+  - id: ceiling
+    category: evaluation
+    short: "What a card does when everything lines up."
+    usage: "The ceiling is high, but it likely requires too much work."
+    source: 4
+  - id: upside
+    category: evaluation
+    short: "The good-case half of a card; also a card with no real drawback."
+    usage: "Winged Words ends up being pure upside."
+    source: 3
+  - id: rate
+    category: evaluation
+    short: "Stats and abilities per mana. The workhorse word for efficiency."
+    usage: "A 4/4 flier for four is an absurd rate by itself."
+    source: 16
+  - id: body
+    category: evaluation
+    short: "A creature on the battlefield; also its power and toughness."
+    usage: "A mediocre body and a mediocre win condition."
+    source: 13
+  - id: blank
+    category: evaluation
+    short: "A card doing nothing — theirs, turned dead, or yours in the wrong deck."
+    usage: "In a deck that cares about attacking, this is basically a blank."
+    source: 9
+  - id: trick
+    category: evaluation
+    short: "An instant that buffs or debuffs a creature, used mid-combat."
+    usage: "Attack into open mana and you get blown out by a trick."
+    source: 13
+  - id: removal
+    category: evaluation
+    short: "A spell that kills or neutralises a creature. The most reliably valuable class of card in Limited."
+    usage: "Solid removal to take out their bomb."
+    source: 14
+  - id: evasion
+    category: evaluation
+    short: "Abilities that get damage through — flying, menace, trample."
+    usage: "You can't race a flier with ground creatures."
+    source: 13
+  - id: vanilla
+    category: evaluation
+    short: "A creature with no abilities."
+    usage: "It's a vanilla 3/3, but it's a fine playable."
+    source: 13
+  - id: build-around
+    category: evaluation
+    short: "A card you have to construct the deck to support."
+    usage: "It's in the hypothetical-but-not-actually-good build-around pile."
+    source: 3
+  - id: two-for-one
+    category: evaluation
+    short: "One card that trades for two of theirs."
+    usage: "It's nice that this provides the opportunity for a 2-for-1."
+    source: 3
+  - id: beater
+    category: evaluation
+    short: "An aggressive creature whose job is to attack and end the game."
+    usage: "You want a couple of beaters at the top of the curve."
+    sourced: false
+  - id: forty
+    category: deckbuilding
+    short: "The Limited deck size. 'Your deck', 'your 40' — never 'the Forty' as a name."
+    usage: "Play no more than 40 cards."
+    source: 15
+  - id: the-23
+    category: deckbuilding
+    short: "The spells in a Limited deck: 23 spells and 17 lands is the standard split."
+    usage: "Once you have a workable 23, look at the pool again."
+    source: 15
+  - id: curve
+    category: deckbuilding
+    short: "The distribution of mana values across your deck."
+    usage: "It tops your curve nicely."
+    source: 13
+  - id: curve-out
+    category: deckbuilding
+    short: "Play a spell on every turn on time — two-drop on two, three-drop on three."
+    usage: "If you curve out and they stumble, they're on the back foot fast."
+    sourced: false
+  - id: two-drop
+    category: deckbuilding
+    short: "A two-mana spell. A gap here is the classic Limited deckbuilding flaw."
+    usage: "Missing 2-drops? You'll want to grab some."
+    source: 14
+  - id: cut
+    category: deckbuilding
+    short: "Drop a card from the maindeck when trimming to 23. Limited card quality is denominated in how often a card gets cut."
+    usage: "Good playable that basically always makes the cut."
+    source: 3
+  - id: splash
+    category: deckbuilding
+    short: "A third colour you are not reliant on — a couple of cards, supported by fixing."
+    usage: "A base-UB deck with two red cards is splashing red."
+    source: 9
+  - id: fixing
+    category: deckbuilding
+    short: "Effects that give you the colours you need to cast your spells."
+    usage: "Fixing goes quickly in pack three."
+    source: 13
+  - id: maindeck
+    category: deckbuilding
+    short: "To start the card in your 40 rather than the sideboard. Used as a verb."
+    usage: "I'd always begin by maindecking it."
+    source: 3
+  - id: signals
+    category: table
+    short: "What the cards you are passed say about which colours the players upstream are not taking."
+    usage: "Read signals from pick five on."
+    source: 9
+  - id: open
+    category: table
+    short: "A colour or archetype nobody upstream is taking."
+    usage: "A great signpost uncommon mid-pack says a strategy may be open."
+    source: 14
+  - id: cutting
+    category: table
+    short: "Taking a colour out of the packs you pass, starving the players downstream of it."
+    usage: "You're cutting green hard to your left."
+    sourced: false
+  - id: wheel
+    category: table
+    short: "A card coming back around in a pack you have already passed. Also 'tabling'."
+    usage: "That should wheel — nobody at this table is in white."
+    source: 13
+  - id: pod
+    category: table
+    short: "The eight players you are drafting with."
+    usage: "There's one other person in the pod in red."
+    source: 13
+  - id: hate-draft
+    category: table
+    short: "Taking a card only to keep it out of somebody else's deck. Contested — Wizards argues against it, partly because it corrupts your own read of the signals."
+    usage: "I hate-drafted the bomb."
+    source: 11
+  - id: raredraft
+    category: table
+    short: "Taking a valuable rare for its money rather than for your deck."
+    usage: "Rare-drafting can lead to disappointment."
+    sourced: false
+  - id: pivot
+    category: table
+    short: "Abandoning a colour or plan mid-draft for one that is more open."
+    usage: "I pivoted out of red at the top of pack two."
+    source: 14
+  - id: speculative-pick
+    category: table
+    short: "A pick taken on the chance a plan comes together, accepting it may not make the deck."
+    usage: "The speculative pick didn't work out, but it only cost a card I wasn't playing anyway."
+    source: 5
+  - id: p1p1
+    category: table
+    short: "Pack 1, pick 1."
+    usage: "P1P1 is the hardest decision at the start of a format and the easiest by the end."
+    source: 5
+  - id: signpost-uncommon
+    category: table
+    short: "The gold uncommon that announces what a colour pair is trying to do."
+    usage: "The signpost says this pair wants creatures in the graveyard."
+    sourced: false
+  - id: race
+    category: gameplay
+    short: "Both players attacking with life totals close, each trying to get there first."
+    usage: "You can't race a flier on the ground."
+    source: 13
+  - id: stabilize
+    category: gameplay
+    short: "Reaching a board where you are no longer losing."
+    usage: "You need one more blocker to stabilize."
+    source: 13
+  - id: blowout
+    category: gameplay
+    short: "One interaction leaving a player far ahead, usually up multiple cards."
+    usage: "Casting it into open mana is a complete blowout."
+    source: 13
+  - id: flood
+    category: gameplay
+    short: "Drawing far more lands than you need. 'Screw' is the opposite."
+    usage: "It's especially bad when you're flooded."
+    source: 9
+  - id: at-parity
+    category: gameplay
+    short: "Neither player ahead on board."
+    usage: "It does a lot of work ahead or behind, though it isn't great at parity."
+    sourced: false
+  - id: tempo
+    category: gameplay
+    short: "Board position measured against mana spent. GENUINELY CONTESTED — Wizards reduces it to board presence and many players would say that is a different thing. Use it only where the concrete meaning is obvious."
+    usage: "Paying three mana for a significant tempo gain is worth it."
+    source: 12
+  - id: card-advantage
+    category: gameplay
+    short: "Ending up with more cards than your opponent."
+    usage: "It's a 2-for-1."
+    source: 9
+  - id: gih-wr
+    category: data
+    short: "Games in Hand win rate: the win rate of games where a copy of this card was drawn into hand, in the opening hand or later."
+    usage: "GIH WR is what the pick is graded on."
+    source: 1
+  - id: iih
+    category: data
+    short: "Improvement In Hand: GIH WR minus the win rate of games where the card sat in the deck unseen. RENAMED from IWD by 17Lands on 2025-08-01; the number is unchanged."
+    usage: "High IIH is a card that wins games by itself."
+    source: 1
+  - id: alsa
+    category: data
+    short: "Average Last Seen At: the mean pick number a card was last seen at in packs. A card that comes back on the wheel counts only the second time."
+    usage: "ALSA around 6 means it usually goes by pick six."
+    source: 1
+  - id: ata
+    category: data
+    short: "Average Taken At: the mean pick number the field takes a card at."
+    usage: "The gap between ALSA and ATA is how well a card tables."
+    source: 1
+  - id: gp-wr
+    category: data
+    short: "Games Played win rate: the win rate of decks holding the card, drawn or not — so about half of it is games where the card was never seen."
+    usage: "GP WR is mostly a measure of the decks, not the card."
+    source: 1
+  - id: keto
+    category: framework
+    short: "Kill spells, Efficient creatures, Top end, Other — the pick-order heuristic Limited Resources put in place of BREAD."
+    usage: "KETO is a tool for helping new drafters grasp the basics."
+    source: 8
+  - id: bread
+    category: framework
+    short: "Bombs, Removal, Evasion, and — the old pick-order heuristic. Still widely taught, but its most prominent teachers publicly dropped it. Do not present it as received wisdom."
+    usage: "We don't subscribe to BREAD any more."
+    source: 7
