@@ -13,6 +13,30 @@ for the deck it is not going to be in), 13 (the coach knows a card went
 straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
 lip cut from the scroll position) shipped on 2026-08-20.
 
+5 (the coach and the scorer saying two different things about the margin of
+error) shipped on 2026-08-22, and the asymmetry is the whole of it. `gapLine` said
+"INSIDE the margin" in words when the score called two cards indistinguishable,
+and on the other branch printed `1.2pp` and `±1.1pp` and stopped -- so on a real
+miss the model made the comparison itself and answered "within the margin of
+error, so this pick is essentially a coin flip" under a panel saying the gap was
+larger than the margin. **A number a model is asked to compare is a number it is
+allowed to round**, and at one significant figure every narrow miss in this app
+looks like a tie. Both verdicts are stated now, off `score.indistinguishable`
+and nothing else.
+
+Two things came with it. `explainPick` had the identical shape -- it printed the
+pair and left a PERSON to compare them -- and now says the data can see the gap.
+And **the review prompt had no margin at all**: two card names, "the gap between
+them is the lesson", and nothing about how big a lesson it was, on the screen a
+player reads after the draft where nothing on the page could contradict it. That
+is the shape this file keeps recording, and issue #6's third half was this exact
+sentence about this exact screen. `marginVerdict` is one builder for both
+prompts now.
+
+`coach_shown.contradicted` is the metric: tie language in an answer on a pick the
+score graded as a real miss. It answers whether the prompt fix took, which
+re-reading a prompt cannot.
+
 5 (the coach arguing for a card using the one you took instead), 6 (the scorer
 still holding up cards the deck cannot cast, which was 4 and 18 not actually
 fixed) and 7 (the stats panel losing its room to a token picture) shipped later
@@ -69,56 +93,50 @@ deliberate choice to fix a stale default is the worse of the two errors.
     theme in. The experiment worth running is the pool's rules text. Nothing
     has been built.
 
-3.  **A re-ingest can still strand a draft, through the half nobody guarded**
-    (rewritten 2026-08-18). Everything this item used to describe is gone.
-    `draftPools` gives every session its own packed cards, so the PACKS are
-    beyond a re-ingest's reach, and `draftSessions.sourceHash`, `staleAgainst`,
-    the stale badge and the "can no longer be rebuilt" error were all deleted
-    with the hazard they existed for.
-
-    **The card TEXT was not.** `sets.ingest` replaces a set's `setCardText` rows
-    wholesale, so a card that leaves a pool loses its row while a draft in
-    progress goes on holding that card in boosters nothing can reach to update.
-    The board joins the two halves by name and `hydrateCard` throws on a name it
-    cannot find — deliberately, because a blank frame with no name is worse — and
-    it throws during RENDER, so the board went white with the reason in the
-    console and the back button as the only way out.
-
-    Handled on 2026-08-18: the board asks before the answer can take the page
-    down, names the cards that left, and puts a delete on that screen. A FINISHED
-    draft lands there too and is offered its review first, because `review.load`
-    reads the rows each pick wrote and rebuilds nothing.
-
-    **Never reproduced live.** The mechanism is read off the code and verified
-    there; nobody has watched it happen. Worth knowing before trusting the copy
-    on that screen.
-
-    Not a hazard the eighteen-set re-ingest of 2026-08-17 hit: card counts held
-    for every set, all 29 distinct cards of a pre-re-ingest draft still resolved,
-    and every pool card in all 18 sets has a text row.
+3.  --
 
 4.  Something that's been bothering me is the coaching section when we take unimportant picks that aren't meant to be graded. As well as the coach when we've run out of tokens.
 
 - A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
 - B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
 
-5. Kinda weird the coach and the scorer text say two different things about the margin of error:
+    **Investigated 2026-08-22; nothing built, because B is a decision and A
+    depends on it.** What is actually on screen, which is worse than the
+    complaint says:
 
-```
-Last pick
-A
-91/100
-You took
-Brush Off
-Graded against
-−1.2pp ± 1.1pp
-Sundering Archaic
-That gap is larger than the margin of error on the two win rates.
+    | when | the panel's title | its body |
+    | --- | --- | --- |
+    | a model answered | `Coach` | streamed prose |
+    | the pack was forced | `Coach — skipped, this pick was forced` | `explainPick`, plus a **Coach this pick anyway** button |
+    | the coach quota is spent | `Coach` | the server's sentence in `text-warning`, then `explainPick` |
+    | the deployment has no model key | `Coach` | `explainPick`, silently |
+    | anything else went wrong | `Coach` | `explainPick`, silently |
 
-Coach
-Brush Off is a fine counterspell that fits your
- shell and stays cheap when it counters a spell. Sundering Archaic edges it out by removing a permanent unconditionally on a 3/3 body, but the gap is within the margin of error, so this pick is essentially a coin flip — no need to second-guess it.
-```
+    **Three of the five states say "Coach" and two of those say nothing at
+    all.** The forced case is the one that was designed -- it names itself and
+    offers a way out -- and every other degradation was handled by falling back
+    correctly and then wearing the coach's name. So the panel does not read as
+    disabled; it reads as a coach that got worse, which is the more damaging of
+    the two.
+
+    None of that is a data gap. `coach_unavailable.reason` has separated
+    `declined` / `quota` / `unconfigured` / `error` since it was written. **The
+    instrument was built and the screen was never told.**
+
+    Two things that constrain any answer:
+    - **`quota.mine` returns `remaining` for drafts and reviews and NOT for
+      coach**, so nothing can warn before the wall. The limit is a 200/day token
+      bucket sized so an honest player never meets it (`quota.ts`), which is why
+      it was never surfaced -- but "you cannot be told" and "you will never need
+      telling" are different claims.
+    - **`explainPick` is not prose.** It is emoji-led stat lines
+      ("✅ Nothing measurably better...", "⚠️ Off your committed colors...")
+      rendered as `whitespace-pre-wrap` under a heading that says Coach. A is
+      partly that it is ugly and mostly that it is a different GENRE dressed as
+      the same one, so rewriting the sentences settles nothing until B decides
+      whether it should look like prose at all.
+
+5. --
 
 # Ideas:
 
@@ -304,16 +322,7 @@ over data that was already on the wire. The half that was real work is in trap
      already wants to play twice. The events say whether that is true before any
      of it is designed.
 
-7. **Shipped, and the note went with it** — resuming an abandoned draft. The
-   question this held ("is a draft that isn't completed even tracked on the
-   DB?") is answered yes: `draftSessions.status` carries `"active"`, and
-   `draft.unfinished` lists every open draft on the screen the app opens on,
-   with a picks-so-far count and a `promised` flag so a draft a friend is on the
-   other side of cannot be thrown away. `draft_resumed` is the event.
-
-   The number is kept rather than reused, because the entry below cites 8 and
-   the renumbering that briefly closed this gap took 8's number with it.
-
+7. --
 8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
    drafts side by side. What it is and how to test one alone are in `README.md`;
    the rulings that came out of building it are decisions #17 and #18. The
@@ -407,24 +416,55 @@ flying or trample rather than have it; and 44 fight/bite spells sit in
 nothing. Fixing those is its own re-ingest, so seeing them first is the
 cheap half.
 
-13. I want to improve the coach's (actually the AI being used anywhere in the app) vernacular. I want the AI to talk more like a seasoned friendly MTG player.
+13. **Phases 1 and 2 shipped 2026-08-22. Phase 3 -- the labels pass -- is what
+    is left**, and it is deliberately not started, because it changes words on
+    screens rather than words a model writes.
 
-Here's an example I don't like:
+    `packages/core/docs/vernacular.yaml` is the corpus, built exactly as the
+    principles corpus is: YAML canonical, codegen to TS so Convex's V8 runtime
+    needs no filesystem, schema validated at codegen so a bad corpus breaks the
+    build. Sixteen sources, all read.
 
-```
-Fine pick, but the gap to Spectral Sailor is right at the margin, so they're essentially indistinguishable in the data. Balmor is a strong payoff card that pushes you toward spells-matter, while Spectral Sailor is a cheaper, higher-floor flyer that fits nearly any blue deck — either is defensible at pick 1.
-```
+    **The diagnosis was grammar, not vocabulary, and that is the finding worth
+    keeping.** "Floor" is real Limited vernacular; LSV writes "The floor is
+    pretty high here, as a 3-mana 2/2 flier is solid" -- the abstraction as the
+    PREDICATE of a clause. "A cheaper, higher-floor flyer" is the same word
+    stacked in front of a noun as a hyphenated modifier, and no Limited writer
+    writes that way. So the corpus is ten rules about sentence SHAPE plus twelve
+    phrases with replacements, not a dictionary. A word list would not have
+    touched the sentence that started this.
 
-- I don't like "higher-floor" and "defensible". What the heck does higher-floor mean in this context?
+    `defensible` turned out to have no MTG provenance at all -- it appears in no
+    source read. It is debate-club register that arrived from somewhere else.
 
-It'd be extremely rad to do some deep research, find some blog posts or something, and collect a list of terms off the internet and store them as a reference here in the project.
+    The fifty `terms` are NOT sent to the model, which already knows what a bomb
+    is; they are for the people and the agents working here, which is the half of
+    this idea about my own vocabulary. CLAUDE.md carries that rule now.
 
-- Secondarily, I think YOU (the AI helping me develop this app) should also be aware of that same vernacular because you make some wacky suggestions for things I really don't like/never heard before such as "The Forty" when the term "Deck" is the norm.
+    `coach_shown.jargon` counts the `avoid` list in what the model actually
+    wrote. **A style rule nobody measures is a style rule that silently does not
+    work** -- it costs tokens on every call, raises nothing when ignored, and the
+    only detector is a person finding the prose stilted, which is how this got
+    asked for months after the prose went out. The array rather than a count,
+    because which phrase survives is what decides the next move.
 
-- Lastly, I think this particular idea should be done in a minimum of 2 phases:
-  1. Research and author the list of vernacular.
-  2. Improve the runtime app's usage of AI with proper terminology.
-  3. Do a pass of everything in the app and update labels, title, etc, EVERYTHING.
+    Cost: ~690 tokens on a ~4,900-token system prompt, prompt-cached at 0.1x, so
+    ~69 effective tokens per coached pick.
+
+    **One thing found and deliberately NOT done.** 17Lands renamed *Improvement
+    When Drawn* to *Improvement In Hand* on 2025-08-01 -- verified on their own
+    changelog, definition unchanged. So `IWD` is a year-stale label, and it is in
+    `STAT_LEGEND`, the hover panel, `/glossary` and the stored field name. That is
+    a labels decision and belongs to phase 3; shipping it through the voice
+    corpus would have had the prompt telling the model to write IIH while the
+    legend two blocks below it said IWD.
+
+    **What phase 3 still wants**, and why it is a decision rather than a task:
+    every label, heading, empty state and button in `apps/web` and the CLI, read
+    against the corpus. It is the one phase that changes what a player sees
+    rather than what a model writes, and the IWD/IIH rename is the case that
+    shows why it needs a person: the number does not change, the word does, and
+    everyone who has been reading this app for a month knows the old one.
 
 14. Can we look into some tried and true plugins/packages for resizing, window-drag-n-drop, etc as a standard the app could use?
 
@@ -725,7 +765,6 @@ the number; `bench-packs` is the gate.
 it is derived from what the field DID, so grading a person against it is marking
 them against the crowd rather than against what wins — the circularity
 `trophyPickRate` is kept out of the scorer for.
-
 
 3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
    mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
@@ -1147,24 +1186,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-            So when the colour rule moved (decision #23), the app changed and the
-            instrument did not. It went on reporting the old rule's numbers, correctly,
-            with the right imports at the top of the file, and nothing anywhere could
-            have said so. It now calls `packScoringContext` like the mutation does.
+                                So when the colour rule moved (decision #23), the app changed and the
+                                instrument did not. It went on reporting the old rule's numbers, correctly,
+                                with the right imports at the top of the file, and nothing anywhere could
+                                have said so. It now calls `packScoringContext` like the mutation does.
 
-            **The second half is worse and is the general form.** The same file printed
-            "the colour terms charged it 0.34pp" under its table, from a filter naming
-            `splash` and `archetype`. That filter was written before the off-colour term
-            existed and nobody widened it -- so the number under a table measuring the
-            off-colour term **excluded the off-colour term**. It read as a healthy small
-            charge and it was a subtotal of the two terms that were not the subject. The
-            true figure was 1.28pp, which is still far too small, which is the finding
-            the instrument was built to surface and had been hiding for four days.
+                                **The second half is worse and is the general form.** The same file printed
+                                "the colour terms charged it 0.34pp" under its table, from a filter naming
+                                `splash` and `archetype`. That filter was written before the off-colour term
+                                existed and nobody widened it -- so the number under a table measuring the
+                                off-colour term **excluded the off-colour term**. It read as a healthy small
+                                charge and it was a subtotal of the two terms that were not the subject. The
+                                true figure was 1.28pp, which is still far too small, which is the finding
+                                the instrument was built to surface and had been hiding for four days.
 
-            The rule: **a harness must not enumerate what it sums.** Sum everything and
-            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-            the total by default rather than by somebody remembering. An allowlist in an
-            instrument is a silent undercount waiting for the next field.
+                                The rule: **a harness must not enumerate what it sums.** Sum everything and
+                                exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                                the total by default rather than by somebody remembering. An allowlist in an
+                                instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
@@ -1299,7 +1338,6 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     reads the same column correctly (`row[pickNoI] === "0"`), which is what makes
     this a reading error rather than a data one — **and the correctly-written
     line was three files away from the incorrectly-written one the whole time.**
-
 
 # Deferred trade-offs (revisit when the premise changes):
 
