@@ -236,7 +236,7 @@ export function PickReveal({
 
         {verdict === null && (
           <p className="text-sm text-warning">
-            Coach unavailable — showing the data only.
+            Reading the numbers — the coach did not answer this one.
             {contextBest !== pick.bestName && ` Context-best: ${contextBest}.`}
           </p>
         )}
@@ -260,7 +260,7 @@ export function PickReveal({
           >
             <div className="flex flex-col gap-2">
               <div>
-                <div className="eyebrow mb-1">Divergence</div>
+                <div className="eyebrow mb-1">Where the two answers differ</div>
                 <p className="leading-relaxed">
                   <CardText text={verdict.divergenceLesson} cards={pick.pack} />
                 </p>

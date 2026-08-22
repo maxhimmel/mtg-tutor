@@ -71,7 +71,7 @@ describe("cardDetail", () => {
     expect(out).toContain("2/2");
     expect(out).toContain("Vigilance");
     expect(out).toContain("GIH 56.0%");
-    expect(out).toContain("IWD +4.2pp");
+    expect(out).toContain("IIH +4.2pp");
     expect(out).toContain("maindecked 91.0%");
   });
   it("shows both faces of a double-faced card", () => {

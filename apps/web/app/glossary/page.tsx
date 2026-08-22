@@ -11,14 +11,14 @@ import { WinRateAxis } from "./figures/WinRateAxis";
 export const metadata: Metadata = {
   title: "Glossary",
   description:
-    "What GIH WR, IWD, ATA, ALSA, maindeck rate and GP WR actually measure, where each one misleads, and how P1P1 grades a pick.",
+    "What GIH WR, IIH, ATA, ALSA, maindeck rate and GP WR actually measure, where each one misleads, and how P1P1 grades a pick.",
 };
 
 // Grouped by the question each number answers, rather than alphabetically or in
 // the order the hover panel happens to draw them. Two of these groupings carry
 // an argument:
 //
-//   - "How good is it" runs GP WR -> GIH -> IWD, which is most-contaminated-by-
+//   - "How good is it" runs GP WR -> GIH -> IIH, which is most-contaminated-by-
 //     the-deck to least. That ordering is the point of the section, so it is
 //     stated in the section note rather than left for the reader to infer.
 //   - Maindeck rate is deliberately NOT in that group. It does not measure the
@@ -30,7 +30,7 @@ const SECTIONS: { id: string; question: string; note?: string; ids: string[] }[]
     id: "how-good",
     question: "How good is the card?",
     note: "Three win rates, ordered by how much of each one is really about the deck rather than the card. Read down.",
-    ids: ["gpwr", "gih", "iwd"],
+    ids: ["gpwr", "gih", "iih"],
   },
   {
     id: "how-much-trust",

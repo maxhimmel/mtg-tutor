@@ -29,7 +29,7 @@ function rowsFor(card: DisplayCard): { id: string; value: string }[] {
           : pct(card.gihWinRate),
     });
   }
-  if (card.iwd != null) rows.push({ id: "iwd", value: points(card.iwd) });
+  if (card.iwd != null) rows.push({ id: "iih", value: points(card.iwd) });
   if (card.avgPick != null || card.alsa != null) {
     rows.push({
       id: "pick-order",
