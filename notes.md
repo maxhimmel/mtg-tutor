@@ -13,75 +13,69 @@ for the deck it is not going to be in), 13 (the coach knows a card went
 straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
 lip cut from the scroll position) shipped on 2026-08-20.
 
-4 (the coach on picks nobody grades, and the coach with no tokens left) shipped
-on 2026-08-22, and the report understated it. Five states, three of them titled
-"Coach", two saying nothing at all:
+5 (the coach arguing for a card using the one you took instead), 6 (the scorer
+still holding up cards the deck cannot cast, which was 4 and 18 not actually
+fixed) and 7 (the stats panel losing its room to a token picture) shipped later
+the same day. 6 is the one worth reading about rather than only counting: the
+term shipped for 4 and 18 was correct and never fired, for two independent
+reasons, and neither of them was visible in any number the app collected. The
+rulings are decisions #23 and #24; the trap the instrument fell into is #14.
 
-    a model answered      "Coach"                                  prose
-    the pack was forced   "Coach -- skipped, this pick was forced"  numbers
-    the coach is spent    "Coach"           a warning line, then    numbers
-    no model key          "Coach"                                   numbers
-    something broke       "Coach"                                   numbers
+6 had a third half nobody reported, found while three agents were re-checking
+the first two. **The review screen was never asking the scorer at all.**
+`review.ts` put only `rawBest` on a stored pick, so the CONTEXT_BEST mark was
+the review model's own nomination -- or, with no verdict fetched, the raw-power
+best, which is the exact defect `Verdict.tsx` was fixed for on the live board
+and which sat unfixed two screens away. So both of the day's scoring fixes
+stopped at the board: a screen read AFTER the draft went on nominating cards the
+deck cannot cast, from a model that had never been told the colour rule.
 
-**So the panel never read as disabled; it read as a coach that had got worse**,
-which is the more damaging of the two. And it was not a data gap:
-`coach_unavailable.reason` had separated `declined`/`quota`/`unconfigured`/
-`error` since it was written. The instrument was built and the screen was never
-told -- the inverse of the usual failure in this file, and worth the same shelf
-space.
+The general shape is worth more than the fix: **a rule taught to a scorer only
+reaches the surfaces that ask the scorer.** Three did and one did not, and the
+one that did not was the one nobody had a complaint about yet.
 
-**A: it was never prose.** `explainPick` returned strings with ✅ and ⚠️ baked in,
-joined with newlines into `whitespace-pre-wrap` -- a small table of findings
-typeset as a paragraph, with glyphs standing in for structure a browser can draw
-properly. The complaint arrives as "the writing is ugly" and the cause is the
-wrong medium. Core returns `ExplainTone` per line now and each client decides
-what that looks like: the terminal keeps its glyphs, the browser gets a headline,
-dashed detail rows and a caution in `text-warning`.
+15 shipped in two parts, and the second is worth reading before touching the
+floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
+which had been the number since the review quiz was written and had never been
+measured. The test is `cardsInPack >= this`, so 5 KEPT the pick that sees five
+cards -- the tenth of fourteen -- and dropped only the last four of a pack. The
+first real drill run dealt exactly that pick and it was reported as a miss that
+was not one. Raised to 6 the same day, which drops the last five.
 
-**B: the title names the speaker.** "Reading the numbers" wherever the model did
-not answer, with one line saying why and -- for the spent case -- the server's
-own sentence, which is the only thing that knows when the coach is back.
+**A metric was added to settle this and a person settled it first.**
+`stats_viewed.forced` counts the misses the floor withholds and it is still
+worth having, but it answers "how many does the floor withhold" where the
+question was "is the floor in the right place" -- and no size of number answers
+that. Worth remembering the next time an instrument goes in beside a threshold:
+the instrument measures the setting, and only somebody standing in front of the
+result can say whether the setting is wrong.
 
-**Turning it off is a choice now**, which is the part that makes the rest
-coherent: without it, being without a coach could only ever look like breakage.
-`coachVoice` sits above the threshold in the same popup, and `quota.mine` returns
-the coach allowance so the set picker can say how many picks of coaching are left
--- ONLY when it will not cover a whole draft, a threshold derived from
-`packsPerDraft x packSize()` rather than picked.
+The floor is shared with the coach on purpose (`COACH.minPackCards` reads off
+it) so both moved: three fewer coached picks per draft out of about thirty, on
+picks whose advice was always going to be "you had no choice". The stored
+per-player `coachMinPackCards` is a localStorage setting and does NOT move with
+it -- anyone who drafted before this keeps the 5 they were serialised at, and
+the `Coach >=N` control on the board is where it changes. Deliberately not
+migrated: 5 is a legal value somebody could have chosen, and rewriting a
+deliberate choice to fix a stale default is the worse of the two errors.
 
-Two things found while moving it, neither reported. The fallback was passed
-through `AiResponse`, so **a thumbs-down about arithmetic filed against
-`llmCall`'s coach area** -- the impersonation reached the feedback table, not
-just the heading. And once the quota was spent, every remaining pick still paid a
-round trip to be told no.
+4 (the coach on picks nobody grades, and the coach with no tokens left) and 5
+(the coach and the scorer disagreeing about the margin of error) shipped on
+2026-08-22. Three things worth keeping:
 
-`coach_unavailable.reason` gains `off`. `setting_changed` says somebody flipped a
-toggle once; only a row per pick says how much of this app's central feature is
-being deliberately skipped.
+**The instrument was built and the screen was never told.** Three of the coach
+panel's five states were titled "Coach" and two of them said nothing at all, so
+it read as a coach that had got worse rather than one that was off — while
+`coach_unavailable.reason` had separated every case since it was written. The
+inverse of this file's usual failure, and worth the same shelf space.
 
-5 (the coach and the scorer saying two different things about the margin of
-error) shipped on 2026-08-22, and the asymmetry is the whole of it. `gapLine` said
-"INSIDE the margin" in words when the score called two cards indistinguishable,
-and on the other branch printed `1.2pp` and `±1.1pp` and stopped -- so on a real
-miss the model made the comparison itself and answered "within the margin of
-error, so this pick is essentially a coin flip" under a panel saying the gap was
-larger than the margin. **A number a model is asked to compare is a number it is
-allowed to round**, and at one significant figure every narrow miss in this app
-looks like a tie. Both verdicts are stated now, off `score.indistinguishable`
-and nothing else.
+**A number a model is asked to compare is a number it is allowed to round.** The
+gap line said "INSIDE the margin" in words on one branch and printed `1.2pp`
+against `±1.1pp` on the other; at one significant figure every narrow miss looks
+like a tie. Both branches state their verdict now.
 
-Two things came with it. `explainPick` had the identical shape -- it printed the
-pair and left a PERSON to compare them -- and now says the data can see the gap.
-And **the review prompt had no margin at all**: two card names, "the gap between
-them is the lesson", and nothing about how big a lesson it was, on the screen a
-player reads after the draft where nothing on the page could contradict it. That
-is the shape this file keeps recording, and issue #6's third half was this exact
-sentence about this exact screen. `marginVerdict` is one builder for both
-prompts now.
-
-`coach_shown.contradicted` is the metric: tie language in an answer on a pick the
-score graded as a real miss. It answers whether the prompt fix took, which
-re-reading a prompt cannot.
+And the review prompt had no margin at all — the same shape as #6's third half,
+on the surface nobody had complained about yet.
 
 5 (the coach arguing for a card using the one you took instead), 6 (the scorer
 still holding up cards the deck cannot cast, which was 4 and 18 not actually
@@ -129,6 +123,48 @@ the `Coach >=N` control on the board is where it changes. Deliberately not
 migrated: 5 is a legal value somebody could have chosen, and rewriting a
 deliberate choice to fix a stale default is the worse of the two errors.
 
+4 (the coach on picks nobody grades, and the coach with no tokens left) and 5
+(the coach and the scorer disagreeing about the margin of error) shipped on
+2026-08-22. Three things worth keeping:
+
+**The instrument was built and the screen was never told.** Three of the coach
+panel's five states were titled "Coach" and two of them said nothing at all, so
+it read as a coach that had got worse rather than one that was off — while
+`coach_unavailable.reason` had separated every case since it was written. The
+inverse of this file's usual failure, and worth the same shelf space.
+
+**A number a model is asked to compare is a number it is allowed to round.** The
+gap line said "INSIDE the margin" in words on one branch and printed `1.2pp`
+against `±1.1pp` on the other; at one significant figure every narrow miss looks
+like a tie. Both branches state their verdict now.
+
+And the review prompt had no margin at all — the same shape as #6's third half,
+on the surface nobody had complained about yet.
+
+5 (the coach and the scorer saying two different things about the margin of
+error) shipped on 2026-08-22, and the asymmetry is the whole of it. `gapLine` said
+"INSIDE the margin" in words when the score called two cards indistinguishable,
+and on the other branch printed `1.2pp` and `±1.1pp` and stopped -- so on a real
+miss the model made the comparison itself and answered "within the margin of
+error, so this pick is essentially a coin flip" under a panel saying the gap was
+larger than the margin. **A number a model is asked to compare is a number it is
+allowed to round**, and at one significant figure every narrow miss in this app
+looks like a tie. Both verdicts are stated now, off `score.indistinguishable`
+and nothing else.
+
+Two things came with it. `explainPick` had the identical shape -- it printed the
+pair and left a PERSON to compare them -- and now says the data can see the gap.
+And **the review prompt had no margin at all**: two card names, "the gap between
+them is the lesson", and nothing about how big a lesson it was, on the screen a
+player reads after the draft where nothing on the page could contradict it. That
+is the shape this file keeps recording, and issue #6's third half was this exact
+sentence about this exact screen. `marginVerdict` is one builder for both
+prompts now.
+
+`coach_shown.contradicted` is the metric: tie language in an answer on a pick the
+score graded as a real miss. It answers whether the prompt fix took, which
+re-reading a prompt cannot.
+
 2.  It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
 
     **Still open, and the cause is NOT missing data.** Investigated 2026-08-20;
@@ -139,12 +175,9 @@ deliberate choice to fix a stale default is the worse of the two errors.
     theme in. The experiment worth running is the pool's rules text. Nothing
     has been built.
 
-3.  --
-
-4.  --
-
+3. --
+4. --
 5. --
-
 # Ideas:
 
 Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
@@ -164,89 +197,6 @@ which is live in `apps/web/app/layout.tsx` as "P1P1 — Draft on instinct. Leave
 with reasons." — and 12 (principle marks) and 13 (mana symbols in prose) shipped
 on 2026-08-15.
 
-13 (the app's vernacular) shipped in three phases on 2026-08-22.
-
-`packages/core/docs/vernacular.yaml` is the corpus, built the way the principles
-corpus is: YAML canonical, codegen to TS so Convex's V8 runtime needs no
-filesystem, schema validated at codegen. Sixteen sources, all read.
-
-**The diagnosis was grammar, not vocabulary, and that is the finding worth
-keeping.** "Floor" is real Limited vernacular; LSV writes "The floor is pretty
-high here, as a 3-mana 2/2 flier is solid" -- the abstraction as the PREDICATE of
-a clause. "A cheaper, higher-floor flyer" is the same word stacked in front of a
-noun as a hyphenated modifier, and no Limited writer writes that way. So `voice`
-is ten rules about sentence SHAPE and `avoid` is twelve phrases with their
-replacements. A word list would not have touched the sentence that started this,
-and a blacklist without replacements sends a model to the nearest synonym, which
-is the same register one word over.
-
-`defensible` has no MTG provenance in any source read. It is debate-club register
-that arrived from somewhere other than this game.
-
-The fifty `terms` are NOT sent to the model, which already knows what a bomb is.
-They are for the people and the agents working here, which is the half of the
-idea about my own vocabulary -- CLAUDE.md carries that rule now.
-
-`coach_shown.jargon` counts the `avoid` list in what the model actually wrote.
-**A style rule nobody measures is a style rule that silently does not work**: it
-costs tokens on every call, raises nothing when ignored, and the only detector is
-a person finding the prose stilted, which is how this got asked for months after
-the prose went out.
-
-Cost: ~690 tokens on a ~4,900-token system prompt, prompt-cached at 0.1x, so ~69
-effective tokens per coached pick.
-
-**Phase 3 found less than expected, which is the useful part.** Every player-
-facing string in both clients was inventoried and read against the corpus. The
-app's own voice was already close; almost everything that drifted was the model's
-prose. Five things moved:
-
-- "Your forty" and "Lock in the forty" in the deck builder, on both clients, and
-  `buildTheForty` in the CLI source -- the coinage the idea was filed about.
-- "Archetype fit", which was a label in the score breakdown AND a phrase in
-  `STAT_LEGEND`, i.e. inside a prompt that bans it eight lines earlier.
-- "Divergence" as an eyebrow, which is a nominalisation of what the paragraph
-  under it says.
-- The review screen's "Coach unavailable" and the CLI's "AI coaching
-  unavailable", now saying what the board says.
-
-**And IWD is a year out of date.** 17Lands renamed *Improvement When Drawn* to
-*Improvement In Hand* on 2025-08-01 -- read off their own changelog, not recalled.
-The old name was imprecise in a way worth knowing: the other half of the
-subtraction is games-not-seen, which excludes cards TUTORED to hand as well as
-drawn, so "in hand" is the honest description. The label moves everywhere a player
-reads it; the stored field stays `iwd`, because that is a column name and
-renaming it is a re-ingest for no gain. The glossary keeps a line saying what it
-used to be called.
-
-Judgment calls left alone, so they are decisions rather than misses: lowercase
-"forty" used as a COUNT stays ("Forty-five went into the pool and forty come
-out", "the same forty, card for card", "Forty-two picks"). The rule bans naming
-the deck "the Forty"; it does not ban counting to forty.
-
-**And the first pass missed a whole area, which is worth more than the fix.** The
-challenge and diff screens were never read -- `ChallengeAnswered` still said "Not
-your forty" and stepped a player through "Your forty / Both forties", and
-`Decks.tsx` said "registered a forty" three times in a panel whose own button
-said "Build your deck". The CLI review kept "Divergence" after the web review
-renamed it. All fixed.
-
-It was caught by the copy inventory finishing AFTER the pass ran and ending with
-a conflicts section, not by anything in the pass. **A terminology sweep is a
-coverage problem wearing a taste problem's clothes**: the hard part is not
-deciding what a word should be, it is enumerating every place the word is, and a
-sweep that reads its inventory section by section will stop one section early and
-have no way of knowing. The fix that generalises is the inventory itself --
-`scratch/copy-inventory.md`, a compiler-parsed extraction of every string literal
-and JSX text node in both clients, which is cheap to regenerate and is the only
-thing here that can say "all of them".
-
-Not changed, and argued rather than missed: "raw-power best" has three surface
-forms -- `Raw-power best` (glossary label), `raw-best` (diagram legend chips),
-`RAW BEST` (the coach legend, which capitalises for emphasis throughout). Three
-registers of one term, each fitting its surface. Flattening them would mean
-changing a prompt's emphasis convention to fix a diagram.
-
 15 (the score's own working, drawn) shipped on 2026-08-21, and is deleted rather
 than stubbed because nothing cited it. Worth one line on what it turned out to
 be: no new computation at all. `contextValue` has returned a named, signed term
@@ -256,6 +206,27 @@ coach PROMPT — the model was told why a card was worth what it was and the
 player looking at the same panel was not. The "infographic" is a diverging bar
 over data that was already on the wire. The half that was real work is in trap
 #16, which is what the write path was doing to it.
+
+13 (the app's vernacular) shipped on 2026-08-22, in three phases. The corpus is
+`packages/core/docs/vernacular.yaml`, with its evidence in `vernacular.md`
+beside it; both are built the way the principles corpus is.
+
+**The diagnosis was grammar, not vocabulary.** "Floor" is real Limited
+vernacular — LSV writes "the floor is pretty high here, as a 3-mana 2/2 flier is
+solid", the abstraction as the predicate of a clause. "A cheaper, higher-floor
+flyer" is the same word stacked in front of a noun. A word list would not have
+touched the sentence that started this, which is why the corpus is rules about
+sentence shape. `defensible` turned out to have no MTG provenance at all.
+
+**A style rule nobody measures silently does not work**, so `coach_shown.jargon`
+counts the banned phrases in what the model actually wrote.
+
+**The labels pass is a coverage problem, not a taste problem.** It missed the
+challenge screens entirely, and what caught that was the string inventory, not
+the sweep. Deciding what a word should be was never the hard part.
+
+**IWD is a year out of date**: 17Lands renamed it IIH on 2025-08-01. The label
+moved everywhere a player reads it; the stored field stays `iwd`.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -507,7 +478,6 @@ nothing. Fixing those is its own re-ingest, so seeing them first is the
 cheap half.
 
 13. --
-
 14. Can we look into some tried and true plugins/packages for resizing, window-drag-n-drop, etc as a standard the app could use?
 
 - I'd love to be able to have the drafting window have sections be resizable and adjust their layouts if appropriate
