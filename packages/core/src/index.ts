@@ -35,6 +35,7 @@ export * from "./tutor/citations.js";
 export * from "./tutor/cardNames.js";
 export * from "./tutor/cardLine.js";
 export * from "./tutor/glossary.js";
+export * from "./tutor/vernacular.js";
 export * from "./tutor/prompt.js";
 export * from "./tutor/situation.js";
 export * from "./tutor/challenge.js";
