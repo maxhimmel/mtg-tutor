@@ -34,6 +34,7 @@ import {
   hydrate,
   hydrateScore,
   isDecisionPick,
+  jargonHits,
   loadPrinciples,
   normalizeName,
   packScoringContext,
@@ -428,6 +429,7 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           ms: Date.now() - startedAt,
           chars: prose.length,
           contradicted: !score.indistinguishable && !score.isBest && claimsTie(prose),
+          jargon: jargonHits(prose),
         });
       } catch (e) {
         // The server can disagree with us about whether this pick was forced,

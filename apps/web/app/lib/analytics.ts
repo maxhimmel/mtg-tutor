@@ -214,6 +214,20 @@ export function ceremonyAbandoned(p: {
  * fall says the model is still overruling a verdict it is now handed in words,
  * which is a different repair from the one that was made — and no amount of
  * re-reading the prompt would tell you that.
+ *
+ * `jargon` is the phrases from the vernacular corpus that the answer used
+ * anyway — "defensible", "higher-floor", the rest of `avoid`. A style rule is
+ * the easiest thing in this app to ship and never check: it costs tokens on
+ * every call, it raises nothing when it is ignored, and the only detector is
+ * somebody reading an answer and finding it stilted. That is exactly how the
+ * corpus came to be asked for, months after the prose went out.
+ *
+ * The array rather than a count, because which phrase survives is the thing that
+ * would change what gets done: one term stuck at the top says that rule needs
+ * rewriting, a flat spread says the whole block is being skimmed.
+ *
+ * Neither field measures whether the answer is GOOD. Both catch a failure that
+ * has a name; the rest needs a person.
  */
 export function coachShown(p: {
   sessionId: string;
@@ -221,6 +235,7 @@ export function coachShown(p: {
   ms: number;
   chars: number;
   contradicted: boolean;
+  jargon: string[];
 }): void {
   if (!on()) return;
   posthog.capture("coach_shown", p);
