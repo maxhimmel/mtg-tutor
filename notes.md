@@ -1,67 +1,11 @@
+# notes.md
+
+Open issues and ideas, and the rulings worth not re-deriving. Numbers are stable
+and therefore gappy: a resolved item becomes `--` rather than renumbering, because
+code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
+`drill.ts` cites idea #1). What shipped is in the git history, not here.
+
 # Issues:
-
-Numbering is stable and therefore gappy, for the same reason the ideas below
-are: `corpus.test.ts` cites issue #3. A fixed issue is deleted and its number
-left empty rather than renumbering everything under it. 1, 4, 6, 9 and 10
-shipped on 2026-08-15; 11 (mana pips off the cost, not the colour) and 12 (the
-hover preview surviving a click and a scroll) on 2026-08-17; 14 (the deck
-builder's principle citation drawn as a badge like every other) and 15 (forced
-picks out of the misses lists) on 2026-08-19.
-
-4 and 18 (the same report twice, and the scorer now charges an off-colour card
-for the deck it is not going to be in), 13 (the coach knows a card went
-straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
-lip cut from the scroll position) shipped on 2026-08-20.
-
-5 (the coach arguing for a card using the one you took instead), 6 (the scorer
-still holding up cards the deck cannot cast, which was 4 and 18 not actually
-fixed) and 7 (the stats panel losing its room to a token picture) shipped later
-the same day. 6 is the one worth reading about rather than only counting: the
-term shipped for 4 and 18 was correct and never fired, for two independent
-reasons, and neither of them was visible in any number the app collected. The
-rulings are decisions #23 and #24; the trap the instrument fell into is #14.
-
-6 had a third half nobody reported, found while three agents were re-checking
-the first two. **The review screen was never asking the scorer at all.**
-`review.ts` put only `rawBest` on a stored pick, so the CONTEXT_BEST mark was
-the review model's own nomination -- or, with no verdict fetched, the raw-power
-best, which is the exact defect `Verdict.tsx` was fixed for on the live board
-and which sat unfixed two screens away. So both of the day's scoring fixes
-stopped at the board: a screen read AFTER the draft went on nominating cards the
-deck cannot cast, from a model that had never been told the colour rule.
-
-The general shape is worth more than the fix: **a rule taught to a scorer only
-reaches the surfaces that ask the scorer.** Three did and one did not, and the
-one that did not was the one nobody had a complaint about yet.
-
-15 shipped in two parts, and the second is worth reading before touching the
-floor again. The filter went in first at `REVIEW.decisionPickMinCards` = 5,
-which had been the number since the review quiz was written and had never been
-measured. The test is `cardsInPack >= this`, so 5 KEPT the pick that sees five
-cards -- the tenth of fourteen -- and dropped only the last four of a pack. The
-first real drill run dealt exactly that pick and it was reported as a miss that
-was not one. Raised to 6 the same day, which drops the last five.
-
-**A metric was added to settle this and a person settled it first.**
-`stats_viewed.forced` counts the misses the floor withholds and it is still
-worth having, but it answers "how many does the floor withhold" where the
-question was "is the floor in the right place" -- and no size of number answers
-that. Worth remembering the next time an instrument goes in beside a threshold:
-the instrument measures the setting, and only somebody standing in front of the
-result can say whether the setting is wrong.
-
-The floor is shared with the coach on purpose (`COACH.minPackCards` reads off
-it) so both moved: three fewer coached picks per draft out of about thirty, on
-picks whose advice was always going to be "you had no choice". The stored
-per-player `coachMinPackCards` is a localStorage setting and does NOT move with
-it -- anyone who drafted before this keeps the 5 they were serialised at, and
-the `Coach >=N` control on the board is where it changes. Deliberately not
-migrated: 5 is a legal value somebody could have chosen, and rewriting a
-deliberate choice to fix a stale default is the worse of the two errors.
-
-4 (the coach on picks nobody grades, and with no tokens left) and 5 (the coach
-and the scorer disagreeing about the margin of error) shipped on 2026-08-22;
-trap #20 is the finding worth keeping out of them.
 
 2.  It seems like the coach does a bad job of encouraging/noticing themes/synergies between chosen cards and the latest pick the user just chose.
 
@@ -76,38 +20,8 @@ trap #20 is the finding worth keeping out of them.
 3. --
 4. --
 5. --
+
 # Ideas:
-
-Numbering is stable and therefore gappy. `build-set-stats.mjs` and the roadmap
-below cite these by number, so a shipped idea is deleted and its number left
-empty rather than renumbering everything under it. 4, 5 and 10 shipped on
-2026-07-30; the sideboard and mana-curve ideas that took 10 and 11 after that
-shipped on 2026-07-31; the deck-building step that was 6 shipped on 2026-08-05;
-7 (invite-only access) and 8 (per-user daily limits) shipped on 2026-08-06.
-10 is in use again as of 2026-08-08: a freed number does get reused eventually,
-so anything outside this file that cares should cite by name rather than number.
-8 (challenge a friend) shipped on 2026-08-09 and is the one exception to the
-delete-and-leave-empty rule: 8b and 8c are follow-ons that cite it, so it keeps
-a one-line stub rather than orphaning them. 11 (coach from the local Claude Code
-CLI) shipped on 2026-08-13; what it can and cannot be trusted for is in
-`README.md`, and the roads not taken are decision #19. 11 again — the app title,
-which is live in `apps/web/app/layout.tsx` as "P1P1 — Draft on instinct. Leave
-with reasons." — and 12 (principle marks) and 13 (mana symbols in prose) shipped
-on 2026-08-15.
-
-15 (the score's own working, drawn) shipped on 2026-08-21, and is deleted rather
-than stubbed because nothing cited it. Worth one line on what it turned out to
-be: no new computation at all. `contextValue` has returned a named, signed term
-per adjustment since it was written, summing exactly to the value the grade is
-computed from, and for the whole life of that field the only reader was the
-coach PROMPT — the model was told why a card was worth what it was and the
-player looking at the same panel was not. The "infographic" is a diverging bar
-over data that was already on the wire. The half that was real work is in trap
-#16, which is what the write path was doing to it.
-
-13 (the app's vernacular) shipped on 2026-08-22. The corpus is
-`packages/core/docs/vernacular.yaml`, its evidence is `vernacular.md` beside it,
-and CLAUDE.md says when to read them.
 
 1. A quiz on what archetype a mono-colored card belongs to.
 
@@ -244,36 +158,9 @@ and CLAUDE.md says when to read them.
    order).
    - Not too interested in this format. Low priority.
 
-6. **Shipped 2026-08-18** — the packs you got wrong, dealt back, at
-   `/drills/misses` and `mtg-tutor practice`. What it is and what it refuses are
-   in `README.md`; the reasoning that shaped it is in the commits and in
-   `core/src/drills/`.
-
-   The number keeps a stub rather than being left empty, because the drills
-   category it opened is where Ideas #1 and roadmap #3 are now expected to land,
-   and both cite this shape. Two things it deliberately did NOT do, so that
-   picking either up is a decision rather than a discovery:
-   - **Nothing is recorded.** A run writes no row, so the same misses come back
-     until you draft more (`skip` pages past them for a sitting). Whether being
-     dealt your own mistakes teaches anybody anything is a question about
-     people, and `drill_answered` is what answers it: `fixed` is a pick got
-     wrong once that would now be got right. Persisting attempts is Deferred #2,
-     and this is the evidence it is waiting on.
-   - **No star rating, no streak, no retention loop.** Those are the reward half
-     of a mini-game and they are only worth building over a drill somebody
-     already wants to play twice. The events say whether that is true before any
-     of it is designed.
-
+6. --
 7. --
-8. **Shipped 2026-08-09** — challenge a friend to your packs, then read the two
-   drafts side by side. What it is and how to test one alone are in `README.md`;
-   the rulings that came out of building it are decisions #17 and #18. The
-   design write-up that used to sit here is gone with the idea, as a shipped
-   idea should be.
-
-   The number is not left empty the way the note at the top of this section
-   describes, because 8b and 8c below are follow-ons that cite it and would be
-   orphaned by an empty slot. They are future work, deliberately not built.
+8. Shipped — challenge a friend. Kept as a stub because 8b and 8c cite it.
 
 8b. I'm curious - is it possible for me to send a challenge of "draft-A" to multiple different friends? -- or is it only one challenge per draft?
 
@@ -289,33 +176,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 
 9. One thing this app feels like it's desperately missing is some kinda progression/indication that the user is learning and improving. Something kinda like, "I was there, but now I'm here!"
 
-10. **Shipped 2026-08-19** — the reason you wrote for a pick is now readable,
-    on your own review and on both sides of a challenge diff. The sentence was
-    written and stored from the day the commitment ceremony landed and read by
-    exactly one thing, the coach prompt; the two screens that show picks back to
-    a person both dropped it in their projections. Four projections carry it now
-    and nothing new is read — `storedPicks` collects whole documents, so the
-    field was already paid for.
-
-    The number keeps a stub rather than being left empty, because the honesty
-    question this was waiting on is not answered by shipping it, only opened:
-    - **A reason written for yourself is not a reason written for a friend.**
-      Whether people stay honest in that box now that it is readable is the
-      thing that decides whether this was a good idea, and it is measurable —
-      `pick_made` already carries `confidence`, `challenged` and `stood` per
-      pick, so a change in how the box is used after somebody's first shared
-      draft is visible in data already being collected. Nobody has looked.
-    - **Most rows have nothing to show**, because a `defense` exists only for a
-      pick made through the ceremony (decision #13) and the CLI has only the
-      passive flow. Every reader draws the absence as absence rather than
-      filling it, and `diff_viewed.reasons` is the count that says whether the
-      panel is a feature or an empty box — near zero across real challenges
-      means the thing to fix is the ceremony being off, not the panel.
-    - **The heads-up is at the link, not at the box.** "They will see your
-      reasons" is said once, in `ChallengeAFriend`, at the moment a private
-      draft becomes a shared one — rather than under the textarea, where it
-      would be read forty-five times a draft about a link most drafts never get.
-
+10. --
 11. **The coach cannot see what a Map is either** (2026-08-15, fell out of
     shipping the token feature). Decision #9 is that every card written into a
     prompt carries its rules text, because a type line cannot say whether a card
@@ -419,10 +280,6 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    has played twice is a guess about what to store.
 
 # Still open from shipped work:
-
-Numbering is gappy here for the same reason it is above: a fixed item is deleted
-and its number left empty rather than renumbering everything under it. 3 (the
-CLI's review quiz printing the answer beside the question) shipped 2026-08-19.
 
 1. **`stats.overview` disagrees with itself about a draft with no summary**
    (2026-08-17, found while giving the web app `/stats`). `recent` maps a
@@ -1245,6 +1102,20 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     the verdict, not the arithmetic**, wherever the app has already computed one:
     the branch that states its conclusion is fine and the branch that leaves two
     numbers on the table is the bug, and they look identical in review.
+
+21. **A rule taught to a scorer reaches only the surfaces that ask the scorer**
+    (2026-08-20). The colour rule shipped, was correct, and never fired on the
+    review screen — which put only `rawBest` on a stored pick and so marked
+    CONTEXT_BEST from the review model's own nomination. Three surfaces asked the
+    scorer and one did not, and the one that did not was the one nobody had
+    complained about yet. `pickCoach.ts` cites this by name.
+
+22. **An instrument beside a threshold measures the setting, not whether the
+    setting is right** (2026-08-19). `stats_viewed.forced` was added to settle
+    where the decision-pick floor belongs and a person settled it first, on the
+    first real run. The metric answers "how many does the floor withhold", and no
+    size of that number answers "is the floor in the right place". Worth having;
+    not worth waiting for.
 
 # Deferred trade-offs (revisit when the premise changes):
 
