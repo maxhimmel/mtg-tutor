@@ -13,6 +13,52 @@ for the deck it is not going to be in), 13 (the coach knows a card went
 straight to the sideboard), 14 (one word for practice) and 17 (the scroll box's
 lip cut from the scroll position) shipped on 2026-08-20.
 
+4 (the coach on picks nobody grades, and the coach with no tokens left) shipped
+on 2026-08-22, and the report understated it. Five states, three of them titled
+"Coach", two saying nothing at all:
+
+    a model answered      "Coach"                                  prose
+    the pack was forced   "Coach -- skipped, this pick was forced"  numbers
+    the coach is spent    "Coach"           a warning line, then    numbers
+    no model key          "Coach"                                   numbers
+    something broke       "Coach"                                   numbers
+
+**So the panel never read as disabled; it read as a coach that had got worse**,
+which is the more damaging of the two. And it was not a data gap:
+`coach_unavailable.reason` had separated `declined`/`quota`/`unconfigured`/
+`error` since it was written. The instrument was built and the screen was never
+told -- the inverse of the usual failure in this file, and worth the same shelf
+space.
+
+**A: it was never prose.** `explainPick` returned strings with ✅ and ⚠️ baked in,
+joined with newlines into `whitespace-pre-wrap` -- a small table of findings
+typeset as a paragraph, with glyphs standing in for structure a browser can draw
+properly. The complaint arrives as "the writing is ugly" and the cause is the
+wrong medium. Core returns `ExplainTone` per line now and each client decides
+what that looks like: the terminal keeps its glyphs, the browser gets a headline,
+dashed detail rows and a caution in `text-warning`.
+
+**B: the title names the speaker.** "Reading the numbers" wherever the model did
+not answer, with one line saying why and -- for the spent case -- the server's
+own sentence, which is the only thing that knows when the coach is back.
+
+**Turning it off is a choice now**, which is the part that makes the rest
+coherent: without it, being without a coach could only ever look like breakage.
+`coachVoice` sits above the threshold in the same popup, and `quota.mine` returns
+the coach allowance so the set picker can say how many picks of coaching are left
+-- ONLY when it will not cover a whole draft, a threshold derived from
+`packsPerDraft x packSize()` rather than picked.
+
+Two things found while moving it, neither reported. The fallback was passed
+through `AiResponse`, so **a thumbs-down about arithmetic filed against
+`llmCall`'s coach area** -- the impersonation reached the feedback table, not
+just the heading. And once the quota was spent, every remaining pick still paid a
+round trip to be told no.
+
+`coach_unavailable.reason` gains `off`. `setting_changed` says somebody flipped a
+toggle once; only a row per pick says how much of this app's central feature is
+being deliberately skipped.
+
 5 (the coach and the scorer saying two different things about the margin of
 error) shipped on 2026-08-22, and the asymmetry is the whole of it. `gapLine` said
 "INSIDE the margin" in words when the score called two cards indistinguishable,
@@ -95,46 +141,7 @@ deliberate choice to fix a stale default is the worse of the two errors.
 
 3.  --
 
-4.  Something that's been bothering me is the coaching section when we take unimportant picks that aren't meant to be graded. As well as the coach when we've run out of tokens.
-
-- A. I think the coach advice looks ugly - i know it can't be as nuanced because it's algorithmic, BUT it's be nice if we could improve upon it because it hasn't been touched since the apps inception.
-- B. I would like you to consider some frontend/UX options on how we can convey to the user that the normally intelligent (ai-driven) coach is now essentially disabled. I'm not sure what the solution is, but would love some research and like 5 suggestions/solutions/options.
-
-    **Investigated 2026-08-22; nothing built, because B is a decision and A
-    depends on it.** What is actually on screen, which is worse than the
-    complaint says:
-
-    | when | the panel's title | its body |
-    | --- | --- | --- |
-    | a model answered | `Coach` | streamed prose |
-    | the pack was forced | `Coach — skipped, this pick was forced` | `explainPick`, plus a **Coach this pick anyway** button |
-    | the coach quota is spent | `Coach` | the server's sentence in `text-warning`, then `explainPick` |
-    | the deployment has no model key | `Coach` | `explainPick`, silently |
-    | anything else went wrong | `Coach` | `explainPick`, silently |
-
-    **Three of the five states say "Coach" and two of those say nothing at
-    all.** The forced case is the one that was designed -- it names itself and
-    offers a way out -- and every other degradation was handled by falling back
-    correctly and then wearing the coach's name. So the panel does not read as
-    disabled; it reads as a coach that got worse, which is the more damaging of
-    the two.
-
-    None of that is a data gap. `coach_unavailable.reason` has separated
-    `declined` / `quota` / `unconfigured` / `error` since it was written. **The
-    instrument was built and the screen was never told.**
-
-    Two things that constrain any answer:
-    - **`quota.mine` returns `remaining` for drafts and reviews and NOT for
-      coach**, so nothing can warn before the wall. The limit is a 200/day token
-      bucket sized so an honest player never meets it (`quota.ts`), which is why
-      it was never surfaced -- but "you cannot be told" and "you will never need
-      telling" are different claims.
-    - **`explainPick` is not prose.** It is emoji-led stat lines
-      ("✅ Nothing measurably better...", "⚠️ Off your committed colors...")
-      rendered as `whitespace-pre-wrap` under a heading that says Coach. A is
-      partly that it is ugly and mostly that it is a different GENRE dressed as
-      the same one, so rewriting the sentences settles nothing until B decides
-      whether it should look like prose at all.
+4.  --
 
 5. --
 

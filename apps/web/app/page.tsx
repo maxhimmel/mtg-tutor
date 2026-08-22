@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
+import { PACK, packSize } from "@mtg-tutor/core";
 import { useEffect, useRef, useState } from "react";
 import { PageShell } from "./components/PageShell";
 import { SetGrid } from "./components/SetGrid";
@@ -203,6 +204,19 @@ function SetPicker() {
           {quota?.limited && quota.remaining != null && (
             <span className="text-xs text-base-content/55">
               {quota.remaining.drafts} of {quota.of.drafts} drafts left today
+              {/* The coach allowance, and ONLY when it will not cover the draft
+                  you are about to start.
+
+                  The threshold is derived rather than picked: a draft is at most
+                  `packsPerDraft × packSize()` picks, so anything at or above
+                  that number cannot run out on you and saying it would be noise
+                  beside a line about drafts. Below it, the coach will go quiet
+                  partway through -- which is exactly the surprise issue #4 is
+                  about, and the one limit in this app a player had no way of
+                  seeing coming. */}
+              {quota.remaining.coach < PACK.packsPerDraft * packSize() && (
+                <> · coaching for about {quota.remaining.coach} more picks</>
+              )}
             </span>
           )}
           {/* Both only once there is something to draft. A control over an

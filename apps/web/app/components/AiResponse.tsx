@@ -45,7 +45,7 @@ import { routeOf, useFeedback, type FeedbackSurface } from "./Feedback";
  * is the strip alone, for a frame that is already a titled Panel.
  */
 
-type Anchor = NonNullable<Doc<"feedback">["anchor"]>;
+export type Anchor = NonNullable<Doc<"feedback">["anchor"]>;
 type Sentiment = NonNullable<Doc<"feedback">["sentiment"]>;
 
 interface Rated {

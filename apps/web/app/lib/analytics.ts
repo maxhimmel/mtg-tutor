@@ -244,15 +244,22 @@ export function coachShown(p: {
 /**
  * The coach did not.
  *
- * `reason` separates three different bugs that look identical from the outside:
- * "declined" is the pick being forced and no tokens being spent on purpose,
- * "quota" is the friend having run out, and "error"/"unconfigured" are the app
- * being broken. Only one of them is a thing to fix.
+ * `reason` separates bugs that look identical from the outside: "declined" is
+ * the pick being forced and no tokens being spent on purpose, "quota" is the
+ * friend having run out, and "error"/"unconfigured" are the app being broken.
+ * Only one of them is a thing to fix.
+ *
+ * "off" is new, and it is the one this event was missing. A player can now turn
+ * the coach off — which exists so that drafting without prose is a CHOICE rather
+ * than something that looks like a broken app — and without a row per pick,
+ * `setting_changed` would say somebody flipped a toggle once and nothing would
+ * say how much of this app's central feature is being deliberately skipped.
+ * Those are different questions and only the second one changes anything.
  */
 export function coachUnavailable(p: {
   sessionId: string;
   pickIndex: number;
-  reason: "declined" | "quota" | "unconfigured" | "error";
+  reason: "declined" | "quota" | "unconfigured" | "error" | "off";
 }): void {
   if (!on()) return;
   posthog.capture("coach_unavailable", p);
