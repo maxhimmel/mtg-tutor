@@ -99,10 +99,10 @@ export function Decks({
       <Panel title="The two decks" className={className}>
         <p className="text-base-content/70">
           {!built.yours && !built.theirs
-            ? "Neither of you has registered a forty yet."
+            ? "Neither of you has registered a deck yet."
             : !built.yours
-              ? `${them} has registered a forty. Build yours and the two go side by side.`
-              : `You have registered a forty. ${them} has not built theirs yet — this fills in when they do.`}
+              ? `${them} has registered a deck. Build yours and the two go side by side.`
+              : `You have registered a deck. ${them} has not built theirs yet — this fills in when they do.`}
         </p>
         {!built.yours && (
           <Link

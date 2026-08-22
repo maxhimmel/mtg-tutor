@@ -231,7 +231,10 @@ function renderReveal(
   lines.push(optionsPanel(pick, contextBest));
   if (verdict) {
     lines.push("");
-    lines.push(pc.bold("Divergence: ") + verdict.divergenceLesson);
+    // Same words as the web review's eyebrow. The rename landed there and
+    // stopped, which is the CLI/web parity rule failing on wording rather than
+    // on logic -- and wording is where it is hardest to notice.
+    lines.push(pc.bold("Where the two answers differ: ") + verdict.divergenceLesson);
     lines.push(pc.bold("Coach: ") + verdict.narrative);
   } else if (contextBest !== pick.bestName) {
     lines.push("");

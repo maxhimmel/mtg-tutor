@@ -221,8 +221,31 @@ used to be called.
 
 Judgment calls left alone, so they are decisions rather than misses: lowercase
 "forty" used as a COUNT stays ("Forty-five went into the pool and forty come
-out", "the same forty, card for card"). The rule bans naming the deck "the
-Forty"; it does not ban counting to forty.
+out", "the same forty, card for card", "Forty-two picks"). The rule bans naming
+the deck "the Forty"; it does not ban counting to forty.
+
+**And the first pass missed a whole area, which is worth more than the fix.** The
+challenge and diff screens were never read -- `ChallengeAnswered` still said "Not
+your forty" and stepped a player through "Your forty / Both forties", and
+`Decks.tsx` said "registered a forty" three times in a panel whose own button
+said "Build your deck". The CLI review kept "Divergence" after the web review
+renamed it. All fixed.
+
+It was caught by the copy inventory finishing AFTER the pass ran and ending with
+a conflicts section, not by anything in the pass. **A terminology sweep is a
+coverage problem wearing a taste problem's clothes**: the hard part is not
+deciding what a word should be, it is enumerating every place the word is, and a
+sweep that reads its inventory section by section will stop one section early and
+have no way of knowing. The fix that generalises is the inventory itself --
+`scratch/copy-inventory.md`, a compiler-parsed extraction of every string literal
+and JSX text node in both clients, which is cheap to regenerate and is the only
+thing here that can say "all of them".
+
+Not changed, and argued rather than missed: "raw-power best" has three surface
+forms -- `Raw-power best` (glossary label), `raw-best` (diagram legend chips),
+`RAW BEST` (the coach legend, which capitalises for emphasis throughout). Three
+registers of one term, each fitting its surface. Flattening them would mean
+changing a prompt's emphasis convention to fix a diagram.
 
 15 (the score's own working, drawn) shipped on 2026-08-21, and is deleted rather
 than stubbed because nothing cited it. Worth one line on what it turned out to
