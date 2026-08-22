@@ -20,7 +20,7 @@ import { pct, points } from "../lib/format";
  */
 const TERM_COPY: Record<string, { label: string; why: string }> = {
   archetype: {
-    label: "Archetype fit",
+    label: "What the archetype wants",
     why: "How this card does in decks your colours, against how it does everywhere.",
   },
   splash: {

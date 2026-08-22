@@ -117,7 +117,7 @@ async function askLands(current: number): Promise<number | null> {
  * Returns false when the player walks away -- their picks are safe, the deck is
  * simply not built yet, and `--resume` brings them back here.
  */
-export async function buildTheForty(
+export async function buildTheDeck(
   convex: ConvexHttpClient,
   sessionId: Id<"draftSessions">,
   pool: Card[],
@@ -142,13 +142,13 @@ export async function buildTheForty(
     );
 
     const action = await p.select({
-      message: "Build the forty",
+      message: "Build your deck",
       options: [
         { value: "cards", label: "Move cards between the deck and the sideboard" },
         { value: "lands", label: `Basic lands: ${basicLands}` },
         {
           value: "lock",
-          label: "Lock in the forty",
+          label: "Lock in your deck",
           hint: short ?? "reveals the suggested build",
         },
       ],

@@ -151,7 +151,7 @@ export function DeckBuilder({
   return (
     <>
       <Panel
-        title="Your forty"
+        title="Your deck"
         aside={
           // The one place in the chrome that carries Magic's colours, earned here
           // for the reason it is earned during the draft: which colours the deck
@@ -290,7 +290,7 @@ export function DeckBuilder({
               }
             }}
           >
-            {locking ? "Locking in…" : "Lock in the forty"}
+            {locking ? "Locking in…" : "Lock in your deck"}
           </button>
         </div>
       </div>

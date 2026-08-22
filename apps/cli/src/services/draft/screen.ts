@@ -23,7 +23,7 @@ import { gradeColor, pct } from "../../core/ui/format.js";
 import { pickFromPack } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { CoachQuotaExceeded, streamCoach } from "../../core/tutor/coach.js";
-import { buildTheForty, managePiles } from "./deck.js";
+import { buildTheDeck, managePiles } from "./deck.js";
 import { humanError } from "../../core/ui/humanError.js";
 
 // The draft loop drives the deployment: the engine, the bots and the scoring all
@@ -215,7 +215,7 @@ export async function finishDraft(convex: ConvexHttpClient, sessionId: Id<"draft
         "the rest wants. The suggested build and your grade are behind the lock.",
       "Draft complete",
     );
-    if (!(await buildTheForty(convex, sessionId, results.pool, results.sideboard))) {
+    if (!(await buildTheDeck(convex, sessionId, results.pool, results.sideboard))) {
       p.cancel(
         "Deck not built. Your picks are saved — finish it any time: " +
           `mtg-tutor draft --resume ${sessionId}`,
