@@ -47,9 +47,24 @@ export default defineSchema({
     // Same cheap metadata request as the name and icon.
     releasedAt: v.optional(v.string()),
     // Pool revision + hash of the stats artifact the CARD list was built from.
-    // Lets a deploy re-crawl only the sets that actually changed. Absent on
+    // Lets a deploy rebuild only the sets that actually changed. Absent on
     // documents written before it existed, which means they rebuild once.
     sourceHash: v.optional(v.string()),
+    // What the stored pool's SCRYFALL half was crawled from -- the crawl
+    // revision plus the card identities in the artifact, and nothing about the
+    // numbers. Paired with sourceHash above, which moves whenever any number in
+    // the artifact does.
+    //
+    // The two exist apart because they go stale for unrelated reasons and only
+    // one of them is expensive. Changing a scoring weight moves sourceHash for
+    // every set at once and leaves every printing exactly as it was; re-crawling
+    // Scryfall to pick that up costs ~2.7MB and 5-6 requests per set, and earns
+    // a 429 around the sixth set in a row from a shared build IP. With this
+    // stored, that deploy re-reads the pool it already has instead.
+    //
+    // Absent on documents written before it existed. Those crawl once more and
+    // then have it, which is why nothing needed migrating for this.
+    crawlHash: v.optional(v.string()),
     // Revision of the set-level metadata above, tracked apart from sourceHash
     // so adding a field like the icon costs one request per set rather than a
     // full re-crawl of every card.

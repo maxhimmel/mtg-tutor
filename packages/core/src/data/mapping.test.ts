@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { mergeCards } from "./mapping.js";
-import type { ScryfallCard } from "./sources.js";
+import { mergeCards, restateRatings } from "./mapping.js";
+import type { ScryfallCard, SeventeenLandsCard } from "./sources.js";
+import type { Card } from "../model/card.js";
 
 // Shapes taken from live Scryfall responses rather than invented, because the
 // whole point of `backImageUrl` is a distinction Scryfall draws and we do not:
@@ -348,5 +349,129 @@ describe("mergeCards tokens", () => {
       }),
     );
     expect(card.tokens).toEqual([{ name: "Insect", typeLine: "Token Creature — Insect" }]);
+  });
+});
+
+describe("restateRatings", () => {
+  // What a stored pool looks like coming back out of the database: Scryfall's
+  // half as it was crawled, plus everything the ingest derived and stamped on.
+  const stored = (over: Partial<Card> = {}): Card => ({
+    name: "Spectral Sailor",
+    rarity: "uncommon",
+    colors: ["U"],
+    colorIdentity: ["U"],
+    manaCost: "{U}",
+    cmc: 1,
+    typeLine: "Creature — Spirit",
+    oracleText: "Flash. Flying.",
+    collectorNumber: "76",
+    setCode: "sos",
+    gihWinRate: 0.55,
+    gihGames: 4000,
+    alsa: 5.2,
+    avgPick: 5.0,
+    winRate: 0.54,
+    value: 0.61,
+    turn: 1,
+    role: "evasion",
+    tableValue: 0.58,
+    rarityBaseline: 0.52,
+    packRate: 0.12,
+    iwd: 0.03,
+    maindeckRate: 0.8,
+    ...over,
+  });
+
+  const rating = (over: Partial<SeventeenLandsCard> = {}): SeventeenLandsCard => ({
+    name: "Spectral Sailor",
+    color: "U",
+    rarity: "uncommon",
+    url: "",
+    seen_count: 1000,
+    pick_count: 1000,
+    ever_drawn_win_rate: 0.60,
+    ever_drawn_game_count: 9000,
+    avg_seen: 3.1,
+    avg_pick: 2.9,
+    win_rate: 0.59,
+    ...over,
+  });
+
+  it("takes the new numbers and keeps the printing", () => {
+    const [card] = restateRatings([stored()], [rating()]);
+
+    expect(card.gihWinRate).toBe(0.60);
+    expect(card.gihGames).toBe(9000);
+    expect(card.alsa).toBe(3.1);
+    expect(card.avgPick).toBe(2.9);
+    expect(card.winRate).toBe(0.59);
+
+    expect(card.oracleText).toBe("Flash. Flying.");
+    expect(card.typeLine).toBe("Creature — Spirit");
+    expect(card.colors).toEqual(["U"]);
+    expect(card.collectorNumber).toBe("76");
+  });
+
+  // The reason this function builds up rather than spreading the stored card
+  // down. Every one of these is derived by the ingest that runs next, and a
+  // survivor would be a number computed against the PREVIOUS stats -- right
+  // shape, right magnitude, quietly wrong.
+  it("drops everything the ingest derives", () => {
+    const [card] = restateRatings([stored()], [rating()]);
+
+    for (const field of [
+      "value",
+      "turn",
+      "role",
+      "tableValue",
+      "rarityBaseline",
+      "packRate",
+      "iwd",
+      "maindeckRate",
+    ]) {
+      expect(card).not.toHaveProperty(field);
+    }
+  });
+
+  // A card 17Lands no longer rates has to come back unrated, not holding the
+  // rating it had last time. Undefined rather than absent, which is exactly what
+  // `mergeCards` writes for an unrated card -- the storage layer's `defined()`
+  // is what turns that into an absent field, and `observedRarityBaselines` reads
+  // either as unrated. The point of the test is that 0.55 does not survive.
+  it("unrates a card the new stats do not mention", () => {
+    const [card] = restateRatings([stored()], []);
+
+    expect(card.gihWinRate).toBeUndefined();
+    expect(card.gihGames).toBeUndefined();
+    expect(card.alsa).toBeUndefined();
+    expect(card.avgPick).toBeUndefined();
+    expect(card.winRate).toBeUndefined();
+    expect(card.name).toBe("Spectral Sailor");
+  });
+
+  // The guarantee that makes the re-derive path safe to prefer: for a pool whose
+  // printing has not moved, it produces exactly what a fresh crawl would.
+  it("agrees with a full merge over the same inputs", () => {
+    const sc = scryfall({
+      name: "Spectral Sailor",
+      rarity: "uncommon",
+      colors: ["U"],
+      color_identity: ["U"],
+      mana_cost: "{U}",
+      cmc: 1,
+      type_line: "Creature — Spirit",
+      oracle_text: "Flash. Flying.",
+      collector_number: "76",
+      set: "sos",
+    });
+    const ratings = [rating()];
+
+    const merged = mergeCards([sc], ratings);
+    const restated = restateRatings(
+      [{ ...merged[0], value: 0.61, turn: 1, role: "evasion" } as Card],
+      ratings,
+    );
+
+    expect(restated[0]).toEqual(merged[0]);
   });
 });

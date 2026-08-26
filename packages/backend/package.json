@@ -17,6 +17,7 @@
   },
   "scripts": {
     "backtest-scoring": "node scripts/backtest-scoring.mjs",
+    "archive-datasets": "node scripts/archive-datasets.mjs",
     "bench-backfill-draft": "node scripts/bench-backfill-draft.mjs",
     "bench-bots": "node scripts/bench-bots.mjs",
     "bench-io": "node scripts/bench-io.mjs",
