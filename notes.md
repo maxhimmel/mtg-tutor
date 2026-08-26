@@ -21,6 +21,50 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
 4. --
 5. --
 
+6.  **`validate-pack-model`'s default sample under-powers a rare bonus slot, and
+    the false failure NAMES A CARD so it reads as a finding.** MSH failed on
+    2026-08-26 with "Chaos Warp came out 0.72x expected" and is fine: its bonus
+    slot is in 4.26% of packs, so Chaos Warp's expectation is ~118 occurrences
+    and 0.72x is three Poisson standard errors. At `--packs 1500000` it passes,
+    worst 1.09x. Below roughly 15% slot frequency, check the `bonus dealt N%`
+    line before believing any per-card ratio. The fix is for the check to scale
+    its own sample, or report an interval rather than a point.
+
+    Ruled out while diagnosing it, and worth not re-deriving: the bonus pool is
+    NOT dealt uniformly. `sampleUnique` weights every slot by observed
+    `openedRate`, and every slot in all 26 sets is fully rated, so the uniform
+    fallback never fires. STX was briefly deferred on the belief that it did,
+    then imported and validated — its Mystical Archive is in 100% of packs
+    against MTGJSON's 100%, pool 63 against 63, worst 1.06x. The set whose bonus
+    sheet is in EVERY pack is the strongest test of this available.
+
+7.  **FIN pools `Wastes` at an observed rate of zero**, so it is dealt in no
+    pack ever and `validate-pack-model` reports it as never dealt. Correct
+    behaviour reported as a failure: 17Lands never saw Wastes in a FIN pack, and
+    `build-set-stats` adds basics to the land slot without asking whether the
+    set opened them. Harmless — a zero weight is never drawn — and left because
+    both fixes cost something. Dropping zero-rate cards at build time would
+    discard cards a thin dataset merely never saw; teaching the validator to
+    accept them would blind it to the MKM failure it exists to catch.
+
+8.  **STX has no archetype data at all, and degrades silently.** 17Lands'
+    game dataset for STX carries `opp_colors` but no `main_colors`, alone among
+    the 26 — KTK (2014) and PIO have it. Oldest set with TradDraft data, so it
+    reads as an early-dataset schema difference: not ours to fix, and no other
+    set is at risk. The artifact therefore has 0 archetypes and 0 colorWinRates
+    where others carry 494-1,887 and 13-30.
+
+    Nothing breaks, which is the problem — every fallback is deliberate and
+    quiet. `formatBaseline([])` is 0.5, `archDelta` returns 0, and
+    `deckColorsFor`'s `priced` guard drops the triples and stops charging
+    `splashCost`. So STX gives two-colour deck suggestions only, no splash
+    pricing, no archetype-fit term, with nothing saying so.
+
+    It shipped because STX's five colleges ARE pairs, so pairs-only is close to
+    right here by luck rather than design. The open question is whether the app
+    should SAY so: `coach_shown` cannot tell a set with no archetype data apart
+    from one where the coach was merely quiet.
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
