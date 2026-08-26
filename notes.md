@@ -69,6 +69,30 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
 
 - Example: What the heck does "the ring tempts you" mean in the LTR set? Is it actually not a big deal because the card itself tells you how it reacts to that? Or does the ring being tempted do something else I'm not aware of?
 
+    **Yes, and we do not have one. Researched 2026-08-26 over all 26 sets;
+    nothing built.** The Ring does do something no card restates — CR 701.54, an
+    emblem with four abilities that escalate with the tempt count — so the
+    instinct behind the question was right, and LTR is the worst case in the
+    pool: it shipped those rules on a separate card in the booster.
+
+    Counting a mechanic as set-defining at four or more cards and six sets or
+    fewer, there are 120 and `model/keywords.ts` covers 6. 1,521 of the 9,552
+    cards in the pool carry one the hover panel says nothing about — 15.9%, or
+    two cards a pack, worst in one (38%), ktk (30%), ecl and ltr (26%).
+
+    The source that works is the Comprehensive Rules, and only joined to the
+    card text: its `7xx.y` headings are the detector (112 of 120, and they rank
+    the Ring first in LTR), and rule 207.2c lists the 60 ability words precisely
+    because the CR refuses to define them — those are defined by the card, after
+    the em-dash. Scryfall's `keywords` and its three catalogs know nothing about
+    the Ring, and reminder-text mining cannot either. Details in the commit that
+    records this.
+
+    **Whatever gets built must settle the coach's half at the same time.**
+    `rulesText` strips reminder text, which on a card with a set mechanic is the
+    only definition it had: 1,148 of the 1,614, worst on the sets published
+    after any model's cutoff (mom, sir, msh 97%).
+
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
