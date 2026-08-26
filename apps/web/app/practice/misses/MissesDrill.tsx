@@ -5,6 +5,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Card, DisplayCard } from "@mtg-tutor/core";
+import { useCardHoverFactory } from "../../components/CardPreview";
 import { byCurve, gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
 import { CardPlacardList } from "../../components/CardPlacard";
 import { CardFace, CardTile } from "../../components/CardTile";
@@ -542,6 +543,7 @@ function Reveal({
   result: MissResult;
   guess: string;
 }) {
+  const hover = useCardHoverFactory(true);
   const card = (name: string) => question.pack.find((c) => c.name === name);
 
   // One entry per card worth showing, in the order the sentence reads them. A
@@ -577,10 +579,12 @@ function Reveal({
                     globals.css is explicit that the turning is what marks a
                     choice held open, waiting on you. This choice is made. */}
                 {face ? (
-                  <CardFace
-                    card={face}
-                    className={held ? "ring-2 ring-primary" : ""}
-                  />
+                  // Hoverable like every other card in the app. Stats on,
+                  // unlike the question screen above, because the answer has
+                  // already been given -- this is the half the drill is for.
+                  <span className="block" {...hover(face)}>
+                    <CardFace card={face} className={held ? "ring-2 ring-primary" : ""} />
+                  </span>
                 ) : (
                   <span className="text-sm">{name}</span>
                 )}

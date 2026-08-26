@@ -77,6 +77,29 @@ export function useCardHover(card: DisplayCard | undefined, showStats = false) {
   };
 }
 
+/**
+ * `useCardHover` for a list, where calling a hook per card is not allowed.
+ *
+ * The hook reads one context and returns handlers, so a component rendering a
+ * variable number of cards would be calling it a variable number of times --
+ * which is the rule-of-hooks violation, not a style preference. This reads the
+ * context once and hands back a plain function to spread per card.
+ */
+export function useCardHoverFactory(showStats = false) {
+  const ctx = useContext(HoverPreviewContext);
+  return (card: DisplayCard | undefined) => {
+    if (!ctx || !card?.imageUrl) return {};
+    const onEnter = (e: { currentTarget: HTMLElement }) =>
+      ctx.show(card, e.currentTarget, showStats);
+    return {
+      onMouseEnter: onEnter,
+      onFocus: onEnter,
+      onMouseLeave: ctx.hide,
+      onBlur: ctx.hide,
+    };
+  };
+}
+
 // Hold the preview back for as long as something else owns the screen. Hiding
 // once is not enough: while the cursor is being dragged across the board every
 // card and every deck row it passes over fires its own onMouseEnter, so the

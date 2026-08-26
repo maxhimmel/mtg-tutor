@@ -69,9 +69,12 @@ describe("faces that do not all fit", () => {
     expect(at.lefts[1] - at.lefts[0]).toBe(PREVIEW_W + GAP);
   });
 
+  // Against the PAGE, which is the only edge that drops a face now. A wall used
+  // to do this too and no longer does -- see "tokens no longer yield to the
+  // wall" below for the report that changed it.
   it("drops from the tail and never the front", () => {
-    const narrow: Viewport = { ...SCREEN, wall: 660 };
-    const at = place(tile(100, 300), narrow, false, [UPRIGHT], [UPRIGHT, UPRIGHT])!;
+    const narrow: Viewport = { width: 600, height: 900, wall: null };
+    const at = place(tile(40, 300), narrow, false, [UPRIGHT], [UPRIGHT, UPRIGHT])!;
     expect(at.lefts).toHaveLength(1);
   });
 
@@ -129,17 +132,20 @@ describe("the keyword panel", () => {
     expect(first.panelLeft).not.toBeNull();
   });
 
-  // The same defect at a narrower window, where it stops depending on which
-  // slot of the pack you point at: below about 1300px there is no room for a
-  // card, a token and a panel at ANY anchor, so before the fix every
-  // token-making card lost its stats and not just the first one. The token is
-  // what yields now, which is the order the token block's own comment states.
-  it("drops the token rather than the panel on a laptop-width board", () => {
+  // The same defect at a narrower window, where it stops depending on which slot
+  // of the pack you point at: before the fix for notes.md #7 every token-making
+  // card lost its stats and not just the first one.
+  //
+  // The panel keeping its room is the whole assertion, and it survives the
+  // token no longer yielding to the wall -- the panel's share is still
+  // subtracted before any face is measured. The token now draws at every anchor
+  // as well, which is the bug below this one.
+  it("never loses the panel to a token, whatever slot of the pack is hovered", () => {
     const laptop: Viewport = { width: 1280, height: 900, wall: 848 };
     for (const at of [40, 300, 560]) {
       const placed = place(tile(at, 300), laptop, true, [UPRIGHT], [UPRIGHT])!;
-      expect(placed.lefts).toHaveLength(1);
       expect(placed.panelLeft).not.toBeNull();
+      expect(placed.lefts).toHaveLength(2);
     }
   });
 
@@ -198,12 +204,26 @@ describe("a card with two sides, against a wall that moved in", () => {
     expect(at.panelLeft! + 260 - split.wall!).toBeLessThan(PREVIEW_W / 4);
   });
 
-  it("still makes a token yield to the wall", () => {
-    // A token is another card and the panel names it either way, so the wall
-    // costs it its picture -- which is the line the exemption stops at.
+  // Reported from the board: hovering a pack card drew the card alone, while the
+  // same card hovered in the Last pick rail drew its token -- because a card
+  // already right of the wall has no wall. The token feature worked everywhere
+  // except the screen it exists for.
+  //
+  // The panel is still never the thing that goes, which is what keeps notes.md
+  // #7 fixed.
+  it("draws a token past the wall, and keeps the panel", () => {
     const at = place(packCard, split, true, [UPRIGHT], [UPRIGHT])!;
-    expect(at.lefts).toHaveLength(1);
+    expect(at.lefts).toHaveLength(2);
     expect(at.panelLeft).not.toBeNull();
+  });
+
+  // The report, stated as the thing that was wrong: the same card showed less
+  // in the middle of the board than at the edge of it.
+  it("draws the same faces for a pack card and one inside the rail", () => {
+    const inRail = tile(900, 300, 165, 230);
+    const board = place(packCard, split, true, [UPRIGHT], [UPRIGHT])!;
+    const rail = place(inRail, split, true, [UPRIGHT], [UPRIGHT])!;
+    expect(board.lefts).toHaveLength(rail.lefts.length);
   });
 
   it("leaves a one-sided card entirely inside the wall", () => {
