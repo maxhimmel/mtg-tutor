@@ -52,7 +52,7 @@ function layoutOf(sc: ScryfallCard): string | undefined {
 //
 // Deduped by name within a card rather than by id, because two entries that
 // differ only by printing are one thing to a person reading the card.
-function tokensOf(sc: ScryfallCard, art: Map<string, string>): CardToken[] | undefined {
+function tokensOf(sc: ScryfallCard, art: ReadonlyMap<string, string>): CardToken[] | undefined {
   const byName = new Map<string, CardToken>();
 
   for (const part of sc.all_parts ?? []) {
@@ -216,34 +216,99 @@ export function mergeCards(
     if (image) art.set(t.id, image);
   }
 
-  return scryfall.map((sc) => {
-    const r = ratingByName.get(normalizeName(sc.name));
-    const combat = combatOf(sc);
+  return scryfall.map((sc) => ({
+    ...scryfallHalf(sc, art),
+    ...ratingHalf(ratingByName.get(normalizeName(sc.name))),
+  }));
+}
 
-    return {
-      name: sc.name,
-      rarity: toRarity(sc.rarity),
-      colors: asColorCodes(requiredColors(sc)),
-      colorIdentity: asColorCodes(sc.color_identity),
-      manaCost: sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost ?? "",
-      cmc: sc.cmc ?? 0,
-      typeLine: typeLineOf(sc),
-      oracleText: oracleOf(sc),
-      power: combat.power,
-      toughness: combat.toughness,
-      loyalty: combat.loyalty,
-      imageUrl: imageOf(sc),
-      layout: layoutOf(sc),
-      backImageUrl: backImageOf(sc),
-      tokens: tokensOf(sc, art),
-      collectorNumber: sc.collector_number,
-      setCode: sc.set,
-      gihWinRate: r?.ever_drawn_win_rate ?? undefined,
-      gihGames: r?.ever_drawn_game_count ?? undefined,
-      alsa: r?.avg_seen ?? undefined,
-      avgPick: r?.avg_pick ?? undefined,
-      winRate: r?.win_rate ?? undefined,
-    };
+// A card's two halves BY SOURCE, which is a different cut from the two halves by
+// reader that engineCard/cardText make. Everything above the line is Scryfall's
+// answer about the printing; everything below is 17Lands' answer about how the
+// card performed. They are separated because they go stale at different times
+// and for different reasons -- see `restateRatings`.
+
+function scryfallHalf(sc: ScryfallCard, art: ReadonlyMap<string, string>) {
+  const combat = combatOf(sc);
+  return {
+    name: sc.name,
+    rarity: toRarity(sc.rarity),
+    colors: asColorCodes(requiredColors(sc)),
+    colorIdentity: asColorCodes(sc.color_identity),
+    manaCost: sc.mana_cost ?? sc.card_faces?.[0]?.mana_cost ?? "",
+    cmc: sc.cmc ?? 0,
+    typeLine: typeLineOf(sc),
+    oracleText: oracleOf(sc),
+    power: combat.power,
+    toughness: combat.toughness,
+    loyalty: combat.loyalty,
+    imageUrl: imageOf(sc),
+    layout: layoutOf(sc),
+    backImageUrl: backImageOf(sc),
+    tokens: tokensOf(sc, art),
+    collectorNumber: sc.collector_number,
+    setCode: sc.set,
+  };
+}
+
+function ratingHalf(r: SeventeenLandsCard | undefined) {
+  return {
+    gihWinRate: r?.ever_drawn_win_rate ?? undefined,
+    gihGames: r?.ever_drawn_game_count ?? undefined,
+    alsa: r?.avg_seen ?? undefined,
+    avgPick: r?.avg_pick ?? undefined,
+    winRate: r?.win_rate ?? undefined,
+  };
+}
+
+// TAKEN FROM `scryfallHalf`, NOT WRITTEN OUT AGAIN -- the same rule cardText.ts
+// applies to the engine/text split, for the same reason. A Scryfall field added
+// above and forgotten in a hand-copied list here would be silently dropped from
+// every re-derived set while a full crawl kept it, which is the worst shape a
+// bug can have: correct on the path anybody tests by hand.
+//
+// Every key is present on the object whichever card is passed -- the fields are
+// spelled out, not conditionally spread -- so one dummy enumerates them all.
+const SCRYFALL_KEYS = Object.keys(
+  scryfallHalf(
+    { id: "", name: "", rarity: "common", layout: "normal", collector_number: "", booster: true, set: "" },
+    new Map(),
+  ),
+) as (keyof IngestCard)[];
+
+/**
+ * Re-applies 17Lands' half of a card to a pool that is already merged, leaving
+ * Scryfall's half exactly as it was.
+ *
+ * This is what makes a re-ingest free of the network. A set's stats move often
+ * -- every scoring change, every new column -- and the printing behind them
+ * moves almost never, so re-crawling Scryfall to pick up a new win rate re-reads
+ * ~2.7MB per set to change five numbers per card. Ingest can instead read the
+ * pool it already stored and call this.
+ *
+ * Everything the ingest DERIVES is dropped rather than carried: `value`, `turn`,
+ * `role` and `tableValue`, and the four denormalised fields the ingest stamps on
+ * (`rarityBaseline`, `packRate`, `iwd`, `maindeckRate`). A card whose new stats
+ * no longer carry one of those must come back without it, and spreading the
+ * stored card would instead leave the old number in place -- stale, plausible,
+ * and invisible. Building from `SCRYFALL_KEYS` up means only what this function
+ * names can survive.
+ */
+export function restateRatings(
+  cards: readonly Card[],
+  ratings: readonly SeventeenLandsCard[],
+): IngestCard[] {
+  const ratingByName = new Map(ratings.map((r) => [normalizeName(r.name), r]));
+
+  return cards.map((c) => {
+    const kept = Object.fromEntries(
+      SCRYFALL_KEYS.filter((k) => c[k as keyof Card] !== undefined).map((k) => [
+        k,
+        c[k as keyof Card],
+      ]),
+    ) as unknown as ReturnType<typeof scryfallHalf>;
+
+    return { ...kept, ...ratingHalf(ratingByName.get(normalizeName(c.name))) };
   });
 }
 

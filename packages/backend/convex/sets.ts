@@ -12,13 +12,14 @@ import {
   curveTurn,
   detectRole,
   observedRarityBaselines,
+  restateRatings,
   tableValueShift,
   tableValues,
   packSize,
   withPackSlots,
 } from "@mtg-tutor/core";
 import { requireDeployerOrAdmin } from "./admin.js";
-import { cardContextFor, cardTextFor, engineHalf, hydrate, textHalf } from "./cardText.js";
+import { cardContextFor, cardTextFor, engineHalf, hydrate, textHalf, textIndex } from "./cardText.js";
 import {
   action,
   internalMutation,
@@ -47,6 +48,10 @@ export interface IngestResult {
   keptExistingSnapshot: boolean;
   // True when both fingerprints already matched and nothing was fetched at all.
   skipped: boolean;
+  // True when the pool was re-derived from storage instead of crawled -- the
+  // saving this whole split exists for, and worth surfacing so a deploy that
+  // quietly stopped taking it is visible rather than merely slow.
+  reusedPool?: boolean;
   // True when the card pool was current and only the one-request set metadata
   // was refreshed.
   metaOnly: boolean;
@@ -143,8 +148,45 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // it. So nothing would have invalidated a single pool, `ingest-sets` would have
 // printed "unchanged, skipped" eighteen times, and no card would ever have got
 // one.
-const POOL_REVISION = `15-table-value.${VALUE_FINGERPRINT}`;
-const META_REVISION = "2-name-icon-released";
+// Exported for the tests, which have to build a fingerprint that MATCHES to
+// exercise the cheap path at all -- a hand-copied literal there would pass by
+// agreeing with itself.
+export const POOL_REVISION = `15-table-value.${VALUE_FINGERPRINT}`;
+export const META_REVISION = "2-name-icon-released";
+
+// WHICH OF THE THREE REVISIONS TO BUMP, because getting this wrong is the one
+// way this scheme fails quietly.
+//
+// POOL_REVISION above no longer implies a crawl. It gates the DERIVATION -- the
+// numbers stamped onto a card and the shape they are stored in -- and a set
+// whose crawl is still current satisfies it by re-reading the pool it already
+// has and running the derivation again over fresh stats. That is the whole
+// saving: a scoring change moves VALUE_FINGERPRINT, which moves POOL_REVISION,
+// which used to mean 25 Scryfall crawls and now means none.
+//
+// CRAWL_REVISION gates what only Scryfall can answer: which cards are in the
+// pool, and what `mergeCards` reads off a printing. Bump it when the crawl's
+// QUERIES change, or when a field on core's `scryfallHalf` is added, removed, or
+// derived differently. Re-read that list before deciding -- it is short, and it
+// is the actual test.
+//
+// The history above splits cleanly along that line, which is the clearest way to
+// see it: "9-card-shape" (layout, back face), "12-tokens", "13-required-colors"
+// and "14-adventure-colors" all changed what is read OFF a printing and would be
+// CRAWL bumps today. "5-value-precomputed", "10-context-se" and "15-table-value"
+// changed only what we compute FROM the stats and would not have crawled at all.
+//
+// Bumping the wrong one is not symmetric, and that asymmetry is the safety
+// margin. Bumping CRAWL when only the derivation moved costs a crawl nobody
+// needed -- slow, correct. Bumping POOL when a Scryfall field actually changed
+// leaves every set re-derived from a pool missing that field, which is stale and
+// silent. WHEN IN DOUBT, BUMP CRAWL_REVISION: the expensive answer is the safe
+// one, and it is exactly what this repo did on every deploy before the split.
+//
+// `1-split` is not a new shape. It is the first value this has ever had, so
+// every set crawls once more to record what its pool was built from, and every
+// scoring change after that is free.
+export const CRAWL_REVISION = "1-split";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
@@ -398,6 +440,14 @@ export const ingest = action({
     // have no artifact to hand (the CLI ingesting a set on demand), which just
     // means the set is always rebuilt.
     sourceHash: v.optional(v.string()),
+    // Hash of the CARD IDENTITIES in the same artifact -- the pack manifest and
+    // the rated names, and none of the numbers. Computed by the caller because
+    // the caller already has the artifact open; deriving it here would mean
+    // reading ~270KB of stats to decide whether to read anything at all.
+    //
+    // Omitted by the CLI for the same reason sourceHash is, and the result is
+    // the same: no crawl fingerprint, so no re-derive, so a full crawl.
+    crawlHash: v.optional(v.string()),
     force: v.optional(v.boolean()),
     // Absent from the CLI's calls, which authenticate as a person instead.
     deployKey: v.optional(v.string()),
@@ -408,57 +458,51 @@ export const ingest = action({
     const setCode = args.setCode.toLowerCase();
     const format = args.format ?? "PremierDraft";
 
-    // Checked before anything touches Scryfall: re-ingesting a set that has not
-    // changed costs two paginated crawls, and doing that for every set on every
-    // deploy is what got us rate limited in the first place.
+    // Two fingerprints, checked before anything touches Scryfall, answering two
+    // different questions: is the DERIVATION current, and is the CRAWL current.
+    // See CRAWL_REVISION for which is which and which to bump.
     const poolFingerprint = args.sourceHash
       ? `${POOL_REVISION}:${args.sourceHash}`
       : undefined;
+    const crawlFingerprint = args.crawlHash
+      ? `${CRAWL_REVISION}:${args.crawlHash}`
+      : undefined;
 
-    if (poolFingerprint && !args.force) {
-      const current = await ctx.runQuery(internal.sets.readIngestState, {
-        code: setCode,
-        format,
-      });
+    const current =
+      args.force
+        ? null
+        : await ctx.runQuery(internal.sets.readIngestState, { code: setCode, format });
 
-      if (current && current.sourceHash === poolFingerprint) {
-        // The card pool is current, so the crawl is off the table either way.
-        // Metadata may still be behind -- one request settles it.
-        if (current.metaRevision !== META_REVISION) {
-          const meta = await fetchSetMeta(setCode);
-          await ctx.runMutation(internal.sets.storeMeta, {
-            code: setCode,
-            format,
-            name: meta.name,
-            iconUri: meta.icon_svg_uri,
-            releasedAt: meta.released_at,
-            metaRevision: META_REVISION,
-          });
-          return {
-            ...current.result,
-            keptExistingSnapshot: false,
-            skipped: false,
-            metaOnly: true,
-          };
-        }
-
+    if (poolFingerprint && current && current.sourceHash === poolFingerprint) {
+      // The card pool is current, so the crawl is off the table either way.
+      // Metadata may still be behind -- one request settles it.
+      if (current.metaRevision !== META_REVISION) {
+        const meta = await fetchSetMeta(setCode);
+        await ctx.runMutation(internal.sets.storeMeta, {
+          code: setCode,
+          format,
+          name: meta.name,
+          iconUri: meta.icon_svg_uri,
+          releasedAt: meta.released_at,
+          metaRevision: META_REVISION,
+        });
         return {
           ...current.result,
           keptExistingSnapshot: false,
-          skipped: true,
-          metaOnly: false,
+          skipped: false,
+          metaOnly: true,
         };
       }
+
+      return {
+        ...current.result,
+        keptExistingSnapshot: false,
+        skipped: true,
+        metaOnly: false,
+      };
     }
 
-    const [scryfall, stats] = await Promise.all([
-      fetchScryfallPool(setCode),
-      ctx.runQuery(internal.sets.readStats, { code: setCode, format }),
-    ]);
-
-    if (scryfall.cards.length === 0) {
-      throw new Error(`No Scryfall cards found for set "${setCode}". Check the set code.`);
-    }
+    const stats = await ctx.runQuery(internal.sets.readStats, { code: setCode, format });
     if (!stats) {
       throw new Error(
         `No stats for "${setCode}" (${format}). Build and seed them first: ` +
@@ -469,27 +513,68 @@ export const ingest = action({
     const ratings = statsAsRatings(stats);
     const packCards = stats.packCards ?? [];
 
-    // Bonus-sheet cards the release-day crawl could not reach. build-set-stats
-    // already resolved which printing each one is, so this is an exact lookup
-    // and costs one request per 75 cards. Empty for every set whose boosters
-    // hold nothing older than the set itself, which is all of them but MKM.
-    const known = new Set(scryfall.cards.map((c) => normalizeName(c.name)));
-    const leftovers = await fetchByPrinting(
-      packCards.filter((p) => !known.has(normalizeName(p.name))),
-    );
-
-    // Our stats list exactly what appears in packs, so it decides the pool --
-    // that drops promos, art cards and Alchemy rebalances the Scryfall search
-    // pulls in, and keeps the bonus sheet. Basics are the one omission (they are
-    // not rated) and the Play Booster land slot needs them.
+    // THE FORK. Everything below this block is the same derivation either way --
+    // it reads `draftable` and the stats and touches no network at all. The only
+    // question here is where `draftable` comes from.
     //
-    // Leftovers go last so pickDraftable's first-print-wins dedupe still lets a
-    // name that is in both the main set and a bonus sheet keep its main rarity.
-    const draftable = pickDraftable(
-      mergeCards([...scryfall.cards, ...leftovers], ratings, scryfall.tokens),
-      ratings,
-      packCards,
-    );
+    // A pool whose crawl fingerprint still matches is a pool whose PRINTINGS
+    // have not moved, so re-crawling Scryfall would spend ~2.7MB and 5-6
+    // requests to arrive back at the cards already stored. Reading them instead
+    // and re-applying the new ratings gets the identical input for one database
+    // read -- which is what makes a scoring change cost nothing per set.
+    const crawlCurrent =
+      crawlFingerprint != null && current != null && current.crawlHash === crawlFingerprint;
+
+    const reused = crawlCurrent
+      ? await ctx.runQuery(internal.sets.readPool, { code: setCode, format })
+      : null;
+
+    let draftable: IngestCard[];
+    let meta: ScryfallSet = {};
+
+    if (reused) {
+      // No `pickDraftable` here, and that is not an omission. It narrows a raw
+      // Scryfall search to the pack manifest, and the stored pool IS the
+      // narrowed answer -- the manifest is part of the crawl fingerprint, so a
+      // pool this branch accepts was narrowed against the same one.
+      draftable = restateRatings(reused, ratings);
+
+      // The one request this branch can still owe. Stamping META_REVISION
+      // without having fetched the metadata would record a refresh that never
+      // happened; carrying the stored value forward leaves the set correctly
+      // marked as behind.
+      if (current && current.metaRevision !== META_REVISION) {
+        meta = await fetchSetMeta(setCode);
+      }
+    } else {
+      const scryfall = await fetchScryfallPool(setCode);
+      if (scryfall.cards.length === 0) {
+        throw new Error(`No Scryfall cards found for set "${setCode}". Check the set code.`);
+      }
+      meta = scryfall.meta;
+
+      // Bonus-sheet cards the release-day crawl could not reach. build-set-stats
+      // already resolved which printing each one is, so this is an exact lookup
+      // and costs one request per 75 cards. Empty for every set whose boosters
+      // hold nothing older than the set itself, which is all of them but MKM.
+      const known = new Set(scryfall.cards.map((c) => normalizeName(c.name)));
+      const leftovers = await fetchByPrinting(
+        packCards.filter((p) => !known.has(normalizeName(p.name))),
+      );
+
+      // Our stats list exactly what appears in packs, so it decides the pool --
+      // that drops promos, art cards and Alchemy rebalances the Scryfall search
+      // pulls in, and keeps the bonus sheet. Basics are the one omission (they are
+      // not rated) and the Play Booster land slot needs them.
+      //
+      // Leftovers go last so pickDraftable's first-print-wins dedupe still lets a
+      // name that is in both the main set and a bonus sheet keep its main rarity.
+      draftable = pickDraftable(
+        mergeCards([...scryfall.cards, ...leftovers], ratings, scryfall.tokens),
+        ratings,
+        packCards,
+      );
+    }
 
     // Measure what an unrated card of each rarity is worth in THIS set, from the
     // set's own rated cards, and stamp it on every card. Without it, unrated
@@ -624,19 +709,29 @@ export const ingest = action({
 
     const stored = await ctx.runMutation(internal.sets.store, {
       code: setCode,
-      name: scryfall.meta.name,
-      iconUri: scryfall.meta.icon_svg_uri,
-      releasedAt: scryfall.meta.released_at,
+      name: meta.name,
+      iconUri: meta.icon_svg_uri,
+      releasedAt: meta.released_at,
       format,
       cards: withTable,
       colorWinRates,
       contexts,
       packComposition: stats.packComposition,
       sourceHash: poolFingerprint,
-      metaRevision: META_REVISION,
+      crawlHash: crawlFingerprint,
+      // Only claimed when the metadata was actually fetched this run. A re-derive
+      // that found the set already at META_REVISION carries the stored value
+      // forward; one that found it behind fetched above and has earned this.
+      metaRevision: reused && !meta.released_at ? current?.metaRevision : META_REVISION,
     });
 
-    return { ...stored, missingPackCards, tokensWithoutArt, tableValueShift: shift };
+    return {
+      ...stored,
+      missingPackCards,
+      tokensWithoutArt,
+      tableValueShift: shift,
+      reusedPool: reused != null,
+    };
   },
 });
 
@@ -657,6 +752,7 @@ export const readIngestState = internalQuery({
 
     return {
       sourceHash: doc.sourceHash,
+      crawlHash: doc.crawlHash,
       metaRevision: doc.metaRevision,
       result: {
         setId: doc._id,
@@ -701,6 +797,40 @@ export const storeMeta = internalMutation({
   },
 });
 
+// The stored pool, put back together, for a re-derive that must not touch the
+// network. `hydrate` is the same join the web app and the CLI use, so the pool
+// this hands back is the same object a fresh crawl would have produced -- minus
+// the derived fields, which `restateRatings` drops on the way past.
+//
+// This is a ~400KB read per set and it happens only when the derivation moved
+// and the crawl did not. Convex charges for bytes READ, so it is worth being
+// exact about the frequency: an ordinary deploy skips on a hash compare and
+// never calls this, and the sets picker's own read is untouched. The path this
+// serves is a scoring change, which previously paid the same bytes to Scryfall
+// AND rewrote them anyway.
+export const readPool = internalQuery({
+  args: { code: v.string(), format: v.string() },
+  handler: async (ctx, args): Promise<Card[] | null> => {
+    const pool = await ctx.db
+      .query("setCards")
+      .withIndex("by_code_and_format", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .unique();
+    if (!pool) return null;
+
+    const text = await ctx.db
+      .query("setCardText")
+      .withIndex("by_code_format_and_key", (q) =>
+        q.eq("code", args.code).eq("format", args.format),
+      )
+      .collect();
+    if (text.length === 0) return null;
+
+    return hydrate(pool.cards, textIndex(text.map((t) => t.text)));
+  },
+});
+
 export const readStats = internalQuery({
   args: { code: v.string(), format: v.string() },
   handler: async (ctx, args) =>
@@ -724,6 +854,7 @@ export const store = internalMutation({
     contexts: v.array(v.object({ key: v.string(), context: cardContext })),
     packComposition: v.optional(packComposition),
     sourceHash: v.optional(v.string()),
+    crawlHash: v.optional(v.string()),
     metaRevision: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -852,6 +983,13 @@ export const store = internalMutation({
       iconUri: args.iconUri ?? existing?.iconUri,
       releasedAt: args.releasedAt ?? existing?.releasedAt,
       sourceHash: args.sourceHash,
+      // Not falling back to `existing` the way name/icon do, and the difference
+      // is deliberate: those fall back so a failed metadata request cannot blank
+      // a good value, while a missing crawlHash here should mean exactly what it
+      // says. `replace` drops it, the next deploy sees no record of what the
+      // pool was crawled from, and it crawls. Losing it costs one crawl; keeping
+      // a stale one costs a silently stale pool.
+      crawlHash: args.crawlHash,
       metaRevision: args.metaRevision,
     };
 
