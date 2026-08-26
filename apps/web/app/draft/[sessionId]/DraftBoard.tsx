@@ -34,6 +34,7 @@ import {
   type ExplainLine,
   hydrate,
   hydrateScore,
+  setMechanicsOf,
   isDecisionPick,
   jargonHits,
   normalizeName,
@@ -450,6 +451,10 @@ export function DraftBoard({ sessionId }: { sessionId: string }) {
           chars: prose.length,
           contradicted: !score.indistinguishable && !score.isBest && claimsTie(prose),
           jargon: jargonHits(prose),
+          // Off the picked card rather than the whole prompt: the server chooses
+          // which of the pack it writes out and we do not, and this is the card
+          // the answer is about either way.
+          mechanics: setMechanicsOf(score.picked).length,
         });
       } catch (e) {
         // The server can disagree with us about whether this pick was forced,

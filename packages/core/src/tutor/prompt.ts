@@ -57,6 +57,9 @@ const CARD_TEXT_RULE = [
   "  nothing else — never from its name, its type line, or what you recall of the set.",
   "  Many of these sets are newer than you are. If a card you want to talk about has no",
   "  rules text shown, you have not been given it: reason from its data instead.",
+  "- Text in square brackets after a card is OURS, not the card's: it is what a mechanic",
+  "  this set introduced actually does, for the ones whose cards never say. Use it to",
+  "  reason, and never quote it back as though it were printed on the card.",
 ];
 
 // The verdict names a better card; without the gap the model read every

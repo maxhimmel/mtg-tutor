@@ -226,8 +226,17 @@ export function ceremonyAbandoned(p: {
  * would change what gets done: one term stuck at the top says that rule needs
  * rewriting, a flat spread says the whole block is being skimmed.
  *
- * Neither field measures whether the answer is GOOD. Both catch a failure that
- * has a name; the rest needs a person.
+ * `mechanics` is how many of the set's own mechanics were on the card the pick
+ * was about, and therefore how much of the prompt was our explanation rather
+ * than the card's own text. It is not here to prove the corpus fires --
+ * `mechanic_explained` does that from the panel, on far more cards. It is here
+ * because it can be crossed with the two fields above it: if `contradicted` or
+ * `jargon` run higher on picks about a card carrying an unfamiliar mechanic,
+ * then handing the model a definition made its prose worse rather than better,
+ * and that is a repair to this feature that nothing else would surface.
+ *
+ * None of these measures whether the answer is GOOD. They catch failures that
+ * have names; the rest needs a person.
  */
 export function coachShown(p: {
   sessionId: string;
@@ -236,6 +245,7 @@ export function coachShown(p: {
   chars: number;
   contradicted: boolean;
   jargon: string[];
+  mechanics: number;
 }): void {
   if (!on()) return;
   posthog.capture("coach_shown", p);

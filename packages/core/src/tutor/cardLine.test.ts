@@ -135,3 +135,42 @@ describe("statLine", () => {
     expect(statLine(card({ gihGames: 412 }))).toContain("(n 412)");
   });
 });
+
+// The half of notes.md #9 that was not what the question asked about. The rule
+// in the system prompt says to describe a card from its text and nothing else,
+// and this function was deleting the only definition on the card for 1,148 of
+// the 1,614 cards in the pool that carry a mechanic their own set introduced.
+describe("set mechanics in a prompt", () => {
+  const card = (oracleText: string) =>
+    ({
+      name: "Test", cmc: 2, colors: [], colorIdentity: [], manaCost: "{1}{W}",
+      typeLine: "Creature — Human", oracleText, turn: 2, role: "body", value: 0,
+    }) as unknown as Parameters<typeof describeCard>[0];
+
+  it("keeps the reminder that defines a set mechanic", () => {
+    const text = rulesText(card("Warp {1}{W} (You may cast this card from your hand for its warp cost.)"));
+    expect(text).toContain("cast this card from your hand for its warp cost");
+  });
+
+  it("still drops the reminder on an evergreen keyword", () => {
+    const text = rulesText(card("Flying (This creature can't be blocked except by creatures with reach.)"));
+    expect(text).toBe("Flying");
+  });
+
+  // LTR printed 45 distinct reminders across 291 cards and not one mentions the
+  // Ring: those rules shipped on a separate card in the booster.
+  it("supplies the definition when the card has no reminder to keep", () => {
+    const out = describeCard(card("When this creature enters, the Ring tempts you."));
+    expect(out).toContain("[The Ring Tempts You:");
+    expect(out).toContain("Ring-bearer");
+  });
+
+  it("does not say the same thing twice when the card explained itself", () => {
+    const out = describeCard(card("Warp {1}{W} (You may cast this card from your hand for its warp cost.)"));
+    expect(out).not.toContain("[Warp:");
+  });
+
+  it("leaves a card with no set mechanic exactly as it was", () => {
+    expect(describeCard(card("Flying"))).not.toContain("[");
+  });
+});
