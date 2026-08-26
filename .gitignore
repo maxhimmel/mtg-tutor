@@ -31,6 +31,15 @@ scratch/
 # moves, which is why a stale cache here cannot quietly change a number.
 datasets/
 
+# The upstream 17Lands CSVs, kept by `pnpm archive-datasets` and read by nothing
+# automatically. The opposite contract to `datasets/` above, which is why it is a
+# separate directory rather than a subfolder: those files are caches that rebuild
+# themselves from a fingerprint, and these are kept precisely BECAUSE they may
+# stop being fetchable. ~700MB for the sets we ship, and re-downloadable only for
+# as long as 17Lands serves them -- so it is ignored for size, not because losing
+# it would be cheap.
+archive/
+
 # Benchmark output, and only the derived half. `pnpm bench-report` rebuilds the
 # page from a transcript in milliseconds for free, so it is build output.
 #
