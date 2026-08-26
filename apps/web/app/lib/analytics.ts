@@ -966,6 +966,50 @@ export function tokensPreviewed(p: {
 }
 
 /**
+ * What the hover panel could say about a card somebody looked at.
+ *
+ * The event that would have made notes.md #9 findable. "The Ring tempts you"
+ * sat on fifty LTR cards with nothing in the app able to say what it meant, and
+ * the panel looked exactly as it does on a card with nothing to explain -- so
+ * the only person who could have reported it is one who already knew the
+ * mechanic was missing, which is precisely what somebody confused by it does not
+ * know.
+ *
+ * WHAT IS NOT HERE, AND WHY
+ *
+ * "A mechanic we detected and had no sentence for" is the number you would want
+ * and it cannot be captured here. The corpus is the only vocabulary the browser
+ * ships, so everything it can find, it can already explain -- the count would be
+ * zero by construction and would read as coverage. That gap is measured where
+ * the full rules vocabulary exists, in refresh-mechanics, which is why that
+ * script exits non-zero rather than printing a warning.
+ *
+ * So this measures the two things a real pack can say and a script cannot.
+ *
+ * `set` against `evergreen` is whether the corpus earns its place. If people's
+ * hovers are all flying and trample then the panel was already fine and this was
+ * built for a case that does not come up.
+ *
+ * `silent` is a card with rules text that the panel named nothing on. Some of
+ * those are honest -- plenty of cards do something unique that no glossary
+ * covers -- so the number is not a defect on its own. Its RATE is: a new set
+ * whose silence runs above the others is a set with mechanics nobody has written
+ * yet, and that is exactly the state every set was in before this existed.
+ *
+ * Once per provider, not once per hover, for the same reason as
+ * `tokensPreviewed`: a draft is hundreds of hovers and the answer barely moves.
+ */
+export function mechanicExplained(p: {
+  setCode: string;
+  set: number;
+  evergreen: number;
+  silent: boolean;
+}): void {
+  if (!on()) return;
+  posthog.capture("mechanic_explained", p);
+}
+
+/**
  * Where a setting was reached from.
  *
  * "menu" is the account dropdown, which no longer carries any setting at all --

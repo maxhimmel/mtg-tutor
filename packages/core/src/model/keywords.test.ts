@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { cardShapeOf, keywordsOf } from "./keywords.js";
 
 const names = (oracleText: string) => keywordsOf({ oracleText }).map((k) => k.name);
+const names_ = names;
 
 describe("keywordsOf", () => {
   it("finds keywords in the order they are printed", () => {
@@ -86,5 +87,43 @@ describe("cardShapeOf", () => {
   it("says nothing when the layout is unknown", () => {
     expect(shape(undefined, "Creature — Faerie Rogue // Instant — Adventure")).toBeUndefined();
     expect(shape(undefined, "Creature — Human")).toBeUndefined();
+  });
+});
+
+// The whole point of the corpus, from the panel's side.
+describe("keywordsOf, with the set-mechanics corpus", () => {
+  it("explains the mechanic LTR never printed a reminder for", () => {
+    const found = keywordsOf({ oracleText: "Sacrifice this: draw a card. The Ring tempts you." });
+    expect(found.map((k) => k.name)).toContain("The Ring Tempts You");
+    expect(found.find((k) => k.name === "The Ring Tempts You")?.reminder).toMatch(/Ring-bearer/);
+  });
+
+  it("still finds the evergreen keywords beside it", () => {
+    const names = names_("Flying\nWhenever this creature enters, the Ring tempts you.");
+    expect(names).toContain("Flying");
+    expect(names).toContain("The Ring Tempts You");
+  });
+
+  // A card is hovered because of the part that is unfamiliar.
+  it("puts the set mechanic ahead of an evergreen keyword at the same spot", () => {
+    const names = names_("Warp {1}{R}\nFlying");
+    expect(names.indexOf("Warp")).toBeLessThan(names.indexOf("Flying"));
+  });
+
+  it("prefers the specific mechanic over the general one it contains", () => {
+    const names = names_("When this creature enters, manifest dread.");
+    expect(names).toContain("Manifest Dread");
+    expect(names).not.toContain("Manifest");
+  });
+
+  // An ability word is an ordinary English word anywhere but the head of an
+  // ability, which is why the corpus records what kind each mechanic is.
+  it("does not read an ability word out of ordinary rules text", () => {
+    expect(names_("Exile it into the void.")).not.toContain("Void");
+    expect(names_("Void — At the beginning of your end step, draw a card.")).toContain("Void");
+  });
+
+  it("says nothing about a vanilla creature", () => {
+    expect(names_("")).toEqual([]);
   });
 });

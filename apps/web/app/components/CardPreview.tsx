@@ -10,8 +10,20 @@ import {
   useState,
 } from "react";
 import { usePathname } from "next/navigation";
-import { type DisplayCard, cardShapeOf, frontIsSideways, keywordsOf } from "@mtg-tutor/core";
-import { tokensPreviewed } from "../lib/analytics";
+import {
+  type DisplayCard,
+  allMechanics as SET_MECHANICS_FN,
+  cardShapeOf,
+  frontIsSideways,
+  keywordsOf,
+} from "@mtg-tutor/core";
+
+// The corpus, so the event can tell a set mechanic from an evergreen keyword.
+// `keywordsOf` deliberately returns one list -- a person hovering does not care
+// which kind a thing is -- so the split is recovered here rather than leaked
+// into the type the panel renders.
+const SET_MECHANICS = SET_MECHANICS_FN();
+import { mechanicExplained, tokensPreviewed } from "../lib/analytics";
 import { webpImage } from "../lib/cardImage";
 import {
   type Box,
@@ -392,6 +404,21 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
       viewport: window.innerWidth,
     });
   }, [pos, tokens, drawable, faces]);
+
+  // What the panel managed to say about a card somebody chose to look at. A ref
+  // so it is once per provider, exactly like `tokensPreviewed` above.
+  const explained = useRef(false);
+  useEffect(() => {
+    if (explained.current || !hover?.card.oracleText) return;
+    explained.current = true;
+    const set = new Set(SET_MECHANICS.map((m) => m.name));
+    mechanicExplained({
+      setCode: hover.card.setCode ?? "unknown",
+      set: notes.filter((n) => set.has(n.name)).length,
+      evergreen: notes.filter((n) => !set.has(n.name)).length,
+      silent: notes.length === 0,
+    });
+  }, [hover, notes]);
 
   // Memoised because every hoverable card on the page consumes this context, and
   // a fresh object here would re-render all of them each time a preview opens.
