@@ -8,22 +8,62 @@
 //   pnpm new-set DSK TradDraft       # pick the format
 //   pnpm new-set DSK TradDraft --prod   # seed + ingest into production
 //   pnpm new-set DSK --force         # skip the availability gate
+//   pnpm new-set DSK --no-archive    # stream the CSVs, keep nothing
 //
 // A thin orchestrator over the sibling scripts in this directory -- it shells out
 // to their `pnpm` aliases rather than duplicating the pipeline. For the rare
-// local-CSV or custom-output case (build-set-stats' --draft/--game/--out), run
-// that step by hand instead.
+// custom-output case (build-set-stats' --out), run that step by hand instead.
+//
+// LOCAL ONLY. Nothing here runs on a deploy: apps/web/vercel.json builds with
+// `convex deploy` then seed-set-stats then ingest-sets, all of which read the
+// committed artifact under data/. This is how that artifact gets made.
+//
+// The CSVs are archived on the way in rather than streamed and dropped, which is
+// the one thing this does that is not just calling the next script. It costs
+// nothing -- the download happens either way -- and it is the difference between
+// an archive that covers every set and one that covers the sets somebody
+// remembered to fetch twice. `--no-archive` streams and keeps nothing, for a
+// one-off on a machine with no room for it.
+//
+// The archived files are then passed to build-set-stats EXPLICITLY. That
+// direction matters and is not symmetric with writing them: a build that
+// silently preferred a local file would be a build whose inputs depend on which
+// machine ran it, so build-set-stats still only ever reads a path it was handed.
 
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ARCHIVE = resolve(HERE, "..", "..", "..", "archive");
 
 const argv = process.argv.slice(2);
 const prod = argv.includes("--prod");
 const force = argv.includes("--force");
+const noArchive = argv.includes("--no-archive");
 const [set, format = "PremierDraft"] = argv.filter((a) => !a.startsWith("--"));
 
 if (!set) {
-  console.error("usage: pnpm new-set <setCode> [format] [--prod] [--force]");
+  console.error(
+    "usage: pnpm new-set <setCode> [format] [--prod] [--force] [--no-archive]",
+  );
   process.exit(1);
+}
+
+const archived = (kind) =>
+  join(ARCHIVE, `${kind}_data_public.${set.toUpperCase()}.${format}.csv.gz`);
+
+// Only when BOTH landed. A half-archived set falls back to streaming rather than
+// handing build-set-stats one path and letting it fetch the other, which would
+// build from two sources and report neither.
+function archivedPaths() {
+  if (noArchive) return null;
+  const draft = archived("draft");
+  const game = archived("game");
+  return existsSync(draft) && existsSync(game)
+    ? ["--draft", draft, "--game", game]
+    : null;
 }
 
 const artifact = `${set.toLowerCase()}.${format}`;
@@ -35,7 +75,19 @@ const run = (script, args) => {
 console.error(`Adding ${artifact}${prod ? " (production)" : ""}`);
 try {
   if (!force) run("check-availability", [set, format]);
-  run("build-set-stats", force ? [set, format, "--force"] : [set, format]);
+  if (!noArchive) run("archive-datasets", [set, "--format", format]);
+
+  // Falls back to streaming when the archive step could not produce both files
+  // -- a set 17Lands has not published, which --force is how you get past.
+  const local = archivedPaths();
+  if (!local) {
+    console.error(
+      noArchive
+        ? "\n→ streaming the datasets (--no-archive), keeping nothing"
+        : "\n→ nothing archived for this set, streaming instead",
+    );
+  }
+  run("build-set-stats", [set, format, ...(local ?? []), ...(force ? ["--force"] : [])]);
   run("seed-set-stats", prod ? [artifact, "--prod"] : [artifact]);
   run("ingest-sets", prod ? [artifact, "--prod"] : [artifact]);
   // A set that ingests without throwing can still be wrong in ways nothing above
