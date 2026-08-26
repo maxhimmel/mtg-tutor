@@ -65,33 +65,28 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     should SAY so: `coach_shown` cannot tell a set with no archetype data apart
     from one where the coach was merely quiet.
 
-9.  Is there a way to detect special rules that get introduced in each set?
+9.  --  (Set mechanics, shipped 2026-08-26. The hover panel and the coach both
+    name what a set's own mechanic does; the Ring was the worst case in the pool
+    and LTR shipped its rules on a separate card in the booster.)
 
-- Example: What the heck does "the ring tempts you" mean in the LTR set? Is it actually not a big deal because the card itself tells you how it reacts to that? Or does the ring being tempted do something else I'm not aware of?
+    Three things worth not re-deriving. **The Comprehensive Rules are the only
+    complete list of what Magic's mechanics are called, and are not licensed for
+    redistribution** — the Fan Content Policy carves verbatim rules content out
+    of what it permits — so `docs/set-mechanics.yaml` is our prose with a rule
+    number as a citation, `checkOriginal` fails the build on twelve shared words,
+    and the CR must never be committed. **Do not fetch it at build time**: there
+    is no stable URL and the txt's date drifts independently of the docx and pdf.
 
-    **Yes, and we do not have one. Researched 2026-08-26 over all 26 sets;
-    nothing built.** The Ring does do something no card restates — CR 701.54, an
-    emblem with four abilities that escalate with the tempt count — so the
-    instinct behind the question was right, and LTR is the worst case in the
-    pool: it shipped those rules on a separate card in the booster.
+    **The bar is a mechanic on 8+ cards of a set that appears in 6 sets or
+    fewer**, which is 95 of them. `refresh-mechanics` is step 6 of `new-set`,
+    exits non-zero on a gap, and prints what fell below the bar rather than
+    letting the tail read as completeness.
 
-    Counting a mechanic as set-defining at four or more cards and six sets or
-    fewer, there are 120 and `model/keywords.ts` covers 6. 1,521 of the 9,552
-    cards in the pool carry one the hover panel says nothing about — 15.9%, or
-    two cards a pack, worst in one (38%), ktk (30%), ecl and ltr (26%).
-
-    The source that works is the Comprehensive Rules, and only joined to the
-    card text: its `7xx.y` headings are the detector (112 of 120, and they rank
-    the Ring first in LTR), and rule 207.2c lists the 60 ability words precisely
-    because the CR refuses to define them — those are defined by the card, after
-    the em-dash. Scryfall's `keywords` and its three catalogs know nothing about
-    the Ring, and reminder-text mining cannot either. Details in the commit that
-    records this.
-
-    **Whatever gets built must settle the coach's half at the same time.**
-    `rulesText` strips reminder text, which on a card with a set mechanic is the
-    only definition it had: 1,148 of the 1,614, worst on the sets published
-    after any model's cutoff (mom, sir, msh 97%).
+    **Ability words are hand-written and always will be.** Rule 207.2c names all
+    60 and says outright they have no rules meaning and no entries, so there is
+    nothing to cite and nothing to re-derive — and 207.2c is not exhaustive:
+    `corrupted` is on 26 paper cards and appears nowhere in the rules, not even
+    in the release published for its own set.
 
 # Ideas:
 
