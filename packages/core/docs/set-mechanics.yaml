@@ -1,0 +1,79 @@
+# What a set's own mechanics mean — CANONICAL machine-readable source.
+#
+# Compiled into src/model/mechanics.generated.ts by scripts/generate-principles.ts,
+# so edit THIS file and re-run `pnpm --filter @mtg-tutor/core generate`.
+#
+# WHY THIS EXISTS
+#
+# A drafter opening an LTR pack is told "the Ring tempts you" and nothing else,
+# because LTR shipped that rule on a separate card in the booster. Nothing in
+# the app could say what it meant, and it was not an outlier: 1,521 of the 9,552
+# cards in the pool carry a mechanic the hover panel had no entry for, better
+# than two cards in a fourteen-card pack.
+#
+# WHY THE PROSE IS OURS
+#
+# The Comprehensive Rules answer every one of these and are not licensed for it.
+# The Fan Content Policy carves verbatim republication of rules content out of
+# what it permits, and the CR document grants nothing at all. So `rule` is a
+# citation for a reader who wants the whole thing, and `short` is a sentence
+# somebody wrote. `checkOriginal` in model/mechanicsSchema.ts fails the build if
+# any definition drifts back into Wizards' wording.
+#
+# WHY IT IS FLAT AND NOT KEYED BY SET
+#
+# The match is against a card's own rules text, exactly as keywordsOf already
+# works, so nothing at runtime needs to know which set it is looking at. Which
+# sets carry what is an authoring question, and it lives in refresh-mechanics'
+# report where it can fail loudly.
+#
+# WHAT DOES NOT BELONG HERE
+#
+# Anything in all 26 sets. Flying, trample and deathtouch are in
+# model/keywords.ts and stay there: that list is the evergreen layer, its prose
+# is terser than anything either source gives, and a mechanic wants ONE
+# definition. The bar for this file is a mechanic on eight or more cards of a
+# set that appears in six of our sets or fewer.
+
+meta:
+  title: "Set mechanics"
+  note: "What a mechanic a set is built on actually does, for the hover panel and the coach."
+  sources: "./set-mechanics-sources.md"
+
+mechanics:
+  # The five that were already in model/keywords.ts under its invitation to
+  # "append a set's own mechanic here". Moved rather than rewritten: they are
+  # shipped prose that has been in front of people, and this commit is the move.
+  - name: Saddle
+    kind: keyword
+    rule: "702.171"
+    short: >-
+      Tap any number of other creatures with total power at least the saddle number to
+      saddle this Mount until end of turn.
+
+  - name: Discover
+    kind: action
+    rule: "701.57"
+    short: >-
+      Exile cards from the top of your library until you exile a nonland card with that mana
+      value or less. Cast it without paying its mana cost or put it into your hand, then put
+      the rest on the bottom in a random order.
+
+  - name: Backup
+    kind: keyword
+    rule: "702.165"
+    short: >-
+      When this creature enters, put that many +1/+1 counters on target creature. If that's
+      another creature, it also gains this card's other abilities until end of turn.
+
+  - name: Bargain
+    kind: keyword
+    rule: "702.166"
+    short: You may sacrifice an artifact, enchantment, or token as you cast this spell.
+
+  - name: Storm
+    kind: keyword
+    rule: "702.40"
+    short: >-
+      When you cast this spell, copy it for each spell cast before it this turn. You may
+      choose new targets for the copies.
