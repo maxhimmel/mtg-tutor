@@ -76,9 +76,31 @@ export interface MechanicsMeta {
   sources?: string;
 }
 
+/**
+ * A term the vocabulary finds that is not a mechanic anybody needs told about.
+ *
+ * The rules name a great many things, and matching a set's cards against all of
+ * them turns up `Face Up` on 55 cards of mkm and ktk, `Starting Deck` on 10 of
+ * mom, `Color Identity` on 4 of mh3. Those are the plumbing a rule is written
+ * in, not something a drafter is stuck on, and no containment test can tell them
+ * from `Prepared` or `Crime`, which arrive by the same route and are real.
+ *
+ * So it is a decision, and decisions get written down. Kept beside the
+ * definitions rather than in a second file, because the question "why is there
+ * no entry for Face Up" is asked in exactly the place the answer belongs -- and
+ * because without it refresh-mechanics is red forever and a check that is always
+ * red is a check nobody reads.
+ */
+export interface IgnoredTerm {
+  name: string;
+  why: string;
+}
+
 export interface MechanicsDoc {
   meta: MechanicsMeta;
   mechanics: Mechanic[];
+  /** Read by refresh-mechanics only. Nothing at runtime looks at it. */
+  ignored?: IgnoredTerm[];
 }
 
 const KINDS = new Set<string>([
@@ -168,6 +190,14 @@ export function validateMechanics(
           `Mechanic ${m.name} uses "${phrase}", which vernacular.yaml lists under \`avoid\`.`,
         );
       }
+    }
+  }
+
+  for (const i of doc.ignored ?? []) {
+    if (!i.name) throw new Error(`An ignored term in ${source} has no name.`);
+    if (!i.why) throw new Error(`Ignored term ${i.name} does not say why.`);
+    if (seen.has(i.name.toLowerCase())) {
+      throw new Error(`${i.name} is both defined and ignored in ${source}.`);
     }
   }
 

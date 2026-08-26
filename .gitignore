@@ -31,6 +31,19 @@ scratch/
 # moves, which is why a stale cache here cannot quietly change a number.
 datasets/
 
+# What `refresh-mechanics` downloads: the Comprehensive Rules, and Scryfall's
+# card text per set. The Scryfall half is an ordinary cache, the same contract as
+# datasets/ above.
+#
+# The rules are NOT. They must never be committed, whatever the size: the Fan
+# Content Policy permits a great deal and carves verbatim republication of
+# Wizards' rules content out of it, so a copy of that file in this repo is the
+# one thing here that would actually be a breach. It is a dev-time input that
+# decides which mechanics exist and supplies a section number to cite; every
+# sentence a person reads is written by us in packages/core/docs/set-mechanics.yaml,
+# and `checkOriginal` fails the run if one of them drifts back into the original.
+packages/backend/.cache/
+
 # The upstream 17Lands CSVs, kept by `pnpm archive-datasets` and read by nothing
 # automatically. The opposite contract to `datasets/` above, which is why it is a
 # separate directory rather than a subfolder: those files are caches that rebuild
