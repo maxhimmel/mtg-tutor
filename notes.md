@@ -17,9 +17,9 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     theme in. The experiment worth running is the pool's rules text. Nothing
     has been built.
 
-3. --
-4. --
-5. --
+3.  --
+4.  --
+5.  --
 
 6.  **`validate-pack-model`'s default sample under-powers a rare bonus slot, and
     the false failure NAMES A CARD so it reads as a finding.** MSH failed on
@@ -64,6 +64,10 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     right here by luck rather than design. The open question is whether the app
     should SAY so: `coach_shown` cannot tell a set with no archetype data apart
     from one where the coach was merely quiet.
+
+9.  Is there a way to detect special rules that get introduced in each set?
+
+- Example: What the heck does "the ring tempts you" mean in the LTR set? Is it actually not a big deal because the card itself tells you how it reacts to that? Or does the ring being tempted do something else I'm not aware of?
 
 # Ideas:
 
@@ -980,24 +984,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-            So when the colour rule moved (decision #23), the app changed and the
-            instrument did not. It went on reporting the old rule's numbers, correctly,
-            with the right imports at the top of the file, and nothing anywhere could
-            have said so. It now calls `packScoringContext` like the mutation does.
+                So when the colour rule moved (decision #23), the app changed and the
+                instrument did not. It went on reporting the old rule's numbers, correctly,
+                with the right imports at the top of the file, and nothing anywhere could
+                have said so. It now calls `packScoringContext` like the mutation does.
 
-            **The second half is worse and is the general form.** The same file printed
-            "the colour terms charged it 0.34pp" under its table, from a filter naming
-            `splash` and `archetype`. That filter was written before the off-colour term
-            existed and nobody widened it -- so the number under a table measuring the
-            off-colour term **excluded the off-colour term**. It read as a healthy small
-            charge and it was a subtotal of the two terms that were not the subject. The
-            true figure was 1.28pp, which is still far too small, which is the finding
-            the instrument was built to surface and had been hiding for four days.
+                **The second half is worse and is the general form.** The same file printed
+                "the colour terms charged it 0.34pp" under its table, from a filter naming
+                `splash` and `archetype`. That filter was written before the off-colour term
+                existed and nobody widened it -- so the number under a table measuring the
+                off-colour term **excluded the off-colour term**. It read as a healthy small
+                charge and it was a subtotal of the two terms that were not the subject. The
+                true figure was 1.28pp, which is still far too small, which is the finding
+                the instrument was built to surface and had been hiding for four days.
 
-            The rule: **a harness must not enumerate what it sums.** Sum everything and
-            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-            the total by default rather than by somebody remembering. An allowlist in an
-            instrument is a silent undercount waiting for the next field.
+                The rule: **a harness must not enumerate what it sums.** Sum everything and
+                exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                the total by default rather than by somebody remembering. An allowlist in an
+                instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
