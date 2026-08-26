@@ -48,6 +48,34 @@ if (files.length === 0) {
   process.exit(1);
 }
 
+// WHICH CARDS the artifact names, with nothing about how they performed.
+//
+// Paired with `sourceHash` above, which is the whole file and therefore moves
+// whenever any number in it does. This one moves only when the pool a crawl
+// would produce moves, which is what lets `sets.ingest` re-derive a set from the
+// cards it already stored instead of crawling Scryfall for them again. See
+// CRAWL_REVISION in convex/sets.ts for the rule about which is which.
+//
+// `openedRate` is deliberately excluded and is the reason this cannot just hash
+// `packCards` whole: it is a measured frequency that moves with every rebuild of
+// the stats, so including it would make this a second copy of `sourceHash` and
+// quietly restore the crawl on every deploy. `slot` and `setCode` ARE included
+// -- both decide what a card IS rather than how it did.
+//
+// Computed here rather than in the action because the artifact is already open
+// and parsed; asking the action for it would mean reading ~270KB of stats out of
+// the database to decide whether to read anything at all.
+function crawlHashOf(artifact) {
+  const identities = (artifact.packCards ?? [])
+    .map((p) => `${p.name}\u0000${p.slot ?? ""}\u0000${p.setCode ?? ""}`)
+    .sort();
+  const rated = (artifact.cards ?? []).map((c) => c.name).sort();
+
+  return createHash("sha256")
+    .update(JSON.stringify({ setCode: artifact.setCode, identities, rated }))
+    .digest("hex");
+}
+
 const client = new ConvexHttpClient(deploymentUrl(prod));
 // Resolved once, before the loop: a missing key should stop the run rather
 // than fail every set in turn.
@@ -56,10 +84,12 @@ const key = deployKey(prod);
 let ingested = 0;
 let refreshed = 0;
 let skipped = 0;
+let reused = 0;
 
 for (const file of files) {
   const raw = readFileSync(join(DATA, file), "utf8");
-  const { setCode, format } = JSON.parse(raw);
+  const artifact = JSON.parse(raw);
+  const { setCode, format } = artifact;
   const label = `${setCode}/${format}`;
   const sourceHash = createHash("sha256").update(raw).digest("hex");
 
@@ -68,6 +98,7 @@ for (const file of files) {
     setCode,
     format,
     sourceHash,
+    crawlHash: crawlHashOf(artifact),
     force,
     deployKey: key,
   });
@@ -80,6 +111,7 @@ for (const file of files) {
     process.stderr.write("metadata refreshed (no card crawl)\n");
   } else {
     ingested++;
+    if (result.reusedPool) reused++;
     process.stderr.write(`ingest ... ${JSON.stringify(result)}\n`);
     // The artifact names every card the set's boosters can contain, so the pool
     // coming back short means those cards can never be dealt even though the
@@ -100,6 +132,7 @@ for (const file of files) {
 }
 
 console.error(
-  `\ningested ${ingested} set(s), refreshed ${refreshed} metadata-only, ` +
+  `\ningested ${ingested} set(s) (${reused} re-derived without crawling), ` +
+    `refreshed ${refreshed} metadata-only, ` +
     `skipped ${skipped} unchanged${prod ? " (production)" : ""}`,
 );
