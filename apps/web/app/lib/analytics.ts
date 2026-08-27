@@ -1,6 +1,7 @@
 import posthog from "posthog-js";
 import type {
   ArchetypeOutcome,
+  ArchetypeResult,
   Confidence,
   DrillId,
   MissOutcome,
@@ -1167,6 +1168,15 @@ export function drillStarted(p: {
   drafts: number;
   candidates: number;
   unavailable: number;
+  /**
+   * How many of a set's cards have an answer other than "the decks want it the
+   * same". Archetype quiz only.
+   *
+   * A run out of a set with four separable cards is a different run from one
+   * out of blb's thirty-six, and pooling their completion rates would hide
+   * that -- a drill that reads as boring might just be a set that is thin.
+   */
+  separable?: number;
   /** Which page of the ranked list -- 0 is the first run of a sitting. */
   skip: number;
 }): void {
@@ -1223,6 +1233,17 @@ export function drillAnswered(p: {
    * shape cannot be repaired retroactively; a second property costs nothing.
    */
   gap?: number;
+  /**
+   * Which of the four ways an archetype answer went wrong.
+   *
+   * `tookRawBest` above already carries the one both drills share, so this is
+   * the rest -- and the pair worth watching is `saw-difference` against
+   * `saw-none`. The first is the mistake the drill exists to correct; the
+   * second is people reaching for "they are the same" when there IS an answer,
+   * and if it dominates then the third answer is too tempting and the run's
+   * half-and-half split is doing harm rather than teaching.
+   */
+  mistake?: NonNullable<ArchetypeResult["mistake"]>;
   /**
    * How many error bars separated the two decks, in the archetype quiz.
    *

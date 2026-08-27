@@ -124,6 +124,7 @@ describe("drills/archetypes.deal", () => {
       color: "W",
       wants: "WB",
       spurns: "WU",
+      separated: true,
     });
     // The whole table rides along, not just the two ends: the reveal shows
     // every deck and the grade only uses the extremes.
@@ -210,9 +211,10 @@ describe("drills/archetypes.deal", () => {
     expect(run.questions).toEqual([]);
   });
 
-  // The finding the whole drill is shaped by: most cards' decks are inside each
-  // other's error bars, and serving those is grading somebody against noise.
-  it("refuses a card whose decks are too close to separate", async () => {
+  // The finding the whole drill is shaped by, and it is served rather than
+  // refused: most cards' decks are inside each other's error bars, and "these
+  // two want it the same" is the right answer for them.
+  it("serves a card whose decks are too close, marked as having no answer", async () => {
     const t = harness();
     await seed(t, {
       archetypes: [
@@ -224,9 +226,9 @@ describe("drills/archetypes.deal", () => {
 
     const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
 
-    // Not mute -- the set has a table, it just has nothing worth asking. The
-    // screen has to tell those two apart.
-    expect(run).toMatchObject({ mute: null, quizzable: 0, questions: [] });
+    expect(run).toMatchObject({ mute: null, separable: 0 });
+    expect(run.questions).toHaveLength(1);
+    expect(run.questions[0].separated).toBe(false);
   });
 
   // The check the archetype table cannot make for itself. These decks all share

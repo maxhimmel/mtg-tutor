@@ -4,6 +4,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
 import {
   DECK_NAMES,
+  SAME,
   gradeArchetypeGuess,
   scoreArchetypeRun,
   type ArchetypeResult,
@@ -117,9 +118,14 @@ async function play(run: Run): Promise<ArchetypeResult[] | null> {
     // Sorted by colour string so the answer is never the first option twice in
     // a row -- a run whose answer is always at the top is a run about noticing
     // that. The web orders the same way and says the same thing.
-    const options = [question.wants, question.spurns]
-      .sort((a, b) => a.localeCompare(b))
-      .map((colors) => ({ value: colors, label: deckName(colors) }));
+    const options = [
+      ...[question.wants, question.spurns]
+        .sort((a, b) => a.localeCompare(b))
+        .map((colors) => ({ value: colors, label: deckName(colors) })),
+      // Last rather than first, and it is the right answer most of the time.
+      // A person who never reaches for it is who this drill is for.
+      { value: SAME, label: "Neither — the same card in both" },
+    ];
 
     const chosen = await p.select({
       message: `Which deck wanted ${question.card.name}?`,
@@ -156,10 +162,12 @@ function card(question: Question): string {
   ].join("\n");
 }
 
-const head = (result: ArchetypeResult, question: Question) =>
-  result.correct
-    ? pc.green(`✓ ${deckName(question.wants)} wanted it`)
-    : pc.red(`✗ ${deckName(question.wants)} wanted it`);
+const head = (result: ArchetypeResult, question: Question) => {
+  const answer = question.separated
+    ? `${deckName(question.wants)} wanted it`
+    : "neither — the same card in both";
+  return result.correct ? pc.green(`✓ ${answer}`) : pc.red(`✗ ${answer}`);
+};
 
 /**
  * Every deck, not just the two that were asked about.
@@ -176,14 +184,18 @@ function reveal(question: Question, result: ArchetypeResult, guess: string): str
     const line = `  ${name}  ${points(deck.lift).padStart(7)}  ${pc.dim(
       `${deck.n.toLocaleString()} games`,
     )}`;
-    if (deck.colors === question.wants) return pc.green(line);
+    // Nothing is green when there is no answer: colouring the top row on a card
+    // whose decks are level would draw the ranking the drill just said is not
+    // there.
+    if (question.separated && deck.colors === question.wants) return pc.green(line);
     if (deck.colors === guess) return pc.red(line);
     return line;
   });
 
   const lines = [...rows, ""];
 
-  if (result.tookStrongerDeck) {
+  // One sentence per kind of wrong, because they are different lessons.
+  if (result.mistake === "stronger-deck") {
     lines.push(
       pc.dim(
         `${DECK_NAMES[guess] ?? guess} wins more games than ${DECK_NAMES[question.wants] ?? question.wants} does — but not\n` +
@@ -193,12 +205,32 @@ function reveal(question: Question, result: ArchetypeResult, guess: string): str
       "",
     );
   }
+  if (result.mistake === "saw-difference") {
+    lines.push(
+      pc.dim(
+        "The gap is there in the numbers and it is smaller than the error bars on it,\n" +
+          "so it is not a gap. Most cards in a colour are like this, which means the\n" +
+          "colour is the read and the pair usually is not.",
+      ),
+      "",
+    );
+  }
+  if (result.mistake === "saw-none") {
+    lines.push(
+      pc.dim(
+        "This one is real — further apart than the data's own margin.",
+      ),
+      "",
+    );
+  }
 
   lines.push(
     pc.dim(
       "Each figure is how much better the deck did with this card in hand than it did\n" +
-        `in general. The two ends are ${question.sigmas.toFixed(1)} error bars apart; the rows\n` +
-        "between them the data cannot put in order.",
+        `in general. The two ends are ${question.sigmas.toFixed(1)} error bars apart` +
+        (question.separated
+          ? ";\nthe rows between them the data cannot put in order."
+          : ",\nwhich is not far enough to call a difference at all."),
     ),
   );
 
@@ -211,8 +243,8 @@ function report(results: ArchetypeResult[], served: number): void {
     [
       `${pc.bold(`${score.read}/${score.answered}`)} read right`,
       "",
-      `${pc.green("read")}     ${score.read}  named the deck that wanted the card`,
-      `${pc.red("misread")}  ${score.misread}  named the other one`,
+      `${pc.green("read")}     ${score.read}  called it right`,
+      `${pc.red("misread")}  ${score.misread}  called it wrong`,
     ].join("\n"),
     `This run of ${served}`,
   );
@@ -245,8 +277,5 @@ function nothing(run: Run, setCode: string, skip: number): string {
   if (skip > 0) {
     return `That is all ${run.quizzable} of ${code}'s questions. Try --set on another.`;
   }
-  return (
-    `No card in ${code} has two decks that disagree about it by more than the data's\n` +
-    "own margin, so there is nothing here worth asking. Try --set on another."
-  );
+  return `${code} has no mono-coloured cards with enough games to ask about. Try --set on another.`;
 }

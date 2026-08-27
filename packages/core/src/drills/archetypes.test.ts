@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   DECK_NAMES,
+  SAME,
   archetypeQuestions,
+  dealArchetypeRun,
   deckLifts,
   gradeArchetypeGuess,
   scoreArchetypeRun,
   rangePValue,
   separation,
   sharedColor,
+  type ArchetypeQuestion,
   type CardDeckRate,
   type DeckRate,
 } from "./archetypes.js";
@@ -121,10 +124,11 @@ describe("archetypeQuestions", () => {
     expect(q.decks).toHaveLength(3);
   });
 
-  // The finding this drill exists because of: most cards' decks cannot be told
-  // apart, and serving those would be grading somebody against noise.
-  it("refuses a card whose best and worst decks are inside the error bars", () => {
-    const questions = archetypeQuestions(
+  // The finding this drill is built around: most cards' decks cannot be told
+  // apart. It is not a rejection -- the card is still asked about, and "they
+  // want it the same" is the right answer.
+  it("keeps a card whose decks are inside the error bars, and marks it unseparated", () => {
+    const [q] = archetypeQuestions(
       white(
         "Fading Hope",
         [
@@ -139,7 +143,8 @@ describe("archetypeQuestions", () => {
       opts,
     );
 
-    expect(questions).toEqual([]);
+    expect(q).toMatchObject({ name: "Fading Hope", separated: false });
+    expect(q.pValue).toBeGreaterThan(0.05);
   });
 
   it("refuses a card too few decks have an opinion about", () => {
@@ -222,7 +227,7 @@ describe("archetypeQuestions", () => {
   // six ask for 2.85 and refuse it. Under the flat gate this shipped with, both
   // passed -- and the extra decks were free evidence for a difference nobody
   // had, concentrated on the cards that get played in the most decks.
-  it("refuses on six decks the same gap it asks about on three", () => {
+  it("calls the same gap separated on three decks and not on six", () => {
     const decks = [
       ...DECKS,
       { colors: "WUR", n: 20000, wr: 0.55 },
@@ -246,7 +251,8 @@ describe("archetypeQuestions", () => {
 
     expect(rangePValue(three.sigmas, 3)).toBeLessThan(0.05);
     expect(rangePValue(three.sigmas, 6)).toBeGreaterThan(0.05);
-    expect(six).toEqual([]);
+    expect(three.separated).toBe(true);
+    expect(six[0].separated).toBe(false);
   });
 
   // A mono-coloured LAND passes every colour check there is, because
@@ -296,44 +302,121 @@ describe("archetypeQuestions", () => {
 });
 
 describe("gradeArchetypeGuess", () => {
-  // Only the fields grading reads: the two ends, and each deck's own rate,
-  // which is what separates taking the stronger deck from taking a wrong one.
-  const question = {
-    wants: "WB",
-    spurns: "WU",
-    decks: [
-      { colors: "WB", deckWr: 0.5 },
-      { colors: "WU", deckWr: 0.6 },
-    ],
-  };
+  const decks = [
+    { colors: "WB", deckWr: 0.5 },
+    { colors: "WU", deckWr: 0.6 },
+  ];
+  // WB wants it, and WB is the WORSE deck -- which is the trap the drill is for.
+  const real = { wants: "WB", spurns: "WU", separated: true, decks };
+  const same = { ...real, separated: false };
 
   it("reads a guess for the deck that wants the card", () => {
-    expect(gradeArchetypeGuess(question, "WB")).toEqual({
+    expect(gradeArchetypeGuess(real, "WB")).toEqual({
       outcome: "read",
       correct: true,
-      tookStrongerDeck: false,
+      mistake: null,
     });
   });
 
-  // The interesting way to be wrong: answering "which of these decks is better"
-  // when the question was "which of these decks wants this card".
-  it("marks a miss that took the stronger deck instead", () => {
-    expect(gradeArchetypeGuess(question, "WU")).toMatchObject({
+  // The third answer, and the one most cards in a colour have.
+  it("reads SAME on a card whose decks cannot be separated", () => {
+    expect(gradeArchetypeGuess(same, SAME)).toMatchObject({
+      outcome: "read",
+      correct: true,
+    });
+  });
+
+  it("refuses SAME when there is a real answer", () => {
+    expect(gradeArchetypeGuess(real, SAME)).toMatchObject({
       outcome: "misread",
-      tookStrongerDeck: true,
+      mistake: "saw-none",
     });
   });
 
-  // When the deck that wants the card is also the better deck there is no such
-  // trap to fall into, and marking one would be counting the question rather
-  // than the answer.
-  it("does not mark it when the wanted deck is the stronger one", () => {
-    const flipped = { ...question, wants: "WU", spurns: "WB" };
+  // The commonest real mistake in Limited: seeing a difference that is not
+  // there. The whole reason the third answer exists.
+  it("names a difference seen where there is none", () => {
+    expect(gradeArchetypeGuess(same, "WB")).toMatchObject({
+      outcome: "misread",
+      mistake: "saw-difference",
+    });
+  });
+
+  // Answering "which of these is the better deck" when the question was "which
+  // of these wants this card".
+  it("names the miss that took the stronger deck", () => {
+    expect(gradeArchetypeGuess(real, "WU")).toMatchObject({
+      outcome: "misread",
+      mistake: "stronger-deck",
+    });
+  });
+
+  // When the deck that wants the card is also the better one there is no such
+  // trap to fall into, and marking one would count the question, not the answer.
+  it("does not call it a stronger-deck miss when the wanted deck is stronger", () => {
+    const flipped = { ...real, wants: "WU", spurns: "WB" };
 
     expect(gradeArchetypeGuess(flipped, "WB")).toMatchObject({
       outcome: "misread",
-      tookStrongerDeck: false,
+      mistake: "wrong-deck",
     });
+  });
+});
+
+describe("dealArchetypeRun", () => {
+  const q = (name: string, separated: boolean): ArchetypeQuestion => ({
+    name,
+    color: "W",
+    decks: [],
+    wants: "WB",
+    spurns: "WU",
+    sigmas: separated ? 4 : 1,
+    pValue: separated ? 0.001 : 0.5,
+    separated,
+  });
+
+  const real = Array.from({ length: 20 }, (_, i) => q(`real${i}`, true));
+  const same = Array.from({ length: 200 }, (_, i) => q(`same${i}`, false));
+
+  // The derivation: past half, always answering "they are the same" becomes the
+  // winning strategy, and a drill that scores a person for giving up is worse
+  // than no drill.
+  it("deals half a run from each kind", () => {
+    const run = dealArchetypeRun([...real, ...same], 8);
+
+    expect(run).toHaveLength(8);
+    expect(run.filter((x) => x.separated)).toHaveLength(4);
+  });
+
+  // A run that blocks its two kinds is a run somebody reads off its own shape
+  // by question five and then stops thinking about the cards.
+  it("interleaves them rather than blocking them", () => {
+    const run = dealArchetypeRun([...real, ...same], 8);
+
+    expect(run.map((x) => x.separated)).toEqual([
+      true, false, true, false, true, false, true, false,
+    ]);
+  });
+
+  // A set with three separable cards and hundreds of coin flips still gets a
+  // full run, because the alternative is a run of three.
+  it("fills from whichever kind it has when one runs out", () => {
+    const run = dealArchetypeRun([...real.slice(0, 2), ...same], 8);
+
+    expect(run).toHaveLength(8);
+    expect(run.filter((x) => x.separated)).toHaveLength(2);
+  });
+
+  it("pages both kinds so a second run repeats neither", () => {
+    const first = dealArchetypeRun([...real, ...same], 8);
+    const second = dealArchetypeRun([...real, ...same], 8, 4);
+
+    const names = new Set(first.map((x) => x.name));
+    expect(second.some((x) => names.has(x.name))).toBe(false);
+  });
+
+  it("deals nothing out of nothing", () => {
+    expect(dealArchetypeRun([], 8)).toEqual([]);
   });
 });
 
@@ -342,7 +425,7 @@ describe("scoreArchetypeRun", () => {
     const r = (outcome: "read" | "misread") => ({
       outcome,
       correct: outcome === "read",
-      tookStrongerDeck: false,
+      mistake: null,
     });
 
     expect(scoreArchetypeRun([r("read"), r("misread"), r("read")])).toEqual({

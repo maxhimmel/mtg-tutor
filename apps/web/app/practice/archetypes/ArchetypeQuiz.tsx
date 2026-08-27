@@ -6,6 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import {
   DECK_NAMES,
+  SAME,
   gradeArchetypeGuess,
   scoreArchetypeRun,
   type ArchetypeResult,
@@ -26,15 +27,22 @@ import { points } from "../../lib/format";
  * mono-coloured card belongs to, named. For all but a few per cent of cards the
  * decks in a colour are inside each other's error bars, so that quiz is a quiz
  * whose answers are noise. Narrowed to two decks, and gated against the null of
- * the widest-gap-among-k rather than a flat width, there are 335 real questions
- * across 25 sets. `core/drills/archetypes.ts` carries the argument and
+ * the widest-gap-among-k rather than a flat width, 335 cards across 25 sets have
+ * one. `core/drills/archetypes.ts` carries the argument and
  * `pnpm diagnose-archetype-quiz` prints the table.
  *
- * WHAT THE SCREEN DOES WITH THAT. The grade uses two decks and the reveal shows
- * every one, so a person is marked on the half the data can defend and taught
- * the half it cannot. The two decks are the extremes rather than a random pair,
- * because the extremes are the only pair guaranteed to be separable -- and
- * because "the deck that wants it least" is a lesson in itself.
+ * THERE ARE THREE ANSWERS AND THE THIRD IS THE POINT. About 90% of mono-coloured
+ * cards have no deck that genuinely wants them more, so a drill that only asked
+ * about the ones that did would teach the opposite of what Limited is like --
+ * and gating on significance still left a bank about a third noise, because a
+ * 5% rate over everything tested is a much larger share of what gets served.
+ * "These two want it the same" is the right answer for most cards in a colour,
+ * it is the most useful thing a drafter can know about their own reads, and it
+ * turns the statistical weakness into the lesson. Half of every run is those.
+ *
+ * The two decks are the extremes rather than a random pair, because the extremes
+ * are the only pair that CAN be separable -- and because "the deck that wants it
+ * least" is a lesson in itself. The reveal shows every deck either way.
  *
  * THE DECKS SAY NOTHING ABOUT THEMSELVES UNTIL THE REVEAL. No win rate, no
  * record, just pips and a name. The trap this drill is for is answering "which
@@ -103,6 +111,10 @@ export function ArchetypeQuiz() {
       drafts: 0,
       candidates: live.quizzable,
       unavailable: live.mute ? 1 : 0,
+      // How much of this set has an answer at all. A run out of a set with four
+      // separable cards is a different run from one out of blb's thirty-six,
+      // and pooling their completion rates would hide that.
+      separable: live.separable ?? 0,
       skip,
     });
   }, [live, setCode, skip]);
@@ -145,7 +157,13 @@ export function ArchetypeQuiz() {
     drillAnswered({
       drill: "archetypes",
       outcome: result.outcome,
-      tookRawBest: result.tookStrongerDeck,
+      tookRawBest: result.mistake === "stronger-deck",
+      // Which of the four ways it went wrong, because they are four different
+      // lessons -- and `saw-difference` against `saw-none` is the one number
+      // that says whether the third answer is pitched right. If people mostly
+      // call real gaps coin flips, it is too tempting and the run's split is
+      // doing harm.
+      mistake: result.mistake ?? undefined,
       // `sigmas` and not `gap`. It answers the same question the misses drill's
       // `gap` does, in different units -- and one property carrying two units
       // with nothing on the row to say which is a chart that is wrong from the
@@ -312,8 +330,8 @@ function Question({
           {guess == null ? (
             <>
               <p className="mt-5 max-w-prose leading-relaxed text-base-content/70">
-                Two decks played this card. One of them got much more out of it than
-                the other. Which one?
+                Two decks played this card. Did one of them get more out of it — or
+                is it the same card in both?
               </p>
               <div className="mt-4 flex flex-wrap gap-3">
                 {/* The wanted deck is not always drawn first: the answer would
@@ -336,6 +354,24 @@ function Question({
                       </span>
                     </button>
                   ))}
+
+                {/* Set apart from the two decks rather than lined up as a third
+                    option, because it is a different KIND of answer -- not a
+                    deck, a claim about the other two. It is also the right
+                    answer most of the time, and a person who never reaches for
+                    it is the person this drill has something to teach. */}
+                <button
+                  type="button"
+                  onClick={() => onAnswer(SAME)}
+                  className="group flex min-w-[9rem] cursor-pointer flex-col justify-center gap-1 rounded-box border border-dashed border-base-300 bg-base-100 px-4 py-3 text-left transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <span className="font-display font-semibold leading-tight transition-colors group-hover:text-primary">
+                    Neither
+                  </span>
+                  <span className="text-xs leading-tight text-base-content/55">
+                    same card in both
+                  </span>
+                </button>
               </div>
             </>
           ) : (
@@ -373,27 +409,45 @@ function Reveal({
       <p className="font-display text-lg font-semibold leading-tight">
         {result.correct ? (
           <span className="text-success">You read it right.</span>
+        ) : question.separated ? (
+          <span className="text-error">{deckName(question.wants)} wanted it more.</span>
         ) : (
-          <span className="text-error">
-            {deckName(question.wants)} wanted it more.
-          </span>
+          <span className="text-error">Neither — it is the same card in both.</span>
         )}
       </p>
 
-      {/* The one sentence worth writing about a wrong answer, and only when it
-          is the interesting kind: naming the better deck instead of the deck
-          that wants the card. */}
-      {result.tookStrongerDeck && (
+      {/* One sentence per kind of wrong, because they are different lessons and
+          a single "not quite" would teach none of them. */}
+      {result.mistake === "stronger-deck" && (
         <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
           {deckName(guess)} wins more games than {deckName(question.wants)} does — but
           not because of this card. What a deck wants and what a deck wins are two
           different questions, and this one is the first.
         </p>
       )}
+      {result.mistake === "saw-difference" && (
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
+          The gap is there in the numbers and it is smaller than the error bars on
+          it, so it is not a gap. Most cards in a colour are like this — which is
+          worth knowing, because it means the colour is the read and the pair
+          usually is not.
+        </p>
+      )}
+      {result.mistake === "saw-none" && (
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
+          This one is real. {deckName(question.wants)} got {points(question.decks[0].lift)}{" "}
+          out of it against {deckName(question.spurns)}&apos;s{" "}
+          {points(question.decks[question.decks.length - 1].lift)}, and that is
+          further apart than the data&apos;s own margin.
+        </p>
+      )}
 
       <ul className="mt-4 flex flex-col gap-1">
         {question.decks.map((deck) => {
-          const isAnswer = deck.colors === question.wants;
+          // Nothing is marked as the answer when there is no answer: colouring
+          // the top row green on a card whose decks are level would teach the
+          // ranking the sentence above just said was not there.
+          const isAnswer = question.separated && deck.colors === question.wants;
           const isGuess = deck.colors === guess;
           return (
             <li
@@ -425,8 +479,10 @@ function Reveal({
       <p className="mt-3 max-w-prose text-xs leading-relaxed text-base-content/55">
         Each figure is how much better the deck did with this card in hand than it
         did in general, so a deck that wins a lot is not credited for winning a
-        lot. The two ends are {question.sigmas.toFixed(1)} error bars apart — the
-        rows between them are real numbers the data cannot put in order.
+        lot. The two ends are {question.sigmas.toFixed(1)} error bars apart
+        {question.separated
+          ? " — the rows between them are real numbers the data cannot put in order."
+          : ", which is not far enough to call a difference at all."}
       </p>
 
       <button type="button" className="btn btn-primary mt-5" onClick={onNext}>

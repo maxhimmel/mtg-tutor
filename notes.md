@@ -76,9 +76,12 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
 1. **The colour-pair half shipped; the DECK-TYPE half is what is left.**
    `/practice/archetypes` asks which of two decks wants a card and names them --
    Boros, Jund -- which is the part of this that wanted teaching. What it could
-   NOT be is the question as written: for all but a few per cent of cards the
+   NOT be is the question as written: for all but about a tenth of cards the
    decks in a colour are inside each other's error bars, so a four-way quiz is a
-   quiz whose answers are noise.
+   quiz whose answers are noise. **That became the third answer rather than a
+   filter** -- "neither, it is the same card in both" is the right answer for
+   most cards in a colour, it is half of every run, and it is the most useful
+   thing the drill teaches.
 
    **The gate is worth reading before touching this.** Best-minus-worst is a
    RANGE over up to ten decks, and the widest gap among many noisy numbers is

@@ -10,16 +10,18 @@
  * indistinguishable for the rest, which is trap #3 one level up: the gaps
  * between them are smaller than the error bars on those gaps.
  *
- * NARROWED TO TWO DECKS IT IS A REAL DRILL: 335 questions across 25 sets, and
- * 17 of them hold a full run. `pnpm diagnose-archetype-quiz` is that
- * measurement, kept so the gate can be re-argued rather than remembered.
+ * NARROWED TO TWO DECKS, 335 of them have an answer. That is only about a tenth
+ * of the candidates, which is why the drill does not stop there -- see
+ * `separated` on the question and `dealArchetypeRun` below. With the third
+ * answer the bank is 3,346 cards across 25 sets and 23 of them hold a full run.
+ * `pnpm diagnose-archetype-quiz` is that measurement, kept so the rate can be
+ * re-argued rather than remembered.
  *
  * THREE-COLOUR DECKS ARE IN, AND THEY ARE WHAT MAKE IT UNIVERSAL. Pairs alone
  * left ktk, snc, sos and tdm with nothing to ask -- they are three-colour
  * formats, where the wedges and shards ARE the archetypes and the pairs are a
- * rounding error. With widths of three those four ask 5, 5, 6 and 3 questions,
- * which is thin and is the difference between a set that can be played and one
- * that cannot.
+ * rounding error. With widths of three, ktk, snc, sos and tdm have 5, 5, 6 and
+ * 2 cards with an answer where pairs alone gave them none at all.
  * They also cost something, and it is the same coin: more decks per card means
  * a wider gate, which is why the numbers above are what they are rather than a
  * regret. STX is the only set that cannot ask anything at all, because it has no
@@ -107,12 +109,32 @@ export interface ArchetypeQuestion {
   /** The card's single colour, one of WUBRG. */
   color: string;
   decks: DeckLift[];
-  /** The deck that wants it. `decks[0]`. */
+  /** The deck with the highest lift. `decks[0]`. */
   wants: string;
-  /** The deck that wants it least. The last of `decks`. */
+  /** The deck with the lowest. The last of `decks`. */
   spurns: string;
-  /** How many standard errors separate those two. Never below the gate. */
+  /** How many error bars separate those two. */
   sigmas: number;
+  /** The chance k decks that all wanted it equally would look this far apart. */
+  pValue: number;
+  /**
+   * Whether the gap is bigger than the data's own margin.
+   *
+   * FALSE IS AN ANSWER AND NOT A REJECTION, which is the whole shape of this
+   * drill. About 90% of mono-coloured cards have no deck that genuinely wants
+   * them more -- measured by a Storey estimate off the p-value distribution
+   * over 2,652 candidates -- and gating those out left a bank that was still
+   * about a third noise, because a 5% rate over everything TESTED is a much
+   * bigger share of what gets SERVED. Controlling that properly with
+   * Benjamini-Hochberg left 25 questions across eighteen sets.
+   *
+   * So the inseparable cards are not thrown away, they are the third answer.
+   * "These two decks want it the same" is true of most cards in a colour, it is
+   * the single most useful thing a drafter can know about their own reads, and
+   * it turns the statistical weakness into the lesson. A question the data
+   * cannot answer stops being a wrong question and becomes a correct one.
+   */
+  separated: boolean;
 }
 
 const variance = (wr: number, n: number): number =>
@@ -256,14 +278,19 @@ export interface QuestionOptions {
 }
 
 /**
- * Every question a set can ask, clearest first.
+ * Every card a set could ask about, clearest first.
+ *
+ * NOT FILTERED TO THE ONES WITH AN ANSWER. `separated` says which those are, and
+ * `dealArchetypeRun` below is what builds a run out of both kinds -- see its
+ * docblock for why a drill made only of separable cards was the wrong drill.
  *
  * RANKED BY SEPARATION RATHER THAN SHUFFLED, which is the same call
- * `rankMisses` makes and for a better reason here: the top of this list is the
- * cards whose decks disagree most, and those are the ones a person can actually
- * learn something from. A shuffle would spend a run's first question on a
- * card two decks barely disagree about, and a drill's first question is the one
- * that decides whether there is a second.
+ * `rankMisses` makes and for a better reason here. Among the separable cards
+ * the top of the list is the decks that disagree most, which is where a person
+ * learns fastest. Among the inseparable ones it is the cards that look MOST
+ * like they should differ and do not -- which is exactly the mistake worth
+ * catching, where a "these are the same" on two obviously identical cards
+ * teaches nobody anything.
  *
  * `cardFor` is asked for every candidate rather than looked up on the row,
  * because the stats artifact has neither colours nor roles on it -- both live on
@@ -328,10 +355,10 @@ export function archetypeQuestions(
     const wants = lifts[0];
     const spurns = lifts[lifts.length - 1];
     const sigmas = separation(wants, spurns);
-    // Against the null of THIS card's deck count, not against a flat width. A
-    // card in ten decks has to clear 3.16 where a card in three clears 2.34,
+    // Against the null of THIS card's deck count, not a flat width. A card in
+    // ten decks has to clear 3.16 error bars where a card in three clears 2.34,
     // because the wider a net the more the widest gap in it means nothing.
-    if (rangePValue(sigmas, lifts.length) >= options.falsePositive) continue;
+    const pValue = rangePValue(sigmas, lifts.length);
 
     questions.push({
       name,
@@ -340,10 +367,60 @@ export function archetypeQuestions(
       wants: wants.colors,
       spurns: spurns.colors,
       sigmas,
+      pValue,
+      separated: pValue < options.falsePositive,
     });
   }
 
   return questions.sort((a, b) => b.sigmas - a.sigmas);
+}
+
+/**
+ * A run: half cards whose decks really differ, half cards where they do not.
+ *
+ * THE HALF IS DERIVED AND NOT A TASTE. About 90% of candidates are cards no
+ * deck truly wants more, so a run drawn in the format's own proportions would
+ * be nine "they are the same" in ten and the best strategy would be to stop
+ * reading the card. Half is the largest share of inseparable cards that does
+ * NOT make a constant answer the winning one -- past it the drill scores a
+ * person for giving up, which is the one thing a drill must never do.
+ *
+ * Below half it drifts back toward the first version of this drill, which
+ * taught that every card has a deck that wants it. That is false about Limited
+ * and is the belief this drill exists to correct.
+ *
+ * Interleaved rather than blocked, so a run cannot be read off its own shape --
+ * four real answers followed by four coin flips is a pattern somebody notices
+ * by question five and then stops thinking.
+ *
+ * `skip` pages both halves together, so a second run repeats neither.
+ */
+export function dealArchetypeRun(
+  questions: readonly ArchetypeQuestion[],
+  limit: number,
+  skip = 0,
+): ArchetypeQuestion[] {
+  const separated = questions.filter((q) => q.separated);
+  const same = questions.filter((q) => !q.separated);
+
+  const half = Math.ceil(limit / 2);
+  const from = Math.max(0, skip);
+  const run: ArchetypeQuestion[] = [];
+
+  // Alternating, and starting on whichever side actually has cards. A set with
+  // three separable questions and hundreds of inseparable ones serves a run
+  // that is mostly the latter rather than a run of three.
+  for (let i = 0; run.length < limit; i++) {
+    const a = separated[from + i];
+    const b = same[from + i];
+    if (!a && !b) break;
+    if (a && i < half) run.push(a);
+    if (b && run.length < limit && i < half) run.push(b);
+    if (!a && b && i >= half) run.push(b);
+    if (a && !b && i >= half) run.push(a);
+  }
+
+  return run.slice(0, limit);
 }
 
 /**
@@ -356,19 +433,27 @@ export function archetypeQuestions(
  */
 export type ArchetypeOutcome = "read" | "misread";
 
+/** The answer for a card whose decks the data cannot separate. */
+export const SAME = "same";
+
 export interface ArchetypeResult {
   outcome: ArchetypeOutcome;
   correct: boolean;
   /**
-   * Wrong by taking the deck that simply wins more.
+   * Which kind of wrong, because the three are three different lessons.
    *
-   * The archetype quiz's version of `tookRawBest`, and the most interesting way
-   * to be wrong here: it is a person answering "which of these decks is better"
-   * when the question was "which of these decks wants this card". Worth its own
-   * sentence on the reveal, and worth counting -- if it is most of the misses
-   * then the two decks on screen need to say less about themselves.
+   * - `stronger-deck` -- named the deck that simply wins more. The archetype
+   *   quiz's version of `tookRawBest`: answering "which of these is the better
+   *   deck" when the question was "which of these wants this card".
+   * - `saw-difference` -- called a coin flip a difference. The commonest real
+   *   mistake in Limited and the one this drill's third answer exists for.
+   * - `saw-none` -- called a real difference a coin flip. The opposite error,
+   *   and if it dominates then the third answer is too tempting and the run's
+   *   half-and-half split is doing harm.
+   * - `wrong-deck` -- picked a deck, there was a real answer, it was the other
+   *   one, and it was not the stronger deck either.
    */
-  tookStrongerDeck: boolean;
+  mistake: "stronger-deck" | "saw-difference" | "saw-none" | "wrong-deck" | null;
 }
 
 /**
@@ -376,22 +461,34 @@ export interface ArchetypeResult {
  * grade what it was handed without holding anything else.
  */
 export function gradeArchetypeGuess(
-  question: Pick<ArchetypeQuestion, "wants" | "spurns"> & {
+  question: Pick<ArchetypeQuestion, "wants" | "spurns" | "separated"> & {
     decks: readonly Pick<DeckLift, "colors" | "deckWr">[];
   },
   guess: string,
 ): ArchetypeResult {
-  const correct = guess === question.wants;
+  // The answer is a deck when the data can name one, and `SAME` when it cannot.
+  const answer = question.separated ? question.wants : SAME;
+  const correct = guess === answer;
+
   const rate = new Map(question.decks.map((d) => [d.colors, d.deckWr]));
   const wanted = rate.get(question.wants) ?? 0;
   const spurned = rate.get(question.spurns) ?? 0;
+
   return {
     outcome: correct ? "read" : "misread",
     correct,
-    // Only when the two decks actually differ: if the deck that wants the card
-    // is also the stronger one, no guess can be this kind of wrong and marking
-    // one would be counting the question rather than the answer.
-    tookStrongerDeck: !correct && spurned > wanted,
+    mistake: correct
+      ? null
+      : guess === SAME
+        ? "saw-none"
+        : !question.separated
+          ? "saw-difference"
+          : // Only when the decks actually differ in strength: if the deck that
+            // wants the card is also the better one, no guess can be this kind
+            // of wrong and marking one would count the question, not the answer.
+            spurned > wanted
+            ? "stronger-deck"
+            : "wrong-deck",
   };
 }
 

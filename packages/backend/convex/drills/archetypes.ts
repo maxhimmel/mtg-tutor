@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import {
   ARCHETYPE_QUIZ,
   archetypeQuestions,
+  dealArchetypeRun,
   hydrateCard,
   normalizeName,
 } from "@mtg-tutor/core";
@@ -133,7 +134,10 @@ export const deal = query({
     };
 
     const ranked = archetypeQuestions(stats.archetypes, decks, cardFor, ARCHETYPE_QUIZ);
-    const candidates = ranked.slice(skip, skip + limit * READ_BUDGET);
+    // Half separable, half not -- see `dealArchetypeRun`, which is where the
+    // half is derived. Over-dealt by the read budget so a card the set has no
+    // text for costs a question rather than a hole in the run.
+    const candidates = dealArchetypeRun(ranked, limit * READ_BUDGET, skip);
 
     // One read per distinct name, the same shape `misses.deal` uses. The whole
     // run's text in one pass rather than per question, because the names are
@@ -171,6 +175,10 @@ export const deal = query({
         wants: question.wants,
         spurns: question.spurns,
         sigmas: question.sigmas,
+        // Whether there IS an answer, which is a third of what this drill
+        // teaches. Never `pValue`: the screen says "1.1 error bars apart",
+        // which a drafter can read, and a p-value is a number they cannot.
+        separated: question.separated,
         // `variance` is deliberately not sent: it is what chose the question and
         // says nothing to a reader, where `sigmas` already carries the same fact
         // in the one form the screen puts into a sentence.
@@ -188,6 +196,11 @@ export const deal = query({
       // The set's whole bank, so the screen can tell "you have played them all"
       // from "this set never had many" without another query.
       quizzable: ranked.length,
+      // How many of those have an answer other than "the same". The screen does
+      // not use it; `drill_started` does, because a run drawn from a set with
+      // four separable cards is a different run from one drawn from blb's
+      // thirty-six and the completion rates should not be pooled.
+      separable: ranked.filter((q) => q.separated).length,
       mute: null as Mute,
       // Where the next run starts. Candidates EXAMINED rather than questions
       // served, so a refused card is not re-dealt on the next page.

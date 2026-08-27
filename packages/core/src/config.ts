@@ -127,14 +127,11 @@ export const COACH = {
  * its own worst picks, which says nothing about how long a quiz should be.
  */
 export const ARCHETYPE_QUIZ = {
-  // A run, and the number is decided by the banks rather than by taste. At the
-  // shipped rate 17 of the 25 sets with archetype data hold eight questions and
-  // only 11 hold twelve. Eight is also about right for a question that is one
-  // card and two words: a couple of minutes.
-  //
-  // The sets below it are served short rather than refused -- a set with three
-  // questions has three, and the screen says which of the three empty states it
-  // is rather than pretending the drill is broken.
+  // A run, and the number is decided by the banks rather than by taste. Half of
+  // it must be cards with an answer, so a set needs four of those -- 23 of the
+  // 25 sets with archetype data clear it, and the two that do not (ecl, tdm)
+  // are served short rather than refused. Eight is also about right for a
+  // question that is one card and three words: a couple of minutes.
   runLength: 8,
   // How many decks must have a measured opinion about a card before it can be
   // asked about. Three of the four pairs in its colour, or three of the ten
@@ -164,9 +161,11 @@ export const ARCHETYPE_QUIZ = {
   // have a deck that wants them more and the effects are small beside their own
   // error bars. That is a fact about Limited rather than about this code.
   //
-  // Five per cent is therefore chosen knowing what it costs, and the screen is
-  // what carries the honesty: every question shows both lifts, both sample
-  // sizes, and how many error bars separate them.
+  // So five per cent does not gate the bank any more -- it decides which of
+  // three ANSWERS a question has. A card the decks cannot be separated on is
+  // asked about too, and "these two want it the same" is the right answer,
+  // which is true of most cards in a colour and is the most useful thing a
+  // drafter can learn about their own reads. See `dealArchetypeRun`.
   falsePositive: 0.05,
 };
 

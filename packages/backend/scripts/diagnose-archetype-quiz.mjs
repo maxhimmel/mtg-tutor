@@ -152,20 +152,30 @@ for (const file of readdirSync(DATA).filter((f) => f.endsWith(".json")).sort()) 
       archetypeQuestions(set.archetypes, set.colorWinRates, cardFor, {
         minDecks: ARCHETYPE_QUIZ.minDecks,
         falsePositive,
-      }).length,
+      }).filter((q) => q.separated).length,
   );
 
   const shipped = archetypeQuestions(set.archetypes, set.colorWinRates, cardFor, ARCHETYPE_QUIZ);
-  rows.push({ code: set.setCode, counts, shipped, exact });
+  rows.push({
+    code: set.setCode,
+    counts,
+    bank: shipped.length,
+    separable: shipped.filter((q) => q.separated).length,
+    exact,
+  });
 }
 
 const pad = (v, w) => String(v).padStart(w);
 
 console.log(
-  `\nQuestions per set, by the rate at which a card whose decks agree is asked` +
-    ` about anyway.\nminDecks ${ARCHETYPE_QUIZ.minDecks}; the width each rate buys is per deck count, see RANGE_CRITICAL.\n`,
+  `\nCards with an ANSWER, by the rate at which decks that agree are called apart.` +
+    `\nminDecks ${ARCHETYPE_QUIZ.minDecks}; the width each rate buys is per deck count, see rangePValue.` +
+    `\n\n\`bank\` is every card that can be asked about, answer or not -- half of every` +
+    `\nrun comes from the cards with no answer, so a run needs ${Math.ceil(ARCHETYPE_QUIZ.runLength / 2)} of each.\n`,
 );
-console.log(`set     ${RATES.map((r) => pad(`${Number(r) * 100}%`, 7)).join("")}   run of ${ARCHETYPE_QUIZ.runLength}?`);
+console.log(
+  `set     ${RATES.map((r) => pad(`${Number(r) * 100}%`, 7)).join("")}    bank   run of ${ARCHETYPE_QUIZ.runLength}?`,
+);
 
 const totals = RATES.map(() => 0);
 let short = 0;
@@ -180,18 +190,18 @@ for (const row of rows) {
   live++;
   row.counts.forEach((c, i) => (totals[i] += c));
 
-  // The number that decides whether a set is offered at all. A set with four
-  // questions is not a short run, it is a screen that deals the same four
-  // cards to everyone forever.
-  const fills = row.shipped.length >= ARCHETYPE_QUIZ.runLength;
+  // A full run needs half a run of each kind. The inseparable side is never
+  // the binding one -- it is nine cards in ten -- so this is really a question
+  // about whether the set has enough cards with an answer.
+  const half = Math.ceil(ARCHETYPE_QUIZ.runLength / 2);
+  const fills = row.separable >= half && row.bank - row.separable >= half;
   if (!fills) short++;
 
   if (!row.exact) approximate++;
 
   console.log(
-    `${(row.code + (row.exact ? "" : "~")).padEnd(7)}${row.counts.map((c) => pad(c, 7)).join("")}   ${
-      fills ? "yes" : `no — ${row.shipped.length}`
-    }`,
+    `${(row.code + (row.exact ? "" : "~")).padEnd(7)}${row.counts.map((c) => pad(c, 7)).join("")}` +
+      `${pad(row.bank, 8)}   ${fills ? "yes" : `no — ${row.separable} with an answer`}`,
   );
 }
 
@@ -211,8 +221,9 @@ console.log(
 if (VERBOSE) {
   console.log("\nThe sharpest question in each set:\n");
   for (const row of rows) {
-    if (row.mute || row.shipped.length === 0) continue;
-    const q = row.shipped[0];
+    if (row.mute || row.bank === 0) continue;
+    const q = row.shipped?.[0];
+    if (!q) continue;
     const want = q.decks[0];
     const spurn = q.decks[q.decks.length - 1];
     const pp = (v) => `${v >= 0 ? "+" : "−"}${(Math.abs(v) * 100).toFixed(1)}pp`;
