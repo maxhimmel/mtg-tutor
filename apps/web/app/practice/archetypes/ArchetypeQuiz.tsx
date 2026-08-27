@@ -468,6 +468,50 @@ function Reveal({
 }
 
 /**
+ * What the thing under the pointer means, following the pointer.
+ *
+ * A CHART NOBODY CAN INTERROGATE IS A CHART THAT HAS TO BE BELIEVED. The band
+ * and the dot and the zero line each carry a different claim, and the caption
+ * under the list explains all three at once in a paragraph that has to be read
+ * once and remembered -- which is not how anybody reads a chart. Asking a mark
+ * directly is.
+ *
+ * Following the cursor rather than anchoring to the mark, because the marks are
+ * four pixels tall and a tooltip pinned above one covers the row below it. This
+ * is the only mouse-following surface in the app, and it is here because the
+ * subject is a position on a scale rather than an element -- a reader pointing
+ * halfway along a band is asking about that spot, and the answer belongs where
+ * they are pointing.
+ *
+ * `pointer-events-none` throughout, so the tooltip can never be the thing the
+ * pointer is over and start chasing itself.
+ */
+function Tip({ tip }: { tip: { x: number; y: number; text: string } | null }) {
+  // Also what keeps `window` off the server: this renders null until a pointer
+  // has moved, and a pointer moving is a thing only a browser has done.
+  if (!tip) return null;
+
+  // Flipped rather than clamped near the right edge: a tooltip that stops
+  // moving still looks attached to the wrong mark, where one that jumps to the
+  // other side of the cursor stays attached to the right one.
+  const flip = tip.x > window.innerWidth - 300;
+
+  return (
+    <div
+      role="presentation"
+      className="pointer-events-none fixed z-50 max-w-[17rem] rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
+      style={{
+        left: tip.x + (flip ? -14 : 14),
+        top: tip.y + 16,
+        transform: flip ? "translateX(-100%)" : undefined,
+      }}
+    >
+      {tip.text}
+    </div>
+  );
+}
+
+/**
  * Every deck's appetite for the card, drawn to one scale.
  *
  * THE PICTURE IS THE EXPLANATION AND THE NUMBERS WERE NOT. This list used to be
@@ -482,6 +526,7 @@ function Reveal({
  * when the gap clears the bar, so the picture cannot disagree with the grade.
  */
 export function DeckBands({ question, guess }: { question: RevealQuestion; guess: string }) {
+  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const k = question.decks.length;
   const band = (sd: number) => decisionBand(sd, k, ARCHETYPE_QUIZ.falsePositive);
 
@@ -492,6 +537,36 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
   const hi = Math.max(0, ...question.decks.map((d) => d.lift + band(d.sd)));
   const span = hi - lo || 1;
   const pct = (v: number) => ((v - lo) / span) * 100;
+
+  /**
+   * Which mark the pointer is nearest, and what that mark claims.
+   *
+   * Measured in pixels off the track's own box rather than in lift units,
+   * because "am I on the dot" is a question about the drawing: the dot is eight
+   * pixels wide whatever the scale, and a reader aiming at it is aiming at what
+   * they can see.
+   */
+  function describe(
+    deck: RevealQuestion["decks"][number],
+    e: { clientX: number; clientY: number; currentTarget: HTMLElement },
+  ) {
+    const box = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - box.left;
+    const value = lo + (x / box.width) * span;
+    const half = band(deck.sd);
+    const near = (v: number) => Math.abs(x - (pct(v) / 100) * box.width) < 7;
+    const name = deckName(deck.colors);
+
+    const text = near(deck.lift)
+      ? `${name} won ${points(deck.lift)} more with this card in hand than it did in general, over ${deck.n.toLocaleString()} games.`
+      : near(0)
+        ? `What ${name} wins anyway. Everything is measured from here, so a deck that wins a lot gets no credit for winning a lot.`
+        : Math.abs(value - deck.lift) <= half
+          ? `${deck.n.toLocaleString()} games only pin it down this far — anywhere in this band would look the same. Two bands that touch are two decks the data cannot tell apart.`
+          : `${points(value)}, which is outside what ${name}'s ${deck.n.toLocaleString()} games can support.`;
+
+    setTip({ x: e.clientX, y: e.clientY, text });
+  }
 
   return (
     <div className="mt-4">
@@ -512,7 +587,11 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                 isAnswer ? "bg-success/10" : isGuess ? "bg-error/10" : ""
               }`}
             >
-              <ColorPips colors={deck.colors} className="shrink-0" />
+              {/* Fixed width, wide enough for three pips. A wedge is a symbol
+                  wider than a guild, so left to size itself this column moves
+                  the track's left edge between rows -- and a scale whose zero
+                  sits at a different x on every row is not a shared scale. */}
+              <ColorPips colors={deck.colors} className="w-14 shrink-0" />
               <span
                 className={`min-w-[5.5rem] shrink-0 font-display font-semibold ${
                   isAnswer ? "text-success" : ""
@@ -525,10 +604,16 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                   rest are dimmed. They are the only two the grade looked at,
                   and a chart that gave all five the same weight would invite
                   reading a ranking off the middle rows. */}
+              {/* The whole track takes the pointer, not the marks: the dot is
+                  eight pixels and the band is four tall, and a reader aiming at
+                  either would spend the hover missing. `describe` works out
+                  which one they meant from where they landed. */}
               <span
                 className="relative h-4 min-w-0 flex-1"
                 role="img"
-                aria-label={`${points(deck.lift)}, give or take ${points(half).replace("+", "")}`}
+                aria-label={`${deckName(deck.colors)}: ${points(deck.lift)} over ${deck.n.toLocaleString()} games, give or take ${points(half).replace("+", "")}`}
+                onMouseMove={(e) => describe(deck, e)}
+                onMouseLeave={() => setTip(null)}
               >
                 {/* Where the deck's own rate sits: no better, no worse. */}
                 <span
@@ -575,8 +660,10 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
         in general — so a deck that wins a lot is not credited for winning a lot.
         The band is how much of that is guesswork at that many games, and it is
         drawn so that two bands touching is exactly the line between a difference
-        and none.
+        and none. Point at any of it to be told which is which.
       </p>
+
+      <Tip tip={tip} />
     </div>
   );
 }
