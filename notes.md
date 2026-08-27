@@ -87,12 +87,23 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
    the honest axis is how fast a deck wants the game to go, and `contextValue`
    already has a speed term STORED AND UNSCORED waiting on exactly that number.
 
-   So it shares a blocker with the mulligan trainer rather than with anything
-   here: format speed comes out of the replay dataset, which is what
-   `.omc/plans/mulligan-trainer.md` is a research pass on. Both features, one
-   derivation. Do not start this one before that lands.
+   **And it is much less blocked than it looks** (2026-08-27,
+   `.omc/plans/mulligan-trainer.md` §7). Format speed was thought to need the
+   431MB replay dataset. It does not: it is `num_turns` in the GAME dataset the
+   pipeline already streams, measured at 8.29 turns for mh3 up to 10.03 for ktk
+   over every game in the cached files. One accumulator in `readGameData` and a
+   re-seed. So this wants Phase 0 of that plan and nothing else, and the
+   mulligan drill it was assumed to be queued behind is a separate question.
 
-2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
+2. **The replay dataset is deliberately unused — and two of the three things
+   this entry wants it for turn out not to need it.** See
+   `.omc/plans/mulligan-trainer.md` §1b and §7: format speed and real land
+   counts are both in the game dataset. The scepticism recorded below about
+   format speed is answered there with numbers rather than argued with. What
+   still needs replay is the keep-or-mull decision itself, which is the one
+   thing no other dataset records.
+
+   **The replay dataset is deliberately unused — revisit it later.** 17Lands
    publishes three public datasets per set/format; the stats pipeline pulls only
    **draft** and **game**. Replay is the third and by far the largest (431MB
    gzipped for FIN, vs 90-206MB draft and 26-62MB game), and nothing we compute
@@ -572,13 +583,21 @@ it is derived from what the field DID, so grading a person against it is marking
 them against the crowd rather than against what wins — the circularity
 `trophyPickRate` is kept out of the scorer for.
 
-3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
-   mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
-   Also what `contextValue`'s speed term is waiting on: the axis is stored and
-   unscored because whether a proactive card is GOOD depends on format speed,
-   which nothing measures yet.
-   This is what would re-tighten the availability gate to require replay
-   (`USED_KINDS` in `scripts/lib/datasets.mjs`).
+3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
+   the plan is `.omc/plans/mulligan-trainer.md` and it changes the shape of this
+   item.** Read that before starting, not this paragraph.
+
+   The two findings that matter here. **Two thirds of what this entry promised
+   does not need the replay dataset**: format speed is `num_turns` and real deck
+   land counts are `deck_<card>` including basics, both in the GAME dataset the
+   pipeline already streams — so `contextValue`'s stored, unscored speed term
+   and `DECK`'s 23/17 convention are both answerable now, for free, as that
+   plan's Phase 0. And the drill itself deals a real seven off a real forty and
+   grades against the field's KEEP RATE rather than against `won`, because `won`
+   on a kept hand is censored by the very decision being judged.
+
+   The availability gate stays where it is: requiring replay would de-ingest
+   BRO, NEO, ONE and SNC (`USED_KINDS` in `scripts/lib/datasets.mjs`).
 
 4. **Follow-ups to token metrics** (spec:
    `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
