@@ -10,6 +10,7 @@ import {
   feedbackRefused,
   identify,
   pickMade,
+  setPicked,
   settingChanged,
   settingsOpened,
   signedOut,
@@ -182,6 +183,16 @@ describe("with a project token", () => {
   it("reports a settings visit on arrival", () => {
     settingsOpened({ from: "menu" });
     expect(capture).toHaveBeenCalledWith("settings_opened", { from: "menu" });
+  });
+
+  // The event exists for one property, so that property is what is asserted.
+  // A capture that forwarded the set and dropped `from` would typecheck and
+  // chart -- as a set_picked with no source, which is the same number
+  // `draft_started` already has and nothing this was built for.
+  it("names the surface a draft was started from", () => {
+    const picked = { setCode: "fdn", format: "TradDraft", from: "recent" as const };
+    setPicked(picked);
+    expect(capture).toHaveBeenCalledWith("set_picked", picked);
   });
 
   // The two halves of what happens to an unfinished draft: it is played on, or

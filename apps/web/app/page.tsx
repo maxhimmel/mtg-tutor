@@ -7,12 +7,14 @@ import { api } from "@mtg-tutor/backend";
 import { PACK, packSize } from "@mtg-tutor/core";
 import { useEffect, useRef, useState } from "react";
 import { PageShell } from "./components/PageShell";
+import { RecentSets } from "./components/RecentSets";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
 import { SignedOut } from "./components/SignedOut";
 import { UnfinishedDrafts } from "./components/UnfinishedDrafts";
-import { accessBlocked, draftRefused } from "./lib/analytics";
+import { accessBlocked, draftRefused, setPicked } from "./lib/analytics";
 import { PODS, useSettings, type Pod, type SetView } from "./lib/useSettings";
+import type { PickSource } from "./lib/sets";
 import { humanError } from "./lib/humanError";
 
 export default function Home() {
@@ -161,9 +163,13 @@ function SetPicker() {
     accessBlocked({ source: quota.source });
   }, [quota?.role, quota?.source]);
 
-  async function start(setCode: string, format: string) {
+  async function start(setCode: string, format: string, from: PickSource) {
     setRefused(null);
     setStarting(setCode);
+    // On the attempt rather than after the mutation, so a refusal is still
+    // attributable to the surface that produced it -- `draft_refused` fires
+    // beside this one and carries no source of its own.
+    setPicked({ setCode, format, from });
     try {
       // Read here rather than on the board, because it decides the deal and is
       // copied onto the session -- see draftSessions.pod. Changing the setting
@@ -192,6 +198,11 @@ function SetPicker() {
           grid, and it is the one answer that used to be reachable only by
           remembering the URL. It draws nothing when there is nothing open. */}
       <UnfinishedDrafts sets={sets} />
+
+      {/* Below the open drafts and above the picker, which is the order of the
+          three answers to "what do you want to draft": the one you already
+          started, the ones you have been playing, and all of them. */}
+      <RecentSets sets={sets} starting={starting} onStart={start} />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">

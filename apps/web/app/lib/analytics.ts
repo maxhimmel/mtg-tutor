@@ -388,6 +388,43 @@ export function deckShaped(p: {
 }
 
 /**
+ * Which door a draft was started from.
+ *
+ * `draft_started` on the server already says a draft began, and a set code and
+ * a format are on it -- so this event exists for exactly one property it cannot
+ * have. The server is handed a set and a format; it is never told whether the
+ * player found that set by scanning twenty-six plates, by sorting a table, or
+ * by taking the one chip that said they drafted it yesterday. That is
+ * interaction, and interaction is the browser's half.
+ *
+ * IT FIRES FROM ALL THREE SURFACES, WHICH IS THE POINT. An event that only fired
+ * on the recent strip would count its clicks and could not say whether that was
+ * most of the starts on the page or a rounding error, and "does this shortcut
+ * earn the line it costs" is a question about the SHARE. The same denominator
+ * answers a second question nobody has been able to ask: the picker has carried
+ * a grid and a list and a toggle between them since the list landed, and
+ * nothing anywhere records which one people actually start drafts from.
+ *
+ * ON THE ATTEMPT, NOT THE SUCCESS, so a refusal is attributable to the surface
+ * that produced it -- this and `draft_refused` fire together when a quota says
+ * no, and being walled off the shortcut you just learned about is a different
+ * moment from being walled off the grid.
+ */
+export function setPicked(p: {
+  setCode: string;
+  format: string;
+  /**
+   * Which of the picker's three ways in was used. `recent` is the chip strip;
+   * the other two are the picker's own views, and they are named apart rather
+   * than pooled as "picker" because the toggle between them is a live question.
+   */
+  from: "recent" | "grid" | "list";
+}): void {
+  if (!on()) return;
+  posthog.capture("set_picked", p);
+}
+
+/**
  * Someone tried to start a draft and was told no.
  *
  * The most likely thing throttling a private beta, and until now invisible --

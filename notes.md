@@ -271,7 +271,7 @@ cheap half.
 
 15. Maybe this could be an "issue" too. We keep making changes to the bots and how they pick. Do we have a benchmark or anything to see if the bots get better/worse with these changes? I KNOW we have a BUNCH of data from real life drafters - some of which went 3-0 who I think we refer to as "trophy" drafters or something (I think). So, what if we built real drafting benchmarks based on real data from the best of the best? And not just one, but a comprehensive set from different sets we could test against. I just want the packs I'm being passed to feel believable - like I'm actually drafting with real humans.
 
-16. In the set picker screen it'd be nice if we could see/easily pick sets we've recently played.
+16. --
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
