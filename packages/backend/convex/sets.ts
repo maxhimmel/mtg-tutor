@@ -148,10 +148,26 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // it. So nothing would have invalidated a single pool, `ingest-sets` would have
 // printed "unchanged, skipped" eighteen times, and no card would ever have got
 // one.
+//
+// `16-helpers` puts the rules card a set prints for a mechanic onto the text
+// half -- LTR's "The Ring // The Ring Tempts You" and dft's "Start Your Engines!
+// // Max Speed", the two whose printed card says more than the sentence we
+// wrote. Same class of change as `12-tokens`, which added the tokens a card
+// makes, and it has to be a MANUAL bump for the same reason `15-table-value`
+// did: no card's `value` moves, so VALUE_FINGERPRINT does not, and nothing else
+// would invalidate a pool.
+//
+// AND IT IS THE HALF I LEFT OUT. Bumping CRAWL_REVISION alone did nothing at
+// all: the pool fingerprint is checked first and returns `skipped` before the
+// crawl fork is ever reached, so every set reported "unchanged" and no card got
+// a helper. The comment above says which to bump and I read it as either/or --
+// it is neither. A new field read off a printing is a crawl change AND a shape
+// change, and needs both tags moved.
+//
 // Exported for the tests, which have to build a fingerprint that MATCHES to
 // exercise the cheap path at all -- a hand-copied literal there would pass by
 // agreeing with itself.
-export const POOL_REVISION = `15-table-value.${VALUE_FINGERPRINT}`;
+export const POOL_REVISION = `16-helpers.${VALUE_FINGERPRINT}`;
 export const META_REVISION = "2-name-icon-released";
 
 // WHICH OF THE THREE REVISIONS TO BUMP, because getting this wrong is the one
