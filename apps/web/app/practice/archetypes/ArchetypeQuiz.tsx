@@ -17,6 +17,7 @@ import {
 import { CardFace } from "../../components/CardTile";
 import { useCardHover } from "../../components/CardPreview";
 import { ColorPips } from "../../components/ColorPips";
+import { useCursorTip } from "../../components/CursorTip";
 import { PageHeading } from "../../components/PageHeading";
 import { Panel } from "../../components/Panel";
 import { PickTrack, type Tick } from "../../components/PickTrack";
@@ -493,108 +494,28 @@ function ZeroLine({ left }: { left: number }) {
 }
 
 /**
- * What the thing under the pointer means, following the pointer.
+ * Every deck's appetite for the card, drawn to one scale.
  *
- * A CHART NOBODY CAN INTERROGATE IS A CHART THAT HAS TO BE BELIEVED. The band
- * and the dot and the zero line each carry a different claim, and the caption
- * under the list explains all three at once in a paragraph that has to be read
- * once and remembered -- which is not how anybody reads a chart. Asking a mark
- * directly is.
+ * THE PICTURE IS THE EXPLANATION AND THE NUMBERS WERE NOT. This list used to be
+ * five rows of "+9.8pp / 678 games" under a sentence saying the two ends were
+ * too close to call, and a player looking at +9.8 against +2.9 had no way to
+ * see why -- the thing that makes those two numbers the same claim is that one
+ * rests on 678 games and the other on 759, and a column of counts does not say
+ * that. A band does, at a glance, and it was a real person hitting exactly this
+ * on SOS's Stock Up that produced it.
  *
- * Following the cursor rather than anchoring to the mark, because the marks are
- * a few pixels tall and a tooltip pinned above one covers the row below it.
- * This is the only mouse-following surface in the app, and it is here because
- * the subject is a POSITION on a scale rather than an element -- a reader
- * pointing halfway along a band is asking about that spot, and the answer
- * belongs where they are pointing.
+ * `decisionBand` says why the bands are the width they are: they touch exactly
+ * when the gap clears the bar, so the picture cannot disagree with the grade.
  *
- * ITS POSITION IS NOT REACT STATE, WHICH IS THE WHOLE OF WHY IT MOVES SMOOTHLY.
- * The first version put the cursor in `useState`, so every `mousemove` -- which
- * is one an input frame, faster than React renders -- rebuilt six rows and
- * every band inside them, and the tooltip arrived a frame or two late and in
- * clumps. The pointer now writes to a ref and one `requestAnimationFrame` loop
- * moves the element, so a move costs a transform on a single node. Only the
- * TEXT is state, and that changes when you cross from one mark to another
- * rather than when you move.
- *
- * It EASES toward the pointer instead of being pinned to it. A follower exactly
- * under the cursor reads as an artefact of the cursor; one that catches up over
- * about four frames reads as a thing being carried. `pointer-events-none`
- * throughout, so it can never be what the pointer is over and start chasing
- * itself.
+ * AND IT CAN BE ASKED. The band, the dot and the zero line each carry a
+ * different claim, and the caption explains all three at once in a paragraph
+ * that has to be read and remembered -- which is not how anybody reads a chart.
+ * `useCursorTip` is the surface that lets a reader point at a mark instead; its
+ * docblock carries what was learned making it smooth, which was most of the
+ * work.
  */
-const TIP_EASE = 0.28;
-
-// What the tooltip is at most, in pixels -- the `max-w-[17rem]` below, said
-// twice because the first frame has to place the element before it has been
-// measured. Only ever used for the flip decision, which the next frame corrects
-// against the real width.
-const TIP_MAX_WIDTH = 272;
-
-/**
- * Where the tooltip sits for a pointer at (x, y).
- *
- * Flipped rather than clamped near the right edge: a tooltip that stops moving
- * still looks attached to the wrong mark, where one that jumps to the other
- * side of the cursor stays attached to the right one.
- */
-function place(x: number, y: number, width: number): string {
-  const flip = x > window.innerWidth - (width + 32);
-  return `translate3d(${Math.round(x + (flip ? -14 - width : 14))}px, ${Math.round(y + 16)}px, 0)`;
-}
-
 export function DeckBands({ question, guess }: { question: RevealQuestion; guess: string }) {
-  // THE ONLY STATE IS WHETHER IT IS ON SCREEN. Everything the pointer changes
-  // -- where it is and what it is over -- is a ref, written by the move handler
-  // and read by one animation frame. Putting the TEXT in state was the whole of
-  // why this stuttered: one of the four things a tooltip can say carries the
-  // value under the cursor, so it was a different string on every pixel, and
-  // every pixel therefore rebuilt six rows and every band inside them. React
-  // renders slower than a pointer moves, and the tooltip arrived late and in
-  // clumps.
-  const [showing, setShowing] = useState(false);
-  const tip = useRef<HTMLDivElement | null>(null);
-  const want = useRef({ x: 0, y: 0, text: "" });
-  const at = useRef({ x: 0, y: 0 });
-  // Whether `setShowing` has already been told. React bails on a set to the
-  // value it holds, but it is documented as sometimes rendering the component
-  // once more before it does -- and "sometimes" on a path that runs once an
-  // input frame is not a thing to leave to chance.
-  const shown = useRef(false);
-
-  useEffect(() => {
-    if (!showing) return;
-    // Start where the pointer already is, or the first frames are spent flying
-    // in from the corner of the screen.
-    at.current = { x: want.current.x, y: want.current.y };
-
-    let frame = 0;
-    let last = performance.now();
-    const step = (now: number) => {
-      // DAMPED BY TIME, NOT BY FRAME. A fixed fraction per frame chases twice
-      // as fast on a 120Hz display as on a 60Hz one, and changes speed
-      // whenever a frame is dropped -- which is the difference between a follow
-      // that feels weighted and one that feels broken. Clamped, so a tab
-      // returning from the background does not teleport.
-      const dt = Math.min(64, now - last);
-      last = now;
-      const t = 1 - Math.pow(1 - TIP_EASE, dt / 16.667);
-
-      const el = tip.current;
-      if (el) {
-        at.current.x += (want.current.x - at.current.x) * t;
-        at.current.y += (want.current.y - at.current.y) * t;
-        el.style.transform = place(at.current.x, at.current.y, el.offsetWidth);
-        // Written rather than rendered, for the reason above. React only ever
-        // paints this node on show and hide, and it paints the current text
-        // both times, so the two can never disagree.
-        if (el.textContent !== want.current.text) el.textContent = want.current.text;
-      }
-      frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [showing]);
+  const tip = useCursorTip();
 
   const k = question.decks.length;
   const band = (sd: number) => decisionBand(sd, k, ARCHETYPE_QUIZ.falsePositive);
@@ -617,8 +538,8 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
    */
   function describe(
     deck: RevealQuestion["decks"][number],
-    e: { clientX: number; clientY: number; currentTarget: HTMLElement },
-  ) {
+    e: { clientX: number; currentTarget: HTMLElement },
+  ): string {
     const box = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - box.left;
     const value = lo + (x / box.width) * span;
@@ -627,19 +548,13 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
     const name = deckName(deck.colors);
     const games = deck.n.toLocaleString();
 
-    const text = near(deck.lift)
+    return near(deck.lift)
       ? `${name} won ${points(deck.lift)} more with this card in hand than it did in general, over ${games} games.`
       : near(0)
         ? `What ${name} wins anyway. Every bar is measured from this line, so a deck that wins a lot gets no credit for winning a lot.`
         : Math.abs(value - deck.lift) <= half
           ? `${games} games only pin it down this far — anywhere in this band would look the same. Two bands that touch are two decks the data cannot tell apart.`
           : `${points(value)}, which is outside what ${name}'s ${games} games can support.`;
-
-    want.current = { x: e.clientX, y: e.clientY, text };
-    if (!shown.current) {
-      shown.current = true;
-      setShowing(true);
-    }
   }
 
   return (
@@ -682,11 +597,7 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                 className="relative h-4 min-w-0 flex-1"
                 role="img"
                 aria-label={`${deckName(deck.colors)}: ${points(deck.lift)} over ${deck.n.toLocaleString()} games, give or take ${points(half).replace("+", "")}`}
-                onMouseMove={(e) => describe(deck, e)}
-                onMouseLeave={() => {
-                  shown.current = false;
-                  setShowing(false);
-                }}
+                {...tip.follow((e) => describe(deck, e))}
               >
                 {/* The two decks the question was about are drawn solid and the
                     rest are dimmed. They are the only two the grade looked at,
@@ -768,21 +679,7 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
         between a difference and none. Point at any of it to be told which is which.
       </p>
 
-      {showing && (
-        <div
-          ref={tip}
-          role="presentation"
-          className="pointer-events-none fixed left-0 top-0 z-50 max-w-[17rem] rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
-          // PLACED AT RENDER, NOT ON THE FIRST FRAME. Without this the element
-          // paints at the origin and jumps to the pointer once the effect has
-          // run and a frame has been asked for -- two frames of a tooltip in
-          // the corner of the screen, every time one opens. `describe` sets
-          // `want` before it sets the text, so the position is known here.
-          style={{ transform: place(want.current.x, want.current.y, TIP_MAX_WIDTH) }}
-        >
-          {want.current.text}
-        </div>
-      )}
+      {tip.node}
     </div>
   );
 }
