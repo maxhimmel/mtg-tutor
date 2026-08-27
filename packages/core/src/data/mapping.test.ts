@@ -491,8 +491,16 @@ describe("mergeCards helpers", () => {
       booster: false,
       set: "tltr",
       card_faces: [
-        { name: "The Ring", image_uris: { normal: "front.jpg" } },
-        { name: "The Ring Tempts You", image_uris: { normal: "back.jpg" } },
+        {
+          name: "The Ring",
+          oracle_text: "Your Ring-bearer is legendary and can't be blocked by bigger creatures.",
+          image_uris: { normal: "front.jpg" },
+        },
+        {
+          name: "The Ring Tempts You",
+          oracle_text: "As the Ring tempts you, you get an emblem named The Ring.",
+          image_uris: { normal: "back.jpg" },
+        },
       ],
     } as ScryfallCard,
   ];
@@ -537,6 +545,50 @@ describe("mergeCards helpers", () => {
       ],
     } as ScryfallCard;
     expect(merge(card).helpers).toBeUndefined();
+  });
+
+  // dft's back face is a large "4" and no text: a marker for where your speed
+  // has got to, not an explanation of anything.
+  it("drops a face that carries no rules, and keeps the one that does", () => {
+    const SPEED_ID = "82613de6-ed37-48c1-8d2f-d91a3f496794";
+    const speedSheet: ScryfallCard[] = [
+      {
+        id: SPEED_ID,
+        name: "Start Your Engines! // Max Speed",
+        layout: "double_faced_token",
+        rarity: "common",
+        collector_number: "20",
+        booster: false,
+        set: "tdft",
+        card_faces: [
+          {
+            name: "Start Your Engines!",
+            oracle_text: "Whenever an opponent loses life during your turn, increase your speed by 1.",
+            image_uris: { normal: "sye.jpg" },
+          },
+          { name: "Max Speed", image_uris: { normal: "four.jpg" } },
+        ],
+      } as ScryfallCard,
+    ];
+    const card = {
+      ...scryfall({ name: "Aether Syphon" }),
+      oracle_text: "Start your engines!",
+      all_parts: [
+        {
+          id: SPEED_ID,
+          component: "combo_piece",
+          name: "Start Your Engines! // Max Speed",
+          type_line: "Card // Card",
+        },
+      ],
+    } as ScryfallCard;
+    expect(merge(card, speedSheet).helpers).toEqual([
+      {
+        name: "Start Your Engines! // Max Speed",
+        typeLine: "Card // Card",
+        imageUrl: "sye.jpg",
+      },
+    ]);
   });
 
   it("leaves a card that names nothing without the field at all", () => {

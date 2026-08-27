@@ -164,10 +164,16 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // it is neither. A new field read off a printing is a crawl change AND a shape
 // change, and needs both tags moved.
 //
+// `17-helper-faces` drops an insert face that carries no rules -- dft's back is
+// a large "4" and no text, a marker for where your speed has got to rather than
+// an explanation of anything. Both tags again, and for the reason above: whether
+// a face says anything is read off the printing and is not stored, so the cheap
+// re-derive cannot answer it.
+//
 // Exported for the tests, which have to build a fingerprint that MATCHES to
 // exercise the cheap path at all -- a hand-copied literal there would pass by
 // agreeing with itself.
-export const POOL_REVISION = `16-helpers.${VALUE_FINGERPRINT}`;
+export const POOL_REVISION = `17-helper-faces.${VALUE_FINGERPRINT}`;
 export const META_REVISION = "2-name-icon-released";
 
 // WHICH OF THE THREE REVISIONS TO BUMP, because getting this wrong is the one
@@ -207,7 +213,7 @@ export const META_REVISION = "2-name-icon-released";
 // dropped it because Scryfall files it as `combo_piece` rather than `token`.
 // Reading it needs the crawl again: both halves of the answer, `all_parts` and
 // the token sheet the art comes from, are things only Scryfall can say.
-export const CRAWL_REVISION = "2-helpers";
+export const CRAWL_REVISION = "3-helper-faces";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.
