@@ -2,24 +2,27 @@
  * The archetype quiz: one card, two decks, which one wants it.
  *
  * Notes Ideas #1 asked for "a quiz on what archetype a mono-coloured card
- * belongs to", and the data will not answer that question as asked. Measured
- * over every mono-coloured card in all 26 artifacts: naming which ONE of the
- * decks in a card's colour wants it most clears two standard errors for 3.5% of
- * them. The rest are indistinguishable, which is trap #3 one level up -- the
- * gaps between the decks are smaller than the error bars on those gaps.
+ * belongs to", and the data will not answer that question as asked. Naming which
+ * ONE of the decks in a card's colour wants it most needs the best deck
+ * separated from the RUNNER-UP, and that clears even a flat two standard errors
+ * for 3.5% of cards -- a bar which is itself too generous, for the reason the
+ * next paragraph but one gives, so the true figure is lower still. The decks are
+ * indistinguishable for the rest, which is trap #3 one level up: the gaps
+ * between them are smaller than the error bars on those gaps.
  *
- * NARROWED TO TWO DECKS IT COMES ALIVE: 1,149 cards, 30.1% of every candidate,
- * and 17-89 questions in every set but one. `pnpm diagnose-archetype-quiz` is
- * that measurement, kept so the gate can be re-argued rather than remembered.
+ * NARROWED TO TWO DECKS IT IS A REAL DRILL: 362 questions across 25 sets, and
+ * 20 of them hold a full run. `pnpm diagnose-archetype-quiz` is that
+ * measurement, kept so the gate can be re-argued rather than remembered.
  *
  * THREE-COLOUR DECKS ARE IN, AND THEY ARE WHAT MAKE IT UNIVERSAL. Pairs alone
  * left ktk, snc, sos and tdm with nothing to ask -- they are three-colour
  * formats, where the wedges and shards ARE the archetypes and the pairs are a
- * rounding error. Adding widths of three takes those four from 0, 0, 0 and 0
- * questions to 19, 38, 21 and 17, and the bank as a whole from 961 to 1,149.
- * STX is now the only set that cannot ask anything, because it has no archetype
- * data at all -- notes issue #8, and this drill is the first surface that says
- * so out loud instead of quietly degrading.
+ * rounding error. With widths of three those four ask 5, 8, 10 and 6 questions.
+ * They also cost something, and it is the same coin: more decks per card means
+ * a wider gate, which is why the numbers above are what they are rather than a
+ * regret. STX is the only set that cannot ask anything at all, because it has no
+ * archetype data -- notes issue #8, and this drill is the first surface that
+ * says so out loud instead of quietly degrading.
  *
  * WHAT A LIFT IS HERE, and why it is not the card's win rate. A card's raw rate
  * inside a deck says mostly what that deck does: every card in the best deck in
@@ -35,15 +38,72 @@
  * rank cards identically. The single difference is kept because it is the one a
  * person can read off the screen: "+2.9pp on what RW decks do anyway".
  *
- * THE GRADE IS THE GAP, NOT THE WINNER. A question is only asked when the best
- * and worst decks are separated by `ARCHETYPE_QUIZ.minSigmas` -- and the
- * variance is the card's rate in BOTH decks plus both decks' own rates, summed
- * rather than pooled. Summing is conservative in the right direction: the card's
- * games inside a deck are a subset of that deck's games, so the two are
+ * THE GATE IS NOT A NUMBER OF STANDARD ERRORS, AND THE FIRST VERSION OF IT WAS
+ * WRONG. A question is asked when the best and worst decks are far enough apart
+ * -- but best-minus-worst is a RANGE over k decks, not a comparison of two, and
+ * the largest gap among k noisy numbers is wide even when every deck wants the
+ * card equally. Simulated over 2,000,000 draws of k independent nulls, a flat
+ * two-sigma gate passes 18.7% of pure noise at four decks and 59.8% at ten. It
+ * would have shipped a bank whose false questions were concentrated exactly on
+ * the cards played in the most decks, which is the commons.
+ *
+ * So the threshold comes from the null distribution of the range at that card's
+ * own deck count -- `RANGE_CRITICAL` below -- and the setting is a false-positive
+ * RATE rather than a width. Trap #13 is this exact mistake: a max-of-many is
+ * significant against its own null and not against the null of a single
+ * comparison.
+ *
+ * THE VARIANCE is the card's rate in both decks plus both decks' own rates,
+ * summed rather than pooled. Summing is conservative in the right direction: the
+ * card's games inside a deck are a subset of that deck's games, so the two are
  * positively correlated and the true variance of the difference is smaller than
- * this. A question that survives an over-estimate of its own noise is a question
- * that is really there.
+ * this. A question that survives an over-estimate of its own noise is really
+ * there.
  */
+
+/**
+ * How wide the best-to-worst gap gets on k decks that all want a card equally.
+ *
+ * Keyed by deck count, then by the false-positive rate it buys. Simulated:
+ * 2,000,000 draws of k independent standard normals, `(max - min) / sqrt(2)` --
+ * the same arithmetic `separation` does, because two independent unit variances
+ * sum to two. `pnpm diagnose-archetype-quiz --calibrate` regenerates it.
+ *
+ * The row that proves it is k=2, where the 5% figure comes out at 1.96: with
+ * nothing to maximise over, the range test IS the ordinary two-sided z-test, and
+ * a table that did not reproduce that number would be wrong somewhere else too.
+ *
+ * A card with more than ten decks in its colour cannot exist -- ten pairs and
+ * ten wedges, of which any one colour touches four and six.
+ */
+export const RANGE_CRITICAL: Readonly<
+  Record<number, Readonly<Record<"0.10" | "0.05" | "0.01", number>>>
+> = {
+  2: { "0.10": 1.64, "0.05": 1.96, "0.01": 2.57 },
+  3: { "0.10": 2.05, "0.05": 2.34, "0.01": 2.91 },
+  4: { "0.10": 2.29, "0.05": 2.57, "0.01": 3.11 },
+  5: { "0.10": 2.46, "0.05": 2.73, "0.01": 3.26 },
+  6: { "0.10": 2.59, "0.05": 2.85, "0.01": 3.36 },
+  7: { "0.10": 2.69, "0.05": 2.95, "0.01": 3.45 },
+  8: { "0.10": 2.78, "0.05": 3.03, "0.01": 3.53 },
+  9: { "0.10": 2.86, "0.05": 3.10, "0.01": 3.59 },
+  10: { "0.10": 2.92, "0.05": 3.16, "0.01": 3.64 },
+};
+
+export type FalsePositiveRate = "0.10" | "0.05" | "0.01";
+
+/**
+ * How far apart k decks must be before the widest gap among them means anything.
+ *
+ * Clamped rather than extrapolated at both ends: below two there is no gap to
+ * measure, and above ten there is no such card. A count outside the table is a
+ * bug elsewhere and returning Infinity refuses the question rather than
+ * inventing a threshold for it.
+ */
+export function rangeGate(deckCount: number, rate: FalsePositiveRate): number {
+  const row = RANGE_CRITICAL[deckCount];
+  return row ? row[rate] : Number.POSITIVE_INFINITY;
+}
 
 /** A deck's own win rate, with no card dimension. `colorWinRates` in the stats. */
 export interface DeckRate {
@@ -163,8 +223,13 @@ export function sharedColor(colors: readonly string[]): string | undefined {
 export interface QuestionOptions {
   /** How many decks a card must have rates in before it is asked about. */
   minDecks: number;
-  /** How far apart the best and worst deck must be, in standard errors. */
-  minSigmas: number;
+  /**
+   * How often a card whose decks all want it equally may be asked about anyway.
+   *
+   * A rate rather than a width, because the width that buys this rate depends on
+   * how many decks the card has -- see `RANGE_CRITICAL`.
+   */
+  falsePositive: FalsePositiveRate;
 }
 
 /**
@@ -223,7 +288,10 @@ export function archetypeQuestions(
     const wants = lifts[0];
     const spurns = lifts[lifts.length - 1];
     const sigmas = separation(wants, spurns);
-    if (sigmas < options.minSigmas) continue;
+    // Against the null of THIS card's deck count, not against a flat width. A
+    // card in ten decks has to clear 3.16 where a card in three clears 2.34,
+    // because the wider a net the more the widest gap in it means nothing.
+    if (sigmas < rangeGate(lifts.length, options.falsePositive)) continue;
 
     questions.push({
       name,

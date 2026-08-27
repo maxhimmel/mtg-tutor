@@ -47,7 +47,7 @@ const DRILLS = [
     // teaches the word on its way past, which is what Ideas #1 wanted.
     name: "Which deck wants it?",
     what: "One card and two decks that both played it. One got far more out of it — say which, and see what every deck in the set did with it.",
-    length: "12 cards · a couple of minutes",
+    length: "8 cards · a couple of minutes",
   },
 ];
 

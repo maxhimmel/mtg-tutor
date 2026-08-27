@@ -127,23 +127,31 @@ export const COACH = {
  * its own worst picks, which says nothing about how long a quiz should be.
  */
 export const ARCHETYPE_QUIZ = {
-  // A run. Shorter than the misses drill because a question here is one card
-  // and two words rather than a whole pack to read -- ten of these is a minute,
-  // and a minute is not a sitting.
-  runLength: 12,
+  // A run, and the number is decided by the banks rather than by taste. At the
+  // shipped rate 20 of the 25 sets with archetype data hold eight questions and
+  // only 13 hold twelve -- so twelve would have made the drill look thin on
+  // seven sets to make it longer on thirteen. Eight is also about right for a
+  // question that is one card and two words: a couple of minutes.
+  runLength: 8,
   // How many decks must have a measured opinion about a card before it can be
   // asked about. Three of the four pairs in its colour, or three of the ten
   // decks once wedges count -- enough that the reveal's table has something to
   // say beyond the two decks the question names.
   minDecks: 3,
-  // How far apart the wanted and spurned decks must be, in standard errors.
+  // How often a card whose decks all want it equally may be asked about anyway.
   //
-  // TWO IS THE WHOLE FEATURE. Below it the question is a coin flip dressed as a
-  // lesson: at 1.5 the bank is 2,175 cards and a quarter of them are gaps the
-  // data cannot actually see. At 2 it is 1,149 and every one of them is real.
-  // At 2.5 it is 496 and eight sets drop under a single run's worth. Measured
-  // by `pnpm diagnose-archetype-quiz`, which prints this table.
-  minSigmas: 2,
+  // A RATE RATHER THAN A WIDTH, and the difference is not pedantry. Best minus
+  // worst is a range over up to ten decks, and the widest gap among ten noisy
+  // numbers is wide even when nothing is there -- a flat two-sigma gate passes
+  // 18.7% of pure noise at four decks and 59.8% at ten, concentrated on the
+  // cards played in the most decks. So the width is looked up per deck count in
+  // `RANGE_CRITICAL` and this names the rate it buys.
+  //
+  // Five per cent because it is the rate at which one wrong question turns up
+  // in about every second run of twelve, which is a drill that is right
+  // essentially always and not one pretending to be. One per cent costs about
+  // half the bank and puts eight sets under a single run.
+  falsePositive: "0.05" as const,
 };
 
 export const DRILLS = {

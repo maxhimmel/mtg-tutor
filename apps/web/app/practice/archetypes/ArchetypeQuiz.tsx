@@ -23,11 +23,12 @@ import { points } from "../../lib/format";
  * The archetype quiz: one card, two decks, which one wants it.
  *
  * WHY THE QUESTION IS NOT THE ONE THAT WAS ASKED FOR. Ideas #1 wanted the deck a
- * mono-coloured card belongs to, named. Measured across all 26 sets, naming the
- * one deck that wants a card most clears two standard errors for 3.5% of cards;
- * for the rest the decks are inside each other's error bars. Narrowed to a pair
- * the same bar passes 1,148 times. `core/drills/archetypes.ts` carries the
- * argument and `pnpm diagnose-archetype-quiz` prints the table.
+ * mono-coloured card belongs to, named. For all but a few per cent of cards the
+ * decks in a colour are inside each other's error bars, so that quiz is a quiz
+ * whose answers are noise. Narrowed to two decks, and gated against the null of
+ * the widest-gap-among-k rather than a flat width, there are 362 real questions
+ * across 25 sets. `core/drills/archetypes.ts` carries the argument and
+ * `pnpm diagnose-archetype-quiz` prints the table.
  *
  * WHAT THE SCREEN DOES WITH THAT. The grade uses two decks and the reveal shows
  * every one, so a person is marked on the half the data can defend and taught

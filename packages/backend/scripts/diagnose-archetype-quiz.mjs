@@ -1,24 +1,28 @@
 // How many questions the archetype quiz can actually ask, and at what gate.
 //
-//   node scripts/diagnose-archetype-quiz.mjs [--sigmas 1.5,2,2.5,3]
-//                                            [--set fdn] [--verbose]
+//   node scripts/diagnose-archetype-quiz.mjs [--set fdn] [--verbose]
+//   node scripts/diagnose-archetype-quiz.mjs --calibrate [--draws 2000000]
 //
 // WHY THIS EXISTS
 //
 // The drill asks "which of these two decks wants this card", and the reason it
 // asks that rather than the question notes Ideas #1 wrote down -- "which
-// archetype does this card belong to" -- is a number this script prints. Naming
-// the ONE deck that wants a card most clears two standard errors for 3.5% of
-// cards. Naming which of two decks wants it more clears the same bar for 30.1%.
-// The idea as written is a quiz whose answers are noise; narrowed to two decks
-// it has 1,149 real questions.
+// archetype does this card belong to" -- is a number this script prints. The
+// idea as written is a quiz whose answers are mostly noise; narrowed to two
+// decks and gated against the right null it has 362 real questions, and 20 of
+// the 25 sets with archetype data hold a full run.
 //
-// It is committed rather than thrown away because `ARCHETYPE_QUIZ.minSigmas` is
-// a setting somebody will want to move, and moving it should be an argument
+// It is committed rather than thrown away because `ARCHETYPE_QUIZ.falsePositive`
+// is a setting somebody will want to move, and moving it should be an argument
 // with this table rather than with a memory of it. Trap #22: an instrument
 // beside a threshold measures the setting, not whether the setting is right --
-// so what this prints is the whole curve, and the choice of 2 is made by
-// reading it.
+// so what this prints is the whole curve, and the rate is chosen by reading it.
+//
+// `--calibrate` regenerates `RANGE_CRITICAL` in core, which is the other half of
+// the same discipline. That table is what makes the gate honest -- best minus
+// worst is a range over k decks and the widest gap among many noisy numbers is
+// wide even when nothing is there -- and a table nobody can reproduce is a
+// magic number with a comment on it.
 //
 // WHAT IT READS AND WHAT IT CANNOT
 //
@@ -46,9 +50,43 @@ const arg = (flag, fallback) => {
   return i === -1 ? fallback : process.argv[i + 1];
 };
 
-const SIGMAS = arg("--sigmas", "1.5,2,2.5,3").split(",").map(Number);
+const RATES = ["0.10", "0.05", "0.01"];
 const ONLY = arg("--set", null);
 const VERBOSE = process.argv.includes("--verbose");
+
+// Regenerate the null-range table. Box-Muller rather than a dependency, and the
+// same `(max - min) / sqrt(2)` that `separation` computes -- two independent
+// unit variances sum to two, so the divisor is not a fudge.
+if (process.argv.includes("--calibrate")) {
+  const draws = Number(arg("--draws", "2000000"));
+  const gauss = () => {
+    let u = 0;
+    while (u === 0) u = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+  };
+
+  console.log(`\nNull range over ${draws.toLocaleString()} draws. Paste into RANGE_CRITICAL.\n`);
+  for (let k = 2; k <= 10; k++) {
+    const seps = new Float64Array(draws);
+    for (let i = 0; i < draws; i++) {
+      let hi = -Infinity;
+      let lo = Infinity;
+      for (let j = 0; j < k; j++) {
+        const x = gauss();
+        if (x > hi) hi = x;
+        if (x < lo) lo = x;
+      }
+      seps[i] = (hi - lo) / Math.SQRT2;
+    }
+    seps.sort();
+    const q = (p) => seps[Math.floor((1 - p) * draws)].toFixed(2);
+    console.log(`  ${k}: { "0.10": ${q(0.1)}, "0.05": ${q(0.05)}, "0.01": ${q(0.01)} },`);
+  }
+  // k=2 must come out at 1.96: with nothing to maximise over the range test is
+  // the ordinary two-sided z-test, so that row is the table checking itself.
+  console.log("\nThe k=2 row must read 1.96 at 0.05, or the simulation is wrong.");
+  process.exit(0);
+}
 
 // The colour check the app makes and this cannot. Passing the inferred colour
 // straight back through is what makes these counts a ceiling rather than a
@@ -75,11 +113,11 @@ for (const file of readdirSync(DATA).filter((f) => f.endsWith(".json")).sort()) 
   }
 
   const colorOf = inferredColor(set.archetypes);
-  const counts = SIGMAS.map(
-    (minSigmas) =>
+  const counts = RATES.map(
+    (falsePositive) =>
       archetypeQuestions(set.archetypes, set.colorWinRates, colorOf, {
         minDecks: ARCHETYPE_QUIZ.minDecks,
-        minSigmas,
+        falsePositive,
       }).length,
   );
 
@@ -89,10 +127,13 @@ for (const file of readdirSync(DATA).filter((f) => f.endsWith(".json")).sort()) 
 
 const pad = (v, w) => String(v).padStart(w);
 
-console.log(`\nQuestions per set, by separation gate. minDecks ${ARCHETYPE_QUIZ.minDecks}.\n`);
-console.log(`set     ${SIGMAS.map((s) => pad(`@${s}σ`, 7)).join("")}   run of ${ARCHETYPE_QUIZ.runLength}?`);
+console.log(
+  `\nQuestions per set, by the rate at which a card whose decks agree is asked` +
+    ` about anyway.\nminDecks ${ARCHETYPE_QUIZ.minDecks}; the width each rate buys is per deck count, see RANGE_CRITICAL.\n`,
+);
+console.log(`set     ${RATES.map((r) => pad(`${Number(r) * 100}%`, 7)).join("")}   run of ${ARCHETYPE_QUIZ.runLength}?`);
 
-const totals = SIGMAS.map(() => 0);
+const totals = RATES.map(() => 0);
 let short = 0;
 let live = 0;
 
@@ -120,7 +161,8 @@ for (const row of rows) {
 console.log(`\n${"total".padEnd(7)}${totals.map((t) => pad(t, 7)).join("")}`);
 console.log(
   `\n${live} sets with archetype data, ${mute} without. ` +
-    `At the shipped gate of ${ARCHETYPE_QUIZ.minSigmas}σ, ${live - short} of ${live} can fill a run of ${ARCHETYPE_QUIZ.runLength}.`,
+    `At the shipped rate of ${Number(ARCHETYPE_QUIZ.falsePositive) * 100}%, ` +
+    `${live - short} of ${live} can fill a run of ${ARCHETYPE_QUIZ.runLength}.`,
 );
 
 if (VERBOSE) {
