@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { releaseDate } from "../lib/format";
-import type { SetSummary } from "../lib/sets";
+import type { PickSource, SetSummary } from "../lib/sets";
 import { SetIcon } from "./SetIcon";
 
 type SortKey = "name" | "releasedAt" | "cardCount" | "ratedCardCount";
@@ -72,7 +72,7 @@ export function SetList({
   sets: SetSummary[];
   // Code of the set currently being opened, if any.
   starting: string | null;
-  onStart: (setCode: string, format: string) => void;
+  onStart: (setCode: string, format: string, from: PickSource) => void;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; direction: Direction }>({
     key: "releasedAt",
@@ -161,7 +161,7 @@ export function SetList({
                           target. */}
                       <button
                         type="button"
-                        onClick={() => onStart(set.code, set.format)}
+                        onClick={() => onStart(set.code, set.format, "list")}
                         disabled={starting !== null}
                         aria-label={`Draft ${name}`}
                         className={`text-left font-display font-semibold leading-tight transition-colors after:absolute after:inset-0 after:content-[''] focus-visible:outline-none ${

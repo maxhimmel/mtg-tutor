@@ -1,7 +1,7 @@
 "use client";
 
 import { releaseDate } from "../lib/format";
-import type { SetSummary } from "../lib/sets";
+import type { PickSource, SetSummary } from "../lib/sets";
 import { SetIcon } from "./SetIcon";
 
 // The browsing half of the picker: one plate per set, scanned by symbol and
@@ -15,7 +15,7 @@ export function SetGrid({
   sets: SetSummary[];
   // Code of the set currently being opened, if any.
   starting: string | null;
-  onStart: (setCode: string, format: string) => void;
+  onStart: (setCode: string, format: string, from: PickSource) => void;
 }) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
@@ -24,7 +24,7 @@ export function SetGrid({
           key={`${s.code}-${s.format}`}
           type="button"
           className="group card relative cursor-pointer overflow-hidden border border-base-300 bg-base-200 p-4 text-left transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => onStart(s.code, s.format)}
+          onClick={() => onStart(s.code, s.format, "grid")}
           disabled={starting !== null}
         >
           {/* A set symbol is the mark a set stamps on every card in it, so it
