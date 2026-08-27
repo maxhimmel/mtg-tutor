@@ -501,6 +501,7 @@ export const MECHANICS_DOC: MechanicsDoc = {
       "name": "Start Your Engines!",
       "kind": "keyword",
       "rule": "702.179",
+      "art": "Start Your Engines! // Max Speed",
       "short": "It gives you speed, which starts at 1 and goes up once per turn whenever an opponent loses life. It stops at 4, and only ever goes up."
     },
     {
@@ -531,6 +532,7 @@ export const MECHANICS_DOC: MechanicsDoc = {
       "name": "The Ring Tempts You",
       "kind": "action",
       "rule": "701.54",
+      "art": "The Ring // The Ring Tempts You",
       "short": "Name one of your creatures the Ring-bearer and take an emblem called the Ring. It grows each time it happens again — it can't be blocked by bigger creatures, then a draw when the Ring-bearer attacks, then blockers dying, then 3 life off each opponent."
     },
     {

@@ -84,10 +84,17 @@ function onScreen(anchor: Anchor, viewport: Viewport): boolean {
 }
 
 /**
- * `sides` is the card as it is printed -- the front, and the back where there is
- * one. `tokens` is what that card makes, drawn beside it. Both are ordered by
- * claim on the space: the front is what the player pointed at and is never
- * dropped, and each box after it is taken only if the whole of it still fits.
+ * `faces` is everything the block draws, in order of its claim on the space: the
+ * card as it is printed, then the rules cards its set prints for its mechanics,
+ * then what it makes. The front is what the player pointed at and is never
+ * dropped; each box after it is taken only if the whole of it still fits.
+ *
+ * ONE LIST, and it used to be two. Sides and tokens arrived separately because
+ * they were measured against different edges -- a token yielded to the wall and
+ * a side did not. Once the token stopped yielding (see below) the split decided
+ * nothing, and a parameter that changes no outcome is worse than no parameter:
+ * the caller was still computing where the boundary fell, and got it wrong the
+ * moment a third kind of face was added between the two.
  *
  * NEITHER YIELDS TO THE WALL, AND THAT IS A CHANGE.
  *
@@ -126,10 +133,8 @@ export function place(
   anchor: Anchor,
   viewport: Viewport,
   wantsPanel: boolean,
-  sides: Box[],
-  tokens: Box[] = [],
+  faces: Box[],
 ): Placement | null {
-  const faces = [...sides, ...tokens];
   if (faces.length === 0 || !onScreen(anchor, viewport)) return null;
 
   const wall =
@@ -162,8 +167,8 @@ export function place(
   // The front is exempt from all of it: it is what the player pointed at and is
   // never dropped, so a panel is what yields when even the card alone cannot
   // make room for both -- which is what `panelLeft` being null still means.
-  // Everything after it answers to the page and not to the wall, sides and
-  // tokens alike; see the note above the signature for why that changed.
+  // Everything after it answers to the page and not to the wall, whatever kind
+  // of face it is; see the note above the signature for why that changed.
   let width = faces[0].w;
   let shown = 1;
   while (shown < faces.length && width + GAP + faces[shown].w <= roomTo(viewport.width)) {

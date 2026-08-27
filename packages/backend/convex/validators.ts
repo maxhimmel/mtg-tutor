@@ -225,6 +225,16 @@ export const cardToken = v.object({
   imageUrl: v.optional(v.string()),
 });
 
+// A printed rules card for a mechanic, which is not a token the card makes --
+// see core's CardHelper for why the two are separate arrays rather than one.
+// Two images because the ones worth storing are two-sided.
+export const cardHelper = v.object({
+  name: v.string(),
+  typeLine: v.string(),
+  imageUrl: v.optional(v.string()),
+  backImageUrl: v.optional(v.string()),
+});
+
 // The half a person reads, and the half a prompt writes. One row per card in
 // `setCardText`, not an array on the pool document, because its readers want
 // SUBSETS: buildPickContext describes the picked card and the four best it
@@ -272,6 +282,10 @@ export const cardText = v.object({
   // that would fill it -- see decision #21 in notes.md, which cost a production
   // deploy the last time a pipeline field was narrowed on the way in.
   tokens: v.optional(v.array(cardToken)),
+  // Optional for the same reason `tokens` is, and the reason bites harder here:
+  // 90 cards of 9,552 carry one, so all but those are written without it on
+  // every ingest whether or not the crawl found anything.
+  helpers: v.optional(v.array(cardHelper)),
   collectorNumber: v.string(),
   setCode: v.optional(v.string()),
   avgPick: v.optional(v.number()),

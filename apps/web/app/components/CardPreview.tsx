@@ -215,7 +215,23 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
   const notes = useMemo(() => {
     if (!hover) return [];
     const shape = cardShapeOf(hover.card);
-    const keywords = keywordsOf(hover.card);
+    // A mechanic whose printed rules card is on this card loses its sentence:
+    // the card the game shipped says more, which is the only reason `art` is
+    // ever set. Ours stays wherever the picture is not -- a Toxic card in a pack
+    // that never printed a Poison Counter, or the coach, which cannot hold a
+    // picture at all.
+    // Only a helper we actually have a picture of takes a sentence away. An
+    // ingest that stored the name and could not resolve the art would otherwise
+    // leave the mechanic with neither, which is worse than where this started.
+    const printed = new Set(
+      (hover.card.helpers ?? [])
+        .filter((h) => h.imageUrl != null || h.backImageUrl != null)
+        .map((h) => h.name.toLowerCase()),
+    );
+    const replaced = new Set(
+      SET_MECHANICS.filter((m) => m.art && printed.has(m.art.toLowerCase())).map((m) => m.name),
+    );
+    const keywords = keywordsOf(hover.card).filter((k) => !replaced.has(k.name));
     return shape ? [shape, ...keywords] : keywords;
   }, [hover]);
   // Stats can be the panel's only content -- a vanilla creature with no keywords
@@ -274,6 +290,28 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     [hover],
   );
 
+  // The rules card the set printed for a mechanic on this card, as its own
+  // picture. This is not a token -- nothing creates it -- and it is not the
+  // card's other side either; it is the slip that came in the booster because
+  // nothing on the cards says what the mechanic does.
+  //
+  // Ahead of the tokens in the queue and behind the card's own faces, because a
+  // mechanic nobody can read is a worse gap than a token nobody can see, and
+  // because the panel keeps naming the tokens it could not draw while a mechanic
+  // whose sentence has just been taken away has nothing to fall back on.
+  //
+  // Both faces where there are two: LTR leads with the Emblem, which is what you
+  // are given, and carries the rules on the back.
+  const printed = useMemo(() => {
+    const list: { src: string; alt: string }[] = [];
+    for (const h of hover?.card.helpers ?? []) {
+      const [front, back] = h.name.split("//").map((n) => n.trim());
+      if (h.imageUrl) list.push({ src: h.imageUrl, alt: front ?? h.name });
+      if (h.backImageUrl) list.push({ src: h.backImageUrl, alt: back ?? h.name });
+    }
+    return list;
+  }, [hover]);
+
   const faces = useMemo(() => {
     const list: { src: string; alt: string; box: Box; sideways: boolean }[] = [];
     if (!hover?.card.imageUrl) return list;
@@ -295,11 +333,14 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
         sideways: false,
       });
     }
+    for (const rules of printed) {
+      list.push({ src: rules.src, alt: rules.alt, box: UPRIGHT, sideways: false });
+    }
     for (const token of drawable) {
       list.push({ src: token.imageUrl!, alt: `${token.name} token`, box: UPRIGHT, sideways: false });
     }
     return list;
-  }, [hover, back, turned, drawable]);
+  }, [hover, back, turned, drawable, printed]);
 
   // A ref, not state: suspending must not re-render every card on the page, and
   // nothing renders differently for it -- `show` simply declines.
@@ -364,20 +405,9 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     if (!hover) return;
     const { el } = hover;
     const boxes = faces.map((f) => f.box);
-    // The card's own sides lead the list and the tokens follow -- which is how
-    // `faces` is built above -- and `place` is handed them as two lists because
-    // it measures them against different edges: a wall the page nominated may
-    // cost a token its picture, and may not cost the card a side of itself.
-    const sides = boxes.length - drawable.length;
 
     const follow = () => {
-      const next = place(
-        el.getBoundingClientRect(),
-        viewport(),
-        panel,
-        boxes.slice(0, sides),
-        boxes.slice(sides),
-      );
+      const next = place(el.getBoundingClientRect(), viewport(), panel, boxes);
       if (next) setPos(next);
       else hide();
     };
@@ -435,11 +465,15 @@ export function HoverPreviewProvider({ children }: { children: React.ReactNode }
     if (explained.current || !hover?.card.oracleText) return;
     explained.current = true;
     const set = new Set(SET_MECHANICS.map((m) => m.name));
+    const drawn = (hover.card.helpers ?? []).filter(
+      (h) => h.imageUrl != null || h.backImageUrl != null,
+    ).length;
     mechanicExplained({
       setCode: hover.card.setCode ?? "unknown",
       set: notes.filter((n) => set.has(n.name)).length,
       evergreen: notes.filter((n) => !set.has(n.name)).length,
-      silent: notes.length === 0,
+      printed: drawn,
+      silent: notes.length === 0 && drawn === 0,
     });
   }, [hover, notes]);
 

@@ -74,7 +74,7 @@ describe("faces that do not all fit", () => {
   // wall" below for the report that changed it.
   it("drops from the tail and never the front", () => {
     const narrow: Viewport = { width: 600, height: 900, wall: null };
-    const at = place(tile(40, 300), narrow, false, [UPRIGHT], [UPRIGHT, UPRIGHT])!;
+    const at = place(tile(40, 300), narrow, false, [UPRIGHT, UPRIGHT, UPRIGHT])!;
     expect(at.lefts).toHaveLength(1);
   });
 
@@ -128,7 +128,7 @@ describe("the keyword panel", () => {
   // naming with it.
   it("keeps its room when a token would otherwise take it", () => {
     const board: Viewport = { width: 1440, height: 900, wall: 1060 };
-    const first = place(tile(40, 300), board, true, [UPRIGHT], [UPRIGHT])!;
+    const first = place(tile(40, 300), board, true, [UPRIGHT, UPRIGHT])!;
     expect(first.panelLeft).not.toBeNull();
   });
 
@@ -143,7 +143,7 @@ describe("the keyword panel", () => {
   it("never loses the panel to a token, whatever slot of the pack is hovered", () => {
     const laptop: Viewport = { width: 1280, height: 900, wall: 848 };
     for (const at of [40, 300, 560]) {
-      const placed = place(tile(at, 300), laptop, true, [UPRIGHT], [UPRIGHT])!;
+      const placed = place(tile(at, 300), laptop, true, [UPRIGHT, UPRIGHT])!;
       expect(placed.panelLeft).not.toBeNull();
       expect(placed.lefts).toHaveLength(2);
     }
@@ -212,7 +212,7 @@ describe("a card with two sides, against a wall that moved in", () => {
   // The panel is still never the thing that goes, which is what keeps notes.md
   // #7 fixed.
   it("draws a token past the wall, and keeps the panel", () => {
-    const at = place(packCard, split, true, [UPRIGHT], [UPRIGHT])!;
+    const at = place(packCard, split, true, [UPRIGHT, UPRIGHT])!;
     expect(at.lefts).toHaveLength(2);
     expect(at.panelLeft).not.toBeNull();
   });
@@ -221,8 +221,8 @@ describe("a card with two sides, against a wall that moved in", () => {
   // in the middle of the board than at the edge of it.
   it("draws the same faces for a pack card and one inside the rail", () => {
     const inRail = tile(900, 300, 165, 230);
-    const board = place(packCard, split, true, [UPRIGHT], [UPRIGHT])!;
-    const rail = place(inRail, split, true, [UPRIGHT], [UPRIGHT])!;
+    const board = place(packCard, split, true, [UPRIGHT, UPRIGHT])!;
+    const rail = place(inRail, split, true, [UPRIGHT, UPRIGHT])!;
     expect(board.lefts).toHaveLength(rail.lefts.length);
   });
 

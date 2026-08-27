@@ -48,7 +48,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkOriginal, loadMechanics, matchesCard } from "@mtg-tutor/core";
+import { checkOriginal, loadMechanics, matchesCard, setMechanicsOf } from "@mtg-tutor/core";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = resolve(HERE, "..", "data");
@@ -256,11 +256,19 @@ function collapse(rows, hits, terms) {
 // ingest-sets read it, so a set counts here when its stats are committed and
 // never because somebody remembered to add it.
 const setFiles = readdirSync(DATA).filter((f) => f.endsWith(".json"));
-const sets = [...new Set(setFiles.map((f) => f.slice(0, f.indexOf("."))))]
-  .filter((code) => only.length === 0 || only.includes(code));
+// EVERY committed set, always, whatever was asked for on the command line.
+//
+// What makes a mechanic the set's own is that it is rare across the others, and
+// "the others" has to mean all of them. Counting only the sets named on the
+// command line makes Flying appear in 6 of 6 and therefore set-specific, so a
+// scoped run reported every evergreen keyword as an undefined mechanic and
+// exited non-zero. `new-set` passes ONE set, so that was every new set, always.
+const sets = [...new Set(setFiles.map((f) => f.slice(0, f.indexOf("."))))];
+// What gets PRINTED, which is the only thing the argument narrows.
+const report = only.length ? sets.filter((code) => only.includes(code)) : sets;
 
-if (!sets.length) {
-  console.error(only.length ? `No committed artifact for ${only.join(", ")}` : "No artifacts.");
+if (!report.length) {
+  console.error(`No committed artifact for ${only.join(", ")}`);
   process.exit(1);
 }
 
@@ -279,6 +287,12 @@ function setCodesFor(code) {
   // MKM alone names 37 sets this way, 35 of them for a single card.
   for (const [c, n] of counts) if (n >= 5) codes.add(c);
   return [...codes];
+}
+
+// A set's token sheet, which is where a printed rules card lives -- LTR's is
+// tltr/H13. Crawled by the ingest already; read here to say what it holds.
+async function tokenSheet(code) {
+  return scryfall(`/cards/search?q=set%3At${code}&unique=cards`, `t${code}.json`).catch(() => []);
 }
 
 const cr = await comprehensiveRules();
@@ -302,9 +316,11 @@ const perSet = new Map();
 const setsWith = new Map();
 for (const code of sets) {
   const cards = [];
+  const raw = [];
   for (const sc of setCodesFor(code)) {
-    const raw = await scryfall(`/cards/search?q=set%3A${sc}&unique=cards&order=set`, `${sc}.json`);
-    for (const c of raw) {
+    const batch = await scryfall(`/cards/search?q=set%3A${sc}&unique=cards&order=set`, `${sc}.json`);
+    raw.push(...batch);
+    for (const c of batch) {
       const text = [c.oracle_text, ...(c.card_faces ?? []).map((f) => f.oracle_text)]
         .filter(Boolean)
         .join("\n");
@@ -321,7 +337,32 @@ for (const code of sets) {
       hits.set(term.name, matched);
     }
   }
-  perSet.set(code, { cards: cards.length, counts, hits });
+  // The rules cards this set prints, and what they say. A booster's inserts are
+  // mostly places to put cards -- "(Place your energy counters in this area.)"
+  // is the whole of mh3's -- so the text is reported rather than a name, because
+  // the decision is whether the printed card says more than our sentence and
+  // nothing but the two texts settles that.
+  const sheet = await tokenSheet(code);
+  const byId = new Map(sheet.map((t) => [t.id, t]));
+  const inserts = new Map();
+  for (const c of raw) {
+    for (const p of c.all_parts ?? []) {
+      if (p.component !== "combo_piece" || p.name === c.name) continue;
+      if (!/\b(Emblem|Dungeon|Attraction)\b|Card$/.test(p.type_line)) continue;
+      if (/Checklist/i.test(p.name)) continue;
+      const row = inserts.get(p.name) ?? { name: p.name, id: p.id, n: 0 };
+      row.n++;
+      inserts.set(p.name, row);
+    }
+  }
+  for (const row of inserts.values()) {
+    const t = byId.get(row.id);
+    row.text = (t?.card_faces ?? [t ?? {}])
+      .map((f) => (f?.oracle_text ?? "").trim())
+      .filter(Boolean)
+      .join(" // ");
+  }
+  perSet.set(code, { cards: cards.length, counts, hits, inserts, cardsRaw: raw });
   for (const name of counts.keys()) setsWith.set(name, (setsWith.get(name) ?? 0) + 1);
   process.stderr.write(`${code}: ${cards.length} cards\n`);
 }
@@ -341,7 +382,7 @@ let carrying = 0;
 let explained = 0;
 
 console.log("");
-for (const code of sets) {
+for (const code of report) {
   const { cards, counts, hits } = perSet.get(code);
   // Ignored terms are dropped BEFORE collapsing, never after. `Speed` is on 41
   // cards of dft and is ignored; `Start Your Engines!` and `Max Speed` are
@@ -399,7 +440,7 @@ if (drift.length) {
 }
 
 console.log(
-  `\n${explained}/${carrying} set mechanics across ${sets.length} sets have a definition.`,
+  `\n${explained}/${carrying} set mechanics across ${report.length} of ${sets.length} sets have a definition.`,
 );
 
 if (missing.size) {
@@ -421,6 +462,57 @@ if (missing.size) {
     console.error("\nRe-run with --propose for stubs.");
   }
   process.exit(1);
+}
+
+// The printed rules cards, and whether the corpus has claimed them.
+//
+// Not a failure, because most inserts are not worth claiming and never will be:
+// a place to put your energy counters explains nothing. Reported instead, with
+// the text, so a new set's insert is a decision somebody makes against evidence
+// rather than a thing nobody hears about. The corpus entry's own comment carries
+// the reasoning once it is claimed.
+const claimed = new Set(
+  corpus.mechanics.map((m) => m.art?.toLowerCase()).filter((n) => n != null),
+);
+const unclaimed = [];
+for (const code of report) {
+  const { inserts, cardsRaw } = perSet.get(code);
+  for (const row of inserts.values()) {
+    if (row.n < MIN_CARDS || claimed.has(row.name.toLowerCase())) continue;
+    // Which of the set's mechanics sit on the same cards, so the comparison the
+    // decision needs is on the page.
+    const withInsert = new Set(
+      cardsRaw
+        .filter((c) => (c.all_parts ?? []).some((p) => p.id === row.id))
+        .map((c) => c.name),
+    );
+    const mechs = new Map();
+    for (const c of cardsRaw) {
+      if (!withInsert.has(c.name)) continue;
+      const text = [c.oracle_text, ...(c.card_faces ?? []).map((f) => f.oracle_text)]
+        .filter(Boolean)
+        .join("\n");
+      if (!text) continue;
+      for (const m of setMechanicsOf({ oracleText: text })) {
+        mechs.set(m.name, (mechs.get(m.name) ?? 0) + 1);
+      }
+    }
+    unclaimed.push({ code, row, mechs, cards: withInsert.size });
+  }
+}
+
+if (unclaimed.length) {
+  console.log("\nPrinted rules cards no mechanic claims with `art:`. Claim one only when it");
+  console.log("says MORE than the sentence beside it -- most are places to put cards.\n");
+  for (const { code, row, mechs, cards } of unclaimed) {
+    console.log(`  ${code}  "${row.name}"  on ${cards} cards, ${row.text.length} chars`);
+    console.log(`      printed: ${row.text.slice(0, 220) || "(no rules text at all -- a placemat)"}`);
+    for (const [name, n] of [...mechs].sort((a, b) => b[1] - a[1]).slice(0, 2)) {
+      const ours = corpus.mechanics.find((m) => m.name === name);
+      console.log(`      ours (${name}, ${n} shared, ${ours?.short.length ?? 0} chars): ${ours?.short.slice(0, 200) ?? "-"}`);
+    }
+    console.log("");
+  }
 }
 
 console.log("Every mechanic over the bar has a definition.");

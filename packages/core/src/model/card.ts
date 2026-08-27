@@ -170,6 +170,34 @@ export interface CardToken {
 }
 
 /**
+ * A card the game prints to explain a mechanic, rather than one anybody drafts.
+ *
+ * The same three fields a token has plus a back, because the ones worth storing
+ * are two-sided: LTR's is an Emblem showing what the Ring does on the front and
+ * a rules card on the back, and dft's is a rules card whose second face carries
+ * no text at all. Both faces are drawn, because on the Ring the front is the
+ * thing you are given and the back is what it means.
+ *
+ * Kept apart from `tokens` deliberately. A token is something the card MAKES and
+ * `tokens_previewed` counts them; folding a rules insert into that array would
+ * silently change what a shipped metric measures, which is the one thing the
+ * analytics seam says cannot be undone.
+ *
+ * Only for mechanics whose corpus entry names one -- two, at the time of
+ * writing. See `Mechanic.art` for why most of a booster's inserts are places to
+ * put cards rather than explanations.
+ */
+export interface CardHelper {
+  name: string;
+  typeLine: string;
+  imageUrl?: string;
+  // Absent on a one-sided insert, and on the face of a two-sided one that the
+  // printer left blank -- dft's "Max Speed" face has no rules text and is a
+  // divider. Stored anyway: it is still the card's other side.
+  backImageUrl?: string;
+}
+
+/**
  * What a person reads: rules text, art, and the statistics that make a win rate
  * legible next to it. Read when a card is rendered or written into a prompt,
  * which is a handful of cards at a time -- never the whole set on a pick.
@@ -216,6 +244,10 @@ export interface CardText {
   // 16.0KB (woe) per set, mean 8.0KB, spread over that set's text rows and
   // adding nothing at all to the pool document the pick path reads.
   tokens?: CardToken[];
+  // The printed rules cards for this card's mechanics, where the game prints one
+  // and it says more than we can. Absent on all but 90 cards of the 9,552 in the
+  // pool, which is the point: see CardHelper.
+  helpers?: CardHelper[];
   collectorNumber: string;
   // Scryfall set code. Differs from the set being drafted for bonus-sheet and
   // Special Guest cards, which appear in packs without belonging to the set.

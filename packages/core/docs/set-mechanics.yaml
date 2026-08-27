@@ -600,6 +600,9 @@ mechanics:
   - name: Start Your Engines!
     kind: keyword
     rule: "702.179"
+    # 165 characters of real rules on the printed card against 133 here, and it
+    # states the once-a-turn limit that this sentence has to leave out.
+    art: Start Your Engines! // Max Speed
     short: >-
       It gives you speed, which starts at 1 and goes up once per turn whenever an opponent
       loses life. It stops at 4, and only ever goes up.
@@ -635,6 +638,11 @@ mechanics:
   - name: The Ring Tempts You
     kind: action
     rule: "701.54"
+    # The reason this whole corpus exists. LTR printed the Ring's rules on a card
+    # in the booster and on none of the 50 cards that tempt you, so the emblem's
+    # four abilities and its four edge-case bullets are on that card and nowhere
+    # else in the game. 915 characters against our 248.
+    art: The Ring // The Ring Tempts You
     short: >-
       Name one of your creatures the Ring-bearer and take an emblem called the Ring. It grows
       each time it happens again — it can't be blocked by bigger creatures, then a draw when the

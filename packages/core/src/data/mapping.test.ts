@@ -475,3 +475,77 @@ describe("restateRatings", () => {
     expect(restated[0]).toEqual(merged[0]);
   });
 });
+
+// The reason this whole thread exists: every one of LTR's 50 tempting cards has
+// named tltr/H13 in `all_parts` since the set was first ingested, and the mapper
+// dropped it because Scryfall files a rules card as `combo_piece`.
+describe("mergeCards helpers", () => {
+  const RING_ID = "7215460e-8c06-47d0-94e5-d1832d0218af";
+  const ringSheet: ScryfallCard[] = [
+    {
+      id: RING_ID,
+      name: "The Ring // The Ring Tempts You",
+      layout: "double_faced_token",
+      rarity: "common",
+      collector_number: "H13",
+      booster: false,
+      set: "tltr",
+      card_faces: [
+        { name: "The Ring", image_uris: { normal: "front.jpg" } },
+        { name: "The Ring Tempts You", image_uris: { normal: "back.jpg" } },
+      ],
+    } as ScryfallCard,
+  ];
+  const tempts = (): ScryfallCard =>
+    ({
+      ...scryfall({ name: "Frodo, Sauron's Bane" }),
+      oracle_text: "Otherwise, the Ring tempts you.",
+      all_parts: [
+        {
+          id: RING_ID,
+          component: "combo_piece",
+          name: "The Ring // The Ring Tempts You",
+          type_line: "Emblem // Card",
+        },
+      ],
+    }) as ScryfallCard;
+
+  it("keeps the rules card the set prints, with both faces", () => {
+    expect(merge(tempts(), ringSheet).helpers).toEqual([
+      {
+        name: "The Ring // The Ring Tempts You",
+        typeLine: "Emblem // Card",
+        imageUrl: "front.jpg",
+        backImageUrl: "back.jpg",
+      },
+    ]);
+  });
+
+  // The corpus is the whole of the filter, so an insert nobody claimed with
+  // `art:` is not stored -- a place to put your energy counters explains nothing
+  // and would cost every card in the set a row.
+  it("ignores a combo piece the corpus does not name", () => {
+    const card = {
+      ...scryfall({ name: "Galvanic Discharge" }),
+      all_parts: [
+        {
+          id: "1c516212-ad39-4396-8e05-ae57f100309f",
+          component: "combo_piece",
+          name: "Energy Reserve",
+          type_line: "Card",
+        },
+      ],
+    } as ScryfallCard;
+    expect(merge(card).helpers).toBeUndefined();
+  });
+
+  it("leaves a card that names nothing without the field at all", () => {
+    expect(merge(scryfall({ name: "Llanowar Elves" })).helpers).toBeUndefined();
+  });
+
+  // A helper is not a token and must not be counted as one: `tokens_previewed`
+  // has been shipping for months and would silently start measuring both.
+  it("does not put the rules card in `tokens`", () => {
+    expect(merge(tempts(), ringSheet).tokens).toBeUndefined();
+  });
+});

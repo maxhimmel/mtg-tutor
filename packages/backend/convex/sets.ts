@@ -186,7 +186,12 @@ export const META_REVISION = "2-name-icon-released";
 // `1-split` is not a new shape. It is the first value this has ever had, so
 // every set crawls once more to record what its pool was built from, and every
 // scoring change after that is free.
-export const CRAWL_REVISION = "1-split";
+// 2-helpers: a card's `all_parts` has always named the rules card its set prints
+// for a mechanic -- LTR's 50 tempting cards each name tltr/H13 -- and the mapper
+// dropped it because Scryfall files it as `combo_piece` rather than `token`.
+// Reading it needs the crawl again: both halves of the answer, `all_parts` and
+// the token sheet the art comes from, are things only Scryfall can say.
+export const CRAWL_REVISION = "2-helpers";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.

@@ -1000,6 +1000,13 @@ export function tokensPreviewed(p: {
  * hovers are all flying and trample then the panel was already fine and this was
  * built for a case that does not come up.
  *
+ * `printed` is how many of the mechanics on this card were explained by the card
+ * the GAME prints rather than by a sentence we wrote -- LTR's rules slip, dft's.
+ * Those two replace our prose where they appear, so this is the only way to see
+ * that the swap is happening at all: `set` falls by exactly what `printed`
+ * covers, and a `printed` stuck at zero on ltr means the crawl that fetches
+ * those cards has quietly stopped finding them.
+ *
  * `silent` is a card with rules text that the panel named nothing on. Some of
  * those are honest -- plenty of cards do something unique that no glossary
  * covers -- so the number is not a defect on its own. Its RATE is: a new set
@@ -1013,6 +1020,7 @@ export function mechanicExplained(p: {
   setCode: string;
   set: number;
   evergreen: number;
+  printed: number;
   silent: boolean;
 }): void {
   if (!on()) return;

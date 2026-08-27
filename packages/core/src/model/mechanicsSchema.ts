@@ -60,6 +60,32 @@ export interface Mechanic {
   sourced?: boolean;
   short: string;
   /**
+   * The card the game already prints to explain this, by name.
+   *
+   * Some sets ship a rules card in the booster because nothing on the cards
+   * themselves says what the mechanic does -- LTR's "The Ring // The Ring Tempts
+   * You" carries all four of the Ring's escalating abilities and four bullets of
+   * edge cases, none of which appears on any of the 50 cards that tempt you.
+   * Where one exists the printed card is better than our sentence and replaces
+   * it in the hover panel, which is the whole point of this field.
+   *
+   * ONLY WHERE IT SAYS MORE THAN WE DO, and most do not. A booster's other
+   * inserts are places to put cards rather than explanations: mh3's Energy
+   * Reserve reads "(Place your energy counters in this area.)" and nothing else,
+   * woe's On an Adventure and otj's Plot are storage markers with the rule
+   * restated, and one's Poison Counter is a counter area with a single line of
+   * reminder. Those keep our sentence, which is shorter and says more.
+   *
+   * Authored rather than derived, and `refresh-mechanics` reports the candidates
+   * with both texts so the call is made against the evidence. A rule that picked
+   * automatically would need a threshold on length, and the first set to ship a
+   * terse rules card or a wordy placemat would break it silently.
+   *
+   * The COACH never sees this. Its prompt is text and cannot hold a picture, so
+   * `describeCard` goes on writing `short` whatever is set here.
+   */
+  art?: string;
+  /**
    * What to look for in a card's rules text, when the heading is not what the
    * card says. "The Ring Tempts You" is printed "the Ring tempts you"; `Behold`
    * is printed "As an additional cost... behold a Dragon".
@@ -177,6 +203,9 @@ export function validateMechanics(
     }
     if (m.match?.some((p) => !p.trim())) {
       throw new Error(`Mechanic ${m.name} has an empty match phrase.`);
+    }
+    if (m.art != null && !m.art.trim()) {
+      throw new Error(`Mechanic ${m.name} has an empty art name.`);
     }
 
     // The corpus goes into the coach's prompt, so the voice rules bind it the
