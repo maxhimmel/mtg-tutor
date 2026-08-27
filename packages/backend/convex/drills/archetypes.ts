@@ -7,7 +7,7 @@ import {
 } from "@mtg-tutor/core";
 import { query } from "../_generated/server.js";
 import { cardTextFor } from "../cardText.js";
-import { setCardsFor, setDocFor } from "../sessions.js";
+import { requireUserId, setCardsFor, setDocFor } from "../sessions.js";
 
 // The archetype quiz, dealt.
 //
@@ -49,16 +49,20 @@ import { setCardsFor, setDocFor } from "../sessions.js";
  */
 const READ_BUDGET = 2;
 
+/** Why a set has nothing to ask, or null when it has something. */
+type Mute = "unrated" | "unbuilt" | null;
+
 /**
  * A run of questions, clearest first.
  *
- * EMPTY IS AN ANSWER WITH THREE MEANINGS and the counts beside the questions
- * are what let the screen tell them apart. `mute` is a set with no archetype
- * table at all -- STX, alone among twenty-six, because 17Lands' game data for
- * it carries no `main_colors` (notes issue #8). `quizzable` is how many
- * questions the set has in total, so zero-with-a-table is a set whose decks
- * simply never disagree by enough, and a small number is a set that can be
- * played out. `skip` past the end is the fourth case and the client owns it.
+ * EMPTY IS AN ANSWER WITH FOUR MEANINGS and the fields beside the questions are
+ * what let the screen tell them apart. `mute` is `"unrated"` for a set whose
+ * 17Lands data never recorded deck colours -- STX, alone among twenty-six
+ * (notes issue #8) -- and `"unbuilt"` for a set with no statistics row at all,
+ * which is a pipeline problem and not a fact about the set. `quizzable` is the
+ * set's whole bank, so zero-with-a-table is a set whose decks never disagree by
+ * enough and a small number is a set that can be played out. `skip` past the end
+ * is the fourth, and the client owns it.
  *
  * Issue #8 is explicit that the STX hole "degrades silently" and asks whether
  * the app should say so. This is the first surface that can: a drill either has
@@ -81,6 +85,14 @@ export const deal = query({
     );
     const skip = Math.max(0, args.skip ?? 0);
 
+    // Nothing here is private -- it is 17Lands data and a set's own cards -- so
+    // this is not about disclosure. It is about bandwidth: the read below is
+    // 270KB to 412KB depending on the set, the deployment URL ships in the
+    // browser bundle, and an unauthenticated query that size is the shape of
+    // problem this codebase has already had once. The web route is gated twice
+    // over and the CLI signs in; nothing loses an answer by asking.
+    await requireUserId(ctx);
+
     const setDoc = await setDocFor(ctx, args.setCode, args.format ?? "TradDraft");
     const stats = await ctx.db
       .query("setStats")
@@ -89,26 +101,38 @@ export const deal = query({
       )
       .unique();
 
-    // No stats row at all is a set ingested without an artifact; no archetypes
-    // is STX. Both are "this set cannot be quizzed", and neither is an error --
-    // a set the picker offers is a set somebody may land here from.
+    // TWO CAUSES, AND THEY MUST NOT SHARE A WORD. `unrated` is a set whose
+    // 17Lands game data never recorded deck colours, which is STX and only STX.
+    // `unbuilt` is a set with no statistics row at all -- an ingest that ran
+    // without an artifact, or a `seed-set-stats` that has not run or failed.
+    //
+    // One flag for both would put a NAMED CAUSE on a screen in front of a
+    // player and be wrong about it half the time: "17Lands never recorded what
+    // colours its decks were" is a true sentence about STX and a false one
+    // about a pipeline step that did not run. That is trap #9 arriving inside
+    // the surface built to stop silent degradation, which is the only place it
+    // would be embarrassing rather than merely wrong.
     const decks = stats?.colorWinRates ?? [];
-    if (!stats || stats.archetypes.length === 0 || decks.length === 0) {
-      return { questions: [], quizzable: 0, mute: true, nextSkip: skip };
+    const mute: Mute =
+      !stats ? "unbuilt" : stats.archetypes.length === 0 || decks.length === 0 ? "unrated" : null;
+    if (!stats || mute) {
+      return { questions: [], quizzable: 0, mute: mute ?? "unbuilt", nextSkip: skip };
     }
 
-    // Colours, which the stats artifact does not carry -- they come from
-    // Scryfall at ingest and live on the pool document. Without them a
+    // Colours AND roles, neither of which the stats artifact carries -- both are
+    // settled at ingest and live on the pool document. Without the colours a
     // colourless card that only ever got played in white decks is taught as a
-    // white card, which is the one way this drill could be confidently wrong
-    // about something a person can see for themselves.
+    // white card; without the role a mono-coloured land passes the colour check
+    // and gets asked about. `archetypeQuestions` says why that second one is
+    // wrong about the question rather than about the data.
     const cardsDoc = await setCardsFor(ctx, setDoc);
-    const colors = new Map(
-      cardsDoc.cards.map((c) => [normalizeName(c.name), c.colors.join("")]),
-    );
-    const colorOf = (name: string) => colors.get(normalizeName(name));
+    const pool = new Map(cardsDoc.cards.map((c) => [normalizeName(c.name), c]));
+    const cardFor = (name: string) => {
+      const card = pool.get(normalizeName(name));
+      return card && { colors: card.colors.join(""), role: card.role };
+    };
 
-    const ranked = archetypeQuestions(stats.archetypes, decks, colorOf, ARCHETYPE_QUIZ);
+    const ranked = archetypeQuestions(stats.archetypes, decks, cardFor, ARCHETYPE_QUIZ);
     const candidates = ranked.slice(skip, skip + limit * READ_BUDGET);
 
     // One read per distinct name, the same shape `misses.deal` uses. The whole
@@ -164,7 +188,7 @@ export const deal = query({
       // The set's whole bank, so the screen can tell "you have played them all"
       // from "this set never had many" without another query.
       quizzable: ranked.length,
-      mute: false,
+      mute: null as Mute,
       // Where the next run starts. Candidates EXAMINED rather than questions
       // served, so a refused card is not re-dealt on the next page.
       nextSkip: skip + examined,

@@ -50,10 +50,8 @@
  * the cards played in the most decks, which is the commons.
  *
  * So the threshold comes from the null distribution of the range at that card's
- * own deck count -- `RANGE_CRITICAL` below -- and the setting is a false-positive
- * RATE rather than a width. Trap #13 is this exact mistake: a max-of-many is
- * significant against its own null and not against the null of a single
- * comparison.
+ * own deck count -- `rangePValue` below -- and the setting is a false-positive
+ * RATE rather than a width.
  *
  * THE VARIANCE is the card's rate in both decks plus both decks' own rates,
  * summed rather than pooled. Summing is conservative in the right direction: the
@@ -63,51 +61,6 @@
  * there.
  */
 
-/**
- * How wide the best-to-worst gap gets on k decks that all want a card equally.
- *
- * Keyed by deck count, then by the false-positive rate it buys. Simulated:
- * 2,000,000 draws of k independent standard normals, `(max - min) / sqrt(2)` --
- * the same arithmetic `separation` does, because two independent unit variances
- * sum to two. `pnpm diagnose-archetype-quiz --calibrate` regenerates it.
- *
- * The row that proves it is k=2, where the 5% figure comes out at 1.96: with
- * nothing to maximise over, the range test IS the ordinary two-sided z-test, and
- * a table that did not reproduce that number would be wrong somewhere else too.
- *
- * A card with more than ten decks in its colour cannot exist -- ten pairs and
- * ten wedges, of which any one colour touches four and six.
- */
-export const RANGE_CRITICAL: Readonly<
-  Record<number, Readonly<Record<"0.10" | "0.05" | "0.01", number>>>
-> = {
-  2: { "0.10": 1.64, "0.05": 1.96, "0.01": 2.57 },
-  3: { "0.10": 2.05, "0.05": 2.34, "0.01": 2.91 },
-  4: { "0.10": 2.29, "0.05": 2.57, "0.01": 3.11 },
-  5: { "0.10": 2.46, "0.05": 2.73, "0.01": 3.26 },
-  6: { "0.10": 2.59, "0.05": 2.85, "0.01": 3.36 },
-  7: { "0.10": 2.69, "0.05": 2.95, "0.01": 3.45 },
-  8: { "0.10": 2.78, "0.05": 3.03, "0.01": 3.53 },
-  9: { "0.10": 2.86, "0.05": 3.10, "0.01": 3.59 },
-  10: { "0.10": 2.92, "0.05": 3.16, "0.01": 3.64 },
-};
-
-export type FalsePositiveRate = "0.10" | "0.05" | "0.01";
-
-/**
- * How far apart k decks must be before the widest gap among them means anything.
- *
- * Clamped rather than extrapolated at both ends: below two there is no gap to
- * measure, and above ten there is no such card. A count outside the table is a
- * bug elsewhere and returning Infinity refuses the question rather than
- * inventing a threshold for it.
- */
-export function rangeGate(deckCount: number, rate: FalsePositiveRate): number {
-  const row = RANGE_CRITICAL[deckCount];
-  return row ? row[rate] : Number.POSITIVE_INFINITY;
-}
-
-/** A deck's own win rate, with no card dimension. `colorWinRates` in the stats. */
 export interface DeckRate {
   colors: string;
   n: number;
@@ -222,16 +175,84 @@ export function sharedColor(colors: readonly string[]): string | undefined {
   return candidates.length === 1 ? candidates[0] : undefined;
 }
 
+/**
+ * The chance that k decks which all want a card equally show a gap this wide.
+ *
+ * Best-minus-worst is a RANGE over k decks, not a comparison of two, and the
+ * widest gap among k noisy numbers is wide even when nothing is there. A flat
+ * two-sigma gate passes 18.7% of pure noise at four decks and 59.8% at ten -- it
+ * would have shipped a bank whose false questions were concentrated exactly on
+ * the cards played in the most decks, which is the commons. Trap #13: a
+ * max-of-many is significant against its own null, not against the null of a
+ * single comparison.
+ *
+ * Exact rather than a table of simulated quantiles, which is what this was
+ * first. The range of k standard normals has a closed form --
+ * `P(R <= r) = k INTEGRAL phi(x) [Phi(x + r) - Phi(x)]^(k-1) dx` over the
+ * minimum -- so the only approximation left is the quadrature, and Simpson over
+ * [-9, 9] agrees with 2,000,000 simulated draws to three decimals at every k
+ * from 2 to 10. The test pins it against those draws.
+ *
+ * `separation` divides by `sqrt(var_a + var_b)`, so a separation of s is a range
+ * of `s * sqrt(2)` in units where each lift has unit variance. At k = 2 that
+ * makes this the ordinary two-sided z-test and `rangePValue(1.96, 2)` is 0.05,
+ * which is the anchor the whole thing is checked against.
+ *
+ * IT ASSUMES THE k LIFTS ARE INDEPENDENT, AND THEY ARE. A game belongs to one
+ * deck, so two decks of different colours share no games at all. The overlap
+ * that does exist is WITHIN a single lift -- the card's games are a subset of
+ * that deck's -- and `deckLifts` already handles that conservatively by summing
+ * the two variances rather than pooling them.
+ *
+ * The real approximation is equal variance across the k decks, since n runs from
+ * 200 to tens of thousands. It errs conservative: measured by parametric
+ * bootstrap over the real sample sizes and the real deck rates, the gate fires
+ * on 3.14% of true nulls where it nominally allows 5%.
+ */
+export function rangePValue(sigmas: number, deckCount: number): number {
+  if (deckCount < 2 || !Number.isFinite(sigmas)) return 1;
+  const r = sigmas * Math.SQRT2;
+  if (r <= 0) return 1;
+
+  const lo = -9;
+  const hi = 9;
+  const steps = 2000;
+  const h = (hi - lo) / steps;
+  let sum = 0;
+  for (let i = 0; i <= steps; i++) {
+    const x = lo + i * h;
+    const weight = i === 0 || i === steps ? 1 : i % 2 ? 4 : 2;
+    sum += weight * normalPdf(x) * Math.pow(normalCdf(x + r) - normalCdf(x), deckCount - 1);
+  }
+  const cdf = (deckCount * sum * h) / 3;
+  return Math.min(1, Math.max(0, 1 - cdf));
+}
+
+const normalPdf = (x: number): number => Math.exp((-x * x) / 2) / Math.sqrt(2 * Math.PI);
+
+// Zelen & Severo 26.2.17. Accurate to 7.5e-8, which is four orders of magnitude
+// finer than the quadrature it feeds.
+function normalCdf(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const poly =
+    t *
+    (0.319381530 +
+      t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  const tail = normalPdf(x) * poly;
+  return x >= 0 ? 1 - tail : tail;
+}
+
+/** A deck's own win rate, with no card dimension. `colorWinRates` in the stats. */
 export interface QuestionOptions {
   /** How many decks a card must have rates in before it is asked about. */
   minDecks: number;
   /**
    * How often a card whose decks all want it equally may be asked about anyway.
    *
-   * A rate rather than a width, because the width that buys this rate depends on
-   * how many decks the card has -- see `RANGE_CRITICAL`.
+   * A rate rather than a width, because the width that buys it depends on how
+   * many decks the card has -- see `rangePValue`.
    */
-  falsePositive: FalsePositiveRate;
+  falsePositive: number;
 }
 
 /**
@@ -244,15 +265,29 @@ export interface QuestionOptions {
  * card two decks barely disagree about, and a drill's first question is the one
  * that decides whether there is a second.
  *
- * `colorOf` is asked for every candidate rather than looked up on the row,
- * because the stats artifact has no colours on it -- they live on the set's
- * cards. Returning undefined drops the card, which is what happens to a card
- * the set no longer has.
+ * `cardFor` is asked for every candidate rather than looked up on the row,
+ * because the stats artifact has neither colours nor roles on it -- both live on
+ * the set's cards. Returning undefined drops the card, which is what happens to
+ * a card the set no longer has.
+ *
+ * LANDS ARE DROPPED HERE AND THE REASON IS NOT OBVIOUS. A land has no mana cost,
+ * so Scryfall reports no colours -- but `data/mapping.ts` deliberately gives a
+ * land its colour IDENTITY instead, because a Boros tapland is playable in
+ * exactly one kind of deck and every other reader in this codebase needs that.
+ * The consequence here is that a mono-coloured land looks exactly like a
+ * mono-coloured spell: `Boseiju, Who Endures` reads as a green card played in
+ * green decks, and it cleared the gate at 3.11 sigmas.
+ *
+ * It is not even wrong about the data -- a land really is wanted more by some
+ * decks. It is wrong about the QUESTION. "Which deck wants this card" asks what
+ * a deck is trying to do, and the answer for a land is "the one whose colours it
+ * makes", which is on its face. Two of 254 questions were lands, and one of them
+ * was a third of tdm's entire bank.
  */
 export function archetypeQuestions(
   rates: readonly CardDeckRate[],
   decks: readonly DeckRate[],
-  colorOf: (name: string) => string | undefined,
+  cardFor: (name: string) => { colors: string; role?: string } | undefined,
   options: QuestionOptions,
 ): ArchetypeQuestion[] {
   const byCard = new Map<string, CardDeckRate[]>();
@@ -281,8 +316,11 @@ export function archetypeQuestions(
     if (!shared) continue;
 
     // The card's real colours, so a colourless artifact that happens to have
-    // only been played in white decks is not taught as a white card.
-    if (colorOf(name) !== shared) continue;
+    // only been played in white decks is not taught as a white card -- and its
+    // role, because a mono-coloured land passes the colour check and is not a
+    // card this question is about. See the docblock.
+    const card = cardFor(name);
+    if (!card || card.colors !== shared || card.role === "land") continue;
 
     const lifts = deckLifts(rows, decks);
     if (lifts.length < 2) continue;
@@ -293,7 +331,7 @@ export function archetypeQuestions(
     // Against the null of THIS card's deck count, not against a flat width. A
     // card in ten decks has to clear 3.16 where a card in three clears 2.34,
     // because the wider a net the more the widest gap in it means nothing.
-    if (sigmas < rangeGate(lifts.length, options.falsePositive)) continue;
+    if (rangePValue(sigmas, lifts.length) >= options.falsePositive) continue;
 
     questions.push({
       name,

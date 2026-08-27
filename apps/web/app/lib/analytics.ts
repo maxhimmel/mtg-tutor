@@ -1212,14 +1212,25 @@ export function drillAnswered(p: {
    */
   tookRawBest: boolean;
   /**
-   * How big the thing being asked about was.
+   * The win-rate points the original pick cost, as the grade measured it.
    *
-   * Win-rate points the original pick cost, in the misses drill. Standard
-   * errors separating the two decks, in the archetype quiz. Both answer the
-   * same question about the drill -- are only the blatant ones ever got right,
-   * in which case the gate is set too loose and the run should be shorter.
+   * MISSES ONLY, and it stays that way. This very nearly carried the archetype
+   * quiz's separation too, on the grounds that both answer "are only the
+   * blatant ones ever got right" -- but they are in different units with
+   * overlapping ranges and nothing on the row to say which, so any insight that
+   * averaged `gap` without splitting on `drill` would have been wrong from the
+   * first day and the old rows could never be told apart afterwards. An event
+   * shape cannot be repaired retroactively; a second property costs nothing.
    */
-  gap: number;
+  gap?: number;
+  /**
+   * How many error bars separated the two decks, in the archetype quiz.
+   *
+   * The same question `gap` asks for the misses drill -- if only the blatant
+   * ones are ever read right, the gate is loose and the run wants shortening --
+   * in this drill's own units.
+   */
+  sigmas?: number;
   /**
    * How long ago the draft this question came from was taken.
    *

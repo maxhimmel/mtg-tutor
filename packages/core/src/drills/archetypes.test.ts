@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   DECK_NAMES,
-  RANGE_CRITICAL,
   archetypeQuestions,
   deckLifts,
   gradeArchetypeGuess,
   scoreArchetypeRun,
-  rangeGate,
+  rangePValue,
   separation,
   sharedColor,
   type CardDeckRate,
@@ -99,8 +98,8 @@ describe("archetypeQuestions", () => {
   const white = (name: string, rates: [string, number][], n = 5000): CardDeckRate[] =>
     rates.map(([colors, wr]) => rate(colors, wr, n, name));
 
-  const opts = { minDecks: 3, falsePositive: "0.05" as const };
-  const allWhite = () => "W";
+  const opts = { minDecks: 3, falsePositive: 0.05 };
+  const allWhite = () => ({ colors: "W" });
 
   it("asks about a card its decks disagree about, naming both ends", () => {
     const [q] = archetypeQuestions(
@@ -116,7 +115,7 @@ describe("archetypeQuestions", () => {
 
     // WB is +8pp on a 50% deck; WU is dead level on a 60% one.
     expect(q).toMatchObject({ name: "Cathar Commando", color: "W", wants: "WB", spurns: "WU" });
-    expect(q.sigmas).toBeGreaterThan(rangeGate(3, "0.05"));
+    expect(rangePValue(q.sigmas, 3)).toBeLessThan(0.05);
     // Every deck is carried, not just the two asked about -- the reveal needs
     // the whole picture even though the grade only uses the ends.
     expect(q.decks).toHaveLength(3);
@@ -245,9 +244,30 @@ describe("archetypeQuestions", () => {
     const [three] = archetypeQuestions(white("Three", ends), decks, allWhite, opts);
     const six = archetypeQuestions(white("Six", [...ends, ...middle]), decks, allWhite, opts);
 
-    expect(three.sigmas).toBeGreaterThan(rangeGate(3, "0.05"));
-    expect(three.sigmas).toBeLessThan(rangeGate(6, "0.05"));
+    expect(rangePValue(three.sigmas, 3)).toBeLessThan(0.05);
+    expect(rangePValue(three.sigmas, 6)).toBeGreaterThan(0.05);
     expect(six).toEqual([]);
+  });
+
+  // A mono-coloured LAND passes every colour check there is, because
+  // data/mapping.ts deliberately gives a land its colour identity where
+  // Scryfall gives it none. Two of 254 real questions were lands before this,
+  // and one was a third of tdm's whole bank.
+  it("refuses a land even though its colour is real", () => {
+    const rates = white("Boseiju, Who Endures", [
+      ["WU", 0.6],
+      ["WB", 0.58],
+      ["WR", 0.62],
+    ]);
+
+    expect(
+      archetypeQuestions(rates, DECKS, () => ({ colors: "W", role: "land" }), opts),
+    ).toEqual([]);
+    // Same card, same numbers, not a land -- so the refusal above is the role
+    // and not something else about the fixture.
+    expect(
+      archetypeQuestions(rates, DECKS, () => ({ colors: "W", role: "creature" }), opts),
+    ).toHaveLength(1);
   });
 
   // The clearest questions first, because a drill's first question decides
@@ -333,31 +353,47 @@ describe("scoreArchetypeRun", () => {
   });
 });
 
-describe("rangeGate", () => {
-  // The row that proves the table. With two decks there is nothing to maximise
-  // over, so the range test collapses to the ordinary two-sided z-test and the
-  // 5% figure has to be 1.96. A table that missed this is wrong everywhere.
-  it("collapses to the plain two-sided z-value at two decks", () => {
-    expect(rangeGate(2, "0.05")).toBeCloseTo(1.96, 2);
-  });
+describe("rangePValue", () => {
+  // Quantiles from 2,000,000 simulated draws of k standard normals -- an
+  // INDEPENDENT implementation of the same null, so this pins the closed form
+  // against something that shares none of its arithmetic.
+  const SIMULATED_95TH: Record<number, number> = {
+    2: 1.96,
+    3: 2.34,
+    4: 2.57,
+    5: 2.73,
+    6: 2.85,
+    7: 2.95,
+    8: 3.03,
+    9: 3.1,
+    10: 3.16,
+  };
 
-  // The whole reason the gate is not a flat number: the widest gap among ten
-  // noisy decks is wide when nothing is there, so ten has to ask for more.
-  it("asks for a wider gap the more decks there are to maximise over", () => {
-    const gates = [2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => rangeGate(k, "0.05"));
-    for (let i = 1; i < gates.length; i++) expect(gates[i]).toBeGreaterThan(gates[i - 1]);
-  });
-
-  it("refuses a deck count outside the table rather than inventing a width", () => {
-    expect(rangeGate(11, "0.05")).toBe(Number.POSITIVE_INFINITY);
-    expect(rangeGate(1, "0.05")).toBe(Number.POSITIVE_INFINITY);
-  });
-
-  it("asks for more of a stricter rate", () => {
-    for (const k of Object.keys(RANGE_CRITICAL).map(Number)) {
-      expect(rangeGate(k, "0.01")).toBeGreaterThan(rangeGate(k, "0.05"));
-      expect(rangeGate(k, "0.05")).toBeGreaterThan(rangeGate(k, "0.10"));
+  it("agrees with the simulated null at every deck count", () => {
+    for (const [k, sigmas] of Object.entries(SIMULATED_95TH)) {
+      expect(rangePValue(sigmas, Number(k))).toBeCloseTo(0.05, 2);
     }
+  });
+
+  // The anchor. With two decks there is nothing to maximise over, so the range
+  // test collapses to the ordinary two-sided z-test -- and 1.96 catches a wrong
+  // divisor, a one-sided quantile and an off-by-one in the quadrature, which
+  // are the three ways this goes wrong.
+  it("is the plain two-sided z-test at two decks", () => {
+    expect(rangePValue(1.96, 2)).toBeCloseTo(0.05, 3);
+    expect(rangePValue(2.576, 2)).toBeCloseTo(0.01, 3);
+  });
+
+  // The whole reason the gate is not a flat number.
+  it("charges more for the same gap the more decks it was chosen from", () => {
+    const ps = [2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => rangePValue(2.5, k));
+    for (let i = 1; i < ps.length; i++) expect(ps[i]).toBeGreaterThan(ps[i - 1]);
+  });
+
+  it("refuses to find anything in a gap of nothing", () => {
+    expect(rangePValue(0, 4)).toBe(1);
+    expect(rangePValue(Number.NaN, 4)).toBe(1);
+    expect(rangePValue(3, 1)).toBe(1);
   });
 });
 

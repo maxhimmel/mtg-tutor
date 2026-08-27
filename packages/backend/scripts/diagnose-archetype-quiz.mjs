@@ -106,17 +106,27 @@ if (process.argv.includes("--calibrate")) {
  * a table that did not say which rows those were would be inviting somebody to
  * read the two as one number.
  */
-function colorsFor(set) {
+function cardsFor(set) {
   const cache = join(DATA, "..", "..", "..", "datasets", `cards.${set.setCode}.${set.format}.json`);
   if (existsSync(cache)) {
-    const cards = JSON.parse(readFileSync(cache, "utf8"));
-    const byName = new Map(cards.map((c) => [normalizeName(c.name), c.colors.join("")]));
-    return { exact: true, colorOf: (name) => byName.get(normalizeName(name)) };
+    const byName = new Map(
+      JSON.parse(readFileSync(cache, "utf8")).map((c) => [
+        normalizeName(c.name),
+        { colors: c.colors.join(""), role: c.role },
+      ]),
+    );
+    return { exact: true, cardFor: (name) => byName.get(normalizeName(name)) };
   }
+  // No pool cached: the colour is inferred and there is no role at all, so this
+  // set's row cannot drop lands either. Both reasons its count is a ceiling.
   return {
     exact: false,
-    colorOf: (name) =>
-      sharedColor(set.archetypes.filter((r) => r.name === name).map((r) => r.colors)),
+    cardFor: (name) => {
+      const colors = sharedColor(
+        set.archetypes.filter((r) => r.name === name).map((r) => r.colors),
+      );
+      return colors ? { colors } : undefined;
+    },
   };
 }
 
@@ -136,16 +146,16 @@ for (const file of readdirSync(DATA).filter((f) => f.endsWith(".json")).sort()) 
     continue;
   }
 
-  const { exact, colorOf } = colorsFor(set);
+  const { exact, cardFor } = cardsFor(set);
   const counts = RATES.map(
     (falsePositive) =>
-      archetypeQuestions(set.archetypes, set.colorWinRates, colorOf, {
+      archetypeQuestions(set.archetypes, set.colorWinRates, cardFor, {
         minDecks: ARCHETYPE_QUIZ.minDecks,
         falsePositive,
       }).length,
   );
 
-  const shipped = archetypeQuestions(set.archetypes, set.colorWinRates, colorOf, ARCHETYPE_QUIZ);
+  const shipped = archetypeQuestions(set.archetypes, set.colorWinRates, cardFor, ARCHETYPE_QUIZ);
   rows.push({ code: set.setCode, counts, shipped, exact });
 }
 
@@ -189,7 +199,7 @@ console.log(`\n${"total".padEnd(7)}${totals.map((t) => pad(t, 7)).join("")}`);
 if (approximate > 0) {
   console.log(
     `\n~ ${approximate} set${approximate === 1 ? " has" : "s have"} no cached pool in datasets/, ` +
-      `so colours are inferred and those counts are a ceiling.`,
+      `so colours are inferred, lands cannot be dropped, and those counts are a ceiling.`,
   );
 }
 console.log(

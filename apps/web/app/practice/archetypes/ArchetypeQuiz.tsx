@@ -146,10 +146,11 @@ export function ArchetypeQuiz() {
       drill: "archetypes",
       outcome: result.outcome,
       tookRawBest: result.tookStrongerDeck,
-      // Standard errors rather than win-rate points, which is what this drill's
-      // questions differ in. Named `gap` because it answers the same question
-      // the misses drill's `gap` does: are only the blatant ones ever got right.
-      gap: question.sigmas,
+      // `sigmas` and not `gap`. It answers the same question the misses drill's
+      // `gap` does, in different units -- and one property carrying two units
+      // with nothing on the row to say which is a chart that is wrong from the
+      // first day and cannot be repaired.
+      sigmas: question.sigmas,
       setCode: setCode ?? "",
       index: step,
     });
@@ -187,7 +188,7 @@ export function ArchetypeQuiz() {
         }
       />
 
-      {run.mute || questions.length === 0 ? (
+      {run.mute != null || questions.length === 0 ? (
         <Nothing run={run} skip={skip} onRestart={() => setSkip(0)} />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
@@ -424,8 +425,8 @@ function Reveal({
       <p className="mt-3 max-w-prose text-xs leading-relaxed text-base-content/55">
         Each figure is how much better the deck did with this card in hand than it
         did in general, so a deck that wins a lot is not credited for winning a
-        lot. The two ends are {question.sigmas.toFixed(1)} standard errors apart —
-        the rows between them are real numbers the data cannot put in order.
+        lot. The two ends are {question.sigmas.toFixed(1)} error bars apart — the
+        rows between them are real numbers the data cannot put in order.
       </p>
 
       <button type="button" className="btn btn-primary mt-5" onClick={onNext}>
@@ -488,11 +489,11 @@ function Nothing({
   skip,
   onRestart,
 }: {
-  run: { mute: boolean; quizzable: number };
+  run: { mute: "unrated" | "unbuilt" | null; quizzable: number };
   skip: number;
   onRestart: () => void;
 }) {
-  if (run.mute) {
+  if (run.mute === "unrated") {
     return (
       <Panel>
         <div className="p-6">
@@ -503,6 +504,25 @@ function Nothing({
             17Lands' data for it does not say which colours a deck was playing, so
             there is no way to know which deck wanted a card. It is the only set
             with that hole. Pick another above.
+          </p>
+        </div>
+      </Panel>
+    );
+  }
+
+  // Not a fact about the set, so it does not get the sentence above. Somebody
+  // reading "17Lands never recorded it" about a set whose statistics simply
+  // have not been built would go and check 17Lands.
+  if (run.mute === "unbuilt") {
+    return (
+      <Panel>
+        <div className="p-6">
+          <h2 className="font-display text-xl font-semibold">
+            This set has no statistics stored yet.
+          </h2>
+          <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
+            Nothing is wrong with the set — the numbers this drill reads have not
+            been built for it. Pick another above.
           </p>
         </div>
       </Panel>
@@ -534,8 +554,8 @@ function Nothing({
         </h2>
         <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
           A question is only worth asking when two decks disagree about a card by
-          more than the data's own margin, and no card here clears that. Two sets
-          out of twenty-six are like this. Pick another above.
+          more than the data's own margin, and no card here clears that. Pick
+          another above.
         </p>
       </div>
     </Panel>

@@ -146,15 +146,28 @@ export const ARCHETYPE_QUIZ = {
   // A RATE RATHER THAN A WIDTH, and the difference is not pedantry. Best minus
   // worst is a range over up to ten decks, and the widest gap among ten noisy
   // numbers is wide even when nothing is there -- a flat two-sigma gate passes
-  // 18.7% of pure noise at four decks and 59.8% at ten, concentrated on the
-  // cards played in the most decks. So the width is looked up per deck count in
-  // `RANGE_CRITICAL` and this names the rate it buys.
+  // 18.7% of pure noise at four decks and 59.8% at ten. So the width is derived
+  // per deck count by `rangePValue` and this names the rate it buys.
   //
-  // Five per cent because it is the rate at which one wrong question turns up
-  // in about every second run of twelve, which is a drill that is right
-  // essentially always and not one pretending to be. One per cent costs about
-  // half the bank and puts eight sets under a single run.
-  falsePositive: "0.05" as const,
+  // WHAT THIS RATE IS NOT is the share of SERVED questions that are noise, and
+  // the gap between the two is the honest number to quote. Measured over the
+  // eighteen sets with a cached pool: 2,652 candidates, of which a Storey
+  // estimate off the p-value distribution puts ~90% under the null, and a
+  // parametric bootstrap at the real sample sizes fires the gate on 3.14% of
+  // them. That is ~75 false questions in a bank of 252 -- about a THIRD of what
+  // gets served, not a twentieth.
+  //
+  // Controlling that directly with Benjamini-Hochberg was measured and is not
+  // an option: at the same 5% it leaves a bank of 25 across all eighteen sets
+  // and exactly one of them can fill a run. There is no operating point that is
+  // both clean and playable, because only ~270 of the 2,652 cards genuinely
+  // have a deck that wants them more and the effects are small beside their own
+  // error bars. That is a fact about Limited rather than about this code.
+  //
+  // Five per cent is therefore chosen knowing what it costs, and the screen is
+  // what carries the honesty: every question shows both lifts, both sample
+  // sizes, and how many error bars separate them.
+  falsePositive: 0.05,
 };
 
 export const DRILLS = {

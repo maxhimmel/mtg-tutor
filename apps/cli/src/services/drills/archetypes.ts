@@ -197,7 +197,7 @@ function reveal(question: Question, result: ArchetypeResult, guess: string): str
   lines.push(
     pc.dim(
       "Each figure is how much better the deck did with this card in hand than it did\n" +
-        `in general. The two ends are ${question.sigmas.toFixed(1)} standard errors apart; the rows\n` +
+        `in general. The two ends are ${question.sigmas.toFixed(1)} error bars apart; the rows\n` +
         "between them the data cannot put in order.",
     ),
   );
@@ -228,10 +228,18 @@ function report(results: ArchetypeResult[], served: number): void {
  */
 function nothing(run: Run, setCode: string, skip: number): string {
   const code = setCode.toUpperCase();
-  if (run.mute) {
+  if (run.mute === "unrated") {
     return (
       `${code} never recorded what colours its decks were, so there is no way to know\n` +
       "which deck wanted a card. It is the only set with that hole. Try --set on another."
+    );
+  }
+  // A pipeline step that has not run is not a fact about the set, and must not
+  // borrow the sentence above -- somebody would go and check 17Lands.
+  if (run.mute === "unbuilt") {
+    return (
+      `${code} has no statistics stored yet. Nothing is wrong with the set; the\n` +
+      "numbers this drill reads have not been built for it. Try --set on another."
     );
   }
   if (skip > 0) {

@@ -42,13 +42,13 @@ const wanted = (name: string) => [
   rate(name, "WR", 0.56),
 ];
 
-const engineCard = (name: string, colors: string[]) => ({
+const engineCard = (name: string, colors: string[], role = "creature") => ({
   name,
   colors,
   slot: "common" as const,
   value: 40,
   turn: 2,
-  role: "creature" as const,
+  role: role as "creature" | "land",
 });
 
 const cardText = (name: string, colorIdentity: string[] = ["W"]) => ({
@@ -67,7 +67,7 @@ async function seed(
   opts: {
     archetypes: { name: string; colors: string; wr: number; n: number }[];
     colorWinRates?: { colors: string; n: number; wr: number }[];
-    cards?: { name: string; colors: string[] }[];
+    cards?: { name: string; colors: string[]; role?: string }[];
     text?: string[];
   },
 ) {
@@ -86,7 +86,7 @@ async function seed(
     await ctx.db.insert("setCards", {
       code: SET.code,
       format: SET.format,
-      cards: cards.map((c) => engineCard(c.name, c.colors)),
+      cards: cards.map((c) => engineCard(c.name, c.colors, c.role)),
       colorWinRates: opts.colorWinRates ?? DECKS,
     });
     await ctx.db.insert("setStats", {
@@ -118,7 +118,7 @@ describe("drills/archetypes.deal", () => {
 
     const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
 
-    expect(run.mute).toBe(false);
+    expect(run.mute).toBeNull();
     expect(run.questions).toHaveLength(1);
     expect(run.questions[0]).toMatchObject({
       color: "W",
@@ -144,7 +144,70 @@ describe("drills/archetypes.deal", () => {
 
     const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
 
-    expect(run).toMatchObject({ mute: true, quizzable: 0, questions: [] });
+    expect(run).toMatchObject({ mute: "unrated", quizzable: 0, questions: [] });
+  });
+
+  // The other half of what used to be one `mute` flag, and the reason it is two.
+  // A set whose statistics were never built is a pipeline problem, and telling a
+  // player "17Lands never recorded this set's deck colours" about one would be
+  // a named cause that is simply false.
+  it("tells a set with no statistics row apart from one 17Lands never rated", async () => {
+    const t = harness();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("sets", {
+        code: SET.code,
+        format: SET.format,
+        cardCount: 1,
+        ratedCardCount: 1,
+        ingestedAt: new Date(0).toISOString(),
+      });
+      await ctx.db.insert("setCards", {
+        code: SET.code,
+        format: SET.format,
+        cards: [engineCard("Cathar Commando", ["W"])],
+        colorWinRates: DECKS,
+      });
+    });
+
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+
+    expect(run).toMatchObject({ mute: "unbuilt", quizzable: 0, questions: [] });
+  });
+
+  // A set with a statistics row whose colour table is empty is the same hole as
+  // no archetypes at all, and reads as the set's own fault rather than ours.
+  it("calls an empty colour table unrated, not unbuilt", async () => {
+    const t = harness();
+    await seed(t, { archetypes: wanted("Cathar Commando"), colorWinRates: [] });
+
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+
+    expect(run.mute).toBe("unrated");
+  });
+
+  // Nothing here is private, so this is not about disclosure -- it is that an
+  // unauthenticated query reading up to 412KB is the shape of problem this
+  // codebase has had once already.
+  it("refuses a caller who is not signed in", async () => {
+    const t = harness();
+    await seed(t, { archetypes: wanted("Cathar Commando") });
+
+    await expect(t.query(api.drills.archetypes.deal, { setCode: SET.code })).rejects.toThrow();
+  });
+
+  // A mono-coloured LAND passes every colour check there is, because a land is
+  // given its colour identity where Scryfall gives it none. Two of 254 real
+  // questions were lands, and one was a third of tdm's whole bank.
+  it("refuses a land whose colour is real", async () => {
+    const t = harness();
+    await seed(t, {
+      archetypes: wanted("Boseiju, Who Endures"),
+      cards: [{ name: "Boseiju, Who Endures", colors: ["W"], role: "land" }],
+    });
+
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+
+    expect(run.questions).toEqual([]);
   });
 
   // The finding the whole drill is shaped by: most cards' decks are inside each
@@ -163,7 +226,7 @@ describe("drills/archetypes.deal", () => {
 
     // Not mute -- the set has a table, it just has nothing worth asking. The
     // screen has to tell those two apart.
-    expect(run).toMatchObject({ mute: false, quizzable: 0, questions: [] });
+    expect(run).toMatchObject({ mute: null, quizzable: 0, questions: [] });
   });
 
   // The check the archetype table cannot make for itself. These decks all share

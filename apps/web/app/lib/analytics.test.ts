@@ -10,6 +10,7 @@ import {
   feedbackRefused,
   identify,
   pickMade,
+  drillAnswered,
   setPicked,
   settingChanged,
   settingsOpened,
@@ -183,6 +184,38 @@ describe("with a project token", () => {
   it("reports a settings visit on arrival", () => {
     settingsOpened({ from: "menu" });
     expect(capture).toHaveBeenCalledWith("settings_opened", { from: "menu" });
+  });
+
+  // `gap` and `sigmas` are separate properties on one event, and this is the
+  // test that keeps them that way. They answer the same question in different
+  // units, and one field carrying both would chart as a single average that was
+  // wrong from the first day with no way to split the old rows apart.
+  it("keeps the two drills' magnitudes in separate properties", () => {
+    const miss = {
+      drill: "misses" as const,
+      outcome: "fixed" as const,
+      tookRawBest: false,
+      gap: 0.031,
+      ageDays: 4,
+      setCode: "fdn",
+      index: 0,
+    };
+    drillAnswered(miss);
+    expect(capture).toHaveBeenCalledWith("drill_answered", miss);
+
+    const arch = {
+      drill: "archetypes" as const,
+      outcome: "read" as const,
+      tookRawBest: false,
+      sigmas: 3.4,
+      setCode: "fdn",
+      index: 0,
+    };
+    drillAnswered(arch);
+    // No `gap` on the row at all, which is the point: a chart that averages it
+    // is averaging one drill rather than silently mixing two units.
+    expect(capture).toHaveBeenLastCalledWith("drill_answered", arch);
+    expect(capture.mock.lastCall?.[1]).not.toHaveProperty("gap");
   });
 
   // The event exists for one property, so that property is what is asserted.

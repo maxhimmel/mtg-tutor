@@ -62,8 +62,8 @@ export default function DrillsIndex() {
             one thing at a time.
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-base-content/70">
-            Short sessions on one thing at a time — the packs you got wrong dealt back
-            one at a time, or what each deck in a set is actually after.
+            The packs you got wrong, dealt back one at a time — or what each deck in
+            a set is actually after, learned from what the decks did.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <a className="btn btn-primary" href="/sign-in">
