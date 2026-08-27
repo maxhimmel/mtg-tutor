@@ -7,6 +7,7 @@ import { api } from "@mtg-tutor/backend";
 import { PACK, packSize } from "@mtg-tutor/core";
 import { useEffect, useRef, useState } from "react";
 import { PageShell } from "./components/PageShell";
+import { RecentSets } from "./components/RecentSets";
 import { SetGrid } from "./components/SetGrid";
 import { SetList } from "./components/SetList";
 import { SignedOut } from "./components/SignedOut";
@@ -197,6 +198,11 @@ function SetPicker() {
           grid, and it is the one answer that used to be reachable only by
           remembering the URL. It draws nothing when there is nothing open. */}
       <UnfinishedDrafts sets={sets} />
+
+      {/* Below the open drafts and above the picker, which is the order of the
+          three answers to "what do you want to draft": the one you already
+          started, the ones you have been playing, and all of them. */}
+      <RecentSets sets={sets} starting={starting} onStart={start} />
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-semibold tracking-tight">
