@@ -26,6 +26,7 @@
     "claude-bridge": "pnpm --filter @mtg-tutor/backend claude-bridge",
     "dev": "pnpm --filter @mtg-tutor/cli dev",
     "dev:web": "turbo run dev --filter=@mtg-tutor/backend... --filter=@mtg-tutor/web...",
+    "diagnose-archetype-quiz": "pnpm --filter @mtg-tutor/backend diagnose-archetype-quiz",
     "diagnose-offcolour": "pnpm --filter @mtg-tutor/backend diagnose-offcolour",
     "draft": "pnpm --filter @mtg-tutor/cli draft",
     "feedback": "pnpm --filter @mtg-tutor/backend feedback",

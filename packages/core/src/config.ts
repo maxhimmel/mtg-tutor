@@ -119,6 +119,33 @@ export const COACH = {
 
 // A drill: one short, repeated question, minutes rather than the half hour a
 // draft asks for. See drills/drill.ts for what the category owns.
+/**
+ * The archetype quiz's gates.
+ *
+ * Its own block rather than keys on DRILLS below, because DRILLS is shaped by
+ * the misses drill -- `runLength` is 10 because that is what a digest keeps of
+ * its own worst picks, which says nothing about how long a quiz should be.
+ */
+export const ARCHETYPE_QUIZ = {
+  // A run. Shorter than the misses drill because a question here is one card
+  // and two words rather than a whole pack to read -- ten of these is a minute,
+  // and a minute is not a sitting.
+  runLength: 12,
+  // How many decks must have a measured opinion about a card before it can be
+  // asked about. Three of the four pairs in its colour, or three of the ten
+  // decks once wedges count -- enough that the reveal's table has something to
+  // say beyond the two decks the question names.
+  minDecks: 3,
+  // How far apart the wanted and spurned decks must be, in standard errors.
+  //
+  // TWO IS THE WHOLE FEATURE. Below it the question is a coin flip dressed as a
+  // lesson: at 1.5 the bank is 2,175 cards and a quarter of them are gaps the
+  // data cannot actually see. At 2 it is 1,149 and every one of them is real.
+  // At 2.5 it is 496 and eight sets drop under a single run's worth. Measured
+  // by `pnpm diagnose-archetype-quiz`, which prints this table.
+  minSigmas: 2,
+};
+
 export const DRILLS = {
   // How many questions one run of the misses drill deals. Ten because that is
   // what a draft's digest keeps of its own worst picks (DIGEST_MISTAKES), so a

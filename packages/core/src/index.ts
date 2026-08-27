@@ -44,6 +44,7 @@ export * from "./tutor/challenge.js";
 export * from "./tutor/pickCoach.js";
 export * from "./tutor/reviewPrompt.js";
 
+export * from "./drills/archetypes.js";
 export * from "./drills/drill.js";
 export * from "./drills/misses.js";
 
