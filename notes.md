@@ -65,28 +65,10 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     should SAY so: `coach_shown` cannot tell a set with no archetype data apart
     from one where the coach was merely quiet.
 
-9.  -- (Set mechanics, shipped 2026-08-26. The hover panel and the coach both
-    name what a set's own mechanic does; the Ring was the worst case in the pool
-    and LTR shipped its rules on a separate card in the booster.)
-
-    Three things worth not re-deriving. **The Comprehensive Rules are the only
-    complete list of what Magic's mechanics are called, and are not licensed for
-    redistribution** — the Fan Content Policy carves verbatim rules content out
-    of what it permits — so `docs/set-mechanics.yaml` is our prose with a rule
-    number as a citation, `checkOriginal` fails the build on twelve shared words,
-    and the CR must never be committed. **Do not fetch it at build time**: there
-    is no stable URL and the txt's date drifts independently of the docx and pdf.
-
-    **The bar is a mechanic on 8+ cards of a set that appears in 6 sets or
-    fewer**, which is 95 of them. `refresh-mechanics` is step 6 of `new-set`,
-    exits non-zero on a gap, and prints what fell below the bar rather than
-    letting the tail read as completeness.
-
-    **Ability words are hand-written and always will be.** Rule 207.2c names all
-    60 and says outright they have no rules meaning and no entries, so there is
-    nothing to cite and nothing to re-derive — and 207.2c is not exhaustive:
-    `corrupted` is on 26 paper cards and appears nowhere in the rules, not even
-    in the release published for its own set.
+9.  -- (Set mechanics, shipped 2026-08-27. The hover panel and the coach name
+    what a set's own mechanic does, from `packages/core/docs/set-mechanics.yaml`;
+    where the game prints a rules card the picture replaces our sentence. The
+    licensing and derivation rulings are decision #10.)
 
 # Ideas:
 
@@ -2014,3 +1996,36 @@ The architecture, the data pipeline and the deploy story are all documented in
     **3.7% -> 6.8%**, about one more per draft, on picks that spent a card the
     deck cannot play -- while A+ goes UP, 40.3% -> 43.0%, because the uncastable
     card is no longer beating the pick that was made.
+
+10. **The Comprehensive Rules are a dev-time input, never a shipped one.** They
+    are the only complete list of what Magic's mechanics are called and are not
+    licensed for redistribution: the Fan Content Policy carves verbatim rules
+    content out of what it permits, and the CR document itself grants nothing
+    beyond a publisher colophon. So the rules decide WHICH mechanics exist and
+    supply a section number to cite, `docs/set-mechanics.yaml` carries a sentence
+    somebody wrote, and `checkOriginal` fails the run on twelve consecutive words
+    shared with the original. The file is gitignored and must stay so.
+
+    **Not fetched at build time either.** There is no stable URL, no `latest`
+    alias, and the txt's date drifts independently of the docx and pdf -- the
+    site once offered `20260807.docx`, `20260807.pdf` and `20260819.txt` with
+    `20260807.txt` a 404, and the one third-party "always latest" redirect was
+    broken for exactly that reason. `refresh-mechanics` is a local script.
+
+    **Where the game prints a rules card, it replaces our prose -- and almost
+    none of them do.** A booster's inserts are mostly places to put cards: mh3's
+    Energy Reserve is "(Place your energy counters in this area.)" and nothing
+    else, woe's On an Adventure and otj's Plot are storage markers with the rule
+    restated shorter than we say it. Two qualify, LTR's and dft's, and the same
+    test settles a two-faced one face at a time -- dft's back is a large "4" with
+    no text and is not stored. Choosing automatically was declined: it needs a
+    threshold on length, and the first set to ship a terse rules card or a wordy
+    placemat breaks it in silence. `refresh-mechanics` reports every unclaimed
+    insert with its text beside ours, so the next one is a decision somebody
+    makes rather than a default nobody hears about.
+
+    **Ability words will never be derivable.** Rule 207.2c names all 60 and says
+    outright they have no rules meaning and no entries in the rules, so there is
+    nothing to cite -- and it is not exhaustive: `corrupted` is on 26 paper cards
+    and appears nowhere in the CR, not even in the release published for its own
+    set. Scryfall's catalog is the better list of which words exist.
