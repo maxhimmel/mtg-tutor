@@ -2080,3 +2080,24 @@ The architecture, the data pipeline and the deploy story are all documented in
     nothing to cite -- and it is not exhaustive: `corrupted` is on 26 paper cards
     and appears nowhere in the CR, not even in the release published for its own
     set. Scryfall's catalog is the better list of which words exist.
+
+26. **A band drawn beside a decision must be sized by the decision, not by
+    convention** (2026-08-27, the archetype quiz's reveal). The chart on that
+    panel draws each deck's lift with a band around it, and the obvious band is
+    a 95% confidence interval. It is the wrong one and it would have been wrong
+    silently: two 95% intervals stop overlapping at about 2.8 error bars, and
+    that drill's threshold moves with how many decks a card has -- 2.34 at
+    three, 3.16 at ten. So on a card compared across many decks a player would
+    have seen two bands clearly missing each other under a verdict saying the
+    decks are level, and been right to disbelieve the screen.
+
+    `decisionBand` in `core/drills/archetypes.ts` is sized so that TWO BANDS
+    TOUCHING IS EXACTLY THE THRESHOLD, which makes it not a confidence interval
+    and deliberately so. Anybody "fixing" it back to one restores a picture that
+    argues with the grade beneath it.
+
+    The general form, which is the reason this is here rather than only in that
+    file: a chart under a decision is part of the decision. Drawing it with the
+    statistic that is conventional for a number ON ITS OWN will disagree with
+    whatever rule the number is actually being judged by, and the disagreement
+    shows up as a reader who does not believe the app.
