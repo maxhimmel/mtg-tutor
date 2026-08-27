@@ -9,7 +9,7 @@
 // asks that rather than the question notes Ideas #1 wrote down -- "which
 // archetype does this card belong to" -- is a number this script prints. The
 // idea as written is a quiz whose answers are mostly noise; narrowed to two
-// decks and gated against the right null it has 362 real questions, and 20 of
+// decks and gated against the right null it has 335 real questions, and 17 of
 // the 25 sets with archetype data hold a full run.
 //
 // It is committed rather than thrown away because `ARCHETYPE_QUIZ.falsePositive`
@@ -24,24 +24,34 @@
 // wide even when nothing is there -- and a table nobody can reproduce is a
 // magic number with a comment on it.
 //
-// WHAT IT READS AND WHAT IT CANNOT
+// WHAT IT READS, AND THE ONE THING IT HAS TO BORROW
 //
-// The committed artifacts in data/, which is everything the derivation needs
-// except one thing: card COLOURS, which come from Scryfall at ingest and are
-// never written into a stats artifact. So this counts a card as mono-coloured
-// when every deck it has a rate in shares exactly one colour, which is the same
-// inference `sharedColor` makes and is where the app then checks the card's
-// real colours and drops the ones that disagree.
+// The committed artifacts in data/ hold everything the derivation needs except
+// card COLOURS, which come from Scryfall at ingest and are never written into a
+// stats artifact. The app checks them, so a run of this that did not would
+// count questions the app will not ask.
 //
-// That makes every count here a CEILING. The overcount is colourless cards that
-// happened to be played mostly in one colour's decks -- real, small, and in the
-// direction that cannot hide a shortfall: a set this script says has 8
-// questions does not have 20.
+// It is not a small correction and DUAL LANDS are why. A land is colourless and
+// gets played in exactly the decks its colours serve, so the archetype table
+// alone reads it as a mono-coloured card with strong opinions -- and because
+// those opinions are real, lands land near the TOP of the ranking. Before this
+// read colours, the sharpest question in five sets was a land.
+//
+// So colours come from `datasets/cards.<set>.<format>.json`, the same cache
+// `bench-bots` and `fit-bot-policy` read, which carries the real `colors` off
+// the set's pool. `datasets/` is gitignored, so a fresh clone has none of it:
+// a set with no cache falls back to the archetype-table inference and is marked
+// with a `~`, and its number is a CEILING rather than a count.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ARCHETYPE_QUIZ, archetypeQuestions, sharedColor } from "@mtg-tutor/core";
+import {
+  ARCHETYPE_QUIZ,
+  archetypeQuestions,
+  normalizeName,
+  sharedColor,
+} from "@mtg-tutor/core";
 
 const DATA = join(dirname(fileURLToPath(import.meta.url)), "..", "data");
 
@@ -88,13 +98,27 @@ if (process.argv.includes("--calibrate")) {
   process.exit(0);
 }
 
-// The colour check the app makes and this cannot. Passing the inferred colour
-// straight back through is what makes these counts a ceiling rather than a
-// measurement -- see the header.
-const inferredColor = (rates) => (name) => {
-  const decks = rates.filter((r) => r.name === name).map((r) => r.colors);
-  return sharedColor(decks);
-};
+/**
+ * Real colours off the cached pool, or the inference if there is no cache.
+ *
+ * The returned flag is what the table prints a `~` from. A count taken without
+ * colours is not wrong so much as answering a slightly different question, and
+ * a table that did not say which rows those were would be inviting somebody to
+ * read the two as one number.
+ */
+function colorsFor(set) {
+  const cache = join(DATA, "..", "..", "..", "datasets", `cards.${set.setCode}.${set.format}.json`);
+  if (existsSync(cache)) {
+    const cards = JSON.parse(readFileSync(cache, "utf8"));
+    const byName = new Map(cards.map((c) => [normalizeName(c.name), c.colors.join("")]));
+    return { exact: true, colorOf: (name) => byName.get(normalizeName(name)) };
+  }
+  return {
+    exact: false,
+    colorOf: (name) =>
+      sharedColor(set.archetypes.filter((r) => r.name === name).map((r) => r.colors)),
+  };
+}
 
 const rows = [];
 let mute = 0;
@@ -112,7 +136,7 @@ for (const file of readdirSync(DATA).filter((f) => f.endsWith(".json")).sort()) 
     continue;
   }
 
-  const colorOf = inferredColor(set.archetypes);
+  const { exact, colorOf } = colorsFor(set);
   const counts = RATES.map(
     (falsePositive) =>
       archetypeQuestions(set.archetypes, set.colorWinRates, colorOf, {
@@ -122,7 +146,7 @@ for (const file of readdirSync(DATA).filter((f) => f.endsWith(".json")).sort()) 
   );
 
   const shipped = archetypeQuestions(set.archetypes, set.colorWinRates, colorOf, ARCHETYPE_QUIZ);
-  rows.push({ code: set.setCode, counts, shipped });
+  rows.push({ code: set.setCode, counts, shipped, exact });
 }
 
 const pad = (v, w) => String(v).padStart(w);
@@ -136,6 +160,7 @@ console.log(`set     ${RATES.map((r) => pad(`${Number(r) * 100}%`, 7)).join("")}
 const totals = RATES.map(() => 0);
 let short = 0;
 let live = 0;
+let approximate = 0;
 
 for (const row of rows) {
   if (row.mute) {
@@ -151,14 +176,22 @@ for (const row of rows) {
   const fills = row.shipped.length >= ARCHETYPE_QUIZ.runLength;
   if (!fills) short++;
 
+  if (!row.exact) approximate++;
+
   console.log(
-    `${row.code.padEnd(7)}${row.counts.map((c) => pad(c, 7)).join("")}   ${
+    `${(row.code + (row.exact ? "" : "~")).padEnd(7)}${row.counts.map((c) => pad(c, 7)).join("")}   ${
       fills ? "yes" : `no — ${row.shipped.length}`
     }`,
   );
 }
 
 console.log(`\n${"total".padEnd(7)}${totals.map((t) => pad(t, 7)).join("")}`);
+if (approximate > 0) {
+  console.log(
+    `\n~ ${approximate} set${approximate === 1 ? " has" : "s have"} no cached pool in datasets/, ` +
+      `so colours are inferred and those counts are a ceiling.`,
+  );
+}
 console.log(
   `\n${live} sets with archetype data, ${mute} without. ` +
     `At the shipped rate of ${Number(ARCHETYPE_QUIZ.falsePositive) * 100}%, ` +

@@ -10,14 +10,16 @@
  * indistinguishable for the rest, which is trap #3 one level up: the gaps
  * between them are smaller than the error bars on those gaps.
  *
- * NARROWED TO TWO DECKS IT IS A REAL DRILL: 362 questions across 25 sets, and
- * 20 of them hold a full run. `pnpm diagnose-archetype-quiz` is that
+ * NARROWED TO TWO DECKS IT IS A REAL DRILL: 335 questions across 25 sets, and
+ * 17 of them hold a full run. `pnpm diagnose-archetype-quiz` is that
  * measurement, kept so the gate can be re-argued rather than remembered.
  *
  * THREE-COLOUR DECKS ARE IN, AND THEY ARE WHAT MAKE IT UNIVERSAL. Pairs alone
  * left ktk, snc, sos and tdm with nothing to ask -- they are three-colour
  * formats, where the wedges and shards ARE the archetypes and the pairs are a
- * rounding error. With widths of three those four ask 5, 8, 10 and 6 questions.
+ * rounding error. With widths of three those four ask 5, 5, 6 and 3 questions,
+ * which is thin and is the difference between a set that can be played and one
+ * that cannot.
  * They also cost something, and it is the same coin: more decks per card means
  * a wider gate, which is why the numbers above are what they are rather than a
  * regret. STX is the only set that cannot ask anything at all, because it has no

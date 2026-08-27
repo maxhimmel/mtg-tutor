@@ -128,10 +128,13 @@ export const COACH = {
  */
 export const ARCHETYPE_QUIZ = {
   // A run, and the number is decided by the banks rather than by taste. At the
-  // shipped rate 20 of the 25 sets with archetype data hold eight questions and
-  // only 13 hold twelve -- so twelve would have made the drill look thin on
-  // seven sets to make it longer on thirteen. Eight is also about right for a
-  // question that is one card and two words: a couple of minutes.
+  // shipped rate 17 of the 25 sets with archetype data hold eight questions and
+  // only 11 hold twelve. Eight is also about right for a question that is one
+  // card and two words: a couple of minutes.
+  //
+  // The sets below it are served short rather than refused -- a set with three
+  // questions has three, and the screen says which of the three empty states it
+  // is rather than pretending the drill is broken.
   runLength: 8,
   // How many decks must have a measured opinion about a card before it can be
   // asked about. Three of the four pairs in its colour, or three of the ten

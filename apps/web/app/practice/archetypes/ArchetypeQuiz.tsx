@@ -26,7 +26,7 @@ import { points } from "../../lib/format";
  * mono-coloured card belongs to, named. For all but a few per cent of cards the
  * decks in a colour are inside each other's error bars, so that quiz is a quiz
  * whose answers are noise. Narrowed to two decks, and gated against the null of
- * the widest-gap-among-k rather than a flat width, there are 362 real questions
+ * the widest-gap-among-k rather than a flat width, there are 335 real questions
  * across 25 sets. `core/drills/archetypes.ts` carries the argument and
  * `pnpm diagnose-archetype-quiz` prints the table.
  *
