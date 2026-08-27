@@ -98,7 +98,7 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
 
    **And it is much less blocked than it looks** (2026-08-27,
    `.omc/plans/mulligan-trainer.md` §7). Format speed was thought to need the
-   431MB replay dataset. It does not: it is `num_turns` in the GAME dataset the
+   replay dataset. It does not: it is `num_turns` in the GAME dataset the
    pipeline already streams, measured at 8.29 turns for mh3 up to 10.03 for ktk
    over every game in the cached files. One accumulator in `readGameData` and a
    re-seed. So this wants Phase 0 of that plan and nothing else, and the
@@ -114,10 +114,11 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
 
    **The replay dataset is deliberately unused — revisit it later.** 17Lands
    publishes three public datasets per set/format; the stats pipeline pulls only
-   **draft** and **game**. Replay is the third and by far the largest (431MB
-   gzipped for FIN, vs 90-206MB draft and 26-62MB game), and nothing we compute
-   today needs it, so downloading it would triple the pipeline's cost for zero
-   current gain. (`build-set-stats.mjs` cites this item by number — renumber
+   **draft** and **game**. Replay is the third and the largest, and **the sizes
+   written here were the wrong format's**: 431MB for FIN is PremierDraft, and
+   this app is TradDraft-only, where FIN's replay is 51MB against 22MB of draft
+   and all 26 sets come to about 1.5GB. The cost argument below still holds at
+   the real number, but it is a much smaller number than it says. (`build-set-stats.mjs` cites this item by number — renumber
    with care.)
 
    It is one row per game — the same 63,987 games as the game dataset, joinable
@@ -602,11 +603,22 @@ them against the crowd rather than against what wins — the circularity
    pipeline already streams — so `contextValue`'s stored, unscored speed term
    and `DECK`'s 23/17 convention are both answerable now, for free, as that
    plan's Phase 0. And the drill itself deals a real seven off a real forty and
-   grades against the field's KEEP RATE rather than against `won`, because `won`
-   on a kept hand is censored by the very decision being judged.
+   grades against the field's KEEP RATE rather than against `won`. `won` on a
+   kept hand is censored by the very decision being judged, and confounded
+   before that: deck quality alone moves it 9.8pp between terciles, and being
+   `on_play` LOSES -- 57.80% against 59.11% -- because it proxies having lost
+   the game before. Trap #10 hiding in a column that looks like a clean binary.
 
-   The availability gate stays where it is: requiring replay would de-ingest
-   BRO, NEO, ONE and SNC (`USED_KINDS` in `scripts/lib/datasets.mjs`).
+   Two findings say the drill is worth building at all. Win rate by hand shape
+   holds the SAME shape inside every deck-quality tercile, ~14pp of spread,
+   shifted by deck quality and not bent by it -- so a hand really is gradeable.
+   And always-keep scores 79.4%, which is why accuracy is explicitly not one of
+   the gates: trap #8.
+
+   The availability gate stays where it is, and it is now a fact rather than a
+   preference: BRO, NEO and ONE publish no replay in EITHER format (403) and SNC
+   has PremierDraft only, so requiring it would de-ingest four shipping sets.
+   `USED_KINDS` in `scripts/lib/datasets.mjs` stays `["draft", "game"]`.
 
 4. **Follow-ups to token metrics** (spec:
    `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
