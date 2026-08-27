@@ -47,7 +47,8 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     discard cards a thin dataset merely never saw; teaching the validator to
     accept them would blind it to the MKM failure it exists to catch.
 
-8.  **STX has no archetype data at all, and degrades silently.** 17Lands'
+8.  **STX has no archetype data at all, and degrades silently everywhere but
+    one.** 17Lands'
     game dataset for STX carries `opp_colors` but no `main_colors`, alone among
     the 26 — KTK (2014) and PIO have it. Oldest set with TradDraft data, so it
     reads as an early-dataset schema difference: not ours to fix, and no other
@@ -61,34 +62,41 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     pricing, no archetype-fit term, with nothing saying so.
 
     It shipped because STX's five colleges ARE pairs, so pairs-only is close to
-    right here by luck rather than design. The open question is whether the app
-    should SAY so: `coach_shown` cannot tell a set with no archetype data apart
-    from one where the coach was merely quiet.
+    right here by luck rather than design.
+
+    **"Should the app say so" is answered for exactly one surface.** The
+    archetype quiz refuses STX by name and explains the hole, because a drill
+    either has questions or it does not and there is no quiet fallback available
+    to it. The coach and the deck builder both have one and both still take it,
+    and `coach_shown` still cannot tell a set with no archetype data apart from
+    one where the coach was merely quiet.
 
 # Ideas:
 
-1. A quiz on what archetype a mono-colored card belongs to.
+1. **What is left of this is the DECK-TYPE quiz, and it is one derivation away.**
+   The colour-pair half shipped as `/practice/archetypes`. The half still open
+   is the other approach in the original note, and it is the better idea: what
+   TYPE of deck does a card belong in -- aggro, midrange, control. Nothing in
+   the app knows this, and it is not a labelling job: the honest axis is how
+   fast a deck wants the game to go, and `contextValue` has a speed term stored
+   and unscored waiting on exactly that number.
 
-- Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
-- The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
-- Standalone: its own command and data model, not part of reviewing a draft.
-- Now answerable from data rather than authored: `setStats.archetypes` carries
-  per-card win rate per deck-colour-pair, so "which deck wants this card" has a
-  ground truth.
-- Another approach for a very similar/overlapping goal would be to ask what type of
-  deck does this card belong in: mid-range, aggro, control, etc. I don't even know
-  what all the deck types are and what their descriptions would be - that'd be very
-  cool indeed. I think the only reason I suggested "Boros" as an archetype is
-  because it's a name that fits into a MTG vernacular AND (generally) seems to
-  imply aggro-style decks.
+   Which comes from `num_turns` in the game dataset the pipeline already
+   streams, NOT from the replay dataset it was assumed to need -- Phase 0 of
+   `.omc/plans/mulligan-trainer.md`, and nothing else.
 
-2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
-   publishes three public datasets per set/format; the stats pipeline pulls only
-   **draft** and **game**. Replay is the third and by far the largest (431MB
-   gzipped for FIN, vs 90-206MB draft and 26-62MB game), and nothing we compute
-   today needs it, so downloading it would triple the pipeline's cost for zero
-   current gain. (`build-set-stats.mjs` cites this item by number — renumber
-   with care.)
+2. **The replay dataset is deliberately unused, and only ONE of the three things
+   this entry wanted it for actually needs it.** Format speed and real land
+   counts are both in the **game** dataset the pipeline already streams; only
+   the keep-or-mull decision needs replay. Measured and argued in
+   `.omc/plans/mulligan-trainer.md` §1b and §7, which also answers the
+   scepticism recorded below with numbers.
+
+   17Lands publishes three public datasets per set/format and the stats pipeline
+   pulls **draft** and **game**. The sizes this entry used to quote were the
+   wrong format's: 431MB for FIN is PremierDraft, and this app is TradDraft-only,
+   where FIN's replay is 51MB against 22MB of draft and all 26 sets come to about
+   1.5GB. (`build-set-stats.mjs` cites this item by number — renumber with care.)
 
    It is one row per game — the same 63,987 games as the game dataset, joinable
    1:1 — carrying turn-by-turn board state for 30 turns: cards drawn/discarded,
@@ -562,13 +570,28 @@ it is derived from what the field DID, so grading a person against it is marking
 them against the crowd rather than against what wins — the circularity
 `trophyPickRate` is kept out of the scorer for.
 
-3. **`mulligan-trainer`** — the unused **replay** dataset → a keep/mull practice
-   mode + format-speed metrics (see Ideas #2). Biggest, most independent; last.
-   Also what `contextValue`'s speed term is waiting on: the axis is stored and
-   unscored because whether a proactive card is GOOD depends on format speed,
-   which nothing measures yet.
-   This is what would re-tighten the availability gate to require replay
-   (`USED_KINDS` in `scripts/lib/datasets.mjs`).
+3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
+   `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
+   item. Read that, not this paragraph.**
+
+   Three things from it belong here because they constrain work outside the
+   drill:
+
+   - **Two thirds of what this entry promised does not need replay at all.**
+     Format speed (`num_turns`) and real deck land counts (`deck_<card>`,
+     basics included) are in the GAME dataset the pipeline already streams. So
+     `contextValue`'s stored-and-unscored speed term and `DECK`'s 23/17
+     convention are both answerable now, as that plan's Phase 0 — and Ideas #1's
+     deck-type quiz is waiting on the same one derivation.
+   - **The availability gate stays, and it is now a fact rather than a
+     preference.** BRO, NEO and ONE publish no replay in either format (403) and
+     SNC has PremierDraft only, so requiring it would de-ingest four shipping
+     sets. `USED_KINDS` in `scripts/lib/datasets.mjs` stays `["draft", "game"]`.
+   - **`won` cannot be the label**, which is worth not re-deriving: it is
+     censored by the very decision being judged, deck quality alone moves it
+     9.8pp between terciles, and `on_play` LOSES (57.80% against 59.11%) because
+     it proxies having lost the game before — trap #10 in a column that looks
+     like a clean binary.
 
 4. **Follow-ups to token metrics** (spec:
    `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
@@ -1155,6 +1178,38 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     CONTEXT_BEST from the review model's own nomination. Three surfaces asked the
     scorer and one did not, and the one that did not was the one nobody had
     complained about yet. `pickCoach.ts` cites this by name.
+
+23. **The widest gap among k noisy numbers is wide when nothing is there, and a
+    two-sigma gate on it is not a two-sigma test.** The archetype quiz asks
+    which of a card's decks wants it most and which least, and gated that on
+    best-minus-worst clearing two standard errors. Over 2,000,000 simulated
+    draws of k independent nulls that gate passes 18.7% of pure noise at four
+    decks and 59.8% at ten -- so the bank it reported as 1,149 questions was
+    really 335, and the false ones were concentrated on the cards played in the
+    most decks, which is the commons.
+
+    This is trap #13 wearing different clothes and it was not recognised as one
+    while being written. What caught it was asking what the number would be if
+    NOTHING were there, which is the same question trap #8 asks about "agrees
+    with the human 48% of the time" and the one no amount of staring at the
+    output would have answered -- 1,149 questions across 21 sets looked
+    exactly like a healthy result.
+
+    The fix is a threshold per k rather than a threshold, and the setting
+    becomes a false-positive RATE. `rangePValue` in `core/drills/archetypes.ts`
+    is the null, in closed form; `pnpm diagnose-archetype-quiz --calibrate`
+    simulates it independently and the test pins one against the other. Its k=2
+    answer must be 1.96, because with nothing to maximise over the range test IS
+    the ordinary two-sided z-test -- anything that misses that is wrong
+    elsewhere too.
+
+    **The sequel, and it is the part that changed the feature.** Controlling the
+    per-test rate is not controlling what a player sees: 5% over everything
+    TESTED was still about a third of what got SERVED, because only a tenth of
+    candidates have an answer at all. Benjamini-Hochberg controls the right
+    thing and leaves 25 questions across eighteen sets. There was no gate that
+    was both honest and playable -- so the inseparable cards became the drill's
+    third answer instead of its rejects.
 
 22. **An instrument beside a threshold measures the setting, not whether the
     setting is right** (2026-08-19). `stats_viewed.forced` was added to settle

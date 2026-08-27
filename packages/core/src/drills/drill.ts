@@ -14,9 +14,18 @@
  * would be a second parallel set of charts that can never be merged with the
  * first -- an event name cannot be repaired retroactively.
  *
- * There is deliberately no shared question/answer abstraction here. One drill
- * exists; a base class fitted to a sample of one describes this drill twice
- * rather than describing drills. The second one is what will say what is
- * genuinely common, and it can be lifted then.
+ * There is deliberately no shared question/answer abstraction here, and the
+ * second drill did not change that. It was supposed to: the note used to say
+ * the archetype quiz would show what was genuinely common and could be lifted
+ * then. What it showed is that almost nothing is. `MissQuestion` is three card
+ * names out of a stored pick; `ArchetypeQuestion` is a card and a table of
+ * decks derived from a set's statistics. They share a SHAPE -- deal, answer,
+ * grade, tally -- and no data at all, so a base class would have one field and
+ * three type parameters. Lifting it would cost both drills their own
+ * vocabulary and buy an import.
+ *
+ * What the two do share is written down where it is enforced instead: the event
+ * family below, `ARCHETYPE_QUIZ` and `DRILLS` in config.ts for the run lengths,
+ * and the route shape. Ask again at the third drill.
  */
-export type DrillId = "misses";
+export type DrillId = "misses" | "archetypes";

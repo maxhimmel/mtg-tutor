@@ -34,6 +34,7 @@
     "deploy": "convex deploy",
     "dev": "node scripts/dev.mjs",
     "dev:only": "convex dev",
+    "diagnose-archetype-quiz": "node scripts/diagnose-archetype-quiz.mjs",
     "diagnose-offcolour": "node scripts/diagnose-offcolour.mjs",
     "env:pull": "convex env list > .env.convex && echo 'wrote .env.convex (gitignored)'",
     "env:push": "convex env set --force --from-file .env.convex",

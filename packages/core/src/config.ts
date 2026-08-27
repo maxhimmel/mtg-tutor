@@ -119,6 +119,56 @@ export const COACH = {
 
 // A drill: one short, repeated question, minutes rather than the half hour a
 // draft asks for. See drills/drill.ts for what the category owns.
+/**
+ * The archetype quiz's gates.
+ *
+ * Its own block rather than keys on DRILLS below, because DRILLS is shaped by
+ * the misses drill -- `runLength` is 10 because that is what a digest keeps of
+ * its own worst picks, which says nothing about how long a quiz should be.
+ */
+export const ARCHETYPE_QUIZ = {
+  // A run, and the number is decided by the banks rather than by taste. Half of
+  // it must be cards with an answer, so a set needs four of those -- 23 of the
+  // 25 sets with archetype data clear it, and the two that do not (ecl, tdm)
+  // are served short rather than refused. Eight is also about right for a
+  // question that is one card and three words: a couple of minutes.
+  runLength: 8,
+  // How many decks must have a measured opinion about a card before it can be
+  // asked about. Three of the four pairs in its colour, or three of the ten
+  // decks once wedges count -- enough that the reveal's table has something to
+  // say beyond the two decks the question names.
+  minDecks: 3,
+  // How often a card whose decks all want it equally may be asked about anyway.
+  //
+  // A RATE RATHER THAN A WIDTH, and the difference is not pedantry. Best minus
+  // worst is a range over up to ten decks, and the widest gap among ten noisy
+  // numbers is wide even when nothing is there -- a flat two-sigma gate passes
+  // 18.7% of pure noise at four decks and 59.8% at ten. So the width is derived
+  // per deck count by `rangePValue` and this names the rate it buys.
+  //
+  // WHAT THIS RATE IS NOT is the share of SERVED questions that are noise, and
+  // the gap between the two is the honest number to quote. Measured over the
+  // eighteen sets with a cached pool: 2,652 candidates, of which a Storey
+  // estimate off the p-value distribution puts ~90% under the null, and a
+  // parametric bootstrap at the real sample sizes fires the gate on 3.14% of
+  // them. That is ~75 false questions in a bank of 252 -- about a THIRD of what
+  // gets served, not a twentieth.
+  //
+  // Controlling that directly with Benjamini-Hochberg was measured and is not
+  // an option: at the same 5% it leaves a bank of 25 across all eighteen sets
+  // and exactly one of them can fill a run. There is no operating point that is
+  // both clean and playable, because only ~270 of the 2,652 cards genuinely
+  // have a deck that wants them more and the effects are small beside their own
+  // error bars. That is a fact about Limited rather than about this code.
+  //
+  // So five per cent does not gate the bank any more -- it decides which of
+  // three ANSWERS a question has. A card the decks cannot be separated on is
+  // asked about too, and "these two want it the same" is the right answer,
+  // which is true of most cards in a colour and is the most useful thing a
+  // drafter can learn about their own reads. See `dealArchetypeRun`.
+  falsePositive: 0.05,
+};
+
 export const DRILLS = {
   // How many questions one run of the misses drill deals. Ten because that is
   // what a draft's digest keeps of its own worst picks (DIGEST_MISTAKES), so a

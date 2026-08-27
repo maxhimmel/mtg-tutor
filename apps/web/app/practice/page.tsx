@@ -40,6 +40,15 @@ const DRILLS = [
     what: "The packs you got wrong, dealt again — the same cards, the same deck behind you, and no sign of what you took the first time.",
     length: "10 packs · a few minutes",
   },
+  {
+    href: "/practice/archetypes",
+    // Named for the question rather than for "archetype quiz". The word is
+    // standard and the question is what a person recognises -- and the drill
+    // teaches the word on its way past, which is what Ideas #1 wanted.
+    name: "Which deck wants it?",
+    what: "One card and two decks that both played it. One got far more out of it — say which, and see what every deck in the set did with it.",
+    length: "8 cards · a couple of minutes",
+  },
 ];
 
 export default function DrillsIndex() {
@@ -53,8 +62,8 @@ export default function DrillsIndex() {
             one thing at a time.
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-base-content/70">
-            Short sessions built out of your own drafts — starting with the packs you got
-            wrong, dealt back one at a time.
+            The packs you got wrong, dealt back one at a time — or what each deck in
+            a set is actually after, learned from what the decks did.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <a className="btn btn-primary" href="/sign-in">
