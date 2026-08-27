@@ -468,6 +468,31 @@ function Reveal({
 }
 
 /**
+ * The zero line, and the reason it is the loudest thing on the chart.
+ *
+ * It was a one-pixel tick at 25% opacity, and a screenshot made the case
+ * against that better than an argument could: it is the line every other mark
+ * on the row is measured FROM, and on a card where the decks are level it is
+ * the only thing on screen carrying the answer -- six dots scattered around one
+ * rule is what "these all want it the same" looks like.
+ *
+ * DRAWN AS ONE RULE THROUGH THE WHOLE CHART rather than six ticks. Six
+ * disconnected marks read as decoration on each row; one continuous line reads
+ * as the axis it is, which is what it has to read as before anybody trusts a
+ * dot's distance from it. It is one element rather than one per row for the
+ * same reason -- a rule with gaps in it is six ticks again.
+ */
+function ZeroLine({ left }: { left: number }) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0 z-0 w-px bg-base-content/45"
+      style={{ left: `${left}%` }}
+    />
+  );
+}
+
+/**
  * What the thing under the pointer means, following the pointer.
  *
  * A CHART NOBODY CAN INTERROGATE IS A CHART THAT HAS TO BE BELIEVED. The band
@@ -477,56 +502,61 @@ function Reveal({
  * directly is.
  *
  * Following the cursor rather than anchoring to the mark, because the marks are
- * four pixels tall and a tooltip pinned above one covers the row below it. This
- * is the only mouse-following surface in the app, and it is here because the
- * subject is a position on a scale rather than an element -- a reader pointing
- * halfway along a band is asking about that spot, and the answer belongs where
- * they are pointing.
+ * a few pixels tall and a tooltip pinned above one covers the row below it.
+ * This is the only mouse-following surface in the app, and it is here because
+ * the subject is a POSITION on a scale rather than an element -- a reader
+ * pointing halfway along a band is asking about that spot, and the answer
+ * belongs where they are pointing.
  *
- * `pointer-events-none` throughout, so the tooltip can never be the thing the
- * pointer is over and start chasing itself.
+ * ITS POSITION IS NOT REACT STATE, WHICH IS THE WHOLE OF WHY IT MOVES SMOOTHLY.
+ * The first version put the cursor in `useState`, so every `mousemove` -- which
+ * is one an input frame, faster than React renders -- rebuilt six rows and
+ * every band inside them, and the tooltip arrived a frame or two late and in
+ * clumps. The pointer now writes to a ref and one `requestAnimationFrame` loop
+ * moves the element, so a move costs a transform on a single node. Only the
+ * TEXT is state, and that changes when you cross from one mark to another
+ * rather than when you move.
+ *
+ * It EASES toward the pointer instead of being pinned to it. A follower exactly
+ * under the cursor reads as an artefact of the cursor; one that catches up over
+ * about four frames reads as a thing being carried. `pointer-events-none`
+ * throughout, so it can never be what the pointer is over and start chasing
+ * itself.
  */
-function Tip({ tip }: { tip: { x: number; y: number; text: string } | null }) {
-  // Also what keeps `window` off the server: this renders null until a pointer
-  // has moved, and a pointer moving is a thing only a browser has done.
-  if (!tip) return null;
+const TIP_EASE = 0.28;
 
-  // Flipped rather than clamped near the right edge: a tooltip that stops
-  // moving still looks attached to the wrong mark, where one that jumps to the
-  // other side of the cursor stays attached to the right one.
-  const flip = tip.x > window.innerWidth - 300;
-
-  return (
-    <div
-      role="presentation"
-      className="pointer-events-none fixed z-50 max-w-[17rem] rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
-      style={{
-        left: tip.x + (flip ? -14 : 14),
-        top: tip.y + 16,
-        transform: flip ? "translateX(-100%)" : undefined,
-      }}
-    >
-      {tip.text}
-    </div>
-  );
-}
-
-/**
- * Every deck's appetite for the card, drawn to one scale.
- *
- * THE PICTURE IS THE EXPLANATION AND THE NUMBERS WERE NOT. This list used to be
- * five rows of "+9.8pp / 678 games" under a sentence saying the two ends were
- * too close to call, and a player looking at +9.8 against +2.9 had no way to
- * see why -- the thing that makes those two numbers the same claim is that one
- * rests on 678 games and the other on 759, and a column of counts does not say
- * that. A band does, at a glance, and it was a real person hitting exactly this
- * on SOS's Stock Up that produced it.
- *
- * `decisionBand` says why the bands are the width they are: they touch exactly
- * when the gap clears the bar, so the picture cannot disagree with the grade.
- */
 export function DeckBands({ question, guess }: { question: RevealQuestion; guess: string }) {
-  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [tipText, setTipText] = useState<string | null>(null);
+  const tip = useRef<HTMLDivElement | null>(null);
+  const want = useRef({ x: 0, y: 0 });
+  const at = useRef({ x: 0, y: 0 });
+  const showing = tipText != null;
+
+  useEffect(() => {
+    if (!showing) return;
+    // Start where the pointer already is, or the first frames are spent flying
+    // in from the corner of the screen.
+    at.current = { ...want.current };
+
+    let frame = 0;
+    const step = () => {
+      const el = tip.current;
+      if (el) {
+        at.current.x += (want.current.x - at.current.x) * TIP_EASE;
+        at.current.y += (want.current.y - at.current.y) * TIP_EASE;
+        // Flipped rather than clamped near the right edge: a tooltip that stops
+        // moving still looks attached to the wrong mark, where one that jumps to
+        // the other side of the cursor stays attached to the right one.
+        const flip = at.current.x > window.innerWidth - (el.offsetWidth + 32);
+        const x = at.current.x + (flip ? -14 - el.offsetWidth : 14);
+        el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(at.current.y + 16)}px, 0)`;
+      }
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [showing]);
+
   const k = question.decks.length;
   const band = (sd: number) => decisionBand(sd, k, ARCHETYPE_QUIZ.falsePositive);
 
@@ -542,35 +572,40 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
    * Which mark the pointer is nearest, and what that mark claims.
    *
    * Measured in pixels off the track's own box rather than in lift units,
-   * because "am I on the dot" is a question about the drawing: the dot is eight
-   * pixels wide whatever the scale, and a reader aiming at it is aiming at what
+   * because "am I on the dot" is a question about the drawing: the dot is a
+   * fixed size whatever the scale, and a reader aiming at it is aiming at what
    * they can see.
    */
   function describe(
     deck: RevealQuestion["decks"][number],
     e: { clientX: number; clientY: number; currentTarget: HTMLElement },
   ) {
+    want.current = { x: e.clientX, y: e.clientY };
+
     const box = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - box.left;
     const value = lo + (x / box.width) * span;
     const half = band(deck.sd);
-    const near = (v: number) => Math.abs(x - (pct(v) / 100) * box.width) < 7;
+    const near = (v: number) => Math.abs(x - (pct(v) / 100) * box.width) < 8;
     const name = deckName(deck.colors);
+    const games = deck.n.toLocaleString();
 
     const text = near(deck.lift)
-      ? `${name} won ${points(deck.lift)} more with this card in hand than it did in general, over ${deck.n.toLocaleString()} games.`
+      ? `${name} won ${points(deck.lift)} more with this card in hand than it did in general, over ${games} games.`
       : near(0)
-        ? `What ${name} wins anyway. Everything is measured from here, so a deck that wins a lot gets no credit for winning a lot.`
+        ? `What ${name} wins anyway. Every bar is measured from this line, so a deck that wins a lot gets no credit for winning a lot.`
         : Math.abs(value - deck.lift) <= half
-          ? `${deck.n.toLocaleString()} games only pin it down this far — anywhere in this band would look the same. Two bands that touch are two decks the data cannot tell apart.`
-          : `${points(value)}, which is outside what ${name}'s ${deck.n.toLocaleString()} games can support.`;
+          ? `${games} games only pin it down this far — anywhere in this band would look the same. Two bands that touch are two decks the data cannot tell apart.`
+          : `${points(value)}, which is outside what ${name}'s ${games} games can support.`;
 
-    setTip({ x: e.clientX, y: e.clientY, text });
+    // Only when it changes, so moving along one band is a transform and not a
+    // render of the whole chart.
+    setTipText((was) => (was === text ? was : text));
   }
 
   return (
     <div className="mt-4">
-      <ul className="flex flex-col gap-1">
+      <ul className="relative flex flex-col gap-1">
         {question.decks.map((deck) => {
           // Nothing is marked as the answer when there is no answer: colouring
           // the top row on a card whose decks are level would draw the ranking
@@ -600,30 +635,24 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                 {deckName(deck.colors)}
               </span>
 
-              {/* The two decks the question was about are drawn solid and the
-                  rest are dimmed. They are the only two the grade looked at,
-                  and a chart that gave all five the same weight would invite
-                  reading a ranking off the middle rows. */}
-              {/* The whole track takes the pointer, not the marks: the dot is
-                  eight pixels and the band is four tall, and a reader aiming at
-                  either would spend the hover missing. `describe` works out
-                  which one they meant from where they landed. */}
+              {/* The whole track takes the pointer, not the marks: the dot and
+                  the band are a few pixels each, and a reader aiming at either
+                  would spend the hover missing. `describe` works out which one
+                  they meant from where they landed. */}
               <span
                 className="relative h-4 min-w-0 flex-1"
                 role="img"
                 aria-label={`${deckName(deck.colors)}: ${points(deck.lift)} over ${deck.n.toLocaleString()} games, give or take ${points(half).replace("+", "")}`}
                 onMouseMove={(e) => describe(deck, e)}
-                onMouseLeave={() => setTip(null)}
+                onMouseLeave={() => setTipText(null)}
               >
-                {/* Where the deck's own rate sits: no better, no worse. */}
+                {/* The two decks the question was about are drawn solid and the
+                    rest are dimmed. They are the only two the grade looked at,
+                    and a chart that gave all of them the same weight would
+                    invite reading a ranking off the middle rows. */}
                 <span
                   aria-hidden
-                  className="absolute inset-y-0 w-px bg-base-content/25"
-                  style={{ left: `${pct(0)}%` }}
-                />
-                <span
-                  aria-hidden
-                  className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ${
+                  className={`absolute top-1/2 z-10 h-1.5 -translate-y-1/2 rounded-full ${
                     isAnswer ? "bg-success/40" : isEnd ? "bg-base-content/30" : "bg-base-content/15"
                   }`}
                   style={{
@@ -633,7 +662,7 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                 />
                 <span
                   aria-hidden
-                  className={`absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                  className={`absolute top-1/2 z-10 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
                     isAnswer ? "bg-success" : isEnd ? "bg-base-content/80" : "bg-base-content/40"
                   }`}
                   style={{ left: `${pct(deck.lift)}%` }}
@@ -653,17 +682,59 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
             </li>
           );
         })}
+
+        {/* The rule runs the height of the list, inside a spacer laid out to the
+            same columns as a row -- so it lands on the tracks' own zero without
+            anything having to know what those columns add up to. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 flex items-stretch gap-3 px-2"
+        >
+          <span className="w-14 shrink-0" />
+          <span className="min-w-[5.5rem] shrink-0" />
+          <span className="relative min-w-0 flex-1">
+            <ZeroLine left={pct(0)} />
+          </span>
+          <span className="w-16 shrink-0" />
+          <span className="w-20 shrink-0" />
+        </span>
       </ul>
 
-      <p className="mt-2 pl-2 text-xs leading-relaxed text-base-content/50">
+      {/* The rule named, once, under the chart. Six dots scattered around a line
+          is the whole answer on a card whose decks are level, and a line nobody
+          has been told the meaning of is a line nobody reads. */}
+      <div className="flex items-start gap-3 px-2 pt-1.5">
+        <span className="w-14 shrink-0" />
+        <span className="min-w-[5.5rem] shrink-0" />
+        <span className="relative min-w-0 flex-1">
+          <span
+            className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-[0.6875rem] uppercase tracking-[0.14em] text-base-content/45"
+            style={{ left: `${pct(0)}%` }}
+          >
+            what the deck wins anyway
+          </span>
+        </span>
+        <span className="w-16 shrink-0" />
+        <span className="w-20 shrink-0" />
+      </div>
+
+      <p className="mt-6 pl-2 text-xs leading-relaxed text-base-content/50">
         The bar is how much better each deck did with this card in hand than it did
-        in general — so a deck that wins a lot is not credited for winning a lot.
-        The band is how much of that is guesswork at that many games, and it is
-        drawn so that two bands touching is exactly the line between a difference
-        and none. Point at any of it to be told which is which.
+        in general, measured from that line — so a deck that wins a lot is not
+        credited for winning a lot. The band is how much of it is guesswork at that
+        many games, and it is drawn so that two bands touching is exactly the line
+        between a difference and none. Point at any of it to be told which is which.
       </p>
 
-      <Tip tip={tip} />
+      {showing && (
+        <div
+          ref={tip}
+          role="presentation"
+          className="pointer-events-none fixed left-0 top-0 z-50 max-w-[17rem] rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
+        >
+          {tipText}
+        </div>
+      )}
     </div>
   );
 }
