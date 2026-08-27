@@ -525,6 +525,24 @@ function ZeroLine({ left }: { left: number }) {
  */
 const TIP_EASE = 0.28;
 
+// What the tooltip is at most, in pixels -- the `max-w-[17rem]` below, said
+// twice because the first frame has to place the element before it has been
+// measured. Only ever used for the flip decision, which the next frame corrects
+// against the real width.
+const TIP_MAX_WIDTH = 272;
+
+/**
+ * Where the tooltip sits for a pointer at (x, y).
+ *
+ * Flipped rather than clamped near the right edge: a tooltip that stops moving
+ * still looks attached to the wrong mark, where one that jumps to the other
+ * side of the cursor stays attached to the right one.
+ */
+function place(x: number, y: number, width: number): string {
+  const flip = x > window.innerWidth - (width + 32);
+  return `translate3d(${Math.round(x + (flip ? -14 - width : 14))}px, ${Math.round(y + 16)}px, 0)`;
+}
+
 export function DeckBands({ question, guess }: { question: RevealQuestion; guess: string }) {
   const [tipText, setTipText] = useState<string | null>(null);
   const tip = useRef<HTMLDivElement | null>(null);
@@ -544,12 +562,7 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
       if (el) {
         at.current.x += (want.current.x - at.current.x) * TIP_EASE;
         at.current.y += (want.current.y - at.current.y) * TIP_EASE;
-        // Flipped rather than clamped near the right edge: a tooltip that stops
-        // moving still looks attached to the wrong mark, where one that jumps to
-        // the other side of the cursor stays attached to the right one.
-        const flip = at.current.x > window.innerWidth - (el.offsetWidth + 32);
-        const x = at.current.x + (flip ? -14 - el.offsetWidth : 14);
-        el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(at.current.y + 16)}px, 0)`;
+        el.style.transform = place(at.current.x, at.current.y, el.offsetWidth);
       }
       frame = requestAnimationFrame(step);
     };
@@ -731,6 +744,12 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
           ref={tip}
           role="presentation"
           className="pointer-events-none fixed left-0 top-0 z-50 max-w-[17rem] rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
+          // PLACED AT RENDER, NOT ON THE FIRST FRAME. Without this the element
+          // paints at the origin and jumps to the pointer once the effect has
+          // run and a frame has been asked for -- two frames of a tooltip in
+          // the corner of the screen, every time one opens. `describe` sets
+          // `want` before it sets the text, so the position is known here.
+          style={{ transform: place(want.current.x, want.current.y, TIP_MAX_WIDTH) }}
         >
           {tipText}
         </div>
