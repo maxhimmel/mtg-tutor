@@ -47,7 +47,13 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     discard cards a thin dataset merely never saw; teaching the validator to
     accept them would blind it to the MKM failure it exists to catch.
 
-8.  **STX has no archetype data at all, and degrades silently.** 17Lands'
+8.  **STX has no archetype data at all, and degrades silently -- except in one
+    place now.** The archetype quiz refuses the set by name and says why, which
+    is the "should the app SAY so" question below, answered for one surface. It
+    is not answered for the coach or the deck builder, which both still have a
+    quieter fallback available and still take it.
+
+    **STX has no archetype data at all, and degrades silently.** 17Lands'
     game dataset for STX carries `opp_colors` but no `main_colors`, alone among
     the 26 — KTK (2014) and PIO have it. Oldest set with TradDraft data, so it
     reads as an early-dataset schema difference: not ours to fix, and no other
@@ -67,20 +73,24 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
 
 # Ideas:
 
-1. A quiz on what archetype a mono-colored card belongs to.
+1. **The colour-pair half shipped; the DECK-TYPE half is what is left, and it is
+   blocked.** `/practice/archetypes` asks which of two decks wants a card and
+   names them -- Boros, Jund -- which is the part of this that wanted teaching.
+   What it could NOT be is the question as written: naming the one deck a card
+   belongs to clears two standard errors for 3.5% of cards, so a four-way quiz
+   is a quiz whose answers are noise. The argument and the numbers are in
+   `core/drills/archetypes.ts`; `pnpm diagnose-archetype-quiz` prints the table.
 
-- Ex. This Red card belongs in a Boros deck because ... <x,y,z>.
-- The important bit is that it'd teach me what the archetypes even are, and what monocolored cards fit the type to belong in that archetype.
-- Standalone: its own command and data model, not part of reviewing a draft.
-- Now answerable from data rather than authored: `setStats.archetypes` carries
-  per-card win rate per deck-colour-pair, so "which deck wants this card" has a
-  ground truth.
-- Another approach for a very similar/overlapping goal would be to ask what type of
-  deck does this card belong in: mid-range, aggro, control, etc. I don't even know
-  what all the deck types are and what their descriptions would be - that'd be very
-  cool indeed. I think the only reason I suggested "Boros" as an archetype is
-  because it's a name that fits into a MTG vernacular AND (generally) seems to
-  imply aggro-style decks.
+   The other approach in the original note is the one still open, and it is the
+   better idea: **what TYPE of deck does this card belong in -- aggro, midrange,
+   control.** Nothing in the app knows this. It is not a labelling job either:
+   the honest axis is how fast a deck wants the game to go, and `contextValue`
+   already has a speed term STORED AND UNSCORED waiting on exactly that number.
+
+   So it shares a blocker with the mulligan trainer rather than with anything
+   here: format speed comes out of the replay dataset, which is what
+   `.omc/plans/mulligan-trainer.md` is a research pass on. Both features, one
+   derivation. Do not start this one before that lands.
 
 2. **The replay dataset is deliberately unused — revisit it later.** 17Lands
    publishes three public datasets per set/format; the stats pipeline pulls only
