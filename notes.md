@@ -65,11 +65,6 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     should SAY so: `coach_shown` cannot tell a set with no archetype data apart
     from one where the coach was merely quiet.
 
-9.  -- (Set mechanics, shipped 2026-08-27. The hover panel and the coach name
-    what a set's own mechanic does, from `packages/core/docs/set-mechanics.yaml`;
-    where the game prints a rules card the picture replaces our sentence. The
-    licensing and derivation rulings are decision #10.)
-
 # Ideas:
 
 1. A quiz on what archetype a mono-colored card belongs to.
@@ -987,24 +982,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-                    So when the colour rule moved (decision #23), the app changed and the
-                    instrument did not. It went on reporting the old rule's numbers, correctly,
-                    with the right imports at the top of the file, and nothing anywhere could
-                    have said so. It now calls `packScoringContext` like the mutation does.
+                        So when the colour rule moved (decision #23), the app changed and the
+                        instrument did not. It went on reporting the old rule's numbers, correctly,
+                        with the right imports at the top of the file, and nothing anywhere could
+                        have said so. It now calls `packScoringContext` like the mutation does.
 
-                    **The second half is worse and is the general form.** The same file printed
-                    "the colour terms charged it 0.34pp" under its table, from a filter naming
-                    `splash` and `archetype`. That filter was written before the off-colour term
-                    existed and nobody widened it -- so the number under a table measuring the
-                    off-colour term **excluded the off-colour term**. It read as a healthy small
-                    charge and it was a subtotal of the two terms that were not the subject. The
-                    true figure was 1.28pp, which is still far too small, which is the finding
-                    the instrument was built to surface and had been hiding for four days.
+                        **The second half is worse and is the general form.** The same file printed
+                        "the colour terms charged it 0.34pp" under its table, from a filter naming
+                        `splash` and `archetype`. That filter was written before the off-colour term
+                        existed and nobody widened it -- so the number under a table measuring the
+                        off-colour term **excluded the off-colour term**. It read as a healthy small
+                        charge and it was a subtotal of the two terms that were not the subject. The
+                        true figure was 1.28pp, which is still far too small, which is the finding
+                        the instrument was built to surface and had been hiding for four days.
 
-                    The rule: **a harness must not enumerate what it sums.** Sum everything and
-                    exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-                    the total by default rather than by somebody remembering. An allowlist in an
-                    instrument is a silent undercount waiting for the next field.
+                        The rule: **a harness must not enumerate what it sums.** Sum everything and
+                        exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                        the total by default rather than by somebody remembering. An allowlist in an
+                        instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
@@ -1997,7 +1992,7 @@ The architecture, the data pipeline and the deploy story are all documented in
     deck cannot play -- while A+ goes UP, 40.3% -> 43.0%, because the uncastable
     card is no longer beating the pick that was made.
 
-10. **The Comprehensive Rules are a dev-time input, never a shipped one.** They
+25. **The Comprehensive Rules are a dev-time input, never a shipped one.** They
     are the only complete list of what Magic's mechanics are called and are not
     licensed for redistribution: the Fan Content Policy carves verbatim rules
     content out of what it permits, and the CR document itself grants nothing
