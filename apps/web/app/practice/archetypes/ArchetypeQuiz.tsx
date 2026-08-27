@@ -544,25 +544,51 @@ function place(x: number, y: number, width: number): string {
 }
 
 export function DeckBands({ question, guess }: { question: RevealQuestion; guess: string }) {
-  const [tipText, setTipText] = useState<string | null>(null);
+  // THE ONLY STATE IS WHETHER IT IS ON SCREEN. Everything the pointer changes
+  // -- where it is and what it is over -- is a ref, written by the move handler
+  // and read by one animation frame. Putting the TEXT in state was the whole of
+  // why this stuttered: one of the four things a tooltip can say carries the
+  // value under the cursor, so it was a different string on every pixel, and
+  // every pixel therefore rebuilt six rows and every band inside them. React
+  // renders slower than a pointer moves, and the tooltip arrived late and in
+  // clumps.
+  const [showing, setShowing] = useState(false);
   const tip = useRef<HTMLDivElement | null>(null);
-  const want = useRef({ x: 0, y: 0 });
+  const want = useRef({ x: 0, y: 0, text: "" });
   const at = useRef({ x: 0, y: 0 });
-  const showing = tipText != null;
+  // Whether `setShowing` has already been told. React bails on a set to the
+  // value it holds, but it is documented as sometimes rendering the component
+  // once more before it does -- and "sometimes" on a path that runs once an
+  // input frame is not a thing to leave to chance.
+  const shown = useRef(false);
 
   useEffect(() => {
     if (!showing) return;
     // Start where the pointer already is, or the first frames are spent flying
     // in from the corner of the screen.
-    at.current = { ...want.current };
+    at.current = { x: want.current.x, y: want.current.y };
 
     let frame = 0;
-    const step = () => {
+    let last = performance.now();
+    const step = (now: number) => {
+      // DAMPED BY TIME, NOT BY FRAME. A fixed fraction per frame chases twice
+      // as fast on a 120Hz display as on a 60Hz one, and changes speed
+      // whenever a frame is dropped -- which is the difference between a follow
+      // that feels weighted and one that feels broken. Clamped, so a tab
+      // returning from the background does not teleport.
+      const dt = Math.min(64, now - last);
+      last = now;
+      const t = 1 - Math.pow(1 - TIP_EASE, dt / 16.667);
+
       const el = tip.current;
       if (el) {
-        at.current.x += (want.current.x - at.current.x) * TIP_EASE;
-        at.current.y += (want.current.y - at.current.y) * TIP_EASE;
+        at.current.x += (want.current.x - at.current.x) * t;
+        at.current.y += (want.current.y - at.current.y) * t;
         el.style.transform = place(at.current.x, at.current.y, el.offsetWidth);
+        // Written rather than rendered, for the reason above. React only ever
+        // paints this node on show and hide, and it paints the current text
+        // both times, so the two can never disagree.
+        if (el.textContent !== want.current.text) el.textContent = want.current.text;
       }
       frame = requestAnimationFrame(step);
     };
@@ -593,8 +619,6 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
     deck: RevealQuestion["decks"][number],
     e: { clientX: number; clientY: number; currentTarget: HTMLElement },
   ) {
-    want.current = { x: e.clientX, y: e.clientY };
-
     const box = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - box.left;
     const value = lo + (x / box.width) * span;
@@ -611,9 +635,11 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
           ? `${games} games only pin it down this far — anywhere in this band would look the same. Two bands that touch are two decks the data cannot tell apart.`
           : `${points(value)}, which is outside what ${name}'s ${games} games can support.`;
 
-    // Only when it changes, so moving along one band is a transform and not a
-    // render of the whole chart.
-    setTipText((was) => (was === text ? was : text));
+    want.current = { x: e.clientX, y: e.clientY, text };
+    if (!shown.current) {
+      shown.current = true;
+      setShowing(true);
+    }
   }
 
   return (
@@ -657,7 +683,10 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                 role="img"
                 aria-label={`${deckName(deck.colors)}: ${points(deck.lift)} over ${deck.n.toLocaleString()} games, give or take ${points(half).replace("+", "")}`}
                 onMouseMove={(e) => describe(deck, e)}
-                onMouseLeave={() => setTipText(null)}
+                onMouseLeave={() => {
+                  shown.current = false;
+                  setShowing(false);
+                }}
               >
                 {/* The two decks the question was about are drawn solid and the
                     rest are dimmed. They are the only two the grade looked at,
@@ -751,7 +780,7 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
           // `want` before it sets the text, so the position is known here.
           style={{ transform: place(want.current.x, want.current.y, TIP_MAX_WIDTH) }}
         >
-          {tipText}
+          {want.current.text}
         </div>
       )}
     </div>

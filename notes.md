@@ -71,6 +71,8 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
+9.  We've got a lot of custom-coded charts/infographics/bars/graphics in general that I have consistently found to be hard to read. I'd love for you to do a thorough pass on the whole app, every page, etc, and create a list of these sub-par graphics. THEN, i'd love for you to do some deep research into using either Nivo or Tremor packages as replacements (but of course make sure it matches our app's overall theme). Be sure to also use the frontend skill if u think that's applicable here. FINALLY, start replacing these graphics using best practices Nivo/Tremor suggests and remember that the next time u wanna make a graphic.
+
 # Ideas:
 
 1. **What is left of this is the DECK-TYPE quiz, and it is one derivation away.**
@@ -576,7 +578,6 @@ them against the crowd rather than against what wins — the circularity
 
    Three things from it belong here because they constrain work outside the
    drill:
-
    - **Two thirds of what this entry promised does not need replay at all.**
      Format speed (`num_turns`) and real deck land counts (`deck_<card>`,
      basics included) are in the GAME dataset the pipeline already streams. So
@@ -1005,24 +1006,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-                        So when the colour rule moved (decision #23), the app changed and the
-                        instrument did not. It went on reporting the old rule's numbers, correctly,
-                        with the right imports at the top of the file, and nothing anywhere could
-                        have said so. It now calls `packScoringContext` like the mutation does.
+                            So when the colour rule moved (decision #23), the app changed and the
+                            instrument did not. It went on reporting the old rule's numbers, correctly,
+                            with the right imports at the top of the file, and nothing anywhere could
+                            have said so. It now calls `packScoringContext` like the mutation does.
 
-                        **The second half is worse and is the general form.** The same file printed
-                        "the colour terms charged it 0.34pp" under its table, from a filter naming
-                        `splash` and `archetype`. That filter was written before the off-colour term
-                        existed and nobody widened it -- so the number under a table measuring the
-                        off-colour term **excluded the off-colour term**. It read as a healthy small
-                        charge and it was a subtotal of the two terms that were not the subject. The
-                        true figure was 1.28pp, which is still far too small, which is the finding
-                        the instrument was built to surface and had been hiding for four days.
+                            **The second half is worse and is the general form.** The same file printed
+                            "the colour terms charged it 0.34pp" under its table, from a filter naming
+                            `splash` and `archetype`. That filter was written before the off-colour term
+                            existed and nobody widened it -- so the number under a table measuring the
+                            off-colour term **excluded the off-colour term**. It read as a healthy small
+                            charge and it was a subtotal of the two terms that were not the subject. The
+                            true figure was 1.28pp, which is still far too small, which is the finding
+                            the instrument was built to surface and had been hiding for four days.
 
-                        The rule: **a harness must not enumerate what it sums.** Sum everything and
-                        exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-                        the total by default rather than by somebody remembering. An allowlist in an
-                        instrument is a silent undercount waiting for the next field.
+                            The rule: **a harness must not enumerate what it sums.** Sum everything and
+                            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                            the total by default rather than by somebody remembering. An allowlist in an
+                            instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
@@ -1179,7 +1180,7 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     scorer and one did not, and the one that did not was the one nobody had
     complained about yet. `pickCoach.ts` cites this by name.
 
-23. **The widest gap among k noisy numbers is wide when nothing is there, and a
+22. **The widest gap among k noisy numbers is wide when nothing is there, and a
     two-sigma gate on it is not a two-sigma test.** The archetype quiz asks
     which of a card's decks wants it most and which least, and gated that on
     best-minus-worst clearing two standard errors. Over 2,000,000 simulated
@@ -1211,7 +1212,7 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     was both honest and playable -- so the inseparable cards became the drill's
     third answer instead of its rejects.
 
-22. **An instrument beside a threshold measures the setting, not whether the
+23. **An instrument beside a threshold measures the setting, not whether the
     setting is right** (2026-08-19). `stats_viewed.forced` was added to settle
     where the decision-pick floor belongs and a person settled it first, on the
     first real run. The metric answers "how many does the floor withhold", and no
