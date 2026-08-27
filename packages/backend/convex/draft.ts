@@ -308,6 +308,73 @@ export const unfinished = query({
 });
 
 /**
+ * The sets you have been drafting, newest first.
+ *
+ * The picker offers twenty-six sets in release order and a drafter uses three
+ * of them. Getting back into the set you played yesterday meant finding it in
+ * that list every time, which is a scan of the whole grid to reach a decision
+ * that was already made.
+ *
+ * ONE ROW PER SET, NOT PER DRAFT, which is what separates this from
+ * `unfinished` above. That one is a list of drafts and each chip is a different
+ * draft; this is a list of sets and the ten FDN drafts behind a chip are one
+ * chip. So it takes sessions in recency order and keeps the first sighting of
+ * each `setCode:format`, which makes the cap a cap on HISTORY rather than on
+ * answers: a player who has drafted nothing but FDN for their last twenty
+ * sessions gets exactly one chip, correctly.
+ *
+ * IT READS THE SAME ROWS `unfinished` DOES, on the same page, and that was
+ * accepted rather than missed. Merging the two would save the second read, at
+ * the price of one query answering two questions and a rename reaching a test
+ * suite -- and the saving is about 25KB a page view, because a session document
+ * is ~1.2KB of names and a summary rather than the ~36KB set documents that
+ * made `sets.list` a bandwidth problem. Different order of magnitude, different
+ * answer. Revisit if a session document ever grows a large field.
+ *
+ * `open` rather than a filter, because whether a set already has a draft going
+ * is a fact about the row and which strip gets to show it is a question about
+ * the page. The page decides -- see RecentSets, which drops them so that no set
+ * appears twice above the picker.
+ */
+export const recentSets = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    // Fewer rows than `unfinished` takes, and the trade is stated rather than
+    // tuned: this only has to reach back far enough to find the handful of sets
+    // a strip can show. Twenty sessions is deep enough that a player who
+    // alternates between two sets still surfaces both, and shallow enough that
+    // the read is a fifth of a page view's session bytes.
+    const sessions = await ownSessions(ctx, args.limit ?? 20);
+
+    const seen = new Set<string>();
+    const sets: {
+      setCode: string;
+      format: string;
+      lastPlayedAt: string;
+      open: boolean;
+    }[] = [];
+
+    for (const s of sessions) {
+      const key = `${s.setCode}:${s.format}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      sets.push({
+        setCode: s.setCode,
+        format: s.format,
+        // When this set was last SAT DOWN WITH rather than finished, which is
+        // the only date the session row can answer without reading its picks --
+        // and the right one anyway, since an abandoned draft is still the
+        // evidence that you were drafting that set.
+        lastPlayedAt: s.createdAt,
+        open: s.status === "active",
+      });
+    }
+
+    return sets;
+  },
+});
+
+/**
  * Throw a draft away, and everything written about it.
  *
  * Manual and per-draft on purpose. There is no cron, no retention window and no
