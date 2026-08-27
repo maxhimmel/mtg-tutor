@@ -7,7 +7,9 @@ import {
   deckLifts,
   gradeArchetypeGuess,
   scoreArchetypeRun,
+  decisionBand,
   rangePValue,
+  rangeThreshold,
   separation,
   sharedColor,
   type ArchetypeQuestion,
@@ -477,6 +479,40 @@ describe("rangePValue", () => {
     expect(rangePValue(0, 4)).toBe(1);
     expect(rangePValue(Number.NaN, 4)).toBe(1);
     expect(rangePValue(3, 1)).toBe(1);
+  });
+});
+
+describe("rangeThreshold and decisionBand", () => {
+  it("inverts the p-value it is the other half of", () => {
+    for (const k of [2, 3, 5, 8, 10]) {
+      expect(rangePValue(rangeThreshold(k, 0.05), k)).toBeCloseTo(0.05, 3);
+    }
+  });
+
+  // The property the whole picture rests on: bands that just touch are a gap
+  // that just clears the bar. Without it the screen could draw two bands
+  // clearly apart and print "the decks are level" underneath them.
+  it("draws bands that touch exactly at the threshold", () => {
+    for (const k of [3, 5, 10]) {
+      const sd = 0.012;
+      const band = decisionBand(sd, k, 0.05);
+      // Two ends whose bands exactly touch: the gap is the two half-widths.
+      const gap = band * 2;
+      const sigmas = gap / Math.sqrt(sd * sd + sd * sd);
+      expect(sigmas).toBeCloseTo(rangeThreshold(k, 0.05), 6);
+    }
+  });
+
+  // A wider band on a thinner sample, which is the thing the picture is for.
+  it("draws a wider band for fewer games", () => {
+    expect(decisionBand(0.02, 5, 0.05)).toBeGreaterThan(decisionBand(0.005, 5, 0.05));
+  });
+
+  // More decks in the running means a wider bar to clear, so the bands grow --
+  // which is what makes "it only looks best because it won a five-way race"
+  // visible rather than asserted.
+  it("draws wider bands the more decks were compared", () => {
+    expect(decisionBand(0.01, 10, 0.05)).toBeGreaterThan(decisionBand(0.01, 3, 0.05));
   });
 });
 

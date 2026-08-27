@@ -179,14 +179,16 @@ export const deal = query({
         // teaches. Never `pValue`: the screen says "1.1 error bars apart",
         // which a drafter can read, and a p-value is a number they cannot.
         separated: question.separated,
-        // `variance` is deliberately not sent: it is what chose the question and
-        // says nothing to a reader, where `sigmas` already carries the same fact
-        // in the one form the screen puts into a sentence.
+        // `sd` rather than `variance`, because the only reader is the reveal's
+        // band and a band is drawn in the units the lift is in. It is what lets
+        // the screen show that a figure off 300 games is a wider claim than one
+        // off 1,630 -- which is the whole of why a 6.9pp gap can be nothing.
         decks: question.decks.map((d) => ({
           colors: d.colors,
           lift: d.lift,
           n: d.n,
           deckWr: d.deckWr,
+          sd: Math.sqrt(d.variance),
         })),
       });
     }
