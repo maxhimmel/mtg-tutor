@@ -240,17 +240,19 @@ describe("archetypeQuestions", () => {
 });
 
 describe("gradeArchetypeGuess", () => {
+  // Only the fields grading reads: the two ends, and each deck's own rate,
+  // which is what separates taking the stronger deck from taking a wrong one.
   const question = {
-    name: "Cathar Commando",
-    color: "W",
-    decks: [],
     wants: "WB",
     spurns: "WU",
-    sigmas: 3,
+    decks: [
+      { colors: "WB", deckWr: 0.5 },
+      { colors: "WU", deckWr: 0.6 },
+    ],
   };
 
   it("reads a guess for the deck that wants the card", () => {
-    expect(gradeArchetypeGuess(question, DECKS, "WB")).toEqual({
+    expect(gradeArchetypeGuess(question, "WB")).toEqual({
       outcome: "read",
       correct: true,
       tookStrongerDeck: false,
@@ -260,7 +262,7 @@ describe("gradeArchetypeGuess", () => {
   // The interesting way to be wrong: answering "which of these decks is better"
   // when the question was "which of these decks wants this card".
   it("marks a miss that took the stronger deck instead", () => {
-    expect(gradeArchetypeGuess(question, DECKS, "WU")).toMatchObject({
+    expect(gradeArchetypeGuess(question, "WU")).toMatchObject({
       outcome: "misread",
       tookStrongerDeck: true,
     });
@@ -272,7 +274,7 @@ describe("gradeArchetypeGuess", () => {
   it("does not mark it when the wanted deck is the stronger one", () => {
     const flipped = { ...question, wants: "WU", spurns: "WB" };
 
-    expect(gradeArchetypeGuess(flipped, DECKS, "WB")).toMatchObject({
+    expect(gradeArchetypeGuess(flipped, "WB")).toMatchObject({
       outcome: "misread",
       tookStrongerDeck: false,
     });

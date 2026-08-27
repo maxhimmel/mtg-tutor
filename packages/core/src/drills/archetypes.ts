@@ -67,6 +67,14 @@ export interface DeckLift {
   lift: number;
   /** Games with this card in hand in this deck. Never below the artifact's floor of 200. */
   n: number;
+  /**
+   * What this deck wins generally -- the number `lift` was measured against.
+   *
+   * Carried so a question is self-contained: grading has to know which of the
+   * two decks is simply the better one, and without this the client would need
+   * the set's whole colour table beside every question to work that out.
+   */
+  deckWr: number;
   /** Variance of `lift`, carried so a comparison does not have to re-derive it. */
   variance: number;
 }
@@ -117,6 +125,7 @@ export function deckLifts(
           colors: r.colors,
           lift: r.wr - own.wr,
           n: r.n,
+          deckWr: own.wr,
           variance: variance(r.wr, r.n) + variance(own.wr, own.n),
         },
       ];
@@ -254,13 +263,18 @@ export interface ArchetypeResult {
   tookStrongerDeck: boolean;
 }
 
+/**
+ * Takes the question's own decks rather than the set's table, so a client can
+ * grade what it was handed without holding anything else.
+ */
 export function gradeArchetypeGuess(
-  question: ArchetypeQuestion,
-  decks: readonly DeckRate[],
+  question: Pick<ArchetypeQuestion, "wants" | "spurns"> & {
+    decks: readonly Pick<DeckLift, "colors" | "deckWr">[];
+  },
   guess: string,
 ): ArchetypeResult {
   const correct = guess === question.wants;
-  const rate = new Map(decks.map((d) => [d.colors, d.wr]));
+  const rate = new Map(question.decks.map((d) => [d.colors, d.deckWr]));
   const wanted = rate.get(question.wants) ?? 0;
   const spurned = rate.get(question.spurns) ?? 0;
   return {

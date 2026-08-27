@@ -147,10 +147,14 @@ export const deal = query({
         wants: question.wants,
         spurns: question.spurns,
         sigmas: question.sigmas,
+        // `variance` is deliberately not sent: it is what chose the question and
+        // says nothing to a reader, where `sigmas` already carries the same fact
+        // in the one form the screen puts into a sentence.
         decks: question.decks.map((d) => ({
           colors: d.colors,
           lift: d.lift,
           n: d.n,
+          deckWr: d.deckWr,
         })),
       });
     }

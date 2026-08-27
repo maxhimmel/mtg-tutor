@@ -1,0 +1,542 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@mtg-tutor/backend";
+import {
+  DECK_NAMES,
+  gradeArchetypeGuess,
+  scoreArchetypeRun,
+  type ArchetypeResult,
+} from "@mtg-tutor/core";
+import { CardFace } from "../../components/CardTile";
+import { useCardHover } from "../../components/CardPreview";
+import { ColorPips } from "../../components/ColorPips";
+import { PageHeading } from "../../components/PageHeading";
+import { Panel } from "../../components/Panel";
+import { PickTrack, type Tick } from "../../components/PickTrack";
+import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics";
+import { points } from "../../lib/format";
+
+/**
+ * The archetype quiz: one card, two decks, which one wants it.
+ *
+ * WHY THE QUESTION IS NOT THE ONE THAT WAS ASKED FOR. Ideas #1 wanted the deck a
+ * mono-coloured card belongs to, named. Measured across all 26 sets, naming the
+ * one deck that wants a card most clears two standard errors for 3.5% of cards;
+ * for the rest the decks are inside each other's error bars. Narrowed to a pair
+ * the same bar passes 1,148 times. `core/drills/archetypes.ts` carries the
+ * argument and `pnpm diagnose-archetype-quiz` prints the table.
+ *
+ * WHAT THE SCREEN DOES WITH THAT. The grade uses two decks and the reveal shows
+ * every one, so a person is marked on the half the data can defend and taught
+ * the half it cannot. The two decks are the extremes rather than a random pair,
+ * because the extremes are the only pair guaranteed to be separable -- and
+ * because "the deck that wants it least" is a lesson in itself.
+ *
+ * THE DECKS SAY NOTHING ABOUT THEMSELVES UNTIL THE REVEAL. No win rate, no
+ * record, just pips and a name. The trap this drill is for is answering "which
+ * of these decks is better" when the question is "which of these wants this
+ * card" -- and putting each deck's own rate on the button would hand that
+ * mistake to everyone who takes it. `tookStrongerDeck` counts the people who
+ * make it anyway, which is how we find out whether the reveal is teaching.
+ */
+
+type Run = NonNullable<ReturnType<typeof useDeal>>;
+type Question = Run["questions"][number];
+
+function useDeal(setCode: string | undefined, skip: number) {
+  return useQuery(api.drills.archetypes.deal, setCode ? { setCode, skip } : "skip");
+}
+
+const deckName = (colors: string) => DECK_NAMES[colors] ?? colors;
+
+/**
+ * Which set to open on: the one you drafted last.
+ *
+ * Off `draft.recentSets`, which the home page already built for its own strip --
+ * so this costs the sessions read and no new query. Falling back to the newest
+ * set rather than to nothing, because a person who has never drafted is exactly
+ * who this drill is for: it reads a set's statistics and none of your history,
+ * which makes it the one thing here playable on day one.
+ */
+function useDefaultSet(sets: { code: string }[] | undefined) {
+  const recent = useQuery(api.draft.recentSets, {});
+  if (!sets || sets.length === 0) return undefined;
+  const known = new Set(sets.map((s) => s.code));
+  return recent?.find((r) => known.has(r.setCode))?.setCode ?? sets[0].code;
+}
+
+export function ArchetypeQuiz() {
+  const sets = useQuery(api.sets.list);
+  const suggested = useDefaultSet(sets);
+  const [chosen, setChosen] = useState<string>();
+  const setCode = chosen ?? suggested;
+
+  const [skip, setSkip] = useState(0);
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<ReadonlyMap<string, string>>(new Map());
+
+  const live = useDeal(setCode, skip);
+  const [run, setRun] = useState<Run>();
+
+  // A run is a hand you were dealt. `deal` is a live subscription, so without
+  // this the questions would re-shuffle under somebody mid-answer the moment a
+  // set was re-ingested -- the same freeze the misses drill takes, for the same
+  // reason. Frozen and reported in one place, so the two cannot disagree about
+  // which run was served.
+  const dealt = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const token = `${setCode}:${skip}`;
+    if (!live || !setCode || dealt.current === token) return;
+    dealt.current = token;
+    setRun(live);
+    setStep(0);
+    drillStarted({
+      drill: "archetypes",
+      served: live.questions.length,
+      // The misses drill's three counts, in this drill's terms: there are no
+      // drafts behind a question here, `candidates` is the set's whole bank, and
+      // a mute set is the only way a question becomes unservable.
+      drafts: 0,
+      candidates: live.quizzable,
+      unavailable: live.mute ? 1 : 0,
+      skip,
+    });
+  }, [live, setCode, skip]);
+
+  const questions = run?.questions ?? [];
+  const key = (q: Question) => `${setCode}:${q.card.name}`;
+
+  const graded = useMemo(() => {
+    const out = new Map<string, ArchetypeResult>();
+    for (const q of questions) {
+      const guess = answers.get(key(q));
+      if (guess) out.set(key(q), gradeArchetypeGuess(q, guess));
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions, answers, setCode]);
+
+  const score = useMemo(() => scoreArchetypeRun([...graded.values()]), [graded]);
+
+  const reported = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!run || questions.length === 0 || step < questions.length) return;
+    const token = `${setCode}:${skip}:${questions.length}`;
+    if (reported.current === token) return;
+    reported.current = token;
+    drillFinished({
+      drill: "archetypes",
+      served: questions.length,
+      answered: score.answered,
+      read: score.read,
+      misread: score.misread,
+    });
+  }, [run, questions.length, step, score, setCode, skip]);
+
+  function answer(question: Question, guess: string) {
+    const k = key(question);
+    if (answers.has(k)) return;
+    const result = gradeArchetypeGuess(question, guess);
+    setAnswers((prev) => new Map(prev).set(k, guess));
+    drillAnswered({
+      drill: "archetypes",
+      outcome: result.outcome,
+      tookRawBest: result.tookStrongerDeck,
+      // Standard errors rather than win-rate points, which is what this drill's
+      // questions differ in. Named `gap` because it answers the same question
+      // the misses drill's `gap` does: are only the blatant ones ever got right.
+      gap: question.sigmas,
+      setCode: setCode ?? "",
+      index: step,
+    });
+  }
+
+  if (!setCode || run === undefined) {
+    return <p className="py-6 text-base-content/60">Reading what the decks did…</p>;
+  }
+
+  const current = questions[step];
+  const ticks: Tick[][] = [
+    questions.map((q, i) => {
+      const result = graded.get(key(q));
+      return {
+        state: result ? (result.correct ? "hit" : "miss") : i === step ? "current" : "ahead",
+        label: `Question ${i + 1}: ${q.card.name}`,
+      };
+    }),
+  ];
+
+  return (
+    <>
+      <PageHeading
+        title="Which deck wants it?"
+        controls={
+          <SetPicker
+            sets={sets ?? []}
+            value={setCode}
+            onChange={(code) => {
+              setChosen(code);
+              setSkip(0);
+              setAnswers(new Map());
+            }}
+          />
+        }
+      />
+
+      {run.mute || questions.length === 0 ? (
+        <Nothing run={run} skip={skip} onRestart={() => setSkip(0)} />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
+          <div>
+            {current ? (
+              <Question
+                question={current}
+                guess={answers.get(key(current))}
+                onAnswer={(deck) => answer(current, deck)}
+                onNext={() => setStep((s) => s + 1)}
+                last={step === questions.length - 1}
+              />
+            ) : (
+              <Finish
+                score={score}
+                served={questions.length}
+                more={run.quizzable > run.nextSkip}
+                onMore={() => {
+                  setSkip(run.nextSkip);
+                  setAnswers(new Map());
+                }}
+              />
+            )}
+          </div>
+
+          <aside className="lg:sticky lg:top-4 lg:self-start">
+            <Panel title="This run" aside={<span className="eyebrow">{questions.length}</span>}>
+              <div className="px-4 py-3">
+                <PickTrack
+                  groups={ticks}
+                  label="Questions in this run"
+                  here={step}
+                  onSelect={(i) => setStep(i)}
+                />
+                {/* The tally in a sentence rather than a fraction, the same call
+                    the misses drill makes: "6/12" invites a person to read a
+                    drill as a test, and a run is twelve cards you have now seen
+                    the numbers on either way. */}
+                <p className="mt-4 text-sm leading-relaxed text-base-content/70">
+                  {score.answered === 0
+                    ? "Nothing answered yet."
+                    : `You read ${score.read} of ${score.answered} right so far.`}
+                </p>
+              </div>
+            </Panel>
+          </aside>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Which set to be quizzed on.
+ *
+ * A plain select, not the home page's grid: this is a control on a screen about
+ * something else, and the set is a parameter of the run rather than the thing
+ * being chosen. Every set is offered including the ones that turn out to have
+ * nothing to ask -- knowing which is a 270KB read per set, so the honest cheap
+ * answer is to let a set say so when you open it. See `deal`, which explains
+ * why there is no list of quizzable sets.
+ */
+function SetPicker({
+  sets,
+  value,
+  onChange,
+}: {
+  sets: { code: string; name?: string }[];
+  value: string;
+  onChange: (code: string) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="eyebrow">Set</span>
+      <select
+        className="select select-sm select-bordered font-display font-semibold"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {sets.map((s) => (
+          <option key={s.code} value={s.code}>
+            {s.name ?? s.code.toUpperCase()}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Question({
+  question,
+  guess,
+  onAnswer,
+  onNext,
+  last,
+}: {
+  question: Question;
+  guess?: string;
+  onAnswer: (deck: string) => void;
+  onNext: () => void;
+  last: boolean;
+}) {
+  // True only after the answer is in. Before that the hover panel leads with a
+  // win rate, which is most of the answer -- the same reason the misses drill
+  // draws its pack with stats off and its reveal with them on.
+  const hover = useCardHover(question.card, guess != null);
+
+  return (
+    <Panel>
+      <div className="flex flex-col gap-6 p-4 sm:flex-row sm:items-start">
+        <div className="w-[15rem] shrink-0" {...hover}>
+          <CardFace card={question.card} className="w-full rounded-box" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-2xl font-semibold leading-tight tracking-tight">
+            {question.card.name}
+          </h2>
+          <p className="eyebrow mt-1">{question.card.typeLine}</p>
+
+          {guess == null ? (
+            <>
+              <p className="mt-5 max-w-prose leading-relaxed text-base-content/70">
+                Two decks played this card. One of them got much more out of it than
+                the other. Which one?
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {/* The wanted deck is not always drawn first: the answer would
+                    be in the DOM order otherwise, and a drill whose answer is
+                    always on the left is a drill about noticing that. Ordered by
+                    colour string, which is stable per question and carries no
+                    information about which one is right. */}
+                {[question.wants, question.spurns]
+                  .sort((a, b) => a.localeCompare(b))
+                  .map((deck) => (
+                    <button
+                      key={deck}
+                      type="button"
+                      onClick={() => onAnswer(deck)}
+                      className="group flex min-w-[9rem] cursor-pointer flex-col gap-1 rounded-box border border-base-300 bg-base-100 px-4 py-3 text-left transition-colors hover:border-primary/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <ColorPips colors={deck} className="text-lg" />
+                      <span className="font-display font-semibold leading-tight transition-colors group-hover:text-primary">
+                        {deckName(deck)}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </>
+          ) : (
+            <Reveal question={question} guess={guess} onNext={onNext} last={last} />
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * What the decks actually did, all of them.
+ *
+ * The grade used two and this draws every deck the card has a measured rate in,
+ * which is the honest shape of the screen: the middle rows are real numbers the
+ * data cannot rank, and hiding them would leave a person believing the answer
+ * was a ranking rather than a comparison of the ends.
+ */
+function Reveal({
+  question,
+  guess,
+  onNext,
+  last,
+}: {
+  question: Question;
+  guess: string;
+  onNext: () => void;
+  last: boolean;
+}) {
+  const result = gradeArchetypeGuess(question, guess);
+
+  return (
+    <div className="mt-5">
+      <p className="font-display text-lg font-semibold leading-tight">
+        {result.correct ? (
+          <span className="text-success">You read it right.</span>
+        ) : (
+          <span className="text-error">
+            {deckName(question.wants)} wanted it more.
+          </span>
+        )}
+      </p>
+
+      {/* The one sentence worth writing about a wrong answer, and only when it
+          is the interesting kind: naming the better deck instead of the deck
+          that wants the card. */}
+      {result.tookStrongerDeck && (
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
+          {deckName(guess)} wins more games than {deckName(question.wants)} does — but
+          not because of this card. What a deck wants and what a deck wins are two
+          different questions, and this one is the first.
+        </p>
+      )}
+
+      <ul className="mt-4 flex flex-col gap-1">
+        {question.decks.map((deck) => {
+          const isAnswer = deck.colors === question.wants;
+          const isGuess = deck.colors === guess;
+          return (
+            <li
+              key={deck.colors}
+              className={`flex items-center gap-3 rounded-field px-2 py-1.5 text-sm ${
+                isAnswer ? "bg-success/10" : isGuess ? "bg-error/10" : ""
+              }`}
+            >
+              <ColorPips colors={deck.colors} className="shrink-0" />
+              <span
+                className={`min-w-[5.5rem] font-display font-semibold ${
+                  isAnswer ? "text-success" : ""
+                }`}
+              >
+                {deckName(deck.colors)}
+              </span>
+              <span className="tabular-nums text-base-content/70">{points(deck.lift)}</span>
+              <span className="ml-auto text-xs tabular-nums text-base-content/45">
+                {deck.n.toLocaleString()} games
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* What the number means, in one line, because "+2.9pp" beside a deck name
+          is otherwise a statistic with no referent -- and the referent is the
+          whole idea: this is measured against what that deck wins ANYWAY. */}
+      <p className="mt-3 max-w-prose text-xs leading-relaxed text-base-content/55">
+        Each figure is how much better the deck did with this card in hand than it
+        did in general, so a deck that wins a lot is not credited for winning a
+        lot. The two ends are {question.sigmas.toFixed(1)} standard errors apart —
+        the rows between them are real numbers the data cannot put in order.
+      </p>
+
+      <button type="button" className="btn btn-primary mt-5" onClick={onNext}>
+        {last ? "See how it went" : "Next card"}
+      </button>
+    </div>
+  );
+}
+
+function Finish({
+  score,
+  served,
+  more,
+  onMore,
+}: {
+  score: { answered: number; read: number; misread: number };
+  served: number;
+  more: boolean;
+  onMore: () => void;
+}) {
+  return (
+    <Panel>
+      <div className="p-6">
+        <h2 className="font-display text-2xl font-semibold tracking-tight">
+          {score.read === score.answered
+            ? "Every one of them."
+            : `You read ${score.read} of ${score.answered}.`}
+        </h2>
+        <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
+          {score.misread === 0
+            ? "Nothing left to say — you knew which deck wanted every card."
+            : `The ${score.misread === 1 ? "one you missed is" : `${score.misread} you missed are`} still on the track above, with the numbers on them.`}
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          {more && (
+            <button type="button" className="btn btn-primary" onClick={onMore}>
+              Another {served}
+            </button>
+          )}
+          <Link href="/practice" className="btn btn-outline">
+            Back to practice
+          </Link>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * The three ways a set has nothing to ask, told apart.
+ *
+ * They are genuinely different and a screen that said "nothing here" to all
+ * three would be wrong twice. `mute` is a set with no archetype data at all,
+ * which is STX and only STX -- notes issue #8, and the first time the app says
+ * it out loud. A set with a bank and no questions left is somebody who has
+ * played it out. A set with a bank of zero never had decks that disagreed.
+ */
+function Nothing({
+  run,
+  skip,
+  onRestart,
+}: {
+  run: { mute: boolean; quizzable: number };
+  skip: number;
+  onRestart: () => void;
+}) {
+  if (run.mute) {
+    return (
+      <Panel>
+        <div className="p-6">
+          <h2 className="font-display text-xl font-semibold">
+            This set never recorded what its decks were.
+          </h2>
+          <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
+            17Lands' data for it does not say which colours a deck was playing, so
+            there is no way to know which deck wanted a card. It is the only set
+            with that hole. Pick another above.
+          </p>
+        </div>
+      </Panel>
+    );
+  }
+
+  if (skip > 0) {
+    return (
+      <Panel>
+        <div className="p-6">
+          <h2 className="font-display text-xl font-semibold">That is all of them.</h2>
+          <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
+            You have been through every card in this set whose decks disagree by
+            enough to be worth asking about — {run.quizzable} of them.
+          </p>
+          <button type="button" className="btn btn-outline mt-5" onClick={onRestart}>
+            Start again
+          </button>
+        </div>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel>
+      <div className="p-6">
+        <h2 className="font-display text-xl font-semibold">
+          Nothing in this set to ask about.
+        </h2>
+        <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
+          A question is only worth asking when two decks disagree about a card by
+          more than the data's own margin, and no card here clears that. Two sets
+          out of twenty-six are like this. Pick another above.
+        </p>
+      </div>
+    </Panel>
+  );
+}

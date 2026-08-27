@@ -1,5 +1,10 @@
 import posthog from "posthog-js";
-import type { Confidence, DrillId, MissOutcome } from "@mtg-tutor/core";
+import type {
+  ArchetypeOutcome,
+  Confidence,
+  DrillId,
+  MissOutcome,
+} from "@mtg-tutor/core";
 import type { Doc } from "@mtg-tutor/backend/dataModel";
 
 import type { PickCeremony } from "./useSettings";
@@ -1185,13 +1190,44 @@ export function drillStarted(p: {
  */
 export function drillAnswered(p: {
   drill: DrillId;
-  outcome: MissOutcome;
-  /** They took the strongest card in the pack, which still was not the answer. */
+  /**
+   * How it went, in whichever drill's vocabulary.
+   *
+   * A UNION RATHER THAN A SECOND EVENT, which is the same call the `drill`
+   * property itself is: `misses_answered` and `archetypes_answered` would be
+   * two funnels that can never be compared or merged, and the question "do
+   * people get better at these" is asked across drills before it is asked
+   * within one. The words do not overlap, so a breakdown by `outcome` splits
+   * cleanly on its own without needing `drill` beside it.
+   */
+  outcome: MissOutcome | ArchetypeOutcome;
+  /**
+   * The most interesting way to be wrong, whichever drill asked.
+   *
+   * In the misses drill it is taking the strongest card in the pack for
+   * somebody else's deck; in the archetype quiz it is naming the deck that
+   * simply wins more rather than the one that wants the card. Different
+   * mistakes, and the same mistake underneath -- answering the question about
+   * raw power when the question was about fit -- so they share a property.
+   */
   tookRawBest: boolean;
-  /** The win-rate points the original pick cost, as the grade measured it. */
+  /**
+   * How big the thing being asked about was.
+   *
+   * Win-rate points the original pick cost, in the misses drill. Standard
+   * errors separating the two decks, in the archetype quiz. Both answer the
+   * same question about the drill -- are only the blatant ones ever got right,
+   * in which case the gate is set too loose and the run should be shorter.
+   */
   gap: number;
-  /** How long ago the draft this question came from was taken. */
-  ageDays: number;
+  /**
+   * How long ago the draft this question came from was taken.
+   *
+   * Absent for a drill whose questions do not come from a draft. The archetype
+   * quiz reads a set's statistics and nothing of the player's, which is what
+   * lets it be played on day one -- and means there is no age to report.
+   */
+  ageDays?: number;
   setCode: string;
   /** Position in the run, so a drop-off shows as a shape rather than a total. */
   index: number;
@@ -1213,9 +1249,17 @@ export function drillFinished(p: {
   drill: DrillId;
   served: number;
   answered: number;
-  fixed: number;
-  stood: number;
-  missed: number;
+  /**
+   * The tally, in the drill's own words. Every count is optional because no
+   * drill has all of them -- the misses drill has three outcomes and the
+   * archetype quiz has two -- and a zero would read as "nobody did that here"
+   * where absent reads as "that cannot happen here", which is the true thing.
+   */
+  fixed?: number;
+  stood?: number;
+  missed?: number;
+  read?: number;
+  misread?: number;
 }): void {
   if (!on()) return;
   posthog.capture("drill_finished", p);
