@@ -148,10 +148,32 @@ const SCRYFALL_BACKOFF_MS = 1_000;
 // it. So nothing would have invalidated a single pool, `ingest-sets` would have
 // printed "unchanged, skipped" eighteen times, and no card would ever have got
 // one.
+//
+// `16-helpers` puts the rules card a set prints for a mechanic onto the text
+// half -- LTR's "The Ring // The Ring Tempts You" and dft's "Start Your Engines!
+// // Max Speed", the two whose printed card says more than the sentence we
+// wrote. Same class of change as `12-tokens`, which added the tokens a card
+// makes, and it has to be a MANUAL bump for the same reason `15-table-value`
+// did: no card's `value` moves, so VALUE_FINGERPRINT does not, and nothing else
+// would invalidate a pool.
+//
+// AND IT IS THE HALF I LEFT OUT. Bumping CRAWL_REVISION alone did nothing at
+// all: the pool fingerprint is checked first and returns `skipped` before the
+// crawl fork is ever reached, so every set reported "unchanged" and no card got
+// a helper. The comment above says which to bump and I read it as either/or --
+// it is neither. A new field read off a printing is a crawl change AND a shape
+// change, and needs both tags moved.
+//
+// `17-helper-faces` drops an insert face that carries no rules -- dft's back is
+// a large "4" and no text, a marker for where your speed has got to rather than
+// an explanation of anything. Both tags again, and for the reason above: whether
+// a face says anything is read off the printing and is not stored, so the cheap
+// re-derive cannot answer it.
+//
 // Exported for the tests, which have to build a fingerprint that MATCHES to
 // exercise the cheap path at all -- a hand-copied literal there would pass by
 // agreeing with itself.
-export const POOL_REVISION = `15-table-value.${VALUE_FINGERPRINT}`;
+export const POOL_REVISION = `17-helper-faces.${VALUE_FINGERPRINT}`;
 export const META_REVISION = "2-name-icon-released";
 
 // WHICH OF THE THREE REVISIONS TO BUMP, because getting this wrong is the one
@@ -186,7 +208,12 @@ export const META_REVISION = "2-name-icon-released";
 // `1-split` is not a new shape. It is the first value this has ever had, so
 // every set crawls once more to record what its pool was built from, and every
 // scoring change after that is free.
-export const CRAWL_REVISION = "1-split";
+// 2-helpers: a card's `all_parts` has always named the rules card its set prints
+// for a mechanic -- LTR's 50 tempting cards each name tltr/H13 -- and the mapper
+// dropped it because Scryfall files it as `combo_piece` rather than `token`.
+// Reading it needs the crawl again: both halves of the answer, `all_parts` and
+// the token sheet the art comes from, are things only Scryfall can say.
+export const CRAWL_REVISION = "3-helper-faces";
 
 // Convex documents cap at 1MB. Real sets land at 126-164KB, so this is a guard
 // rail rather than an expected path -- but fail loudly if a set ever grows past it.

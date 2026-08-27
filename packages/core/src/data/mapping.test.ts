@@ -475,3 +475,129 @@ describe("restateRatings", () => {
     expect(restated[0]).toEqual(merged[0]);
   });
 });
+
+// The reason this whole thread exists: every one of LTR's 50 tempting cards has
+// named tltr/H13 in `all_parts` since the set was first ingested, and the mapper
+// dropped it because Scryfall files a rules card as `combo_piece`.
+describe("mergeCards helpers", () => {
+  const RING_ID = "7215460e-8c06-47d0-94e5-d1832d0218af";
+  const ringSheet: ScryfallCard[] = [
+    {
+      id: RING_ID,
+      name: "The Ring // The Ring Tempts You",
+      layout: "double_faced_token",
+      rarity: "common",
+      collector_number: "H13",
+      booster: false,
+      set: "tltr",
+      card_faces: [
+        {
+          name: "The Ring",
+          oracle_text: "Your Ring-bearer is legendary and can't be blocked by bigger creatures.",
+          image_uris: { normal: "front.jpg" },
+        },
+        {
+          name: "The Ring Tempts You",
+          oracle_text: "As the Ring tempts you, you get an emblem named The Ring.",
+          image_uris: { normal: "back.jpg" },
+        },
+      ],
+    } as ScryfallCard,
+  ];
+  const tempts = (): ScryfallCard =>
+    ({
+      ...scryfall({ name: "Frodo, Sauron's Bane" }),
+      oracle_text: "Otherwise, the Ring tempts you.",
+      all_parts: [
+        {
+          id: RING_ID,
+          component: "combo_piece",
+          name: "The Ring // The Ring Tempts You",
+          type_line: "Emblem // Card",
+        },
+      ],
+    }) as ScryfallCard;
+
+  it("keeps the rules card the set prints, with both faces", () => {
+    expect(merge(tempts(), ringSheet).helpers).toEqual([
+      {
+        name: "The Ring // The Ring Tempts You",
+        typeLine: "Emblem // Card",
+        imageUrl: "front.jpg",
+        backImageUrl: "back.jpg",
+      },
+    ]);
+  });
+
+  // The corpus is the whole of the filter, so an insert nobody claimed with
+  // `art:` is not stored -- a place to put your energy counters explains nothing
+  // and would cost every card in the set a row.
+  it("ignores a combo piece the corpus does not name", () => {
+    const card = {
+      ...scryfall({ name: "Galvanic Discharge" }),
+      all_parts: [
+        {
+          id: "1c516212-ad39-4396-8e05-ae57f100309f",
+          component: "combo_piece",
+          name: "Energy Reserve",
+          type_line: "Card",
+        },
+      ],
+    } as ScryfallCard;
+    expect(merge(card).helpers).toBeUndefined();
+  });
+
+  // dft's back face is a large "4" and no text: a marker for where your speed
+  // has got to, not an explanation of anything.
+  it("drops a face that carries no rules, and keeps the one that does", () => {
+    const SPEED_ID = "82613de6-ed37-48c1-8d2f-d91a3f496794";
+    const speedSheet: ScryfallCard[] = [
+      {
+        id: SPEED_ID,
+        name: "Start Your Engines! // Max Speed",
+        layout: "double_faced_token",
+        rarity: "common",
+        collector_number: "20",
+        booster: false,
+        set: "tdft",
+        card_faces: [
+          {
+            name: "Start Your Engines!",
+            oracle_text: "Whenever an opponent loses life during your turn, increase your speed by 1.",
+            image_uris: { normal: "sye.jpg" },
+          },
+          { name: "Max Speed", image_uris: { normal: "four.jpg" } },
+        ],
+      } as ScryfallCard,
+    ];
+    const card = {
+      ...scryfall({ name: "Aether Syphon" }),
+      oracle_text: "Start your engines!",
+      all_parts: [
+        {
+          id: SPEED_ID,
+          component: "combo_piece",
+          name: "Start Your Engines! // Max Speed",
+          type_line: "Card // Card",
+        },
+      ],
+    } as ScryfallCard;
+    expect(merge(card, speedSheet).helpers).toEqual([
+      {
+        name: "Start Your Engines! // Max Speed",
+        typeLine: "Card // Card",
+        imageUrl: "sye.jpg",
+      },
+    ]);
+  });
+
+  it("leaves a card that names nothing without the field at all", () => {
+    expect(merge(scryfall({ name: "Llanowar Elves" })).helpers).toBeUndefined();
+  });
+
+  // A helper is not a token and must not be counted as one: `tokens_previewed`
+  // has been shipping for months and would silently start measuring both.
+  it("does not put the rules card in `tokens`", () => {
+    expect(merge(tempts(), ringSheet).tokens).toBeUndefined();
+  });
+});

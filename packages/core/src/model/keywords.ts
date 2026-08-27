@@ -1,8 +1,20 @@
+import { allMechanics } from "./mechanics.js";
+import { indexInText, withoutReminders } from "./mechanicMatch.js";
+
 // What a mechanic actually does, so a card's rules text does not have to be
-// guessed at. Evergreen keywords plus the deciduous ones that keep showing up;
-// a set with its own named mechanic can be appended here without touching
-// anything else. Reminder text is the printed wording, trimmed of the reminder
+// guessed at. Reminder text is the printed wording, trimmed of the reminder
 // parentheses and of cost placeholders that vary per card.
+//
+// THIS LIST IS THE EVERGREEN HALF, and only that. It used to invite a set's own
+// mechanic to be appended, which happened six times in twenty-six sets while
+// 1,521 cards in the pool carried one the panel said nothing about. Those live
+// in docs/set-mechanics.yaml now, where a script can tell when one is missing.
+// The split is by how often a mechanic appears, not by taste: everything here is
+// in essentially every set, which is why these definitions can be this terse --
+// nobody needs telling twice what flying does.
+//
+// Saddle, Discover, Backup, Bargain and Storm left for the corpus when it was
+// written, so a mechanic has one definition rather than two that drift.
 //
 // The bottom of the file answers the same question about the card's SHAPE
 // rather than its abilities, in the same {name, reminder} pair, because a
@@ -102,11 +114,6 @@ const GLOSSARY: Keyword[] = [
       "Tap any number of creatures with total power at least the crew number to turn this Vehicle into an artifact creature until end of turn.",
   },
   {
-    name: "Saddle",
-    reminder:
-      "Tap any number of other creatures with total power at least the saddle number to saddle this Mount until end of turn.",
-  },
-  {
     name: "Convoke",
     reminder:
       "Tap creatures as you cast this; each pays for {1} or one mana of that creature's color.",
@@ -150,25 +157,6 @@ const GLOSSARY: Keyword[] = [
     name: "Fight",
     reminder: "Each creature deals damage equal to its power to the other.",
   },
-  {
-    name: "Bargain",
-    reminder: "You may sacrifice an artifact, enchantment, or token as you cast this spell.",
-  },
-  {
-    name: "Backup",
-    reminder:
-      "When this creature enters, put that many +1/+1 counters on target creature. If that's another creature, it also gains this card's other abilities until end of turn.",
-  },
-  {
-    name: "Discover",
-    reminder:
-      "Exile cards from the top of your library until you exile a nonland card with that mana value or less. Cast it without paying its mana cost or put it into your hand, then put the rest on the bottom in a random order.",
-  },
-  {
-    name: "Storm",
-    reminder:
-      "When you cast this spell, copy it for each spell cast before it this turn. You may choose new targets for the copies.",
-  },
 ];
 
 const MATCHERS = GLOSSARY.map((keyword) => ({
@@ -178,21 +166,55 @@ const MATCHERS = GLOSSARY.map((keyword) => ({
   pattern: new RegExp(`\\b${keyword.name}\\b`, "i"),
 }));
 
-// The mechanics a card's rules text actually mentions, in the order they are
-// printed -- which is the order the player reads them.
+/**
+ * The mechanics a card's rules text actually mentions, in the order they are
+ * printed -- which is the order the player reads them.
+ *
+ * Two sources, one list. The evergreen keywords above, and the set's own
+ * mechanics out of the corpus, because a player hovering a card does not care
+ * which of those a thing is -- they care that "the Ring tempts you" has been
+ * sitting on fifty LTR cards with nothing anywhere in the app to say what it
+ * meant.
+ *
+ * Set mechanics sort ahead of evergreen ones at the same position. A card is
+ * hovered because of the part that is unfamiliar, and on a card with flying and
+ * a set mechanic the flying is not why.
+ */
 export function keywordsOf(card: { oracleText: string }): Keyword[] {
   // Scryfall's oracle text carries the printed reminder text, and reminder text
   // names other keywords: flying's mentions reach, deathtouch's mentions
   // destroy. Matching inside it would report abilities the card does not have.
-  const rules = card.oracleText.replace(/\([^)]*\)/g, " ");
-  const found: { keyword: Keyword; at: number }[] = [];
+  const rules = withoutReminders(card.oracleText);
+  const found: { keyword: Keyword; at: number; set: boolean }[] = [];
 
   for (const { keyword, pattern } of MATCHERS) {
     const at = rules.search(pattern);
-    if (at >= 0) found.push({ keyword, at });
+    if (at >= 0) found.push({ keyword, at, set: false });
   }
 
-  return found.sort((a, b) => a.at - b.at).map((f) => f.keyword);
+  for (const m of allMechanics()) {
+    const at = indexInText(m, rules);
+    if (at >= 0) found.push({ keyword: { name: m.name, reminder: m.short }, at, set: true });
+  }
+
+  // A card saying "manifest dread" matches Manifest and Manifest Dread both, at
+  // the same character. Only the specific one is worth showing: the general one
+  // is a strictly weaker description of the same sentence.
+  const subsumed = new Set(
+    found.flatMap(({ keyword: a }) =>
+      found
+        .filter(
+          ({ keyword: b }) =>
+            b.name !== a.name && b.name.toLowerCase().startsWith(`${a.name.toLowerCase()} `),
+        )
+        .map(() => a.name),
+    ),
+  );
+
+  return found
+    .filter((f) => !subsumed.has(f.keyword.name))
+    .sort((a, b) => a.at - b.at || Number(b.set) - Number(a.set))
+    .map((f) => f.keyword);
 }
 
 // How a card is PRINTED, where that is itself a rule -- two spells sharing one

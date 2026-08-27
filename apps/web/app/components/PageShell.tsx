@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppHeader } from "./AppHeader";
+import { LegalNotice } from "./LegalNotice";
 
 // The frame every screen sits in. It exists because the frame used to be seven
 // hand-copied `<main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">` tags
@@ -19,11 +20,16 @@ import { AppHeader } from "./AppHeader";
 // per-page middle, and everything that went in there -- which set, which pick,
 // quiz on or off, the links between a review's views -- belongs to the page and
 // now sits in it, under PageHeading.
+//
+// The notice at the foot is here for the same reason the header is: it is owed
+// on every screen that shows a card, which is nearly all of them, and a footer
+// each page remembers to add is a footer some page forgets. See LegalNotice.
 export function PageShell({ children }: { children: ReactNode }) {
   return (
     <main className="mx-auto max-w-[1500px] px-6 pb-16 pt-5">
       <AppHeader />
       {children}
+      <LegalNotice />
     </main>
   );
 }

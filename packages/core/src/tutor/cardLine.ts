@@ -1,5 +1,7 @@
 import type { Card, DisplayCard, ColorCode, PoolCard } from "../model/card.js";
 import { CARD_STAT_GLOSSARY } from "./glossary.js";
+import { setMechanicsOf } from "../model/mechanics.js";
+import { phrasesOf } from "../model/mechanicMatch.js";
 
 // How a card is written into a prompt: what it is, and what the data says about
 // it. Shared by pickCoach and reviewPrompt so the live coach and the review
@@ -42,20 +44,80 @@ export function colorLabel(c: PoolCard): string {
 // digits of game count in every line of a fifteen-card pack is noise.
 const count = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
-// Reminder text says again, in brackets, what a keyword already means. The model
-// knows what flying does; it is a third of the characters on a card with three
-// keywords, repeated for every card in every pack of the draft.
-//
-// Newlines become " / " so a card stays one line: describeCard's callers own the
-// indentation of the block a card sits in, and a multi-line card would break out
-// of it.
+/**
+ * A card's rules text, with the reminder text it does not need.
+ *
+ * Reminder text says again, in brackets, what a keyword already means, and it is
+ * a third of the characters on a card with three keywords, repeated for every
+ * card in every pack of a draft. The model knows what flying does.
+ *
+ * IT DOES NOT KNOW WHAT WARP DOES, and stripping every bracket is how the rule
+ * three lines below this one -- say what a card does from its text and nothing
+ * else, many of these sets are newer than you are -- became unfollowable. On a
+ * card carrying a mechanic its own set introduced, the reminder is the only
+ * definition present, and this was deleting it on 1,148 of the 1,614 such cards
+ * in the pool. Worst on mom, sir and msh at 97%, which are exactly the sets a
+ * model has never seen.
+ *
+ * So the strip is now selective: a reminder is kept when the text ahead of it
+ * names a mechanic out of the corpus, and dropped otherwise. Measured across all
+ * 26 sets that keeps 24.9% of reminder characters and still drops the three
+ * quarters this exists for.
+ *
+ * The whole change -- kept reminders plus the bracketed sentences describeCard
+ * adds where there was no reminder to keep -- moves 23.1% of the 7,724 cards in
+ * the pool and lengthens the mean card line 211 -> 241 characters. On a coached
+ * pick, which writes out six cards, that is about +46 tokens. Measured, not
+ * estimated: the estimate was +14, because it counted the reminders and forgot
+ * the sentences.
+ *
+ * Newlines become " / " so a card stays one line: describeCard's callers own the
+ * indentation of the block a card sits in, and a multi-line card would break out
+ * of it.
+ */
 export function rulesText(c: { oracleText: string }): string {
-  return c.oracleText
-    .replace(/\([^)]*\)/g, " ")
+  return readRules(c).text;
+}
+
+/**
+ * The rules text, and which set mechanics the card explained for itself.
+ *
+ * One pass, because the second question is decided by the first: a mechanic is
+ * explained when the strip above chose to keep the bracket that follows it. Two
+ * passes disagreeing is how a card ends up carrying the reminder AND our
+ * sentence for the same mechanic, which is the same fact twice at the model's
+ * expense.
+ */
+function readRules(c: { oracleText: string }): { text: string; explained: Set<string> } {
+  const mechanics = setMechanicsOf(c);
+  const phrases = mechanics.map((m) => ({ name: m.name, needles: phrasesOf(m).map((p) => p.toLowerCase()) }));
+  const explained = new Set<string>();
+
+  const text = c.oracleText
     .split("\n")
-    .map((l) => l.replace(/\s+/g, " ").trim())
+    .map((line) => {
+      // A reminder belongs to whatever precedes it on its own line, which is how
+      // the card is laid out and the only thing that ties the two together.
+      let kept = "";
+      let rest = line;
+      for (;;) {
+        const open = rest.indexOf("(");
+        if (open < 0) break;
+        const close = rest.indexOf(")", open);
+        if (close < 0) break;
+        const before = kept + rest.slice(0, open);
+        const lower = before.toLowerCase();
+        const owner = phrases.find((p) => p.needles.some((n) => lower.includes(n)));
+        if (owner) explained.add(owner.name);
+        kept = before + (owner ? rest.slice(open, close + 1) : " ");
+        rest = rest.slice(close + 1);
+      }
+      return `${kept}${rest}`.replace(/\s+/g, " ").trim();
+    })
     .filter(Boolean)
     .join(" / ");
+
+  return { text, explained };
 }
 
 // The body, for a card that has one. A creature is its size as much as its cost.
@@ -78,8 +140,21 @@ function bodyOf(c: Card): string {
 // dropped here.
 export function describeCard(c: Card): string {
   const head = `${c.name} — ${c.cmc} mana, ${colorLabel(c)}, ${c.typeLine}${bodyOf(c)}`;
-  const rules = rulesText(c);
-  return rules ? `${head} — ${rules}` : head;
+  const { text, explained } = readRules(c);
+  const line = text ? `${head} — ${text}` : head;
+
+  // What the card itself never says. The reminder is kept where there is one,
+  // and on a great many cards there is not: LTR printed 45 distinct reminders
+  // across 291 cards and none of them mentions the Ring, because those rules
+  // shipped on a separate card in the booster. `one` keeps 2% of its reminder
+  // characters for the same reason.
+  //
+  // Bracketed and named so the model can tell this apart from the card. It is
+  // the app explaining a mechanic, not text anybody is holding, and a coach that
+  // quotes it back as printed rules is worse than one that never had it.
+  const missing = setMechanicsOf(c).filter((m) => !explained.has(m.name));
+  if (missing.length === 0) return line;
+  return `${line} [${missing.map((m) => `${m.name}: ${m.short}`).join(" ")}]`;
 }
 
 // What the DATA says. Absent stats are dropped rather than printed as "n/a": a

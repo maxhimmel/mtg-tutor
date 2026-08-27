@@ -14,6 +14,7 @@ import {
   settingsOpened,
   signedOut,
   statsViewed,
+  mechanicExplained,
   tokensPreviewed,
 } from "./analytics";
 
@@ -69,6 +70,7 @@ describe("without a project token", () => {
       authStalled({ route: "/" });
       authRecovered({ route: "/", stalledMs: 1200 });
       tokensPreviewed({ named: 1, withArt: 1, drawn: 1, panel: true, viewport: 1440 });
+      mechanicExplained({ setCode: "ltr", set: 1, evergreen: 0, printed: 0, silent: false });
       statsViewed({ drafts: 0, picks: 0, detailed: 0, mistakes: 0, forced: 0, truncated: false });
       draftResumed({ sessionId: "s1", setCode: "fdn", format: "TradDraft", picks: 3, agedHours: 2 });
       draftStranded({
@@ -140,6 +142,15 @@ describe("with a project token", () => {
     const seen = { named: 2, withArt: 1, drawn: 0, panel: false, viewport: 1280 };
     tokensPreviewed(seen);
     expect(capture).toHaveBeenCalledWith("tokens_previewed", seen);
+  });
+
+  // `set` and `evergreen` answer whether the corpus earns its place, so they
+  // have to stay apart -- summed into one "mechanics" count the answer is
+  // unrecoverable. `silent` is the one read as a rate per set.
+  it("keeps the set mechanics apart from the evergreen ones", () => {
+    const seen = { setCode: "ltr", set: 2, evergreen: 1, printed: 1, silent: false };
+    mechanicExplained(seen);
+    expect(capture).toHaveBeenCalledWith("mechanic_explained", seen);
   });
 
   // These two are read by subtraction -- stalls minus recoveries is the number

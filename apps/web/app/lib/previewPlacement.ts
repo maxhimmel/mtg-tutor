@@ -84,19 +84,39 @@ function onScreen(anchor: Anchor, viewport: Viewport): boolean {
 }
 
 /**
- * `sides` is the card as it is printed -- the front, and the back where there is
- * one. `tokens` is what that card makes, drawn beside it. Both are ordered by
- * claim on the space: the front is what the player pointed at and is never
- * dropped, and each box after it is taken only if the whole of it still fits.
+ * `faces` is everything the block draws, in order of its claim on the space: the
+ * card as it is printed, then the rules cards its set prints for its mechanics,
+ * then what it makes. The front is what the player pointed at and is never
+ * dropped; each box after it is taken only if the whole of it still fits.
  *
- * THEY ARRIVE APART BECAUSE THEY ARE MEASURED AGAINST DIFFERENT EDGES.
+ * ONE LIST, and it used to be two. Sides and tokens arrived separately because
+ * they were measured against different edges -- a token yielded to the wall and
+ * a side did not. Once the token stopped yielding (see below) the split decided
+ * nothing, and a parameter that changes no outcome is worse than no parameter:
+ * the caller was still computing where the boundary fell, and got it wrong the
+ * moment a third kind of face was added between the two.
  *
- * A token yields to the wall. It is another card, it is behind the card's own
- * sides in the queue, and the panel names every token whether or not there was
- * room to draw one -- so a token that does not fit is a loss the screen still
- * reports.
+ * NEITHER YIELDS TO THE WALL, AND THAT IS A CHANGE.
  *
- * A side does not yield to the wall. It is THIS card, nothing else on the screen
+ * A token used to. The reasoning was that a token is another card, that it sits
+ * behind the card's own sides in the queue, and that the panel names every token
+ * whether or not one was drawn -- so a token lost to the wall was a loss the
+ * screen still reported.
+ *
+ * What that produced on a 1440px draft board was a pack card drawing its front
+ * and nothing else, while the SAME card hovered in the Last pick rail beside it
+ * drew its token too -- a card already right of the wall has no wall. The
+ * feature worked everywhere except the screen it was built for, and the naming
+ * fallback made that quiet rather than visible. Reported as a bug, and it is
+ * one: a rule whose effect is "the preview shows less in the middle of the board
+ * than at the edge of it" is not a rule anybody would choose.
+ *
+ * So the wall now costs the block a POSITION and never a face. It still decides
+ * where the block prefers to sit -- `right` below is the wall's edge while the
+ * whole arrangement fits inside it -- and it no longer decides what is in the
+ * block at all.
+ *
+ * A side never yielded to the wall. It is THIS card, nothing else on the screen
  * says what the other half of it is, and the wall is a preference the page
  * stated rather than an edge the page has. Letting it swallow a back face makes
  * a wider window show less than a narrower one, which is what the draft board's
@@ -113,10 +133,8 @@ export function place(
   anchor: Anchor,
   viewport: Viewport,
   wantsPanel: boolean,
-  sides: Box[],
-  tokens: Box[] = [],
+  faces: Box[],
 ): Placement | null {
-  const faces = [...sides, ...tokens];
   if (faces.length === 0 || !onScreen(anchor, viewport)) return null;
 
   const wall =
@@ -148,15 +166,12 @@ export function place(
   //
   // The front is exempt from all of it: it is what the player pointed at and is
   // never dropped, so a panel is what yields when even the card alone cannot
-  // make room for both -- which is what `panelLeft` being null still means. The
-  // rest of the card's sides answer to the page, and only the tokens to the
-  // wall; see the note above the signature for why those are different edges.
+  // make room for both -- which is what `panelLeft` being null still means.
+  // Everything after it answers to the page and not to the wall, whatever kind
+  // of face it is; see the note above the signature for why that changed.
   let width = faces[0].w;
   let shown = 1;
-  while (
-    shown < faces.length &&
-    width + GAP + faces[shown].w <= roomTo(shown < sides.length ? viewport.width : wall)
-  ) {
+  while (shown < faces.length && width + GAP + faces[shown].w <= roomTo(viewport.width)) {
     width += GAP + faces[shown].w;
     shown += 1;
   }

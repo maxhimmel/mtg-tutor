@@ -226,8 +226,17 @@ export function ceremonyAbandoned(p: {
  * would change what gets done: one term stuck at the top says that rule needs
  * rewriting, a flat spread says the whole block is being skimmed.
  *
- * Neither field measures whether the answer is GOOD. Both catch a failure that
- * has a name; the rest needs a person.
+ * `mechanics` is how many of the set's own mechanics were on the card the pick
+ * was about, and therefore how much of the prompt was our explanation rather
+ * than the card's own text. It is not here to prove the corpus fires --
+ * `mechanic_explained` does that from the panel, on far more cards. It is here
+ * because it can be crossed with the two fields above it: if `contradicted` or
+ * `jargon` run higher on picks about a card carrying an unfamiliar mechanic,
+ * then handing the model a definition made its prose worse rather than better,
+ * and that is a repair to this feature that nothing else would surface.
+ *
+ * None of these measures whether the answer is GOOD. They catch failures that
+ * have names; the rest needs a person.
  */
 export function coachShown(p: {
   sessionId: string;
@@ -236,6 +245,7 @@ export function coachShown(p: {
   chars: number;
   contradicted: boolean;
   jargon: string[];
+  mechanics: number;
 }): void {
   if (!on()) return;
   posthog.capture("coach_shown", p);
@@ -963,6 +973,58 @@ export function tokensPreviewed(p: {
 }): void {
   if (!on()) return;
   posthog.capture("tokens_previewed", p);
+}
+
+/**
+ * What the hover panel could say about a card somebody looked at.
+ *
+ * The event that would have made notes.md #9 findable. "The Ring tempts you"
+ * sat on fifty LTR cards with nothing in the app able to say what it meant, and
+ * the panel looked exactly as it does on a card with nothing to explain -- so
+ * the only person who could have reported it is one who already knew the
+ * mechanic was missing, which is precisely what somebody confused by it does not
+ * know.
+ *
+ * WHAT IS NOT HERE, AND WHY
+ *
+ * "A mechanic we detected and had no sentence for" is the number you would want
+ * and it cannot be captured here. The corpus is the only vocabulary the browser
+ * ships, so everything it can find, it can already explain -- the count would be
+ * zero by construction and would read as coverage. That gap is measured where
+ * the full rules vocabulary exists, in refresh-mechanics, which is why that
+ * script exits non-zero rather than printing a warning.
+ *
+ * So this measures the two things a real pack can say and a script cannot.
+ *
+ * `set` against `evergreen` is whether the corpus earns its place. If people's
+ * hovers are all flying and trample then the panel was already fine and this was
+ * built for a case that does not come up.
+ *
+ * `printed` is how many of the mechanics on this card were explained by the card
+ * the GAME prints rather than by a sentence we wrote -- LTR's rules slip, dft's.
+ * Those two replace our prose where they appear, so this is the only way to see
+ * that the swap is happening at all: `set` falls by exactly what `printed`
+ * covers, and a `printed` stuck at zero on ltr means the crawl that fetches
+ * those cards has quietly stopped finding them.
+ *
+ * `silent` is a card with rules text that the panel named nothing on. Some of
+ * those are honest -- plenty of cards do something unique that no glossary
+ * covers -- so the number is not a defect on its own. Its RATE is: a new set
+ * whose silence runs above the others is a set with mechanics nobody has written
+ * yet, and that is exactly the state every set was in before this existed.
+ *
+ * Once per provider, not once per hover, for the same reason as
+ * `tokensPreviewed`: a draft is hundreds of hovers and the answer barely moves.
+ */
+export function mechanicExplained(p: {
+  setCode: string;
+  set: number;
+  evergreen: number;
+  printed: number;
+  silent: boolean;
+}): void {
+  if (!on()) return;
+  posthog.capture("mechanic_explained", p);
 }
 
 /**

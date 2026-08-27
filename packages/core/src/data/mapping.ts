@@ -2,8 +2,17 @@
 // fetchers so the CLI and the server produce identical cards from identical
 // responses, regardless of how they got them.
 
-import type { Card, CardToken, ColorCode, IngestCard, Rarity } from "../model/card.js";
+import type { Card, CardHelper, CardToken, ColorCode, IngestCard, Rarity } from "../model/card.js";
 import { isLand, normalizeName } from "../model/card.js";
+import { allMechanics } from "../model/mechanics.js";
+
+// The printed rules cards the corpus claims, by name. Read once: the corpus is
+// compiled into a module, so this is a constant and not a lookup.
+const PRINTED_RULES = new Set(
+  allMechanics()
+    .map((m) => m.art?.toLowerCase())
+    .filter((n): n is string => n != null),
+);
 import type { ColorRating, ScryfallCard, SeventeenLandsCard } from "./sources.js";
 
 const RARITIES: Rarity[] = ["common", "uncommon", "rare", "mythic", "special", "bonus"];
@@ -18,6 +27,26 @@ const asColorCodes = (values: string[] | undefined): ColorCode[] =>
 function imageOf(sc: ScryfallCard): string | undefined {
   return sc.image_uris?.normal ?? sc.card_faces?.[0]?.image_uris?.normal;
 }
+
+// What the token sheet holds for one printing: the face it leads with, the other
+// one where there is another, and whether either says anything.
+//
+// A token's back was never wanted -- a token is one picture -- but a rules
+// insert's is: LTR's leads with the Emblem and carries the rules on the back,
+// which is the half worth reading.
+//
+// The rules flags are for inserts only and `tokensOf` must not consult them: a
+// 1/1 Soldier has no oracle text and is still exactly the picture somebody
+// wanted. See `helpersOf` for why an insert's faces are held to it.
+interface SheetArt {
+  front?: string;
+  back?: string;
+  frontHasRules: boolean;
+  backHasRules: boolean;
+}
+
+const hasRules = (face: { oracle_text?: string } | undefined) =>
+  (face?.oracle_text ?? "").trim().length > 0;
 
 // The back face's art -- which is also the test for whether a card HAS a back
 // face rather than two halves of one picture. A transforming card's faces each
@@ -52,12 +81,12 @@ function layoutOf(sc: ScryfallCard): string | undefined {
 //
 // Deduped by name within a card rather than by id, because two entries that
 // differ only by printing are one thing to a person reading the card.
-function tokensOf(sc: ScryfallCard, art: ReadonlyMap<string, string>): CardToken[] | undefined {
+function tokensOf(sc: ScryfallCard, art: ReadonlyMap<string, SheetArt>): CardToken[] | undefined {
   const byName = new Map<string, CardToken>();
 
   for (const part of sc.all_parts ?? []) {
     if (part.component !== "token" || byName.has(part.name)) continue;
-    const imageUrl = art.get(part.id);
+    const imageUrl = art.get(part.id)?.front;
     byName.set(part.name, {
       name: part.name,
       typeLine: part.type_line,
@@ -85,6 +114,61 @@ function oracleOf(sc: ScryfallCard): string {
   }
 
   return "";
+}
+
+/**
+ * The rules cards the game prints for this card's mechanics.
+ *
+ * Scryfall files these under `combo_piece` rather than `token`, which is why
+ * they were invisible: every one of LTR's 50 tempting cards has named "The Ring
+ * // The Ring Tempts You" in `all_parts` since the set was ingested, and
+ * `tokensOf` above drops anything that is not a token. The note on
+ * ScryfallRelatedCard called combo_piece "not enough to build anything on" --
+ * true of the card-names-card links it counted, and it missed these entirely.
+ *
+ * Narrowed by the corpus rather than by a rule about type lines. A booster's
+ * inserts are mostly places to put cards -- "(Place your energy counters in this
+ * area.)" is the whole of mh3's -- and only a mechanic whose entry names one is
+ * claiming the printed card says more than our sentence does. So this stores
+ * what somebody decided to store, and the arrival of a set with a new insert is
+ * `refresh-mechanics`' problem rather than a silent behaviour change here.
+ *
+ * The art comes from the set's own token sheet, which is already crawled for
+ * tokens -- LTR's rules card is `tltr/H13`, in the sheet, downloaded on every
+ * ingest since the beginning and thrown away at this line.
+ */
+function helpersOf(
+  sc: ScryfallCard,
+  art: ReadonlyMap<string, SheetArt>,
+): CardHelper[] | undefined {
+  const byName = new Map<string, CardHelper>();
+
+  for (const part of sc.all_parts ?? []) {
+    if (part.component !== "combo_piece" || part.name === sc.name) continue;
+    if (!PRINTED_RULES.has(part.name.toLowerCase()) || byName.has(part.name)) continue;
+    // A FACE EARNS ITS PICTURE THE SAME WAY THE INSERT DID: by carrying rules.
+    //
+    // dft's insert is "Start Your Engines! // Max Speed" and the back face is a
+    // large "4" with no oracle text at all -- a marker for where your speed has
+    // got to, in the same family as the Adventure and energy placemats that were
+    // left out of the corpus entirely. Storing it puts a third card in the hover
+    // row that explains nothing.
+    //
+    // LTR's keeps both: the Emblem says what the Ring does at each step and the
+    // back says what happens when it tempts you, 355 and 560 characters.
+    const faces = art.get(part.id);
+    const front = faces?.frontHasRules ? faces.front : undefined;
+    const back = faces?.backHasRules ? faces.back : undefined;
+    if (!front && !back) continue;
+    byName.set(part.name, {
+      name: part.name,
+      typeLine: part.type_line,
+      ...(front ? { imageUrl: front } : {}),
+      ...(back ? { backImageUrl: back } : {}),
+    });
+  }
+
+  return byName.size > 0 ? [...byName.values()] : undefined;
 }
 
 // The colours of the face a drafter casts.
@@ -210,10 +294,19 @@ export function mergeCards(
   tokenSheet: ScryfallCard[] = [],
 ): IngestCard[] {
   const ratingByName = new Map(ratings.map((r) => [normalizeName(r.name), r]));
-  const art = new Map<string, string>();
+  const art = new Map<string, SheetArt>();
   for (const t of tokenSheet) {
-    const image = imageOf(t);
-    if (image) art.set(t.id, image);
+    const front = imageOf(t);
+    const back = backImageOf(t);
+    if (!front && !back) continue;
+    art.set(t.id, {
+      front,
+      back,
+      // A single-faced printing states its text at the top level; a two-faced
+      // one states it per face and nothing at the top.
+      frontHasRules: hasRules(t.card_faces?.[0] ?? t),
+      backHasRules: hasRules(t.card_faces?.[1]),
+    });
   }
 
   return scryfall.map((sc) => ({
@@ -228,7 +321,7 @@ export function mergeCards(
 // card performed. They are separated because they go stale at different times
 // and for different reasons -- see `restateRatings`.
 
-function scryfallHalf(sc: ScryfallCard, art: ReadonlyMap<string, string>) {
+function scryfallHalf(sc: ScryfallCard, art: ReadonlyMap<string, SheetArt>) {
   const combat = combatOf(sc);
   return {
     name: sc.name,
@@ -246,6 +339,7 @@ function scryfallHalf(sc: ScryfallCard, art: ReadonlyMap<string, string>) {
     layout: layoutOf(sc),
     backImageUrl: backImageOf(sc),
     tokens: tokensOf(sc, art),
+    helpers: helpersOf(sc, art),
     collectorNumber: sc.collector_number,
     setCode: sc.set,
   };

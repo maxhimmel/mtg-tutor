@@ -1,8 +1,9 @@
 // Adds a draftable set end to end: availability preflight -> build the stats
 // artifact from the 17Lands public datasets -> seed it into Convex -> ingest the
 // set from Scryfall + those stats -> validate that it deals the packs its data
-// claims. The steps the README spells out, run in order and scoped to just this
-// set, so a new set is one command:
+// claims -> check that its own mechanics have definitions. The steps the README
+// spells out, run in order and scoped to just this set, so a new set is one
+// command:
 //
 //   pnpm new-set DSK                 # DSK PremierDraft, into the dev deployment
 //   pnpm new-set DSK TradDraft       # pick the format
@@ -95,6 +96,12 @@ try {
   // from fifty deals the wrong card in 11% of packs and reports success. This
   // step deals packs and counts them, so the pipeline proves its own output.
   run("validate-pack-model", prod ? [set, format, "--prod"] : [set, format]);
+  // And a set that deals the right cards can still leave a drafter looking at a
+  // mechanic nothing in the app can explain. That is not a crash either: the
+  // hover panel just says nothing, exactly as it did for every set before the
+  // corpus existed. LTR is the proof -- its flagship mechanic is on 50 of 291
+  // cards and no upstream field mentions it at all.
+  run("refresh-mechanics", [set.toLowerCase()]);
 } catch {
   console.error(`\nAborted -- ${artifact} was not fully added. See the failing step above.`);
   process.exit(1);

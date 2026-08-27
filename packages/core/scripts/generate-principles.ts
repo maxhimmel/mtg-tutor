@@ -12,6 +12,7 @@ import {
   type PrinciplesDoc,
 } from "../src/tutor/principlesSchema.js";
 import { validateVernacular, type VernacularDoc } from "../src/tutor/vernacularSchema.js";
+import { validateMechanics, type MechanicsDoc } from "../src/model/mechanicsSchema.js";
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = join(pkgRoot, "docs", "draft-principles.yaml");
@@ -22,6 +23,8 @@ const VERNACULAR = join(pkgRoot, "docs", "vernacular.yaml");
 const VERNACULAR_OUT = join(pkgRoot, "src", "tutor", "vernacular.generated.ts");
 const VERNACULAR_SOURCES = join(pkgRoot, "docs", "vernacular-sources.md");
 const VERNACULAR_SOURCES_OUT = join(pkgRoot, "src", "tutor", "vernacularSources.generated.ts");
+const MECHANICS = join(pkgRoot, "docs", "set-mechanics.yaml");
+const MECHANICS_OUT = join(pkgRoot, "src", "model", "mechanics.generated.ts");
 
 const doc = validatePrinciples(parse(readFileSync(SOURCE, "utf8")) as PrinciplesDoc, SOURCE);
 
@@ -123,3 +126,33 @@ console.log(
     `${vernacular.avoid.length} avoided phrases, ${vernacular.terms.length} terms)`,
 );
 console.log(`wrote ${VERNACULAR_SOURCES_OUT} (${vernacularSources.length} sources)`);
+
+// The set-mechanics corpus. Compiled last because it is the only one held to
+// another corpus's standard: its definitions go into the coach's prompt, so the
+// vernacular `avoid` list binds them the same way it binds what the model writes
+// back. `jargonHits` measures the model at runtime; nothing measured us.
+//
+// The OTHER check this corpus needs -- that no definition has drifted back into
+// the Comprehensive Rules' own wording -- is not here, and deliberately. It
+// needs the CR text, and the CR is the one thing this repo must never contain.
+// It lives in refresh-mechanics.mjs, which downloads the rules anyway.
+const mechanics = validateMechanics(
+  parse(readFileSync(MECHANICS, "utf8")) as MechanicsDoc,
+  MECHANICS,
+  vernacular.avoid.map((a) => a.phrase),
+);
+
+writeFileSync(
+  MECHANICS_OUT,
+  `// GENERATED FILE -- DO NOT EDIT BY HAND.
+// Source: docs/set-mechanics.yaml
+// Regenerate: pnpm --filter @mtg-tutor/core generate
+
+import type { MechanicsDoc } from "./mechanicsSchema.js";
+
+export const MECHANICS_DOC: MechanicsDoc = ${JSON.stringify(mechanics, null, 2)};
+`,
+  "utf8",
+);
+
+console.log(`wrote ${MECHANICS_OUT} (${mechanics.mechanics.length} set mechanics)`);

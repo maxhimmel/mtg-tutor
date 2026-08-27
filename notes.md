@@ -65,9 +65,10 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     should SAY so: `coach_shown` cannot tell a set with no archetype data apart
     from one where the coach was merely quiet.
 
-9.  Is there a way to detect special rules that get introduced in each set?
-
-- Example: What the heck does "the ring tempts you" mean in the LTR set? Is it actually not a big deal because the card itself tells you how it reacts to that? Or does the ring being tempted do something else I'm not aware of?
+9.  -- (Set mechanics, shipped 2026-08-27. The hover panel and the coach name
+    what a set's own mechanic does, from `packages/core/docs/set-mechanics.yaml`;
+    where the game prints a rules card the picture replaces our sentence. The
+    licensing and derivation rulings are decision #10.)
 
 # Ideas:
 
@@ -274,6 +275,8 @@ cheap half.
 - It'd be cool to empower users to move sections where they like
 
 15. Maybe this could be an "issue" too. We keep making changes to the bots and how they pick. Do we have a benchmark or anything to see if the bots get better/worse with these changes? I KNOW we have a BUNCH of data from real life drafters - some of which went 3-0 who I think we refer to as "trophy" drafters or something (I think). So, what if we built real drafting benchmarks based on real data from the best of the best? And not just one, but a comprehensive set from different sets we could test against. I just want the packs I'm being passed to feel believable - like I'm actually drafting with real humans.
+
+16. In the set picker screen it'd be nice if we could see/easily pick sets we've recently played.
 
 # Deferred (from Draft Review grilling, 2026-07-21):
 
@@ -984,24 +987,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-                So when the colour rule moved (decision #23), the app changed and the
-                instrument did not. It went on reporting the old rule's numbers, correctly,
-                with the right imports at the top of the file, and nothing anywhere could
-                have said so. It now calls `packScoringContext` like the mutation does.
+                    So when the colour rule moved (decision #23), the app changed and the
+                    instrument did not. It went on reporting the old rule's numbers, correctly,
+                    with the right imports at the top of the file, and nothing anywhere could
+                    have said so. It now calls `packScoringContext` like the mutation does.
 
-                **The second half is worse and is the general form.** The same file printed
-                "the colour terms charged it 0.34pp" under its table, from a filter naming
-                `splash` and `archetype`. That filter was written before the off-colour term
-                existed and nobody widened it -- so the number under a table measuring the
-                off-colour term **excluded the off-colour term**. It read as a healthy small
-                charge and it was a subtotal of the two terms that were not the subject. The
-                true figure was 1.28pp, which is still far too small, which is the finding
-                the instrument was built to surface and had been hiding for four days.
+                    **The second half is worse and is the general form.** The same file printed
+                    "the colour terms charged it 0.34pp" under its table, from a filter naming
+                    `splash` and `archetype`. That filter was written before the off-colour term
+                    existed and nobody widened it -- so the number under a table measuring the
+                    off-colour term **excluded the off-colour term**. It read as a healthy small
+                    charge and it was a subtotal of the two terms that were not the subject. The
+                    true figure was 1.28pp, which is still far too small, which is the finding
+                    the instrument was built to surface and had been hiding for four days.
 
-                The rule: **a harness must not enumerate what it sums.** Sum everything and
-                exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-                the total by default rather than by somebody remembering. An allowlist in an
-                instrument is a silent undercount waiting for the next field.
+                    The rule: **a harness must not enumerate what it sums.** Sum everything and
+                    exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                    the total by default rather than by somebody remembering. An allowlist in an
+                    instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as
@@ -1993,3 +1996,36 @@ The architecture, the data pipeline and the deploy story are all documented in
     **3.7% -> 6.8%**, about one more per draft, on picks that spent a card the
     deck cannot play -- while A+ goes UP, 40.3% -> 43.0%, because the uncastable
     card is no longer beating the pick that was made.
+
+10. **The Comprehensive Rules are a dev-time input, never a shipped one.** They
+    are the only complete list of what Magic's mechanics are called and are not
+    licensed for redistribution: the Fan Content Policy carves verbatim rules
+    content out of what it permits, and the CR document itself grants nothing
+    beyond a publisher colophon. So the rules decide WHICH mechanics exist and
+    supply a section number to cite, `docs/set-mechanics.yaml` carries a sentence
+    somebody wrote, and `checkOriginal` fails the run on twelve consecutive words
+    shared with the original. The file is gitignored and must stay so.
+
+    **Not fetched at build time either.** There is no stable URL, no `latest`
+    alias, and the txt's date drifts independently of the docx and pdf -- the
+    site once offered `20260807.docx`, `20260807.pdf` and `20260819.txt` with
+    `20260807.txt` a 404, and the one third-party "always latest" redirect was
+    broken for exactly that reason. `refresh-mechanics` is a local script.
+
+    **Where the game prints a rules card, it replaces our prose -- and almost
+    none of them do.** A booster's inserts are mostly places to put cards: mh3's
+    Energy Reserve is "(Place your energy counters in this area.)" and nothing
+    else, woe's On an Adventure and otj's Plot are storage markers with the rule
+    restated shorter than we say it. Two qualify, LTR's and dft's, and the same
+    test settles a two-faced one face at a time -- dft's back is a large "4" with
+    no text and is not stored. Choosing automatically was declined: it needs a
+    threshold on length, and the first set to ship a terse rules card or a wordy
+    placemat breaks it in silence. `refresh-mechanics` reports every unclaimed
+    insert with its text beside ours, so the next one is a decision somebody
+    makes rather than a default nobody hears about.
+
+    **Ability words will never be derivable.** Rule 207.2c names all 60 and says
+    outright they have no rules meaning and no entries in the rules, so there is
+    nothing to cite -- and it is not exhaustive: `corrupted` is on 26 paper cards
+    and appears nowhere in the CR, not even in the release published for its own
+    set. Scryfall's catalog is the better list of which words exist.

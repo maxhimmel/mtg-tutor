@@ -29,6 +29,14 @@ const complete: StoredCard = {
   layout: "adventure",
   backImageUrl: "https://example.invalid/back.jpg",
   tokens: [{ name: "Insect", typeLine: "Token Creature — Insect" }],
+  helpers: [
+    {
+      name: "The Ring // The Ring Tempts You",
+      typeLine: "Emblem // Card",
+      imageUrl: "https://example.test/ring-front.jpg",
+      backImageUrl: "https://example.test/ring-back.jpg",
+    },
+  ],
   collectorNumber: "51",
   setCode: "woe",
   avgPick: 4.07,
