@@ -11,6 +11,11 @@ import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
 import { ScrollBox } from "../components/ScrollBox";
 import { pct } from "../lib/format";
+import {
+  DeckBands,
+  Verdict,
+  type RevealQuestion,
+} from "../practice/archetypes/ArchetypeQuiz";
 
 // One entry per component worth looking at with a real card in it. Adding the
 // next one is an append to the list at the bottom, which is the whole point of
@@ -82,7 +87,60 @@ function coachSentence(cards: Card[]): string {
   );
 }
 
+/**
+ * Stock Up, out of SOS, exactly as the drill served it.
+ *
+ * A REAL CASE AND NOT AN INVENTED ONE, because this panel exists because of it:
+ * a player answered "neither", was told they were right, and could not see why
+ * -- the table said Temur +9.8pp against Simic +2.9pp and then a sentence said
+ * that was not a difference. The numbers below are the ones they saw, so the
+ * panel can be checked against the confusion that produced it rather than
+ * against a fixture that agrees with it by construction.
+ *
+ * The pair on the far side is the same card if Izzet's 1,630 games were all
+ * five decks had: the same gap, a tighter band, and a verdict that flips. It is
+ * here so the specimen shows the panel SAYING BOTH THINGS rather than only the
+ * one it was built for.
+ */
+const STOCK_UP: RevealQuestion = {
+  decks: [
+    { colors: "URG", lift: 0.098, n: 678, deckWr: 0.57, sd: 0.0189 },
+    { colors: "WUR", lift: 0.071, n: 326, deckWr: 0.56, sd: 0.0276 },
+    { colors: "UBG", lift: 0.062, n: 300, deckWr: 0.55, sd: 0.0296 },
+    { colors: "UR", lift: 0.059, n: 1630, deckWr: 0.58, sd: 0.0128 },
+    { colors: "UG", lift: 0.029, n: 759, deckWr: 0.56, sd: 0.0184 },
+  ],
+  wants: "URG",
+  spurns: "UG",
+  sigmas: 2.6,
+  separated: false,
+};
+
+const STOCK_UP_SEPARATED: RevealQuestion = {
+  ...STOCK_UP,
+  decks: STOCK_UP.decks.map((d) => ({ ...d, sd: d.sd * 0.55 })),
+  sigmas: 4.7,
+  separated: true,
+};
+
 export const SPECIMENS: Specimen[] = [
+  {
+    id: "archetype-reveal",
+    title: "Archetype quiz reveal",
+    note: "Stock Up in SOS — the real case a player could not read, and the same numbers on a sample that would settle it",
+    render: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="No difference (2.6 against a bar of 2.7)">
+          <DeckBands question={STOCK_UP} guess="UG" />
+          <Verdict question={STOCK_UP} />
+        </Bay>
+        <Bay label="Same gaps, tighter samples — now it counts">
+          <DeckBands question={STOCK_UP_SEPARATED} guess="UG" />
+          <Verdict question={STOCK_UP_SEPARATED} />
+        </Bay>
+      </div>
+    ),
+  },
   {
     id: "placard-widths",
     title: "Card placard",

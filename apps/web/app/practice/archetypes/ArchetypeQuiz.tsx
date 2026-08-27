@@ -5,9 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import {
+  ARCHETYPE_QUIZ,
   DECK_NAMES,
   SAME,
+  decisionBand,
   gradeArchetypeGuess,
+  rangeThreshold,
   scoreArchetypeRun,
   type ArchetypeResult,
 } from "@mtg-tutor/core";
@@ -54,6 +57,19 @@ import { points } from "../../lib/format";
 
 type Run = NonNullable<ReturnType<typeof useDeal>>;
 type Question = Run["questions"][number];
+
+/**
+ * The half of a question the reveal draws.
+ *
+ * Named apart from `Question` so the dev stage can hand these two components a
+ * set of real numbers without also having to build a hydrated card around them
+ * -- the panel is about the numbers, and a fixture that had to carry art to be
+ * looked at would not get looked at.
+ */
+export type RevealQuestion = Pick<
+  Question,
+  "decks" | "wants" | "spurns" | "sigmas" | "separated"
+>;
 
 function useDeal(setCode: string | undefined, skip: number) {
   return useQuery(api.drills.archetypes.deal, setCode ? { setCode, skip } : "skip");
@@ -427,10 +443,8 @@ function Reveal({
       )}
       {result.mistake === "saw-difference" && (
         <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
-          The gap is there in the numbers and it is smaller than the error bars on
-          it, so it is not a gap. Most cards in a colour are like this — which is
-          worth knowing, because it means the colour is the read and the pair
-          usually is not.
+          Most cards in a colour are like this, which is worth knowing on its own:
+          it means the colour is the read and the pair usually is not.
         </p>
       )}
       {result.mistake === "saw-none" && (
@@ -442,13 +456,55 @@ function Reveal({
         </p>
       )}
 
-      <ul className="mt-4 flex flex-col gap-1">
+      <DeckBands question={question} guess={guess} />
+
+      <Verdict question={question} />
+
+      <button type="button" className="btn btn-primary mt-5" onClick={onNext}>
+        {last ? "See how it went" : "Next card"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Every deck's appetite for the card, drawn to one scale.
+ *
+ * THE PICTURE IS THE EXPLANATION AND THE NUMBERS WERE NOT. This list used to be
+ * five rows of "+9.8pp / 678 games" under a sentence saying the two ends were
+ * too close to call, and a player looking at +9.8 against +2.9 had no way to
+ * see why -- the thing that makes those two numbers the same claim is that one
+ * rests on 678 games and the other on 759, and a column of counts does not say
+ * that. A band does, at a glance, and it was a real person hitting exactly this
+ * on SOS's Stock Up that produced it.
+ *
+ * `decisionBand` says why the bands are the width they are: they touch exactly
+ * when the gap clears the bar, so the picture cannot disagree with the grade.
+ */
+export function DeckBands({ question, guess }: { question: RevealQuestion; guess: string }) {
+  const k = question.decks.length;
+  const band = (sd: number) => decisionBand(sd, k, ARCHETYPE_QUIZ.falsePositive);
+
+  // One scale for every row, wide enough to hold the widest band, and always
+  // containing zero -- a lift is a claim about doing better than that deck does
+  // anyway, so the line it is measured from has to be on the chart.
+  const lo = Math.min(0, ...question.decks.map((d) => d.lift - band(d.sd)));
+  const hi = Math.max(0, ...question.decks.map((d) => d.lift + band(d.sd)));
+  const span = hi - lo || 1;
+  const pct = (v: number) => ((v - lo) / span) * 100;
+
+  return (
+    <div className="mt-4">
+      <ul className="flex flex-col gap-1">
         {question.decks.map((deck) => {
           // Nothing is marked as the answer when there is no answer: colouring
-          // the top row green on a card whose decks are level would teach the
-          // ranking the sentence above just said was not there.
+          // the top row on a card whose decks are level would draw the ranking
+          // the sentence above just said was not there.
           const isAnswer = question.separated && deck.colors === question.wants;
           const isGuess = deck.colors === guess;
+          const isEnd = deck.colors === question.wants || deck.colors === question.spurns;
+          const half = band(deck.sd);
+
           return (
             <li
               key={deck.colors}
@@ -458,14 +514,55 @@ function Reveal({
             >
               <ColorPips colors={deck.colors} className="shrink-0" />
               <span
-                className={`min-w-[5.5rem] font-display font-semibold ${
+                className={`min-w-[5.5rem] shrink-0 font-display font-semibold ${
                   isAnswer ? "text-success" : ""
                 }`}
               >
                 {deckName(deck.colors)}
               </span>
-              <span className="tabular-nums text-base-content/70">{points(deck.lift)}</span>
-              <span className="ml-auto text-xs tabular-nums text-base-content/45">
+
+              {/* The two decks the question was about are drawn solid and the
+                  rest are dimmed. They are the only two the grade looked at,
+                  and a chart that gave all five the same weight would invite
+                  reading a ranking off the middle rows. */}
+              <span
+                className="relative h-4 min-w-0 flex-1"
+                role="img"
+                aria-label={`${points(deck.lift)}, give or take ${points(half).replace("+", "")}`}
+              >
+                {/* Where the deck's own rate sits: no better, no worse. */}
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 w-px bg-base-content/25"
+                  style={{ left: `${pct(0)}%` }}
+                />
+                <span
+                  aria-hidden
+                  className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ${
+                    isAnswer ? "bg-success/40" : isEnd ? "bg-base-content/30" : "bg-base-content/15"
+                  }`}
+                  style={{
+                    left: `${pct(deck.lift - half)}%`,
+                    width: `${(2 * half * 100) / span}%`,
+                  }}
+                />
+                <span
+                  aria-hidden
+                  className={`absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                    isAnswer ? "bg-success" : isEnd ? "bg-base-content/80" : "bg-base-content/40"
+                  }`}
+                  style={{ left: `${pct(deck.lift)}%` }}
+                />
+              </span>
+
+              <span
+                className={`w-16 shrink-0 text-right tabular-nums ${
+                  isEnd ? "text-base-content/80" : "text-base-content/50"
+                }`}
+              >
+                {points(deck.lift)}
+              </span>
+              <span className="w-20 shrink-0 text-right text-xs tabular-nums text-base-content/45">
                 {deck.n.toLocaleString()} games
               </span>
             </li>
@@ -473,21 +570,61 @@ function Reveal({
         })}
       </ul>
 
-      {/* What the number means, in one line, because "+2.9pp" beside a deck name
-          is otherwise a statistic with no referent -- and the referent is the
-          whole idea: this is measured against what that deck wins ANYWAY. */}
-      <p className="mt-3 max-w-prose text-xs leading-relaxed text-base-content/55">
-        Each figure is how much better the deck did with this card in hand than it
-        did in general, so a deck that wins a lot is not credited for winning a
-        lot. The two ends are {question.sigmas.toFixed(1)} error bars apart
-        {question.separated
-          ? " — the rows between them are real numbers the data cannot put in order."
-          : ", which is not far enough to call a difference at all."}
+      <p className="mt-2 pl-2 text-xs leading-relaxed text-base-content/50">
+        The bar is how much better each deck did with this card in hand than it did
+        in general — so a deck that wins a lot is not credited for winning a lot.
+        The band is how much of that is guesswork at that many games, and it is
+        drawn so that two bands touching is exactly the line between a difference
+        and none.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * What the gap needed to be, and why it was that.
+ *
+ * The sentence this replaced said "2.6 error bars apart, which is not far enough
+ * to call a difference at all", which is true and unanswerable -- not far enough
+ * than WHAT. The bar is not a constant: it is set by how many decks were in the
+ * running, because the widest gap among five noisy numbers is wide even when
+ * every deck wants the card the same. That is the single most surprising thing
+ * on this screen and it was not on it.
+ */
+export function Verdict({ question }: { question: RevealQuestion }) {
+  const k = question.decks.length;
+  const needed = rangeThreshold(k, ARCHETYPE_QUIZ.falsePositive);
+  const pair = rangeThreshold(2, ARCHETYPE_QUIZ.falsePositive);
+
+  return (
+    <div className="mt-4 rounded-box border border-base-300 bg-base-100 px-4 py-3">
+      <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+        <span className="eyebrow">Widest gap</span>
+        <span className="font-display text-base font-semibold tabular-nums">
+          {question.sigmas.toFixed(1)}
+        </span>
+        <span className="text-base-content/55">error bars</span>
+        <span className="text-base-content/30">·</span>
+        <span className="eyebrow">Needed</span>
+        <span
+          className={`font-display text-base font-semibold tabular-nums ${
+            question.separated ? "text-success" : "text-base-content"
+          }`}
+        >
+          {needed.toFixed(1)}
+        </span>
       </p>
 
-      <button type="button" className="btn btn-primary mt-5" onClick={onNext}>
-        {last ? "See how it went" : "Next card"}
-      </button>
+      <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
+        {/* The count is what sets the bar, so the count is what the sentence is
+            about. Two decks would need 1.96; this needed more, and by how much
+            is the whole of why a gap this size can come to nothing. */}
+        {deckName(question.wants)} did not just beat {deckName(question.spurns)} — it
+        came out top of {k}. Pick the best and worst of {k} figures this noisy and
+        they land about {needed.toFixed(1)} error bars apart{" "}
+        <em>even when every deck wants the card the same</em>, so that is the bar.
+        Head to head it would only have needed {pair.toFixed(1)}.
+      </p>
     </div>
   );
 }

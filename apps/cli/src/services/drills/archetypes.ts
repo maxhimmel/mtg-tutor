@@ -3,9 +3,12 @@ import pc from "picocolors";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
 import {
+  ARCHETYPE_QUIZ,
   DECK_NAMES,
   SAME,
+  decisionBand,
   gradeArchetypeGuess,
+  rangeThreshold,
   scoreArchetypeRun,
   type ArchetypeResult,
 } from "@mtg-tutor/core";
@@ -177,16 +180,38 @@ const head = (result: ArchetypeResult, question: Question) => {
  * them would leave a person believing the answer was a ranking.
  */
 function reveal(question: Question, result: ArchetypeResult, guess: string): string {
+  const k = question.decks.length;
+  const rate = ARCHETYPE_QUIZ.falsePositive;
+  const needed = rangeThreshold(k, rate);
+  const band = (sd: number) => decisionBand(sd, k, rate);
+
+  // One scale for every row, always containing zero -- a lift is a claim about
+  // beating what that deck does anyway, so the line it is measured from has to
+  // be on the chart.
+  const lo = Math.min(0, ...question.decks.map((d) => d.lift - band(d.sd)));
+  const hi = Math.max(0, ...question.decks.map((d) => d.lift + band(d.sd)));
+  const span = hi - lo || 1;
+  const WIDTH = 34;
+  const at = (v: number) => Math.round(((v - lo) / span) * (WIDTH - 1));
+
   const width = Math.max(...question.decks.map((d) => deckName(d.colors).length));
 
   const rows = question.decks.map((deck) => {
-    const name = deckName(deck.colors).padEnd(width);
-    const line = `  ${name}  ${points(deck.lift).padStart(7)}  ${pc.dim(
-      `${deck.n.toLocaleString()} games`,
-    )}`;
-    // Nothing is green when there is no answer: colouring the top row on a card
-    // whose decks are level would draw the ranking the drill just said is not
-    // there.
+    const half = band(deck.sd);
+    // The band as a run of dashes with the estimate on it, and the deck's own
+    // rate as a pipe. Two bands that touch are exactly the line between a
+    // difference and none -- see `decisionBand`, which is sized for that.
+    const cells = Array.from({ length: WIDTH }, () => " ");
+    cells[at(0)] = pc.dim("│");
+    for (let i = at(deck.lift - half); i <= at(deck.lift + half); i++) {
+      if (i >= 0 && i < WIDTH && cells[i] === " ") cells[i] = pc.dim("─");
+    }
+    cells[at(deck.lift)] = "●";
+
+    const line =
+      `  ${deckName(deck.colors).padEnd(width)}  ${cells.join("")}  ` +
+      `${points(deck.lift).padStart(7)}  ${pc.dim(`${deck.n.toLocaleString()} games`)}`;
+
     if (question.separated && deck.colors === question.wants) return pc.green(line);
     if (deck.colors === guess) return pc.red(line);
     return line;
@@ -194,7 +219,6 @@ function reveal(question: Question, result: ArchetypeResult, guess: string): str
 
   const lines = [...rows, ""];
 
-  // One sentence per kind of wrong, because they are different lessons.
   if (result.mistake === "stronger-deck") {
     lines.push(
       pc.dim(
@@ -205,32 +229,20 @@ function reveal(question: Question, result: ArchetypeResult, guess: string): str
       "",
     );
   }
-  if (result.mistake === "saw-difference") {
-    lines.push(
-      pc.dim(
-        "The gap is there in the numbers and it is smaller than the error bars on it,\n" +
-          "so it is not a gap. Most cards in a colour are like this, which means the\n" +
-          "colour is the read and the pair usually is not.",
-      ),
-      "",
-    );
-  }
-  if (result.mistake === "saw-none") {
-    lines.push(
-      pc.dim(
-        "This one is real — further apart than the data's own margin.",
-      ),
-      "",
-    );
-  }
 
+  // What the gap needed to be, and why it was that. The bar is not a constant:
+  // it is set by how many decks were in the running, because the widest gap
+  // among k noisy figures is wide even when every deck wants the card the same.
   lines.push(
+    `  widest gap ${pc.bold(question.sigmas.toFixed(1))} error bars` +
+      `   ·   needed ${pc.bold(needed.toFixed(1))} for ${k} decks` +
+      `   ·   head to head ${rangeThreshold(2, rate).toFixed(1)}`,
+    "",
     pc.dim(
-      "Each figure is how much better the deck did with this card in hand than it did\n" +
-        `in general. The two ends are ${question.sigmas.toFixed(1)} error bars apart` +
-        (question.separated
-          ? ";\nthe rows between them the data cannot put in order."
-          : ",\nwhich is not far enough to call a difference at all."),
+      `${DECK_NAMES[question.wants] ?? question.wants} did not just beat ${DECK_NAMES[question.spurns] ?? question.spurns} — it came out top of ${k}. Pick the\n` +
+        `best and worst of ${k} figures this noisy and they land about ${needed.toFixed(1)} error bars\n` +
+        "apart even when every deck wants the card the same, so that is the bar.\n" +
+        "The band is how much of each figure is guesswork at that many games.",
     ),
   );
 

@@ -265,6 +265,51 @@ function normalCdf(x: number): number {
 }
 
 /** A deck's own win rate, with no card dimension. `colorWinRates` in the stats. */
+/**
+ * How far apart the ends of k decks must be before the gap means anything.
+ *
+ * `rangePValue` inverted, by bisection, because the screen needs the number the
+ * other way round: a player asking "why was that not a difference" wants "it
+ * needed 2.7 and had 2.6", and a p-value is not an answer to that.
+ */
+export function rangeThreshold(deckCount: number, rate: number): number {
+  let lo = 0;
+  let hi = 8;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (rangePValue(mid, deckCount) > rate) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/**
+ * Half the width of the band to draw beside a deck's lift.
+ *
+ * NOT A CONFIDENCE INTERVAL, and the difference is the whole reason this
+ * function exists. A 95% interval is the honest object for one number on its
+ * own, and it draws a picture that ARGUES WITH THE VERDICT: two 95% bands stop
+ * overlapping at about 2.8 error bars, which is past the 2.73 that five decks
+ * need and short of the 3.16 that ten do. So a player would meet a card whose
+ * bands clearly miss each other and be told the decks are level, and be right
+ * to disbelieve the screen.
+ *
+ * This is sized so that TWO BANDS TOUCHING IS EXACTLY THE THRESHOLD. Set
+ * `h = t * sd / sqrt(2)` and the two ends touch when
+ * `gap = h_a + h_b = t * (sd_a + sd_b) / sqrt(2)`, which is
+ * `t * sqrt(sd_a^2 + sd_b^2)` whenever the two are equal and within a few per
+ * cent otherwise -- and `separation` divides by exactly that. So the picture
+ * says what the grade says, which is the only thing a picture on this screen
+ * has to do.
+ *
+ * The bands on the middle rows are drawn to the same scale and decide nothing,
+ * which is correct: they are there to show what a sample size of 300 looks like
+ * beside one of 1,630.
+ */
+export function decisionBand(sd: number, deckCount: number, rate: number): number {
+  return (rangeThreshold(deckCount, rate) * sd) / Math.SQRT2;
+}
+
 export interface QuestionOptions {
   /** How many decks a card must have rates in before it is asked about. */
   minDecks: number;
