@@ -321,8 +321,10 @@ export const SPECIMENS: Specimen[] = [
         </div>
 
         {/* Under the axis's own minimum, where the ticks would be four numbers
-            on top of each other. Both charts here say their domain in words
-            instead, which is the whole of what `needs` and `instead` are for. */}
+            on top of each other, so the bands say their domain in words
+            instead -- which is the whole of what `needs` and `instead` are for.
+            The verdict's own mark is fixed at 80px and does not swap: it has no
+            axis to lose, which is the argument in `GapMark`. */}
         <Bay label="180px — under the axis's minimum" width="w-[180px] shrink-0">
           <DeckBands question={STOCK_UP} guess="UG" />
           <Verdict question={STOCK_UP} />

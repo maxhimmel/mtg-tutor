@@ -15,8 +15,8 @@ import {
   type ArchetypeResult,
 } from "@mtg-tutor/core";
 import { scaleLinear } from "@visx/scale";
-import { Plot, Reference, TICK_TEXT, ValueAxisBottom } from "../../charts/Plot";
-import { INK, MARK } from "../../charts/ink";
+import { GapMark } from "../../charts/GapMark";
+import { Plot, ValueAxisBottom } from "../../charts/Plot";
 import { CardFace } from "../../components/CardTile";
 import { useCardHover } from "../../components/CardPreview";
 import { ColorPips } from "../../components/ColorPips";
@@ -850,84 +850,48 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
  * stops a hair short of a line says it before you have read either of them --
  * and it is the same picture whether the miss is by a tenth or by a mile, which
  * the type is not.
+ *
+ * The mark is the kit's `GapMark`, drawn from the pair below rather than from
+ * the pair printed in the line, for the reason that function's note gives.
  */
-
-// The bullet's parts, top to bottom: the threshold's own label, the bar, and the
-// axis under it. `Reference` prints its label BELOW the line, which is where the
-// axis numbers are, so this one is labelled above by hand.
-const GAP_H = { label: 16, bar: 12, axis: 26 };
-
-// The threshold's label is the widest thing on the mark at about 60px, and four
-// tick numbers want 120. Below that the numbers are already in the line above.
-const GAP_NEEDS = 200;
 
 /**
- * How much of the scale is left beyond the further of the two marks.
+ * The same gap and the same bar, in rate units, for `GapMark` to draw.
  *
- * Enough that a bar which clears the bar comfortably still ends inside the
- * drawing -- a mark that runs to the right edge reads as "off the scale", which
- * is a claim about the measurement rather than about this card.
+ * WHY NOT THE TWO NUMBERS PRINTED BESIDE IT. The panel's headline pair is 2.6
+ * against 2.7 ERROR BARS, and handing those to `GapMark` draws the correct
+ * picture and says the wrong sentence: it formats what it is given with
+ * `points()`, so a sigma count reaches a screen reader as "+260.0pp". The
+ * drawing does not care -- it scales itself off its own inputs, so dividing both
+ * numbers by the same standard error moves nothing on screen -- but the spoken
+ * form has to be in a unit that exists.
+ *
+ * So the mark is fed the pair in points: the gap between the two ends, and what
+ * that gap had to be. `is` and `needs` differ by exactly the factor `sigmas` and
+ * `needed` do, which is what makes the bar cross the line in precisely the cases
+ * the verdict above calls level.
+ *
+ * THE STANDARD ERROR IS RECOVERED FROM THE GRADE, not recomputed. `separation`
+ * divides the gap by `sqrt(var_a + var_b)`, so that denominator is already in
+ * hand as `gap / sigmas`. Squaring the two `sd`s here instead would be a second
+ * copy of core's variance rule living in the browser -- and the day the two
+ * disagree, the mark says one thing and the verdict under it says another,
+ * which is the one failure this whole panel is built to make impossible.
  */
-const GAP_HEADROOM = 1.25;
-
-function GapAgainstBar({ sigmas, needed }: { sigmas: number; needed: number }) {
-  const top = Math.max(sigmas, needed) * GAP_HEADROOM;
-  const clears = sigmas >= needed;
-
-  return (
-    <Plot
-      className="mt-3"
-      height={GAP_H.label + GAP_H.bar + GAP_H.axis}
-      needs={GAP_NEEDS}
-      instead={
-        <p className="eyebrow mt-2">
-          on a scale of 0 to {top.toFixed(1)} error bars
-        </p>
-      }
-      label={`The widest gap between two decks was ${sigmas.toFixed(1)} error bars against the ${needed.toFixed(1)} this card needed, on a scale from 0 to ${top.toFixed(1)}.`}
-      margin={{ top: GAP_H.label, bottom: GAP_H.axis }}
-    >
-      {({ width, height }) => {
-        const x = scaleLinear({ domain: [0, top], range: [0, width] });
-        const mid = height / 2;
-
-        return (
-          <>
-            {/* Measured from zero and drawn as a bar rather than as a dot,
-                which is the opposite call `ScorePlot` makes and right for the
-                opposite reason: this axis genuinely starts at zero -- no gap at
-                all is a real, common answer here -- so length means what it
-                looks like it means. */}
-            <line
-              x1={x(0)}
-              x2={x(sigmas)}
-              y1={mid}
-              y2={mid}
-              stroke={clears ? INK.up : INK.value}
-              strokeWidth={MARK.band}
-              strokeLinecap="round"
-            />
-            <Reference at={x(needed)} height={height} />
-            <text x={x(needed)} y={-5} textAnchor="middle" {...TICK_TEXT}>
-              needs {needed.toFixed(1)}
-            </text>
-            <ValueAxisBottom
-              scale={x}
-              top={height}
-              numTicks={4}
-              format={(v) => v.toFixed(1)}
-            />
-          </>
-        );
-      }}
-    </Plot>
-  );
+function gapInPoints(question: RevealQuestion, needed: number) {
+  const gap = question.decks[0].lift - question.decks[question.decks.length - 1].lift;
+  const sd = question.sigmas > 0 ? gap / question.sigmas : 0;
+  // No separation to speak of means no error bar to divide by, and `GapMark`
+  // draws nothing without a margin -- which is right: a bar of unknown length
+  // invites exactly the reading the missing number cannot support.
+  return { gap, margin: sd > 0 ? needed * sd : undefined };
 }
 
 export function Verdict({ question }: { question: RevealQuestion }) {
   const k = question.decks.length;
   const needed = rangeThreshold(k, ARCHETYPE_QUIZ.falsePositive);
   const pair = rangeThreshold(2, ARCHETYPE_QUIZ.falsePositive);
+  const { gap, margin } = gapInPoints(question, needed);
 
   return (
     <div className="mt-4 rounded-box border border-base-300 bg-base-100 px-4 py-3">
@@ -946,9 +910,15 @@ export function Verdict({ question }: { question: RevealQuestion }) {
         >
           {needed.toFixed(1)}
         </span>
-      </p>
 
-      <GapAgainstBar sigmas={question.sigmas} needed={needed} />
+        {/* In the line and not under it: the mark has no axis and wants none,
+            because the two numbers it is about are the two numbers immediately
+            to its left. `self-center` against the row's baseline, which would
+            otherwise stand a 14px drawing on the text's own floor. */}
+        <span className="self-center">
+          <GapMark gap={gap} margin={margin} />
+        </span>
+      </p>
 
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
         {/* The count is what sets the bar, so the count is what the sentence is
