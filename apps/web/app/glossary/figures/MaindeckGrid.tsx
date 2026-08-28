@@ -1,3 +1,4 @@
+import { INK } from "../../charts/ink";
 import { FIG_LABEL, Figure, Term } from "./Figure";
 
 // Maindeck rate is the only number on the hover panel that is not about the
@@ -30,13 +31,25 @@ const CARDS: Card[] = [
 
 const DOTS = 100;
 
+// The hollow dots ARE the argument -- the title counts sixty-one of them -- and
+// they were drawn at 15% of base-content, which on a 23%-lightness panel is
+// barely a shape at all. So both halves come from the kit's roles: `hollow` is
+// the step it defines for exactly this, the unfilled half of a proportion, and
+// it lands at twice the presence.
+//
+// Still a fill rather than a ring. A ring on an 8px dot is a 1px edge around a
+// hole, which is FAINTER than the fill it would replace -- it would fix the
+// naming and leave the defect. The pair is already legible without hue: the
+// dots are counted, the share is printed under each grid, and every hollow dot
+// is one the reader is asked to notice individually.
 function Hundred({ filled, label }: { filled: number; label: string }) {
   return (
     <div role="img" aria-label={label} className="grid w-fit grid-cols-10 gap-1.5">
       {Array.from({ length: DOTS }, (_, i) => (
         <span
           key={i}
-          className={`size-2 rounded-full ${i < filled ? "bg-primary" : "bg-base-content/15"}`}
+          className="size-2 rounded-full"
+          style={{ backgroundColor: i < filled ? INK.yours : INK.hollow }}
         />
       ))}
     </div>

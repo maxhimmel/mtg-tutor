@@ -62,7 +62,16 @@ const AXIS_Y = "1.75rem";
 // because Tailwind generates a class only when it finds that exact string in the
 // source -- a `.replace("sm:", "")` produces a name no stylesheet contains.
 const COLUMNS = "sm:grid-cols-[minmax(0,11rem)_1fr_4.5rem]";
-const HEADER_COLUMNS = "grid-cols-[minmax(0,11rem)_1fr_4.5rem]";
+
+// THE AXIS SURVIVES THE PHONE. It used to be `hidden sm:grid`, along with the
+// two end labels, which left a narrow screen with two rows of dots, four bare
+// numbers and no scale at all -- on the figure that IS the page's argument. The
+// three columns are what cannot fit below 640px, not the axis, so the header and
+// the ticks stack into one column there and keep every word: the card names go
+// above their own plot, and the gutter cells the desktop layout needs collapse
+// out rather than taking the labels with them.
+const STACKED = `grid grid-cols-[1fr] gap-1 sm:gap-4 ${COLUMNS}`;
+const GUTTER = "hidden sm:block";
 
 function AxisRow({ row, index }: { row: Row; index: number }) {
   const a = at(row.without);
@@ -73,7 +82,7 @@ function AxisRow({ row, index }: { row: Row; index: number }) {
   const delay = `${index * 220}ms`;
 
   return (
-    <div className={`grid grid-cols-[1fr] gap-1 ${COLUMNS} sm:items-center sm:gap-4`}>
+    <div className={`${STACKED} sm:items-center`}>
       <div className="font-display text-base leading-tight text-base-content sm:text-right">
         {row.card}
       </div>
@@ -138,8 +147,11 @@ function AxisRow({ row, index }: { row: Row; index: number }) {
         </span>
       </div>
 
-      <div className="text-sm font-semibold tabular-nums text-primary">
+      <div className="flex items-baseline gap-1.5 text-sm font-semibold tabular-nums text-primary">
         <span className="sr-only">{iwdLabel}: </span>
+        <span aria-hidden className={`sm:hidden ${FIG_LABEL} text-base-content/55`}>
+          {iwdLabel}
+        </span>
         {row.iwd}
       </div>
     </div>
@@ -174,13 +186,15 @@ export function WinRateAxis() {
       }
     >
       <div className="flex flex-col gap-5 sm:gap-3">
-        <div className={`hidden gap-4 sm:grid ${HEADER_COLUMNS}`}>
-          <span />
+        <div className={STACKED}>
+          <span className={GUTTER} />
           <div className={`flex justify-between ${FIG_LABEL}`}>
             <span className="text-base-content/55">Won without drawing it</span>
             <span className="text-primary/75">Won after drawing it</span>
           </div>
-          <span className={`${FIG_LABEL} text-base-content/55`}>{iwdLabel}</span>
+          {/* Named in the row itself below 640px, where it sits under its own
+              value rather than over a column of them. */}
+          <span className={`${GUTTER} ${FIG_LABEL} text-base-content/55`}>{iwdLabel}</span>
         </div>
 
         {ROWS.map((row, i) => (
@@ -189,21 +203,21 @@ export function WinRateAxis() {
 
         {/* The axis has to sit in the same three columns as the rows, or it
             measures the label gutter as well as the plot. */}
-        <div className={`hidden gap-4 sm:grid ${HEADER_COLUMNS}`}>
-          <span />
+        <div className={STACKED}>
+          <span className={GUTTER} />
           <div className="relative h-5">
             <div className="absolute inset-x-0 top-0 h-px bg-base-content/10" />
             {TICKS.map((t) => (
               <span
                 key={t}
-                className="absolute top-1.5 -translate-x-1/2 text-[0.625rem] tabular-nums text-base-content/40"
+                className="absolute top-1.5 -translate-x-1/2 text-[0.625rem] tabular-nums text-base-content/55"
                 style={{ left: `${at(t)}%` }}
               >
                 {t}%
               </span>
             ))}
           </div>
-          <span />
+          <span className={GUTTER} />
         </div>
       </div>
     </Figure>

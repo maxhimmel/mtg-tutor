@@ -7,7 +7,6 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
 import { PageShell } from "../components/PageShell";
 import { Panel } from "../components/Panel";
-import { SetIcon } from "../components/SetIcon";
 import { SignedOut } from "../components/SignedOut";
 import { pct, points, releaseDate } from "../lib/format";
 import { statsViewed } from "../lib/analytics";
@@ -188,11 +187,8 @@ function Lately({ recent }: { recent: Stats["recent"] }) {
 
     return {
       key: draft.id,
-      label: set?.iconUri ? (
-        <SetIcon uri={set.iconUri} className="mx-auto size-3.5" />
-      ) : (
-        draft.setCode.toUpperCase()
-      ),
+      label: draft.setCode.toUpperCase(),
+      iconUri: set?.iconUri,
       score: draft.overallScore,
       href: `/review/${draft.id}`,
       title: `${name}${draft.colorPair ? ` ${draft.colorPair}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
@@ -260,18 +256,25 @@ function Breakdowns({ data }: { data: Stats }) {
 
   const covers = coverage(data);
 
+  // The count travels with the average and into the spoken form of it. These
+  // two panels are the only ones on the page where a column can be built from a
+  // handful of picks -- a pick number that only some sets reach, a pack a
+  // half-finished history barely covers -- and on an axis this zoomed that
+  // column looks exactly as authoritative as the ones beside it.
   const packs: ScoreColumn[] = byPackNo.map((row) => ({
     key: String(row.packNo),
     label: `Pack ${row.packNo}`,
     score: row.avgScore,
-    title: `Pack ${row.packNo}: ${row.avgScore.toFixed(1)} average`,
+    n: row.n,
+    title: `Pack ${row.packNo}: ${row.avgScore.toFixed(1)} average over ${row.n.toLocaleString()} picks`,
   }));
 
   const picks: ScoreColumn[] = byPickNo.map((row) => ({
     key: String(row.pickNo),
     label: String(row.pickNo),
     score: row.avgScore,
-    title: `Pick ${row.pickNo}: ${row.avgScore.toFixed(1)} average`,
+    n: row.n,
+    title: `Pick ${row.pickNo}: ${row.avgScore.toFixed(1)} average over ${row.n.toLocaleString()} picks`,
   }));
 
   return (
@@ -282,7 +285,7 @@ function Breakdowns({ data }: { data: Stats }) {
         className="lg:w-64 lg:shrink-0"
         bodyClassName="gap-3"
       >
-        <ScorePlot columns={packs} label={spoken("Average score by pack", packs)} />
+        <ScorePlot columns={packs} label={spoken("Average score by pack", packs)} counting="picks" />
         <p className="text-xs leading-relaxed text-base-content/50">
           Pack three is drafted with a deck already half-decided, so a slip here is usually a
           pool that stopped offering anything you can play.
@@ -293,6 +296,7 @@ function Breakdowns({ data }: { data: Stats }) {
         <ScorePlot
           columns={picks}
           label={spoken("Average score by pick number within a pack", picks)}
+          counting="picks"
         />
         <p className="text-xs leading-relaxed text-base-content/50">
           How deep into a pack, counted the same way in all three. The late numbers are
