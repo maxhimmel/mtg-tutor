@@ -19,9 +19,11 @@ import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../lib/format";
 import { deckShaped } from "../lib/analytics";
+import { INK, NEUTRAL } from "../charts/ink";
+import { Key } from "../charts/Key";
 import { CardPlacard } from "./CardPlacard";
 import { ColorTally } from "./ColorPips";
-import { LANDS_PILE, PILE_LABELS, PileGrid, PileWell, pileUp } from "./CurvePiles";
+import { CurveBar, LANDS_PILE, PILE_LABELS, PileGrid, PileWell, pileUp } from "./CurvePiles";
 import { Panel } from "./Panel";
 
 /**
@@ -39,25 +41,48 @@ import { Panel } from "./Panel";
  */
 function DeckSlots({ spells, lands, size }: { spells: number; lands: number; size: number }) {
   const full = size === DECK.size;
-  const fill = (i: number) => {
-    if (i < spells) return full ? "bg-primary" : "bg-base-content/70";
-    if (i < spells + lands) return full ? "bg-primary/45" : "bg-base-content/25";
-    return "border border-base-content/20";
+  // Gold once the forty is legal, and only then. The rest of the time the marks
+  // are the app's plain ink -- see ink.ts on why gold is not a colour a chart
+  // gets to spend on a category.
+  const ink = full ? INK.yours : INK.value;
+
+  // Three marks, three FORMS, because two tints of one colour at eight pixels
+  // is not a categorical split and spells-against-lands is half of what this
+  // drawing promises. A spell is a solid card, a land is the same card hollow,
+  // and a slot with nothing in it is a short dash that could not be mistaken
+  // for either. The land count agreeing with the stepper two elements along is
+  // the point rather than a duplication: it is how you check that the picture
+  // and the number are describing the same deck.
+  const mark = (i: number) => {
+    if (i < spells) return { background: ink };
+    if (i < spells + lands) return { border: `1px solid ${ink}` };
+    return { background: NEUTRAL.rule, borderRadius: "1px", transform: "scaleY(0.3)" };
   };
 
   return (
-    <div
-      role="img"
-      aria-label={`${size} of ${DECK.size} cards: ${spells} spells, ${lands} lands`}
-      className="grid w-[13rem] shrink-0 grid-cols-[repeat(20,minmax(0,1fr))] gap-[2px]"
-    >
-      {Array.from({ length: DECK.size }, (_, i) => (
-        <span
-          key={i}
-          aria-hidden
-          className={`card-aspect rounded-[1px] motion-safe:transition-colors ${fill(i)}`}
-        />
-      ))}
+    <div className="flex w-[13rem] shrink-0 flex-col gap-2">
+      <div
+        role="img"
+        aria-label={`${size} of ${DECK.size} cards: ${spells} spells, ${lands} lands`}
+        className="grid grid-cols-[repeat(20,minmax(0,1fr))] gap-[2px]"
+      >
+        {Array.from({ length: DECK.size }, (_, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="card-aspect rounded-[1px] motion-safe:transition-colors"
+            style={mark(i)}
+          />
+        ))}
+      </div>
+
+      <Key
+        entries={[
+          { label: "Spells", ink, shape: "bar", aside: spells },
+          { label: "Lands", ink, shape: "hollow", aside: lands },
+        ]}
+        className="gap-x-4"
+      />
     </div>
   );
 }
@@ -85,9 +110,14 @@ function DeckSlots({ spells, lands, size }: { spells: number; lands: number; siz
  * cards you are playing, and directly beneath them the ones you are not. A
  * separate column could not answer it without you holding two places at once.
  *
- * The mana curve chart above the piles goes, for the reason the results board
- * dropped its own: the piles ARE the curve, and a bar chart over a board whose
- * column heights say the same thing is two pictures of one fact.
+ * The curve is a bar in each well's header rather than a chart above the board.
+ * It used to be the pile heights themselves, and that was not true here: the
+ * cards you have CUT are pinned to the floor of the well they came from, so a
+ * well with two playing and six cut has the mass of an eight-card column while
+ * the number in its header reads two. The shape and the number were answering
+ * different questions. `CurveBar` counts what the header counts, which leaves
+ * the cards underneath free to be the argument they are -- the cut ones under a
+ * dashed rule, outside the bar and visibly so.
  */
 export function DeckBuilder({
   sessionId,
@@ -148,6 +178,12 @@ export function DeckBuilder({
   const playingPiles = pileUp(playing, (p) => p.card);
   const cutPiles = pileUp(cut, (p) => p.card);
 
+  // The right-hand end of every curve bar on the board. Spell wells only: see
+  // CurveBar on why seventeen lands are not a point on a mana curve.
+  const most = Math.max(...playingPiles.slice(0, LANDS_PILE).map((p) => p.length));
+
+  const rates = winRateSpan(pool);
+
   return (
     <>
       <Panel
@@ -167,6 +203,17 @@ export function DeckBuilder({
           pool and forty come out.
         </p>
 
+        {/* The scale the gutter is drawn against, said in words because it is
+            the reader's own pool and changes every draft. Without it the bar
+            under each win rate is a length with no domain, which is the same
+            complaint the numbers alone had. */}
+        {rates && (
+          <p className="text-xs text-base-content/55">
+            Win rates run {pct(rates.lo)} to {pct(rates.hi)} across your pool. The bar under each
+            is where that card sits between them.
+          </p>
+        )}
+
         <PileGrid gutter>
           {PILE_LABELS.map((pile, i) => (
             <PileWell
@@ -175,19 +222,23 @@ export function DeckBuilder({
               spoken={pile.spoken}
               aside={
                 <span
-                  className={`text-xs tabular-nums ${
-                    playingPiles[i].length === 0 ? "text-base-content/30" : "text-base-content/70"
-                  }`}
+                  className="text-xs tabular-nums"
+                  style={{ color: playingPiles[i].length === 0 ? NEUTRAL.quiet : INK.value }}
                 >
                   {playingPiles[i].length}
                   <span className="sr-only"> playing</span>
                 </span>
               }
+              bar={
+                i === LANDS_PILE ? undefined : (
+                  <CurveBar count={playingPiles[i].length} most={most} />
+                )
+              }
             >
               {playingPiles[i].length > 0 && (
                 <ul className="flex flex-col gap-0.5">
                   {playingPiles[i].map((pick) => (
-                    <BuildRow key={pick.pos} pick={pick} cut={false} onMove={move} />
+                    <BuildRow key={pick.pos} pick={pick} cut={false} rates={rates} onMove={move} />
                   ))}
                 </ul>
               )}
@@ -225,7 +276,7 @@ export function DeckBuilder({
                   </p>
                   <ul className="flex flex-col gap-0.5">
                     {cutPiles[i].map((pick) => (
-                      <BuildRow key={pick.pos} pick={pick} cut onMove={move} />
+                      <BuildRow key={pick.pos} pick={pick} cut rates={rates} onMove={move} />
                     ))}
                   </ul>
                 </div>
@@ -299,6 +350,29 @@ export function DeckBuilder({
 }
 
 /**
+ * The win rates in this pool, lowest and highest, as the scale the gutter is
+ * drawn against.
+ *
+ * The pool rather than the set, because the pool is what the browser is holding
+ * -- forty-five cards with their win rates already on them -- and because it is
+ * the honest denominator for the question being asked. Nobody at this screen is
+ * deciding whether a card is good in the abstract; they are deciding which
+ * twenty-two of the cards IN FRONT OF THEM to cut, and "the worst card you
+ * drafted" is an end of the scale that means something to that decision.
+ *
+ * Null when there is nothing to span. One rated card, or a pool where every
+ * rated card posts the same rate, gives a scale with no width, and a bar drawn
+ * on it would put every card at either end.
+ */
+function winRateSpan(pool: readonly Card[]): { lo: number; hi: number } | null {
+  const rates = pool.map((c) => c.gihWinRate).filter((r): r is number => r != null);
+  if (rates.length === 0) return null;
+  const lo = Math.min(...rates);
+  const hi = Math.max(...rates);
+  return hi > lo ? { lo, hi } : null;
+}
+
+/**
  * One card in a well, and the win rate you are weighing it on.
  *
  * The number rides in a gutter beside the placard rather than inside it, which is
@@ -307,16 +381,29 @@ export function DeckBuilder({
  * where it earns its place -- the results board can drop it, since by then the
  * argument is the suggestion rather than a column of percentages, but cutting
  * twenty-two cards without them is guesswork.
+ *
+ * A COLUMN OF FIVE-CHARACTER STRINGS IS NOT A COMPARISON. Ranking "56.3" against
+ * "58.1" against "54.9" down a well is arithmetic the reader was left to do, on
+ * the exact decision the screen exists for, and it got harder the more cards
+ * there were to cut. The bar under each number is that arithmetic done: one
+ * scale for the whole board, stated above it, so a card sitting near the bottom
+ * of your own pool is visible as a short bar rather than as a number you have to
+ * hold three others beside.
  */
 function BuildRow({
   pick,
   cut,
+  rates,
   onMove,
 }: {
   pick: DeckPick<Card>;
   cut: boolean;
+  rates: { lo: number; hi: number } | null;
   onMove: (pos: number, cut: boolean) => void;
 }) {
+  const wr = pick.card.gihWinRate;
+  const at = rates && wr != null ? (wr - rates.lo) / (rates.hi - rates.lo) : null;
+
   return (
     <li className="flex items-center gap-1.5">
       <CardPlacard
@@ -334,13 +421,32 @@ function BuildRow({
           its content the placard beside it took the difference and grew. A well
           of cards where the unrated ones are visibly longer than the rest reads
           as a rendering fault, which it was. Wide enough for "100.0%", right
-          aligned so the decimal points line up down the well. */}
+          aligned so the decimal points line up down the well.
+
+          The bar is a background rather than a second element, and that is what
+          makes it affordable: twenty-three rows each three pixels taller is a
+          board that has grown by most of a placard. Painted as a gradient under
+          the digits it costs no layout at all.
+
+          Full ink on both states. The cut cards used to render at /25 -- around
+          2:1 against this ground -- which put the faintest number on the screen
+          on exactly the card you are deciding whether to bring back. The placard
+          beside it already says which pile it is in. */}
       <span
-        className={`w-10 shrink-0 text-right text-[11px] tabular-nums ${
-          cut ? "text-base-content/25" : "text-base-content/45"
-        }`}
+        className="w-10 shrink-0 pb-[4px] text-right text-[11px] tabular-nums"
+        style={{
+          color: INK.value,
+          ...(at != null && {
+            backgroundImage: `linear-gradient(to right, ${INK.value} 0 ${at * 100}%, ${
+              NEUTRAL.rule
+            } ${at * 100}% 100%)`,
+            backgroundSize: "100% 3px",
+            backgroundPosition: "left bottom",
+            backgroundRepeat: "no-repeat",
+          }),
+        }}
       >
-        {pct(pick.card.gihWinRate)}
+        {pct(wr)}
       </span>
     </li>
   );
