@@ -3,7 +3,7 @@
 import { type DisplayCard, CURVE_TOP, manaCurve } from "@mtg-tutor/core";
 import { colorBands, sayColumn } from "../lib/curveBands";
 import { Key, type KeyEntry } from "../charts/Key";
-import { manaMark } from "../charts/marks";
+import { ManaCost } from "./ManaCost";
 import { useCursorTip } from "./CursorTip";
 
 // The pool's shape, in the one dimension a Limited deck lives or dies on: what
@@ -29,6 +29,16 @@ import { useCursorTip } from "./CursorTip";
 // gets the whole 44px, still gives six pixels each to a seven-way split no real
 // pool reaches.
 const BAR_HEIGHT = 44;
+
+// The shortest a band can be and still hold its pips. Below it the band is a
+// stripe of colour and the key underneath is the only thing naming it, which is
+// the whole reason that key is not optional on this chart.
+const PIP_FLOOR = 13;
+
+// A band's colours as a cost string ManaCost can draw: "UB" -> "{U}{B}". A
+// colourless band has no letters and takes the game's own symbol for that, which
+// is what a card with no coloured pips prints.
+const pipCost = (key: string) => (key === "" ? "{C}" : [...key].map((c) => `{${c}}`).join(""));
 
 export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
   const curve = manaCurve(cards);
@@ -75,7 +85,6 @@ export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
               >
                 {colorBands(bucket.cards).map((band) => {
                   const share = band.count / bucket.cards.length;
-                  const mark = manaMark(band.key.length === 1 ? band.key : "");
                   // The band's own height in px, which is what decides whether
                   // the letter is legible -- a share is not a size.
                   const tall = share * (bucket.cards.length / tallest) * BAR_HEIGHT;
@@ -96,22 +105,37 @@ export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
                         boxShadow: "inset 0 1px 0 rgb(0 0 0 / 0.25)",
                       }}
                     >
-                      {/* THE SECOND CHANNEL, and it is not a nicety. Put through
-                          a colour-vision check against this app's near-black
+                      {/* THE SECOND CHANNEL, and it is the game's own symbol
+                          rather than anything this app invented.
+
+                          Put through a colour-vision check against a near-black
                           ground, `cardFrame`'s green and red come out 4.8 apart
-                          to a deuteranope -- below the floor at which a palette
-                          is legal even WITH a second channel -- and colourless
-                          against green is 14.2 apart to normal vision. Those
-                          colours are Arena's and are not ours to re-pick, so the
-                          letter goes on the band. Where the band is too thin to
-                          hold one, the key below is carrying it. */}
-                      {band.key.length === 1 && mark.fits(11, tall) && (
-                        <span
-                          aria-hidden
-                          className="font-semibold leading-none"
-                          style={{ fontSize: Math.min(10, tall - 3), color: mark.ink }}
-                        >
-                          {mark.letter}
+                          to a deuteranope -- below the floor at which a
+                          categorical palette is legal even WITH a second channel
+                          -- and colourless against green is 14.2 apart to normal
+                          vision. Those colours are Arena's and are not ours to
+                          re-pick, so something else has to carry the identity.
+
+                          A letter was the first attempt and it was wrong twice:
+                          it is a mark that appears nowhere else in Magic, and a
+                          gold card has no single letter to print, so exactly the
+                          bands whose ring is a gradient -- the ones a reader can
+                          least infer -- got nothing. Pips have neither problem.
+                          They are on every card in the pack, `ColorPips` has
+                          argued since it was written that a reader who has seen
+                          one card knows what the blue drop means, and a two
+                          colour band simply prints both.
+
+                          Where a band is too thin to hold them, the key below is
+                          what carries it -- which is why that key may not be
+                          argued away. */}
+                      {tall >= PIP_FLOOR && (
+                        <span aria-hidden className="leading-none drop-shadow-sm">
+                          <ManaCost
+                            cost={pipCost(band.key)}
+                            className="text-[9px]"
+                            shadow
+                          />
                         </span>
                       )}
                     </span>
@@ -165,5 +189,19 @@ function legendFor(cards: DisplayCard[]): KeyEntry[] {
   return colorBands(cards)
     .slice()
     .sort((a, b) => b.count - a.count)
-    .map((band) => ({ label: band.name, ink: band.frame.ring, aside: band.count }));
+    .map((band) => ({
+      label: band.name,
+      ink: band.frame.ring,
+      aside: band.count,
+      // The same pips the band carries, so the key is a smaller copy of the
+      // thing it explains rather than a second vocabulary beside it. It also
+      // sidesteps the swatch problem entirely: a gold band's ring is a gradient,
+      // and a gradient in a four-pixel chip is a smudge whichever way it is
+      // painted, where two pips are exactly as readable as one.
+      swatch: (
+        <span aria-hidden className="mt-[0.15rem] leading-none">
+          <ManaCost cost={pipCost(band.key)} className="text-[11px]" />
+        </span>
+      ),
+    }));
 }

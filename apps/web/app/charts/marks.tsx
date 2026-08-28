@@ -123,12 +123,21 @@ export function SeriesGlyph({
   return <Glyph left={cx} top={cy} size={MARK.dot * MARK.dot} fill={ink} />;
 }
 
+export interface ManaMark {
+  /** The ring `cardFrame` paints this colour's cards with. Flat, or a gradient. */
+  fill: string;
+  /** The second channel, as a cost string: "UB" -> "{U}{B}". Draw with ManaCost. */
+  pips: string;
+  /** The shortest box the pips stay legible in. Below it, lean on the legend. */
+  fits: (width: number, height: number) => boolean;
+}
+
 /**
- * A band of one Magic colour, WITH ITS PIP. The pip is not optional and that is
- * the whole reason this component exists rather than a fill.
+ * A Magic colour as a fill AND the pips that go on it. Never one without the
+ * other, which is why this returns a pair rather than a colour.
  *
- * `cardFrame`'s WUBRG rings are sampled from Arena and are not ours to re-pick:
- * they say which colour a CARD is, and a drafter expects red to be red. Put
+ * WHY THERE HAS TO BE A SECOND CHANNEL. `cardFrame`'s rings are sampled from
+ * Arena and are not ours to re-pick -- a drafter expects red to be red. Put
  * through a colour-vision check against this app's near-black surface they come
  * back badly:
  *
@@ -136,84 +145,27 @@ export function SeriesGlyph({
  *     colourless #8c98a2 <-> green #4e8a55  dE 14.2  NORMAL vision
  *
  * 4.8 is below even the floor at which a categorical palette is legal with a
- * second channel behind it, and 14.2 means two of these are hard to separate
- * with full colour vision. Red against green is also the pair Magic asks about
- * most often.
+ * second channel behind it, and red against green is the pair this game asks
+ * about most.
  *
- * The palette cannot move, so the other end has to: WUBRG is never the only
- * channel. The second one is already in the app and is better than a hatch or a
- * texture would be -- the mana pip. Magic solved this itself, with symbols,
- * decades ago, and every reader of this app can already read one.
+ * WHY PIPS AND NOT A LETTER. A letter was the first answer here and it was
+ * wrong twice. It is a mark that appears nowhere else in Magic -- `ColorPips`
+ * has argued since it was written that the pip is how the game itself writes a
+ * colour, is on every card in the pack, and needs no key where "WU" has to be
+ * decoded. And a gold card has no single letter, so exactly the marks whose
+ * ring is a GRADIENT, the ones a reader can least infer, would have got
+ * nothing. Pips have neither problem: a two-colour mark prints both.
  *
- * Structural rather than advisory: there is no way to get the fill out of here
- * without the pip coming with it, so a future chart cannot quietly reintroduce
- * the defect by painting `ringFor` on a rectangle.
+ * Returned as a cost string rather than a rendered node so the caller draws it
+ * with `ManaCost`, which is the app's one mana-font renderer -- a second one
+ * would drift the day a hybrid or snow symbol turns up.
  */
-export interface ManaMark {
-  /** The ring `cardFrame` paints this colour's cards with. */
-  fill: string;
-  /** The second channel. Near-black, because every ring is light enough. */
-  letter: string;
-  ink: string;
-  /** The smallest box the letter is legible in. Below it, lean on the legend. */
-  fits: (width: number, height: number) => boolean;
-}
-
-/**
- * A Magic colour, as a fill AND the letter that goes on it. Never one without
- * the other, which is why this returns a pair rather than a colour.
- *
- * The renderer is the caller's business -- the mana curve is HTML because its
- * axis is a mana-font icon row that has to line up with the columns, and the
- * braid is SVG because it is a rope. What must not vary between them is this
- * rule, so it lives here and both of them ask for it.
- */
-export function manaMark(color: string): ManaMark {
+export function manaMark(colors: string): ManaMark {
   return {
-    fill: ringFor(color),
-    letter: color === "colorless" ? "C" : color,
-    // Near-black on every ring: all five are light enough to carry it, which is
-    // the same fact `cardFrame` already leans on for its plates.
-    ink: "#0d0b06",
-    fits: (width, height) => height >= 13 && width >= 11,
+    fill: colors.length === 1 ? ringFor(colors) : ringFor("colorless"),
+    pips: colors === "" ? "{C}" : [...colors].map((c) => `{${c}}`).join(""),
+    fits: (width, height) => height >= 13 && width >= 11 * Math.max(1, colors.length),
   };
-}
-
-/** The SVG form. `manaMark` is the rule; this is one way of drawing it. */
-export function ManaBand({
-  color,
-  x,
-  y,
-  width,
-  height,
-}: {
-  color: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}) {
-  const mark = manaMark(color);
-
-  return (
-    <Group>
-      <rect x={x} y={y} width={width} height={height} fill={mark.fill} />
-      {mark.fits(width, height) && (
-        <text
-          x={x + width / 2}
-          y={y + height / 2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={Math.min(11, height - 4)}
-          fontWeight={700}
-          fill={mark.ink}
-          aria-hidden
-        >
-          {mark.letter}
-        </text>
-      )}
-    </Group>
-  );
 }
 
 /**
@@ -231,8 +183,8 @@ export const SEAM = { stroke: "var(--color-base-100)", strokeWidth: 2 } as const
  * A rule the marks are measured from: a zero, a baseline, a threshold.
  *
  * Always labelled. An unlabelled reference line gets read as zero even when it
- * is a 50% win rate or a significance bar, and the reader has no way to find
- * out they are wrong.
+ * is a 50% win rate or a significance bar, and the reader has no way to find out
+ * they are wrong.
  */
 export function Baseline({
   x1,

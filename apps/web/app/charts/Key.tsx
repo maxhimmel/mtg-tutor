@@ -28,6 +28,19 @@ export interface KeyEntry {
   /** The paint. A role from `ink.ts`, never a literal colour. */
   ink: string;
   /**
+   * Drawn instead of the colour chip, where the app already has a better mark
+   * for this thing than a rectangle of its colour.
+   *
+   * The case that produced it is Magic's own: a colour is written as a PIP, on
+   * every card in the pack and every placard in a deck list, and `ColorPips`
+   * has argued since it was written that a reader who has seen one card knows
+   * what the blue drop means. A chip is a mark that appears nowhere else in the
+   * game, and for a gold card it is not even one colour. Handing the key the
+   * symbol makes it the same object the reader is already fluent in -- and
+   * carries a two-colour card without a gradient having to survive a swatch.
+   */
+  swatch?: ReactNode;
+  /**
    * The second channel, so the entry is legible without the hue. `bar` is a
    * filled band, `hollow` is the same band unfilled, `dot` is a point estimate.
    */
@@ -38,13 +51,25 @@ export interface KeyEntry {
   means?: string;
 }
 
+/**
+ * The colour chip, and the reason it paints with `background` and not
+ * `backgroundColor`.
+ *
+ * `cardFrame` hands multicolour cards a GRADIENT -- `linear-gradient(to right,
+ * …)` -- as their ring, because a gold card's ring runs through every colour it
+ * is. `background-color` does not accept one: the declaration is thrown out and
+ * the chip renders transparent, so every gold entry in a key was an invisible
+ * swatch beside a label. Found by looking at the thing rather than at the code.
+ * The shorthand takes a flat colour and a gradient alike, so one property serves
+ * both and no caller has to know which kind of paint it is holding.
+ */
 function Swatch({ ink, shape = "bar" }: { ink: string; shape?: KeyEntry["shape"] }) {
   if (shape === "dot") {
     return (
       <span
         aria-hidden
         className="mt-[0.3rem] size-2 shrink-0 rounded-full"
-        style={{ backgroundColor: ink }}
+        style={{ background: ink }}
       />
     );
   }
@@ -53,11 +78,7 @@ function Swatch({ ink, shape = "bar" }: { ink: string; shape?: KeyEntry["shape"]
     <span
       aria-hidden
       className="mt-[0.45rem] h-1.5 w-4 shrink-0 rounded-full"
-      style={
-        shape === "hollow"
-          ? { border: `1px solid ${ink}` }
-          : { backgroundColor: ink }
-      }
+      style={shape === "hollow" ? { border: `1px solid ${ink}` } : { background: ink }}
     />
   );
 }
@@ -67,7 +88,7 @@ export function Key({ entries, className }: { entries: KeyEntry[]; className?: s
     <dl className={`flex flex-wrap gap-x-5 gap-y-1.5 ${className ?? ""}`}>
       {entries.map((entry) => (
         <div key={entry.label} className="flex items-start gap-1.5">
-          <Swatch ink={entry.ink} shape={entry.shape} />
+          {entry.swatch ?? <Swatch ink={entry.ink} shape={entry.shape} />}
           <div className="min-w-0">
             <dt className="flex items-baseline gap-1.5 text-xs text-base-content/70">
               {entry.label}
