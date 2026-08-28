@@ -11,6 +11,9 @@ import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
 import { PickTrack, TrackKey, type Tick, type TickState } from "../components/PickTrack";
 import { ScrollBox } from "../components/ScrollBox";
+import { GradeRuler } from "../glossary/figures/GradeRuler";
+import { WinRateAxis } from "../glossary/figures/WinRateAxis";
+import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
 import { pct } from "../lib/format";
 import {
   DeckBands,
@@ -183,6 +186,65 @@ const TRACK_KEY = [
   { state: "miss" as const, label: "missed it", aside: 4 },
   { state: "stood" as const, label: "stood by it", aside: 2 },
 ];
+
+// A hundred drafts of per-pick averages, shaped like a history rather than a
+// curve. The slide from pick 4 to pick 8 is the thing the panel exists to show;
+// the late picks climb back because a pack of four cards has little left to get
+// wrong; and pick 15 is a 97.4 on forty-one picks, because only some sets deal a
+// fifteenth card. That last column is the whole case for printing n -- on this
+// axis it is the tallest dot on the plot and the least worth believing.
+const BY_PICK: ScoreColumn[] = [
+  { key: "1", label: "1", score: 93.1, n: 300, title: "Pick 1: 93.1 average over 300 picks" },
+  { key: "2", label: "2", score: 91.8, n: 300, title: "Pick 2: 91.8 average over 300 picks" },
+  { key: "3", label: "3", score: 90.4, n: 300, title: "Pick 3: 90.4 average over 300 picks" },
+  { key: "4", label: "4", score: 88.9, n: 300, title: "Pick 4: 88.9 average over 300 picks" },
+  { key: "5", label: "5", score: 87.2, n: 300, title: "Pick 5: 87.2 average over 300 picks" },
+  { key: "6", label: "6", score: 85.6, n: 300, title: "Pick 6: 85.6 average over 300 picks" },
+  { key: "7", label: "7", score: 84.1, n: 300, title: "Pick 7: 84.1 average over 300 picks" },
+  { key: "8", label: "8", score: 82.6, n: 300, title: "Pick 8: 82.6 average over 300 picks" },
+  { key: "9", label: "9", score: 83.4, n: 300, title: "Pick 9: 83.4 average over 300 picks" },
+  { key: "10", label: "10", score: 85.0, n: 300, title: "Pick 10: 85.0 average over 300 picks" },
+  { key: "11", label: "11", score: 87.3, n: 300, title: "Pick 11: 87.3 average over 300 picks" },
+  { key: "12", label: "12", score: 89.9, n: 300, title: "Pick 12: 89.9 average over 300 picks" },
+  { key: "13", label: "13", score: 92.6, n: 299, title: "Pick 13: 92.6 average over 299 picks" },
+  { key: "14", label: "14", score: 95.8, n: 299, title: "Pick 14: 95.8 average over 299 picks" },
+  { key: "15", label: "15", score: 97.4, n: 41, title: "Pick 15: 97.4 average over 41 picks" },
+];
+
+// Ten finished drafts, oldest first, the way /stats draws a run of them: no n,
+// because every column is forty-five picks by construction, and a set symbol
+// instead of a label. The symbols are masked from Scryfall over the network,
+// exactly as the live panel loads them, so an offline bay draws empty gutters
+// rather than the wrong thing. The hrefs go nowhere here; on /stats each one is
+// the way back into that draft.
+const DRAFT_RUN: [code: string, score: number][] = [
+  ["dft", 78.4],
+  ["tdm", 81.0],
+  ["fin", 79.6],
+  ["eoe", 84.2],
+  ["ecl", 83.1],
+  ["blb", 86.7],
+  ["dsk", 85.9],
+  ["otj", 88.3],
+  ["mkm", 87.4],
+  ["lci", 91.2],
+];
+
+const BY_DRAFT: ScoreColumn[] = DRAFT_RUN.map(([code, score]) => ({
+  key: code,
+  label: code.toUpperCase(),
+  iconUri: `https://svgs.scryfall.io/sets/${code}.svg`,
+  score,
+  href: "#",
+  title: `${code.toUpperCase()}: ${score.toFixed(1)}`,
+}));
+
+const BY_PICK_SPOKEN =
+  "Average score by pick number within a pack — " +
+  BY_PICK.map((c) => c.title).join("; ");
+
+const BY_DRAFT_SPOKEN =
+  "Score by draft, oldest first — " + BY_DRAFT.map((c) => c.title).join("; ");
 
 export const SPECIMENS: Specimen[] = [
   {
@@ -470,6 +532,56 @@ export const SPECIMENS: Specimen[] = [
           <ScrollBox maxHeight="max-h-64" label="A list that overflows">
             <CardPlacardList cards={[...cards, ...cards, ...cards]} />
           </ScrollBox>
+        </Bay>
+      </div>
+    ),
+  },
+{
+    id: "score-plot",
+    title: "Score plot",
+    note: "All three panels on /stats — a run of drafts, by pack, by pick",
+    // THE THIRD BAY IS THE SPECIMEN. The first two show the plot working; the
+    // third is the same fifteen columns at 20rem, which is under `needs`, so it
+    // must draw the table and not a squeezed chart. If a fifteen-column plot
+    // ever appears in that bay, `needs` has been under-stated and every phone is
+    // getting the wrong drawing.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="By pick — fifteen columns, every label with room">
+          <ScorePlot columns={BY_PICK} label={BY_PICK_SPOKEN} counting="picks" />
+        </Bay>
+        <Bay label="A run of drafts — set symbols, no sample size, columns are links">
+          <ScorePlot columns={BY_DRAFT} label={BY_DRAFT_SPOKEN} />
+        </Bay>
+        <Bay label="The same fifteen at 20rem — under needs, so the table" width="w-[20rem] max-w-full">
+          <ScorePlot columns={BY_PICK} label={BY_PICK_SPOKEN} counting="picks" />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "glossary-figures",
+    title: "Glossary figures",
+    note: "The page's opening dumbbell and the grade ruler, at full width and at a phone's",
+    // NARROW THE WINDOW to check these. The narrow bay gives the figure the
+    // 23rem a 375px phone gives it, which is what catches an overflow -- but the
+    // layouts inside both figures switch on Tailwind's `sm:`, and that is a
+    // VIEWPORT media query, not a container one. The bay cannot trip it. So the
+    // stacked forms -- the dumbbell's axis and end labels, which used to vanish
+    // below 640px -- only appear once the browser window itself is under 640px.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Win-rate dumbbell — full width">
+          <WinRateAxis />
+        </Bay>
+        <Bay label="Win-rate dumbbell — a phone's 23rem" width="w-[23rem] max-w-full">
+          <WinRateAxis />
+        </Bay>
+        <Bay label="Grade ruler — full width, F fading past the axis end">
+          <GradeRuler />
+        </Bay>
+        <Bay label="Grade ruler — a phone's 23rem" width="w-[23rem] max-w-full">
+          <GradeRuler />
         </Bay>
       </div>
     ),
