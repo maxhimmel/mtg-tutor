@@ -287,8 +287,8 @@ function HandOff({ challengeId, them }: { challengeId: string; them?: string }) 
  * measures nothing, which is the only honest way to preview a drawing whose
  * whole value is that it is measured.
  *
- * STOOD ON END, which the comparison does with the real one for the same reason
- * -- see Spine, "the rail IS the braid, same rope, same measure". Laid along the
+ * STOOD ON END, which the comparison tried with the real one for the same
+ * reason -- the rail IS the braid, same rope, same measure. Laid along the
  * floor of the banner this was 56 units tall across nine hundred, and a parting
  * drawn on a 17:1 canvas is a straight line with a kink in it. Read as four
  * horizontal rules and was taken for a border. Vertical it gets a canvas the

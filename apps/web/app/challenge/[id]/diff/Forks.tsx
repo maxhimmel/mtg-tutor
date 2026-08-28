@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { scaleLinear } from "@visx/scale";
 import type { DiffRow, DiffTally, ForkImpact } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
 import { ScrollBox } from "../../../components/ScrollBox";
+import { INK, MARK, NEUTRAL } from "../../../charts/ink";
 import { gradeColor } from "../../../lib/format";
 import { Explain } from "./Explain";
 import { FaceName, type Face } from "./faces";
@@ -50,9 +52,44 @@ import { Dot } from "./sides";
  * they gained on" -- and both are what the top of the corresponding sort already
  * is, on a list of five to fifteen. A filter here would hide forks to save a
  * reader from scrolling past four of them.
+ *
+ * AND THE SORT HAD NOTHING TO STAND ON, which is the defect this closes and it
+ * had two halves.
+ *
+ * The first is that the grid destroyed the ranking. The forks were laid out
+ * `repeat(auto-fill, minmax(21rem, 1fr))` with a note saying "the sort reads
+ * left to right and wraps, which is how a ranked grid reads" -- and it does not,
+ * for a list whose ordering is the control's ONLY output. On a wide screen rank
+ * one and rank four sat side by side, the same size, in the same tone, with
+ * nothing between them saying which came first. Three buttons that reorder an
+ * unordered-looking grid are three buttons that appear to do nothing. So it is
+ * one column, capped at a comfortable measure, and the ranking is the reading
+ * order again.
+ *
+ * The second is that none of the three quantities was drawn. The ranked bar
+ * chart that used to be here was removed for a good reason -- most forks change
+ * nothing, and a row of empty bars reads as a broken chart rather than as a
+ * finding -- and that call stands. What replaces it is a DOT ON A STATED AXIS,
+ * where zero is a legitimate position rather than an absence: a fork that
+ * changed nothing puts its dot on the rule, which is a mark saying "none" and
+ * not a bar failing to be drawn. One mark, three domains, and the domain the
+ * list is currently sorted by is the one it draws -- so the control's output is
+ * visible as a shape down the column instead of being taken on trust.
+ *
+ * THE AXIS IS A FIXED WIDTH AND NOT A MEASURED ONE. Every fork's mark has to sit
+ * on the same scale as every other or the column says nothing, and the cheapest
+ * way to guarantee that across fifteen rows in a scroll box is to give the mark
+ * a box that does not depend on the row. Below `sm` the column is dropped
+ * outright rather than squeezed: every row already prints its own value in
+ * words, so what a narrow screen loses is the comparison and not the number.
  */
 
 type SortKey = "order" | "gap" | "changed";
+
+// The mark's own box, in pixels, shared by every row. See the header.
+const MARK_W = 132;
+const MARK_H = 18;
+
 export function Forks({
   rows,
   tally,
@@ -106,6 +143,68 @@ export function Forks({
   const anyReached = forkRows.some((r) => (impacts.get(r.pickIndex)?.reach ?? 0) > 0);
 
   const apartAndDiffered = rows.filter((r) => !r.samePack && !r.agree).length;
+
+  /**
+   * The scale the marks are drawn on, which is whichever quantity the list is
+   * ordered by.
+   *
+   * Its ends come off the forks in hand rather than off a constant, because
+   * there is no natural maximum for any of the three: a score gap of forty is
+   * possible and a score gap of two is a normal draft, and a domain fixed to the
+   * worse case would draw every real comparison as a row of dots in the middle.
+   * The ends are printed under the list for exactly that reason -- a domain that
+   * moves with the data is only honest while it is stated.
+   */
+  const gaps = forkRows.map(gapOf);
+  const widest = Math.max(1, ...gaps.map(Math.abs));
+  const furthest = Math.max(1, ...forkRows.map(reachOf));
+
+  const scale: {
+    domain: [number, number];
+    reference?: number;
+    valueOf: (row: DiffRow) => number;
+    inkOf: (row: DiffRow) => string;
+    says: ReactNode;
+  } =
+    sort === "gap"
+      ? {
+          domain: [-widest, widest],
+          reference: 0,
+          valueOf: gapOf,
+          // Signed, so the grade scale's own green and red are the right paint:
+          // right of the rule is a pick that cost you, left of it one that did
+          // not. The sign is on the row in words as well, so the hue is never
+          // the only thing saying it.
+          inkOf: (row) => (gapOf(row) > 0 ? INK.down : gapOf(row) < 0 ? INK.up : INK.zero),
+          says: (
+            <>
+              The marks run from {widest} points your way on the left to {widest} theirs on
+              the right, level on the rule — so a mark right of the rule is a call that cost
+              you.
+            </>
+          ),
+        }
+      : sort === "changed"
+        ? {
+            domain: [0, furthest],
+            reference: 0,
+            valueOf: reachOf,
+            inkOf: () => INK.yours,
+            says: (
+              <>
+                The marks run from nothing changed, on the rule, to {furthest} of your later
+                packs.
+              </>
+            ),
+          }
+        : {
+            domain: [0, Math.max(1, rows.length - 1)],
+            valueOf: (row) => row.pickIndex,
+            inkOf: () => INK.value,
+            says: (
+              <>The marks run left to right through the draft, pick 1 to pick {rows.length}.</>
+            ),
+          };
 
   if (forkRows.length === 0) {
     return (
@@ -182,13 +281,14 @@ export function Forks({
           to disagree. No label on the box: every fork in it is a button, so a
           keyboard already walks the list and scrolls it on the way.
 
-          Laid out by the width a fork needs rather than in one column, so a wide
-          screen fills with three or four abreast instead of running one row
-          across a metre of page with a card name at one end and a grade at the
-          other. The sort reads left to right and wraps, which is how a ranked
-          grid reads. */}
+          ONE COLUMN, CAPPED AT A MEASURE. It was laid out by the width a fork
+          needs, three or four abreast on a wide screen, to keep a card name at
+          one end of a metre of page and a grade at the other -- which is a real
+          problem and a `max-w` is the answer to it. A grid is not: the ordering
+          is the only thing the sort control produces, and a grid that wraps
+          hides it. The room the cap gives back is where the marks go. */}
       <ScrollBox maxHeight="max-h-[30rem]">
-        <ul className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(21rem,1fr))]">
+        <ul className="flex max-w-[46rem] flex-col gap-2">
           {ranked.map((row) => (
             <Fork
               key={row.pickIndex}
@@ -197,10 +297,27 @@ export function Forks({
               impact={impacts.get(row.pickIndex)}
               faceOf={faceOf}
               onOpen={onOpen}
+              mark={
+                <ForkMark
+                  value={scale.valueOf(row)}
+                  domain={scale.domain}
+                  reference={scale.reference}
+                  ink={scale.inkOf(row)}
+                />
+              }
             />
           ))}
         </ul>
       </ScrollBox>
+
+      {/* THE SCALE, SAID ONCE, at the foot of the list it belongs to -- both the
+          mark's domain and the unit on the score gap, which this panel printed
+          bare ("theirs +7") while the only statement of what a point of it is
+          lived on a different panel two sections up. */}
+      <p className="flex flex-wrap gap-x-2 text-xs leading-relaxed text-base-content/50">
+        <span className="hidden sm:inline">{scale.says}</span>
+        <span>Pick scores are out of 100.</span>
+      </p>
 
       {/* A failed replay stays a paragraph whatever the page has been told about
           notes: it is not a caveat on a number, it is the reason a column the
@@ -309,12 +426,64 @@ function Apart({ count, them }: { count: number; them: string }) {
   );
 }
 
+/**
+ * One fork's place on whichever scale the list is ordered by.
+ *
+ * A DOT AND NOT A BAR, which is the difference between drawing "none" and
+ * failing to draw anything. Most forks change nothing about the rest of your
+ * draft -- your own pick cannot reach your own packs for eight picks, and by
+ * then the card is usually gone -- so a bar chart of what each fork changed is
+ * mostly empty boxes, and an empty box reads as a chart that did not load. A dot
+ * sitting on the reference rule is a mark that says none, in the same ink and at
+ * the same size as every other mark in the column.
+ *
+ * The rule is drawn the width of the box whether or not there is a reference on
+ * it, because a dot floating in white space has no scale at all -- and the
+ * reference itself is heavier than the rule, because on a column where most
+ * marks land on it, it is the only thing carrying the answer.
+ */
+function ForkMark({
+  value,
+  domain,
+  reference,
+  ink,
+}: {
+  value: number;
+  domain: [number, number];
+  reference?: number;
+  ink: string;
+}) {
+  const r = MARK.dot / 2;
+  const x = scaleLinear({ domain, range: [r, MARK_W - r], clamp: true });
+  const y = MARK_H / 2;
+
+  return (
+    // The values are all in the row's own accessible name already; a second
+    // reading of them as a picture would be the same fact twice.
+    <svg width={MARK_W} height={MARK_H} aria-hidden className="shrink-0">
+      <line x1={0} x2={MARK_W} y1={y} y2={y} stroke={INK.rule} strokeWidth={MARK.axis} />
+      {reference !== undefined && (
+        <line
+          x1={x(reference)}
+          x2={x(reference)}
+          y1={1}
+          y2={MARK_H - 1}
+          stroke={INK.zero}
+          strokeWidth={1}
+        />
+      )}
+      <circle cx={x(value)} cy={y} r={r} fill={ink} stroke={NEUTRAL.rule} strokeWidth={0.5} />
+    </svg>
+  );
+}
+
 function Fork({
   row,
   them,
   impact,
   faceOf,
   onOpen,
+  mark,
 }: {
   row: DiffRow;
   them: string;
@@ -323,6 +492,8 @@ function Fork({
   impact?: ForkImpact;
   faceOf: (name: string, colors: readonly string[]) => Face;
   onOpen: (pickIndex: number) => void;
+  /** Where this fork stands on the quantity the list is ordered by. */
+  mark: ReactNode;
 }) {
   const colorsOf = (pack: DiffRow["yours"]["pack"], name: string) =>
     pack.find((c) => c.name === name)?.colors ?? [];
@@ -348,48 +519,56 @@ function Fork({
           fork lying in it has to be the thing on top or the two are one flat
           surface with a border drawn on it. */}
       <button
-        className="card-focus flex w-full cursor-pointer flex-col gap-2 rounded-lg border border-base-300 bg-base-200 px-3 py-2.5 text-left transition-colors hover:border-base-content/25"
-        aria-label={`Pack ${row.packNo}, pick ${row.pickNo} — you took ${row.yours.pickedName}, ${row.yours.grade}; ${them} took ${row.theirs.pickedName}, ${row.theirs.grade}.${
+        className="card-focus flex w-full cursor-pointer items-center gap-4 rounded-lg border border-base-300 bg-base-200 px-3 py-2.5 text-left transition-colors hover:border-base-content/25"
+        aria-label={`Pack ${row.packNo}, pick ${row.pickNo} — you took ${row.yours.pickedName}, ${row.yours.grade}; ${them} took ${row.theirs.pickedName}, ${row.theirs.grade}. ${
+          gap === 0
+            ? "Level on score."
+            : `Their card scored ${Math.abs(gap)} points ${gap > 0 ? "higher" : "lower"} than yours.`
+        }${
           reach > 0
             ? ` It changed ${reach} of your ${impact?.of ?? 0} later packs, from ${impact?.delay} picks on.`
             : ""
         }`}
         onClick={() => onOpen(row.pickIndex)}
       >
-        <span aria-hidden className="flex items-baseline justify-between gap-2">
-          <span className="eyebrow">
-            Pack {row.packNo}, pick {row.pickNo}
+        <span aria-hidden className="flex min-w-0 flex-1 flex-col gap-2">
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="eyebrow">
+              Pack {row.packNo}, pick {row.pickNo}
+            </span>
+            <span className="shrink-0 text-xs text-base-content/45">
+              {gap === 0
+                ? "level on score"
+                : gap > 0
+                  ? `theirs +${gap}`
+                  : `yours +${Math.abs(gap)}`}
+            </span>
           </span>
-          <span className="shrink-0 text-xs text-base-content/45">
-            {gap === 0
-              ? "level on score"
-              : gap > 0
-                ? `theirs +${gap}`
-                : `yours +${Math.abs(gap)}`}
+
+          <span className="flex flex-col gap-1">
+            <Took face={yours} grade={row.yours.grade} mine />
+            <Took face={theirs} grade={row.theirs.grade} />
           </span>
+
+          {/* What the pick went on to do, when it did anything. A line, not a
+              chart: the answer is usually "nothing", and the shape that says
+              nothing loudest is an empty bar. Kept because the one fork in ten
+              that DID reroute the draft is the most interesting thing on this
+              page -- and it is why the list is ordered the way it is, so the rows
+              carrying one rise to the top of it. */}
+          {reach > 0 && (
+            <span className="flex items-center gap-2 border-t border-base-300 pt-2 text-xs leading-relaxed text-primary/85">
+              <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+              Changed {reach} of your {impact?.of ?? 0} later packs, from {impact?.delay}{" "}
+              picks on.
+            </span>
+          )}
         </span>
 
-        <span aria-hidden className="flex flex-col gap-1">
-          <Took face={yours} grade={row.yours.grade} mine />
-          <Took face={theirs} grade={row.theirs.grade} />
-        </span>
-
-        {/* What the pick went on to do, when it did anything. A line, not a
-            chart: the answer is usually "nothing", and the shape that says
-            nothing loudest is an empty bar. Kept because the one fork in ten
-            that DID reroute the draft is the most interesting thing on this
-            page -- and it is why the list is ordered the way it is, so the rows
-            carrying one rise to the top of it. */}
-        {reach > 0 && (
-          <span
-            aria-hidden
-            className="flex items-center gap-2 border-t border-base-300 pt-2 text-xs leading-relaxed text-primary/85"
-          >
-            <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-            Changed {reach} of your {impact?.of ?? 0} later packs, from {impact?.delay} picks
-            on.
-          </span>
-        )}
+        {/* Gone below `sm` rather than squeezed. A scale narrower than its own
+            dots is not a smaller scale, and the number this mark places is
+            printed on the row either way. */}
+        <span className="hidden shrink-0 sm:block">{mark}</span>
       </button>
     </li>
   );

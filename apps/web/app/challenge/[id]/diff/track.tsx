@@ -1,5 +1,6 @@
 "use client";
 
+import { useParentSize } from "@visx/responsive";
 import type { DiffRow } from "@mtg-tutor/core";
 import { PickTrack, type Tick, type TickState } from "../../../components/PickTrack";
 
@@ -58,6 +59,37 @@ export function trackGroups(rows: DiffRow[], them: string): Tick[][] {
   return [...groups.entries()].sort(([a], [b]) => a - b).map(([, ticks]) => ticks);
 }
 
+/**
+ * WHAT A TICK NEEDS TO BE A TICK, and the arithmetic every threshold in this
+ * file is derived from.
+ *
+ * The diff track draws all forty-two picks, always, and at 360px it was doing it
+ * in about 132 pixels: 3.1px a tick, of which 3px is the padding that separates
+ * one tick's target from the next. The bar was a hairline, the hit target was
+ * three pixels wide, and this is the page's ONLY keyboard path to a pick -- so
+ * the failure was silent in the worst possible place. Nothing about it looked
+ * broken; there were still forty-two marks.
+ *
+ * Eight pixels is the floor: `TICK_X` spends three of them on the thread of page
+ * between one target and the next, which leaves a five-pixel bar and a target a
+ * thumb can be aimed at without hitting its neighbour. Below that the answer is
+ * not a thinner tick, it is to stop spending width on anything that is not a
+ * tick -- which is what the two thresholds below decide, in order of what is
+ * cheapest to give up.
+ */
+const MIN_TICK = 8;
+// A labelled group is a bordered well: `px-1.5` plus the border, per pack.
+const LABEL_COST = 14;
+// `--pick-track-gap`, at its default. Under the braid it is a percentage of the
+// drafted span instead -- and there the labels are off anyway, because the
+// ruler names the packs.
+const PACK_GAP = 12;
+// The two stepper buttons and the gaps either side of them.
+const STEPPER_COST = 2 * 60 + 2 * 8;
+
+const tickRoom = (width: number, picks: number, packs: number, spent: number) =>
+  (width - (packs - 1) * PACK_GAP - spent) / picks;
+
 export function DiffTrack({
   rows,
   them,
@@ -89,21 +121,43 @@ export function DiffTrack({
    * pack and the ruler between them has already named it -- a third statement of
    * the same boundary, in a third notation. The wells also carry an inset, and
    * an inset is exactly what stops a tick landing under the pick it names.
+   *
+   * ASKING FOR THEM IS NOT GETTING THEM. A bordered well per pack costs fourteen
+   * pixels of the row and buys a name a reader can usually infer from the gap
+   * beside it; forty-two ticks costs the row everything and buys the only thing
+   * on this page that is navigation. So the labels are the first thing given up
+   * when the two cannot both be had, and the caller's `true` means "name the
+   * packs if there is room", which is the only version of that request that can
+   * be honoured at every width.
    */
   packLabels?: boolean;
 }) {
   // Off the rows' own pack numbers rather than counted from one, so the labels
   // cannot drift from the groups if a draft ever has fewer than three packs.
   const packNos = [...new Set(rows.map((r) => r.packNo))].sort((a, b) => a - b);
+  // `useParentSize` and not the `ParentSize` component: that one lays its
+  // children out absolutely inside a box of the height it was given, which is
+  // right for an SVG and wrong for a row of buttons. See `charts/Plot`.
+  const { parentRef, width } = useParentSize({ debounceTime: 0 });
+
+  const named =
+    // Unmeasured on the first frame, and the labels stay off there: a name row
+    // that appears once the measurement lands grows the track into its height,
+    // where one that vanishes drops the page out from under a reader's thumb.
+    packLabels &&
+    width > 0 &&
+    tickRoom(width, rows.length, packNos.length, packNos.length * LABEL_COST) >= MIN_TICK;
 
   return (
-    <PickTrack
-      groups={trackGroups(rows, them)}
-      label={label}
-      onSelect={onAt}
-      here={Math.min(at, rows.length - 1)}
-      groupLabels={packLabels ? packNos.map((n) => `Pack ${n}`) : undefined}
-    />
+    <div ref={parentRef} style={{ width: "100%" }}>
+      <PickTrack
+        groups={trackGroups(rows, them)}
+        label={label}
+        onSelect={onAt}
+        here={Math.min(at, rows.length - 1)}
+        groupLabels={named ? packNos.map((n) => `Pack ${n}`) : undefined}
+      />
+    </div>
   );
 }
 
@@ -140,6 +194,21 @@ export function DiffTrack({
  * page, and this copy carries its own pack labels -- a reader down here can
  * see which pack they are in and how far along it. Anything more would be the
  * panel's own header rule, restated.
+ *
+ * AND ON A PHONE THE TRACK TAKES THE WHOLE ROW, which is a reversal of what is
+ * written above it and worth saying why. Flanking at every width was argued from
+ * "two orphan buttons on an empty line is a worse trade than thinner ticks", and
+ * that was right about the alternative it was comparing against and wrong about
+ * the arithmetic: at 360px the buttons and the pack wells were taking two thirds
+ * of the row, and what was left was not thinner ticks but a three-pixel target
+ * on the only keyboard path to a pick on this page.
+ *
+ * The orphan was also avoidable. The line above the control is a transport
+ * instruction and the two buttons are the transport, so on a narrow screen they
+ * become ONE row -- previous, the instruction, next -- and the track sits under
+ * it at full width. Nothing is orphaned and nothing has moved out of reach: the
+ * same three objects, regrouped, and the buttons stay flanking on any screen
+ * that can afford to have them there.
  */
 export function TrackStepper({
   rows,
@@ -153,39 +222,74 @@ export function TrackStepper({
   onAt: (index: number) => void;
 }) {
   const here = Math.min(at, rows.length - 1);
+  const packs = new Set(rows.map((r) => r.packNo)).size;
+  const { parentRef, width } = useParentSize({ debounceTime: 0 });
+
+  // "Anywhere on the page" is the part worth saying: the page listens for these,
+  // so a reader does not have to find and focus the track first -- which is the
+  // whole reason to press a key instead of aiming at a tick.
+  const hint = (
+    <p className="flex items-center justify-center gap-1.5 text-xs text-base-content/45">
+      <kbd className="kbd kbd-xs">←</kbd>
+      <kbd className="kbd kbd-xs">→</kbd>
+      to step, anywhere on the page
+    </p>
+  );
+
+  const track = (
+    <DiffTrack
+      rows={rows}
+      them={them}
+      at={here}
+      onAt={onAt}
+      label="Every pick in both drafts, in order. Select one to read it in this panel."
+    />
+  );
+
+  const previous = (
+    <Step way="Previous" glyph="←" to={rows[here - 1]} onClick={() => onAt(here - 1)} />
+  );
+  const next = (
+    <Step way="Next" glyph="→" trailing to={rows[here + 1]} onClick={() => onAt(here + 1)} />
+  );
+
+  // Flanking is what says the arrows step ALONG the track rather than sitting
+  // near it, so it is kept wherever the ticks can still pay for it.
+  //
+  // Width 0 is the unmeasured first frame, and it takes the flanking form for
+  // the same reason the labels above start off: of the two arrangements it is
+  // the SHORTER, so whichever way the measurement lands the panel grows into
+  // its final height rather than collapsing out of it. There is a frame of
+  // difference either way; this decides which direction it moves.
+  const flanking =
+    width === 0 || tickRoom(width, rows.length, packs, STEPPER_COST) >= MIN_TICK;
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Above the control and not below it, so nothing sits between the track
-          and the bottom of the panel. The house form for a key, per the draft
-          board and the glossary. "Anywhere on the page" is the part worth
-          saying: the page listens for these, so a reader does not have to find
-          and focus the track first -- which is the whole reason to press a key
-          instead of aiming at a tick. */}
-      <p className="flex items-center justify-center gap-1.5 text-xs text-base-content/45">
-        <kbd className="kbd kbd-xs">←</kbd>
-        <kbd className="kbd kbd-xs">→</kbd>
-        to step, anywhere on the page
-      </p>
-
-      {/* Flanking at every width, which is what says the arrows step ALONG the
-          track rather than sitting near it. They cost the ticks 120px, and
-          dropping them to their own row on a narrow screen bought that back as
-          two orphan buttons on an empty line -- a worse trade than thinner
-          ticks. */}
-      <div className="flex items-end gap-2">
-        <Step way="Previous" glyph="←" to={rows[here - 1]} onClick={() => onAt(here - 1)} />
-        <div className="min-w-0 flex-1">
-          <DiffTrack
-            rows={rows}
-            them={them}
-            at={here}
-            onAt={onAt}
-            label="Every pick in both drafts, in order. Select one to read it in this panel."
-          />
-        </div>
-        <Step way="Next" glyph="→" trailing to={rows[here + 1]} onClick={() => onAt(here + 1)} />
-      </div>
+    <div ref={parentRef} className="flex flex-col gap-2" style={{ width: "100%" }}>
+      {flanking ? (
+        <>
+          {/* Above the control and not below it, so nothing sits between the
+              track and the bottom of the panel. The house form for a key, per
+              the draft board and the glossary. */}
+          {hint}
+          <div className="flex items-end gap-2">
+            {previous}
+            <div className="min-w-0 flex-1">{track}</div>
+            {next}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* The transport, as one row: where you came from, what moves you,
+              where you are going. */}
+          <div className="flex items-center justify-between gap-2">
+            {previous}
+            {hint}
+            {next}
+          </div>
+          {track}
+        </>
+      )}
     </div>
   );
 }

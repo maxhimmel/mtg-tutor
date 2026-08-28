@@ -80,9 +80,10 @@ export const PICK_CEREMONIES: readonly { id: PickCeremony; label: string; blurb:
  * they compete for the same edges.
  *
  * FOUR WERE TRIED AND TWO ARE HERE. `spine` and `tower` both spent the left edge
- * on the braid stood on end, and the drawing did not survive the rotation -- see
- * the header of `Spine.tsx`, which is kept for exactly that reason. What they
- * did establish is that PERMANENCE was the good idea and the rotation was not,
+ * on the braid stood on end, and the drawing did not survive the rotation -- the
+ * diagnosis is the last section of `Braid.tsx`'s header, beside the drawing it
+ * is about. What they did establish is that PERMANENCE was the good idea and
+ * the rotation was not,
  * which is what `console` is: the same braid, still lying down, pinned across
  * the top, with the left edge given to the verdict instead. That is why both
  * survivors are here rather than one -- `ribbon` is the page as it shipped, and

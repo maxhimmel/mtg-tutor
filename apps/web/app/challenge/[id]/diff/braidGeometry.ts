@@ -1,19 +1,22 @@
+import { scaleLog } from "@visx/scale";
 import type { DiffRow } from "@mtg-tutor/core";
+import { NEUTRAL } from "../../../charts/ink";
+import { ringFor } from "../../../lib/cardFrame";
 import { COLOR_NAMES } from "../../../lib/format";
 
 /**
- * What a braid is made of, independent of which way it runs.
+ * What a braid is made of, independent of how wide the page is.
  *
- * The comparison now draws the same rope twice: across a panel, and on end as a
- * rail that never leaves the screen. They are one instrument in two
- * orientations, and everything in here is the part that does not know about
- * orientation -- how thick a cord is, what colour it takes, how far the rope
- * opens at each pick, where the packs divide. The two drawings keep only their
- * own geometry: which axis is the draft, how much room the cross-axis has, where
- * the names come in.
+ * Everything here is the part of the rope that does not know its own scale --
+ * how thick a cord is, what colour it takes, how far it opens at each pick,
+ * where the packs divide. The drawing keeps only what depends on the width it
+ * was given: how far apart two picks are, and therefore how far the rope is
+ * allowed to swing between them.
  *
- * Split out rather than exported from `Braid`, so neither drawing is the other's
- * parent and a change to the rope is a change to the rope.
+ * Split out rather than exported from `Braid` because the pack measure and the
+ * openness scale are both things a reader can be wrong about, and a file whose
+ * only job is to answer "how far, and in what colour" is a file those two
+ * answers can be argued in.
  */
 
 // Fat on purpose. The strand was eight units -- four per cord -- and four units
@@ -30,36 +33,56 @@ export const STRAND = CORD * 2 + SEAM;
 // slab and not two unrelated tracks.
 export const TOGETHER = 18;
 
-// Magic's own colours, which is what a reader already knows how to decode. White
-// is pulled back off the top of the range: at #f3efd0 against this near-black
-// panel it was the brightest thing on the page by some way, and a strand whose
-// second colour is white read as a white rope with a tint at one edge.
-export const INK: Record<string, string> = {
-  W: "#e9dcb4",
-  U: "#a8cbe4",
-  B: "#9c9490",
-  R: "#e08d68",
-  G: "#8fb694",
-};
-export const UNDECIDED = "#55504c";
-
 /**
  * A cord's colour, where a cord is half a strand.
  *
- * Each strand is drawn as two cords, and that is what lets it say a PAIR. The
- * previous drawing collapsed anything with more than one colour to a single
- * gold, which is the game's convention for a multicolour card and says nothing
- * whatever about which two colours a deck is -- so a blue-black drafter and a
- * red-green one were painted identically for most of the draft.
+ * WHICH HUE IS `cardFrame`'S TO SAY, and this file no longer keeps a second
+ * opinion. It used to hold five literal hex values of its own -- the only
+ * palette in `apps/web` outside `cardFrame` and the theme -- tuned by eye
+ * against this panel's ground, which meant Magic's five colours had two
+ * definitions in one app and only one of them was the one the placards, the
+ * pool counts and the deck rows are drawn from. A blue rope and a blue card
+ * being different blues is the kind of drift nobody reports and everybody feels.
  *
- * One colour fills both cords, so a mono-colour lean reads as a solid strand
- * rather than as a pair that happens to match. Nothing yet fills both with the
- * undecided grey, which is the honest picture of the first few picks.
+ * SO THE RING SAYS THE HUE AND THE MIX SAYS THE GROUND. `ringFor` is sampled
+ * off Arena's own deck-list rows, which sit on a near-white plate; these cords
+ * lie on a 19%-lightness floor, where black's #5e5c5a is a smudge. Mixing each
+ * ring toward `base-content` lifts every colour by the same amount, off the one
+ * token that already knows how light this theme's foreground has to be -- so the
+ * hue comes from the card and the contrast comes from the theme, and neither is
+ * a number tuned by hand here.
  */
 export const cordInk = (lean: string, cord: 0 | 1): string => {
-  if (lean.length === 0) return UNDECIDED;
-  return INK[lean[lean.length === 1 ? 0 : cord]] ?? UNDECIDED;
+  const color = lean[lean.length === 1 ? 0 : cord];
+  return `color-mix(in oklab, ${ringFor(color)} 55%, var(--color-base-content))`;
 };
+
+/**
+ * The rope before either of you had colours, which is not a colour.
+ *
+ * IT WAS A SECOND GREY, and that is the defect worth writing down. Undecided
+ * was `#55504c` and mono-black was `#9c9490`: two neutrals separated by
+ * lightness alone, drawn at the same width, in the stretch of the draft -- the
+ * first six picks -- where a reader most needs to tell "they are on black" from
+ * "nobody has committed to anything yet". Lightness is also the channel this
+ * panel spends on everything else, so the two were competing with the drift
+ * shading and the hover wash for the same dimension.
+ *
+ * A THREAD IS NOT A THIN CORD, it is the absence of one, and that is the honest
+ * picture: `leanColors` returns nothing until two cards of a colour are in the
+ * pool, so before that there is no pair to draw. So the rope is not painted
+ * there at all -- it is a dashed hairline holding the path until the cords
+ * start. Weight, texture and colour all differ from mono-black at once, and
+ * none of them is a shade of grey a reader has to name.
+ */
+// `quiet` and not `rule`: this is a mark a reader has to read, not a gridline
+// under one. It is the state the rope is in for the first several picks of every
+// draft, which is the part of the drawing anybody looks at first.
+export const THREAD = NEUTRAL.quiet;
+export const THREAD_W = 2;
+export const THREAD_DASH = "2 3";
+
+export const undecided = (lean: string) => lean.length === 0;
 
 export const spoken = (colors: string): string =>
   colors.length === 0
@@ -78,24 +101,61 @@ export function titleOf(row: DiffRow): string {
 }
 
 /**
+ * How far the rope never closes, as a fraction of the full excursion.
+ *
+ * A parting has to be visibly open or it is not drawn at all: together, the two
+ * strands leave three units of page between them, and at this floor they leave
+ * four times that. It used to be more than half the excursion, because the
+ * fork's gold tick was stretched across the opening and needed somewhere to
+ * sit. The tick is a fixed length now (see `Braid`), which hands the floor back
+ * to the scale -- and the scale is what actually needed it.
+ */
+export const OPEN_FLOOR = 0.3;
+
+/**
  * How far the rope opens at each pick, as a fraction of the full excursion.
  *
  * A single pick where you differed and were back in step immediately is not the
  * same event as six picks of building different decks, and the braid drew both
  * at full amplitude -- which is how a diagram of two drafts became a waveform.
  * The run's own length is the measure already in the data, so it is the one the
- * drawing uses: a little over half a lane for one pick, the whole of it at three
- * or more, held flat across the run so a parting reads as a plateau rather than
- * as a lens that implies a growing distance nobody measured.
+ * drawing uses.
  *
- * It never reaches zero inside a run. A pick you disagreed on has to be visibly
- * open or the gold tick in it has nowhere to sit.
+ * IT USED TO SATURATE AT THREE, which made the caption a false promise. The
+ * scale was `0.55 + 0.45 * min(1, (n - 1) / 2)`: one pick opened a little over
+ * half a lane, two picks most of it, and every parting from three picks to
+ * forty-two drew EXACTLY THE SAME. "Wider the longer the parting held" was true
+ * of the first two picks of a run and of nothing after them, and the two
+ * partings a reader most wants told apart -- a blip, and the six picks where
+ * two decks actually diverged -- were the two the drawing could not separate.
+ *
+ * SO THE SCALE IS LOGARITHMIC AND ITS DOMAIN IS THE WHOLE DRAFT. Log rather
+ * than linear because the run lengths are not spread evenly: two drafters on
+ * one seed agree on nearly everything (43 of 45 picks after a P1P1 divergence,
+ * measured -- see `core/draft/diff.ts`), so almost every run is one or two
+ * picks and a long one is rare and interesting. A linear scale would spend its
+ * whole range on the tail and draw the common case as a flat rope; log gives
+ * one, two and three picks a third of the excursion between them and still has
+ * room left for twelve.
+ *
+ * The far end is `rows.length` and not the longest run in THIS draft, which is
+ * the tempting mistake: a per-draft domain would draw a two-pick parting at
+ * full amplitude on a draft where nothing longer happened, and two comparisons
+ * of the same set would then be drawn to different scales with nothing on
+ * either saying so. The honest extreme is the one the draft itself bounds --
+ * you parted and never came back -- and it is what the chart's label states.
  */
 export function opennessOf(rows: DiffRow[]): number[] {
+  const amplitude = scaleLog({
+    domain: [1, Math.max(2, rows.length)],
+    range: [OPEN_FLOOR, 1],
+    clamp: true,
+  });
+
   const out = rows.map(() => 0);
   for (const run of spans(rows, (r) => !r.agree)) {
-    const amount = 0.55 + 0.45 * Math.min(1, (run.to - run.from - 1) / 2);
-    for (let i = run.from; i < run.to; i++) out[i] = amount;
+    const held = amplitude(run.to - run.from);
+    for (let i = run.from; i < run.to; i++) out[i] = held;
   }
   return out;
 }
@@ -135,13 +195,20 @@ export function packSpans(rows: DiffRow[]): { packNo: number; count: number }[] 
 }
 
 /**
- * The lay of the packs along whichever axis the draft runs on.
+ * The lay of the packs along the draft axis, in whatever unit the caller
+ * measures that axis in.
  *
- * Both drawings need exactly this and got it by writing the same six lines: one
- * length per pick, the page between packs taken off the top rather than out of
- * the picks either side of it, and each pack's own run measured off that. The
- * band a pick owns is `[at(i), at(i) + step]` on the draft axis, wherever that
- * axis happens to point.
+ * `span` is the length of the whole axis and everything comes back in the same
+ * unit, which is what lets the chart ask in pixels and the ruler and the track
+ * beneath it ask in fractions of their own box -- ONE call, two coordinate
+ * systems, and no percentage anywhere that has to be kept in step with a pixel
+ * by hand. The panel does exactly that: `pickAxis(rows, { span: 1, ... })`
+ * multiplied by the measured width inside the SVG, and read as percentages
+ * outside it.
+ *
+ * The band a pick owns is `[at(i), at(i) + step]`, and the page between packs
+ * is taken off the top rather than out of the picks either side of it -- so
+ * every band is exactly one `step` wide, including the two at every seam.
  */
 export function pickAxis(
   rows: DiffRow[],

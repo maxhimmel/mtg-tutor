@@ -1,12 +1,23 @@
 "use client";
 
 import { useRef, type CSSProperties } from "react";
+import { useParentSize } from "@visx/responsive";
+import { Text } from "@visx/text";
 import type { DiffRow, DiffTally } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
+import { ScrollBox } from "../../../components/ScrollBox";
+import { Key } from "../../../charts/Key";
+import { Plot, TICK_TEXT } from "../../../charts/Plot";
+import { INK, NEUTRAL } from "../../../charts/ink";
+import { COLOR_NAMES } from "../../../lib/format";
 import {
   CORD,
+  OPEN_FLOOR,
   SEAM,
   STRAND,
+  THREAD,
+  THREAD_DASH,
+  THREAD_W,
   TOGETHER,
   cordInk,
   isFork,
@@ -15,6 +26,8 @@ import {
   spans,
   spoken,
   titleOf,
+  undecided,
+  type PickAxis,
 } from "./braidGeometry";
 import { Explain } from "./Explain";
 import { DiffTrack } from "./track";
@@ -37,34 +50,37 @@ import { DiffTrack } from "./track";
  * drafting, which is what finally makes the colour say something. It used to
  * collapse any two colours to gold -- the game's mark for a multicolour CARD,
  * and no answer at all to which deck somebody was building. The colour stays
- * exact through the curves: four paths, each painted with a hard-stop gradient
- * built from the pick-by-pick leans, so the geometry smooths without the colour
- * being blended into shades neither of you ever played.
+ * exact through the curves: each cord is painted with a hard-stop gradient built
+ * from the pick-by-pick leans, so the geometry smooths without the colour being
+ * blended into shades neither of you ever played.
  *
  * WHY IT STILL DID NOT READ, second pass, which is the amplitude. Every pick you
  * differed on opened the rope by the same sixteen units, and on a real pair of
  * drafts most of those are single picks with agreement either side. Twenty-five
  * identical humps across a panel is a waveform: one loud note repeated, with no
  * way to tell a blip from a parting that held for six picks and actually built
- * two different decks. So the excursion is the RUN's own length -- see
- * `opennessOf`. The rope barely kinks for one pick and yawns for a sustained
- * one, and the shape of the draft is finally in the shape of the drawing.
+ * two different decks. So the excursion is the RUN's own length -- and it took
+ * two goes to get a scale that keeps its promise, because the first one
+ * saturated at three picks and drew a twelve-pick parting exactly like a
+ * three-pick one. See `opennessOf`, which now carries the argument for a log
+ * scale over the whole draft.
  *
  * AND THE DRIFT IS GROUND, NOT ROPE. The track draws three states and this drew
- * two, so an opening with no gold tick in it had
- * nothing anywhere saying why -- while the summary above spends a paragraph on
- * exactly that. Packs coming apart is not something either of you DID, so it is
- * not on the strands: it is a shaded stretch of the floor the strands run over,
- * in the warning tone this feature already says drift in. Its leading edge is
- * the first drift, which is why the dashed rule that used to mark it is gone --
- * one boundary drawn once, and the arc lands on it.
+ * two, so an opening with no gold tick in it had nothing anywhere saying why --
+ * while the summary above spends a paragraph on exactly that. Packs coming apart
+ * is not something either of you DID, so it is not on the strands: it is a
+ * shaded stretch of the floor the strands run over, in the warning tone this
+ * feature already says drift in, ruled along its foot so the stretch has an edge
+ * a reader can find rather than a wash they have to notice.
  *
  * THE DELAY IS STILL THE CLAIM. Your own pick cannot reach your own packs until
  * the pod passes yours back round, at least eight picks later, and a diagram
  * that puts the branch where you picked differently gets the causation exactly
  * backwards. So the arc survives -- cause on the left, a long span of nothing
  * visible, effect on the right -- and it is given clear air above the wells to
- * be seen in, because it is the one mark here carrying an argument.
+ * be seen in, at full strength and with a head on it, because it is the one mark
+ * here carrying an argument and it spent three revisions as the faintest ink on
+ * the panel.
  *
  * WHOSE HALF IS WHOSE, WHICH THE GUTTER KEPT FAILING TO SAY. It has now been
  * three notations, and the first two were both a mark standing BESIDE a band
@@ -80,31 +96,41 @@ import { DiffTrack } from "./track";
  * there is nothing left to infer. Nothing in the run-up is a pick, and the wells
  * make that plain by starting after it.
  *
- * THE TWO ENTRANCES ARE ONE ENTRANCE, MIRRORED, which took a second attempt.
- * The names were first anchored to the top and bottom of the BOX, which is
- * symmetric about the box's middle -- and the box's middle is not the chart's,
- * because the causal arc's channel sits above the wells and nothing balanced it
- * below. So yours fell forty-one units into its lane and theirs rose twenty-one,
- * at visibly different steepnesses, and the pair read as two unrelated arrivals.
- * Both anchors are now measured from `MID` and by the same distance -- the
- * floor's own half-height, so each name sits exactly level with the top or
- * bottom edge of the floor its rope is about to run along -- and the channel is
- * matched below. The two curves are congruent by construction.
+ * THE NAMES ARE THE CHART'S OWN MARGIN NOW, and that is a width fix rather than
+ * a typographic one. They were a `w-28` column in a flex row, repeated on the
+ * track's row and again on the ruler's -- so a phone spent 112 of its 310
+ * usable pixels, three times over, on an empty gutter beside a drawing that had
+ * already been squeezed to a hairline. Inside the plot they are `margin.left`,
+ * which means they exist exactly when the drawing does and cost nothing when it
+ * does not.
+ *
+ * THE TWO ENTRANCES ARE ONE ENTRANCE, MIRRORED. Both anchors are measured from
+ * `MID` by the same distance -- the floor's own half-height, so each name sits
+ * exactly level with the top or bottom edge of the floor its rope is about to
+ * run along -- and the arc's channel is matched below. The two curves are
+ * congruent by construction.
  *
  * That also retires the two-bar colour chip. A chip beside a name is a legend
  * entry, and the moment a rope emerges from under that name in a DIFFERENT
  * colour -- which it does, because the chip showed what a side finished on and
- * the rope starts undecided grey -- the legend is actively misleading. Where
- * each of you arrived is legible at the other end of its own rope, and the decks
- * panel says it in words.
+ * the rope starts with no colours at all -- the legend is actively misleading.
+ * The colours are keyed under the chart instead, where a key says what the five
+ * hues mean without claiming either of them is anybody's.
  *
  * THE PACKS ARE MEASURED, NOT BOXED. Three dark rectangles with a five-unit gap
  * between them is a weak delineation at any width and a nearly invisible one in
  * this theme, and the boundary was then drawn a second time by the labels
  * underneath. So the well keeps only what a well is for, which is being a floor
  * for the rope and for the drift shading, and the boundary moves to the ruler
- * beneath. A pack is a measured length of the draft, and that is what a
- * dimension line says.
+ * beneath.
+ *
+ * AND THE RULER NUMBERS THE PICKS, which it did not, for as long as the caption
+ * has been talking in pick numbers. "Pack 1", "Pack 2", "Pack 3" is a division
+ * of the draft and not a scale: a reader told the drift starts at pack 2 pick 5
+ * had three named regions and no way to find a pick inside one. It now marks
+ * the first pick of every pack and every fifth after it, in the pack-and-pick
+ * coordinate the rest of this screen speaks -- so every number in the caption
+ * has a place on the drawing.
  *
  * THE PAGE BETWEEN PACKS BELONGS TO NOBODY, which is the second thing that
  * ruler taught. The gap was first taken OUT of the packs -- each floor inset by
@@ -118,21 +144,48 @@ import { DiffTrack } from "./track";
  *
  * EVERY PICK IS A PLACE TO GO, not only the forks. The forks were the only
  * clickable thing here on the theory that they are the only DECISIONS -- true,
- * and beside the point once the track became navigation over all forty-two. A
- * reader who has learnt that a pick is something you click does not carry an
- * exception between two drawings of the same draft, they carry a dead chart --
- * least of all now that the two drawings are one object with the ticks directly
- * under the bands. So the whole band under every pick takes the click, and the fork keeps
- * only what it always was: the gold tick that says a decision happened here.
+ * and beside the point once the track became navigation over all forty-two. So
+ * the whole band under every pick takes the click, and the fork keeps only what
+ * it always was: the gold tick that says a decision happened here.
+ *
+ * THE TICK IS A FIXED LENGTH, which is the correction to a second scale nobody
+ * declared. It used to reach across whatever the opening happened to be, so its
+ * length encoded run length exactly as the amplitude did -- a redundant channel,
+ * saturating in the same place, and named by no caption. It is now the width of
+ * a one-pick parting, everywhere: long enough to fit in the narrowest opening
+ * the chart can draw, and carrying no quantity of its own. What a fork means is
+ * "a decision happened here", and that is a mark, not a measurement.
  *
  * The hover mark is `base-content` and not gold, which is the same choice the
  * track makes and for the same reason recorded there: gold is how this app says
  * WHERE YOU ARE, and a hover that borrows it says that forty-two times a second.
  *
- * Curves, settled. The control that offered corners instead was a comparison
- * aid, and it has done its job: a rope has no corners, and a straight cut to a
- * new lane draws the parting as instantaneous when the whole point of the panel
- * is that it was not.
+ * IT IS DRAWN AT ITS REAL SIZE, which it was not. The SVG was a fixed
+ * thousand-unit box stretched to fill with `preserveAspectRatio="none"`, so the
+ * horizontal scale changed with the panel and the vertical one never did: at a
+ * metre wide a lane change eased over twelve pixels of band against thirty-two
+ * of travel, and on a phone over three -- the same rope drawn as a square wave,
+ * with nothing on screen saying the shape had stopped being true. The rotated
+ * form was parked over the same fault, in stronger terms -- see the last section
+ * of this header.
+ *
+ * So the plot is measured and the geometry answers to the measurement. The
+ * amplitude is capped at the width of one pick's band, which holds every lane
+ * change at or under forty-five degrees at EVERY width -- the rope opens less on
+ * a narrow panel rather than opening the same amount faster, which is the
+ * degradation a reader can read. And below the width where a pick's band is
+ * eleven pixels, the drawing stops: forty-two bands narrower than that are a
+ * comb, not a chart, and their click targets are a hairline. What shows instead
+ * is the same finding without the geometry -- the partition of all forty-two
+ * picks, and every parting listed with how long it held.
+ *
+ * WHY THE MEASUREMENT IS TAKEN OUT HERE AND NOT LEFT TO `Plot`. The braid is
+ * not one SVG: it is the SVG, the ruler that numbers it, and the key that says
+ * what the cords mean, and all three stop being true at the same width. So the
+ * width is measured once for the whole instrument and `Plot` is handed the same
+ * `needs`, which makes its own guard belt-and-braces rather than a second
+ * opinion. The track below is the exception and stays at every width -- it is
+ * the only keyboard path to a pick on this page.
  *
  * AND THE TRACK CAME DOWN HERE, which is what turned a drawing into an
  * instrument. Forty-two picks were drawn three times on this screen -- beside
@@ -143,27 +196,56 @@ import { DiffTrack } from "./track";
  * held, plus the arc. The one thing it cannot be is a set of places to go from a
  * keyboard. So the track stops being a second picture and becomes this chart's
  * axis: same measure, same pack widths, same gaps, drawn under the wells, with
- * the tick you are on directly below the band that is lit. See the comment on it
- * below for how the two are held to one measure without a number being copied.
+ * the tick you are on directly below the band that is lit.
+ *
+ * WHAT `Spine.tsx` LEARNT, KEPT HERE BECAUSE THE FILE IS GONE. The same rope was
+ * built stood on end, as a full-height rail that never leaves the screen, wired
+ * into two layouts and rejected on sight. The idea it was testing survived --
+ * `console` pins this drawing across the top of the reading column for exactly
+ * that reason -- but the rotation did not, and these are the reasons, so the
+ * next attempt starts from a diagnosis rather than a blank file:
+ *
+ * - The cross-axis is starved and the long axis is not. Forty-two picks down a
+ *   viewport is generous; a hundred and sixteen units of width for two ropes
+ *   that must open and still read as two cords each is not. Laid across a page
+ *   the rope has a foot of room to open into and the eye reads the OPENING;
+ *   stood up it has a thumb's width, and the eye reads a stripe with wobble in
+ *   it.
+ * - Which means widening the amplitude was the wrong lever. It made the
+ *   openings bigger in a box already too narrow for them, so the strands spent
+ *   the draft near the walls and "together" stopped being the resting state a
+ *   parting departs from.
+ * - The entrance curve does not survive either. Across a page the run-up is a
+ *   long shallow easing under a name; down a rail it is a hook in the top two
+ *   inches, with both names nearly touching above a narrow chart.
+ *
+ * The honest next move is not "rotate it better" but "draw a different thing for
+ * a rail" -- a rail's real job is where-am-I plus what-kind-of-pick, and the
+ * two-cords-per-strand colour story may simply not be a rail's to tell. That is
+ * a design question rather than a geometry one, which is why nothing was tuned.
  */
 
-// The widest either side climbs. Forty-two picks across a panel is about 16px
-// each, so a strand that went much further would be moving faster than 45
-// degrees, and a rope this thick at that angle reads as a chunk rather than as
-// an opening. Fifty units between the centres is already unmistakably apart.
-const OPEN = 16;
+// The widest either side climbs, before the width has its say. Capped to one
+// pick's band below, so this is the ceiling rather than the amplitude.
+const OPEN_MAX = 16;
 // The strands' own room, inside a well.
 const WELL_H = 86;
+// The narrowest a pick's band may be and still be a band: a mark you can see
+// and a target you can hit. Below it the drawing gives up rather than shrinks.
+const MIN_BAND = 11;
+// The names' column, as the plot's left margin.
+const NAMES_W = 96;
 // The right inset, and the run-up on the left: the distance a strand has to come
 // down from its name to its lane. Long enough that the arrival is a shallow
-// curve rather than a hook, and drawn as the same smooth step the lane changes
-// use, so the entrance is in the chart's own hand.
-const PAD = 14;
-const LEAD = 56;
+// curve rather than a hook. Fractions of the drawn width, so the run-up is a
+// proportion of the drawing rather than a number that means one thing on a
+// phone and another on a desk.
+const PAD_F = 0.014;
+const LEAD_F = 0.056;
 // Page between one pack and the next, allocated by the layout and owned by no
 // pick. Taken out of the picks instead, it made two bands in every six narrower
 // than their neighbours -- see the header.
-const PACK_GAP = 12;
+const GAP_F = 0.012;
 // Clear air above the wells for the causal arc, and the same again below so the
 // drawing is symmetric about its own middle. The bottom half is not spare page:
 // it is what lets the two names sit at equal distances from their lanes, which
@@ -174,6 +256,10 @@ const MID = H / 2;
 // Where a name sits, and therefore where its rope comes in: exactly level with
 // the top or bottom edge of the floor its rope is about to run along.
 const NAME_Y = { yours: MID - WELL_H / 2, theirs: MID + WELL_H / 2 };
+
+type Side = "yours" | "theirs";
+const SIDES: Side[] = ["yours", "theirs"];
+const CORDS = [0, 1] as const;
 
 export function Braid({
   rows,
@@ -205,6 +291,16 @@ export function Braid({
    */
   const byPointer = useRef(false);
 
+  /**
+   * The instrument's own width, measured once for all of it.
+   *
+   * `useParentSize` and not the `ParentSize` component, for the reason `Plot`
+   * records: that component lays its children out absolutely inside a box of the
+   * height you gave it, which silently clips anything that is not an SVG of
+   * exactly that height -- and half of what hangs off this measurement is prose.
+   */
+  const { parentRef, width } = useParentSize({ debounceTime: 0 });
+
   if (rows.length === 0) return null;
 
   // The fork the first drift is attributable to: the last one before it. Only
@@ -215,59 +311,230 @@ export function Braid({
       ? undefined
       : [...tally.forks].reverse().find((f) => f.pickIndex < (tally.firstDrift ?? 0));
 
-  // The draft laid along x, which is the only thing about this drawing the rail
-  // form does differently -- it lays the same measure along y.
-  const {
-    step,
-    at: bandL,
-    end: bandR,
-    mid: cx,
-    wells: packWells,
-  } = pickAxis(rows, { span: 1000, lead: LEAD, pad: PAD, gap: PACK_GAP });
+  // The draft laid along x, in fractions of whatever the chart turns out to be
+  // wide. Multiplied by the measured width inside the SVG and read as
+  // percentages by the ruler and the track underneath it, so the three of them
+  // are held to one measure without a number being copied between them.
+  const axis = pickAxis(rows, { span: 1, lead: LEAD_F, pad: PAD_F, gap: GAP_F });
 
+  // The width below which a band is narrower than `MIN_BAND`, derived rather
+  // than picked: `axis.step` is already a pick's share of the chart, so this is
+  // the same threshold for a draft of forty-two picks and one of thirty.
+  const needs = NAMES_W + MIN_BAND / axis.step;
+
+  const drawn = width >= needs;
   const open = opennessOf(rows);
+  const here = Math.min(at, rows.length - 1);
+  const last = rows[rows.length - 1];
 
-  const laneY = (i: number, side: "yours" | "theirs") =>
+  const fallback = <Fallback rows={rows} tally={tally} them={them} />;
+
+  const label =
+    `Two strands over ${rows.length} picks, running together where you took the same card ` +
+    `and opening where you did not. A one-pick parting opens to about a third of the full ` +
+    `swing and a parting that held the whole draft to all of it. You finished ` +
+    `${spoken(last.yourLean)}; ${them} finished ${spoken(last.theirLean)}. ` +
+    `${tally.forks.length} of the partings were on the same pack, marked with a gold tick; ` +
+    `the shaded stretches are the ${tally.rows - tally.comparable} picks where you were not ` +
+    `looking at the same cards at all.`;
+
+  return (
+    <Panel
+      className={className}
+      title="How the two drafts came apart"
+      aside={
+        <Explain subject="how to read the braid" align="end">
+          <BraidCaption rows={rows} tally={tally} causingFork={causingFork} />
+        </Explain>
+      }
+      // Tight, because three of the four things in this body are one object:
+      // the chart, the track that scrubs it and the ruler that measures it. The
+      // caption takes its own margin back, so the one visible gap in the panel
+      // falls between the instrument and the sentence about it.
+      bodyClassName="gap-1.5"
+    >
+      {/* The instrument's own box, and the thing the measurement above is
+          taken from. Nothing is drawn until it has been measured: rendering the
+          narrow form for one frame would flash the phone version at everybody,
+          and the panel's own height holds the space either way. */}
+      <div ref={parentRef} style={{ width: "100%" }}>
+        {width > 0 && (
+          <div className="flex flex-col gap-1.5">
+            {drawn ? (
+              <Plot
+                height={H}
+                // The same threshold the branch above already applied, so the
+                // SVG's own guard and the instrument's agree by construction.
+                needs={needs}
+                instead={fallback}
+                label={label}
+                margin={{ left: NAMES_W }}
+              >
+                {(box) => (
+                  <Rope
+                    rows={rows}
+                    tally={tally}
+                    them={them}
+                    axis={axis}
+                    open={open}
+                    here={here}
+                    causingFork={causingFork}
+                    width={box.width}
+                    onSelect={onSelect}
+                  />
+                )}
+              </Plot>
+            ) : (
+              fallback
+            )}
+
+            {/* The track and the ruler stand in the chart's own coordinate
+                space: the plot's left margin as padding, and everything
+                inside measured as a percentage of what is left -- which is
+                exactly the box `axis` is expressed in. */}
+            <div style={{ paddingLeft: drawn ? NAMES_W : 0 }}>
+              <div
+                style={
+                  {
+                    // Only where there is a chart to line up with. The run-up
+                    // and the right margin are seven per cent of the row, and
+                    // spending them on nothing is spending them where they
+                    // are scarcest.
+                    paddingLeft: drawn ? `${LEAD_F * 100}%` : 0,
+                    paddingRight: drawn ? `${PAD_F * 100}%` : 0,
+                    // Against the track's OWN box, which is the drafted span
+                    // rather than the whole chart -- a percentage gap resolves
+                    // against the flex container's content width, and the
+                    // inset above has already taken the run-up and the right
+                    // margin off it.
+                    "--pick-track-gap": drawn
+                      ? `${(GAP_F / (1 - LEAD_F - PAD_F)) * 100}%`
+                      : undefined,
+                  } as CSSProperties
+                }
+                onPointerDown={() => {
+                  byPointer.current = true;
+                }}
+                onKeyDown={() => {
+                  byPointer.current = false;
+                }}
+              >
+                <DiffTrack
+                  rows={rows}
+                  them={them}
+                  at={here}
+                  onAt={(i) => onSelect(i, "track", byPointer.current)}
+                  label="Every pick in both drafts, in order. Select one opens it in the pick-by-pick panel."
+                  // The ruler names the packs where the chart is drawn. Where
+                  // it is not, the track is the only thing on screen that can,
+                  // so it takes the job back.
+                  packLabels={!drawn}
+                />
+              </div>
+
+              {drawn && <PackRuler rows={rows} axis={axis} />}
+            </div>
+
+            {drawn && <ColorKey rows={rows} />}
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * The rope itself, at the width it was measured at.
+ *
+ * Everything in here is in pixels, which is the change that made the drawing
+ * honest: the amplitude, the tick and the curve all answer to how wide a pick's
+ * band actually came out, rather than to a thousand-unit box that meant a
+ * different thing on every screen.
+ */
+function Rope({
+  rows,
+  tally,
+  them,
+  axis,
+  open,
+  here,
+  causingFork,
+  width,
+  onSelect,
+}: {
+  rows: DiffRow[];
+  tally: DiffTally;
+  them: string;
+  axis: PickAxis;
+  open: number[];
+  here: number;
+  causingFork?: { pickIndex: number };
+  width: number;
+  onSelect: (pickIndex: number, from: "braid" | "track", scroll: boolean) => void;
+}) {
+  const bandL = (i: number) => axis.at(i) * width;
+  const bandR = (i: number) => axis.end(i) * width;
+  const cx = (i: number) => axis.mid(i) * width;
+  const step = axis.step * width;
+
+  /**
+   * How far a strand may leave its lane, which is a question about the width.
+   *
+   * The ease from one lane to the next spans a single band, so a swing bigger
+   * than that band is a corner however smoothly it is specified -- which is
+   * exactly what the fixed sixteen units became once the box stopped being a
+   * fixed size. Capping the swing at one band holds every lane change at or
+   * under forty-five degrees at every width the chart is drawn at, and what
+   * gives way on a narrow panel is the SIZE of the openings rather than their
+   * shape. A shallower rope is still a rope; a square wave is not.
+   */
+  const swing = Math.min(OPEN_MAX, step);
+
+  const laneY = (i: number, side: Side) =>
     side === "yours"
-      ? MID - TOGETHER / 2 - OPEN * open[i]
-      : MID + TOGETHER / 2 + OPEN * open[i];
+      ? MID - TOGETHER / 2 - swing * open[i]
+      : MID + TOGETHER / 2 + swing * open[i];
 
-  const leanOf = (row: DiffRow, side: "yours" | "theirs") =>
+  const leanOf = (row: DiffRow, side: Side) =>
     side === "yours" ? row.yourLean : row.theirLean;
 
   /**
-   * One cord, as a path: in from under its name, then a point per pick.
+   * One stretch of one cord, as a path: a point per pick, eased between them.
    *
    * The control points sit half a pick either side of the turn and horizontally
    * level with the point they belong to -- the standard smooth step, which makes
-   * a lane change read as the rope easing open. The entrance is that same curve
-   * over a longer run, which is what lets a name and a rope read as one object
-   * without the join ever being drawn as a join.
+   * a lane change read as the rope easing open. `head` puts the same curve over
+   * a longer run at the left edge, which is what lets a name and a rope read as
+   * one object without the join ever being drawn as a join.
    */
-  const strandPath = (side: "yours" | "theirs", cord: 0 | 1) => {
-    // The two cords ride half a seam's width either side of the strand's own
-    // line, so together they occupy exactly one strand.
-    const off = (cord === 0 ? -1 : 1) * ((CORD + SEAM) / 2);
-    const y0 = laneY(0, side) + off;
-    const ny = NAME_Y[side] + off;
+  const segment = (side: Side, off: number, from: number, to: number) => {
+    const y = (i: number) => laneY(i, side) + off;
 
-    // The run-up ends where the first floor begins: the rope is in its lane by
-    // the time it is over anything that counts as a pick.
-    const head = `M 0 ${ny} C ${LEAD / 2} ${ny} ${LEAD / 2} ${y0} ${LEAD} ${y0}`;
+    // A stretch one pick long has no curve in it, and a path of a single MOVETO
+    // paints nothing at all -- so it is drawn as its own band instead. It
+    // happens when a side commits to a colour on the very last pick of the
+    // draft, which is rare and would otherwise be a cord that silently is not
+    // there.
+    if (from === to && from !== 0) {
+      return `M ${bandL(from)} ${y(from)} L ${bandR(from)} ${y(from)}`;
+    }
 
-    const body = rows
-      .map((_, i) => {
-        const x = cx(i);
-        const y = laneY(i, side) + off;
-        if (i === 0) return `L ${x} ${y}`;
-        const px = cx(i - 1);
-        const py = laneY(i - 1, side) + off;
-        const mx = (px + x) / 2;
-        return py === y ? `L ${x} ${y}` : `C ${mx} ${py} ${mx} ${y} ${x} ${y}`;
-      })
-      .join(" ");
+    const head =
+      from === 0
+        ? `M 0 ${NAME_Y[side] + off} C ${bandL(0) / 2} ${NAME_Y[side] + off} ${
+            bandL(0) / 2
+          } ${y(0)} ${bandL(0)} ${y(0)} L ${cx(0)} ${y(0)}`
+        : `M ${cx(from)} ${y(from)}`;
 
-    return `${head} ${body}`;
+    let d = head;
+    for (let i = from + 1; i <= to; i++) {
+      const mx = (cx(i - 1) + cx(i)) / 2;
+      d +=
+        y(i - 1) === y(i)
+          ? ` L ${cx(i)} ${y(i)}`
+          : ` C ${mx} ${y(i - 1)} ${mx} ${y(i)} ${cx(i)} ${y(i)}`;
+    }
+    return d;
   };
 
   /**
@@ -277,35 +544,32 @@ export function Braid({
    * ends exactly where the next begins. A soft gradient would paint the blend
    * between "blue" and "blue-black" as a colour neither deck ever was.
    *
-   * It spans the picks and not the box, so the run-up left of the first pack
-   * takes the first stop's colour by padding -- the rope arrives in the colour
-   * it starts in, which for the first few picks is undecided grey.
+   * Offsets come off the axis rather than off `i / rows.length`, which is what
+   * they used to be -- an even division of a span that is not evenly divided,
+   * because the page between packs belongs to no pick. The error was small and
+   * it was still a colour boundary standing a little way from the band edge it
+   * claimed to be.
    */
-  const stops = (side: "yours" | "theirs", cord: 0 | 1) =>
+  const span0 = bandL(0);
+  const spanW = bandR(rows.length - 1) - span0;
+  const stops = (side: Side, cord: 0 | 1) =>
     rows.flatMap((row, i) => {
-      const color = cordInk(leanOf(row, side), cord);
+      const lean = leanOf(row, side);
+      const color = undecided(lean) ? THREAD : cordInk(lean, cord);
       return [
-        { key: `${i}a`, offset: i / rows.length, color },
-        { key: `${i}b`, offset: (i + 1) / rows.length, color },
+        { key: `${i}a`, offset: (bandL(i) - span0) / spanW, color },
+        { key: `${i}b`, offset: (bandR(i) - span0) / spanW, color },
       ];
     });
 
-  const cords = [0, 1] as const;
-
-  /**
-   * Each pack as a floor the strands run over, with the span itself named below.
-   *
-   * The well used to carry the boundary as well -- a bordered rectangle with a
-   * hairline gap to the next -- and it was never strong enough to read while
-   * being just strong enough to make the labels underneath a second drawing of
-   * the same fact. It is a surface now: something for the rope to be legible
-   * against and for the drift shading to sit in. Where one pack ends is said
-   * once, on the ruler.
-   *
-   * It starts and ends on a band edge, exactly, because the gap between packs is
-   * space of its own rather than something borrowed from the picks at the seam.
-   */
-  const wells = packWells.map((well) => ({ ...well, x: well.at, width: well.length }));
+  // Each pack as a floor the strands run over: something for the rope to be
+  // legible against and for the drift shading to sit in. Where one pack ends is
+  // said once, on the ruler beneath.
+  const wells = axis.wells.map((well) => ({
+    ...well,
+    x: well.at * width,
+    width: well.length * width,
+  }));
 
   // Where the packs stopped being guaranteed to match, drawn as the stretch of
   // floor it is. Cut at the pack breaks, so the shading never crosses the page
@@ -319,315 +583,255 @@ export function Braid({
     })),
   );
 
-  const here = Math.min(at, rows.length - 1);
-  const last = rows[rows.length - 1];
+  // The tick a fork gets, sized to the narrowest opening the chart can draw --
+  // a one-pick parting. Constant across the drawing on purpose: its length used
+  // to be a second, undeclared encoding of the same run length the amplitude
+  // already carries.
+  const tick = (TOGETHER + 2 * swing * OPEN_FLOOR - STRAND) / 2;
 
   return (
-    <Panel
-      className={className}
-      title="How the two drafts came apart"
-      aside={
-        <span className="flex items-center gap-2.5">
-          <span className="hidden text-xs text-base-content/50 sm:inline">
-            each strand is the two colours that side was drafting most
-          </span>
-          <Explain subject="how to read the braid" align="end">
-            <BraidCaption rows={rows} tally={tally} causingFork={causingFork} />
-          </Explain>
-        </span>
-      }
-      // Tight, because three of the four things in this body are one object:
-      // the chart, the track that scrubs it and the ruler that measures it. The
-      // caption takes its own margin back, so the one visible gap in the panel
-      // falls between the instrument and the sentence about it.
-      bodyClassName="gap-1.5"
-    >
-      <div className="flex items-stretch gap-2">
-        {/* NOT a legend, and no longer a bracket either. Each name is simply
-            where its own rope comes in, and the run-up does the joining -- so
-            there is nothing here to look up and nothing to map. The positions
-            come from the same `NAME_Y` the paths are drawn from. */}
-        <div className="relative w-28 shrink-0" style={{ height: H }} aria-hidden>
-          <LaneLabel y={NAME_Y.yours} label="You" />
-          <LaneLabel y={NAME_Y.theirs} label={them} />
-        </div>
+    <>
+      <defs>
+        {SIDES.flatMap((side) =>
+          CORDS.map((cord) => (
+            <linearGradient
+              key={`${side}-${cord}`}
+              id={`braid-${side}-${cord}`}
+              gradientUnits="userSpaceOnUse"
+              x1={span0}
+              x2={span0 + spanW}
+              y1={0}
+              y2={0}
+            >
+              {stops(side, cord).map((s) => (
+                <stop key={s.key} offset={s.offset} stopColor={s.color} />
+              ))}
+            </linearGradient>
+          )),
+        )}
+      </defs>
 
-        <svg
-          viewBox={`0 0 1000 ${H}`}
-          preserveAspectRatio="none"
-          className="min-w-0 flex-1"
-          style={{ height: H }}
-          role="img"
-          aria-label={`Two strands over ${rows.length} picks, running together where you took the same card and opening where you did not — wider the longer the parting held. You finished ${spoken(
-            last.yourLean,
-          )}; ${them} finished ${spoken(last.theirLean)}. ${tally.forks.length} of the partings were on the same pack; the shaded stretches are the ${
-            tally.rows - tally.comparable
-          } picks where you were not looking at the same cards at all.`}
+      {/* NOT a legend, and no longer a column either. Each name is simply where
+          its own rope comes in, set in the plot's left margin so it exists
+          exactly when the drawing does. `Text` rather than `<text>` because the
+          other drafter is called "Your challenger" whenever they have not been
+          named, and a name that exists to say whose half this is must wrap
+          rather than truncate to "YOUR CHALLE…". */}
+      {SIDES.map((side) => (
+        <Text
+          key={side}
+          x={-10}
+          y={NAME_Y[side]}
+          width={NAMES_W - 14}
+          textAnchor="end"
+          verticalAnchor="middle"
+          {...TICK_TEXT}
+          fill={NEUTRAL.plain}
         >
-          <defs>
-            {(["yours", "theirs"] as const).flatMap((side) =>
-              cords.map((cord) => (
-                <linearGradient
-                  key={`${side}-${cord}`}
-                  id={`braid-${side}-${cord}`}
-                  gradientUnits="userSpaceOnUse"
-                  x1={LEAD}
-                  x2={1000 - PAD}
-                  y1={0}
-                  y2={0}
-                >
-                  {stops(side, cord).map((s) => (
-                    <stop key={s.key} offset={s.offset} stopColor={s.color} />
-                  ))}
-                </linearGradient>
-              )),
-            )}
-          </defs>
+          {side === "yours" ? "You" : them}
+        </Text>
+      ))}
 
-          {/* First, so everything else is inside them. */}
-          {wells.map((well) => (
-            <rect
-              key={well.packNo}
-              x={well.x}
-              y={CHANNEL}
-              width={well.width}
-              height={WELL_H}
-              rx={2}
-              className="fill-base-100/70"
-            />
-          ))}
+      {/* First, so everything else is inside them. */}
+      {wells.map((well) => (
+        <rect
+          key={well.packNo}
+          x={well.x}
+          y={CHANNEL}
+          width={well.width}
+          height={WELL_H}
+          rx={2}
+          className="fill-base-100/70"
+        />
+      ))}
 
-          {/* Where you are on the page, as the pick's own band rather than as a
-              hairline. It stands directly over the lit tick on the track below
-              -- the same claim in the two notations this panel has -- and a
-              column is what the halo becomes at this scale: a 1px rule among
-              forty-two picks is not findable, and one drawn over the rope would
-              read as a scratch on it. Under the strands, so the rope stays the
-              brightest thing. */}
+      {/* Where you are on the page, as the pick's own band rather than as a
+          hairline. It stands directly over the lit tick on the track below --
+          the same claim in the two notations this panel has -- and a column is
+          what the halo becomes at this scale: a 1px rule among forty-two picks
+          is not findable, and one drawn over the rope would read as a scratch on
+          it. Under the strands, so the rope stays the brightest thing. */}
+      <rect
+        x={bandL(here)}
+        y={CHANNEL}
+        width={step}
+        height={WELL_H}
+        className="fill-base-content/[0.08] stroke-base-content/25"
+        strokeWidth={1}
+      />
+
+      {/* THE SHADING IS NOT THE WHOLE CLAIM ANY MORE. It was thirteen per cent
+          of `warning` over a `base-100/70` well -- about a one-and-a-half to one
+          contrast against its own floor, which is a wash you notice only once
+          somebody tells you it is there, carrying the second of the two things
+          this panel exists to say. It is raised, and it is ruled along its foot:
+          a stretch of floor with an edge can be found, measured and pointed at,
+          and the edge survives being drawn eight pixels wide on a laptop. */}
+      {drifted.map((band) => (
+        <g key={band.key}>
           <rect
-            x={bandL(here)}
+            x={band.x}
+            y={CHANNEL}
+            width={band.width}
+            height={WELL_H}
+            className="fill-warning/[0.18]"
+          />
+          <rect
+            x={band.x}
+            y={CHANNEL + WELL_H - 2}
+            width={band.width}
+            height={2}
+            className="fill-warning/70"
+          />
+        </g>
+      ))}
+
+      {tally.firstDrift !== undefined && (
+        <>
+          {/* The shaded region's own leading edge, which is the moment the
+              caption names. Not a second notation for the drift -- the same one,
+              drawn where it starts. */}
+          <line
+            x1={bandL(tally.firstDrift)}
+            y1={CHANNEL}
+            x2={bandL(tally.firstDrift)}
+            y2={CHANNEL + WELL_H}
+            stroke="currentColor"
+            strokeWidth={1.5}
+            className="text-warning"
+          />
+          {causingFork && (
+            <CausalArc
+              from={cx(causingFork.pickIndex)}
+              to={bandL(tally.firstDrift)}
+            />
+          )}
+        </>
+      )}
+
+      {/* One target per pick, the whole floor-height band under it, and the
+          fork's gold tick riding along in the same group. Every one of them is
+          exactly one `step` wide, everywhere, including at the seams -- a target
+          that quietly narrows because of where it sits in a pack is a target
+          that behaves differently for no reason a reader could recover.
+
+          BENEATH THE STRANDS, with the strands made transparent to the pointer.
+          Above them the hover wash fell across the rope and dulled it, and below
+          them without that the rope swallowed every click that landed on it --
+          which on a wide opening is most of the target. The rope carries no
+          interaction of its own, so it has nothing to lose by not taking the
+          click.
+
+          Keyboard reaches these picks through the track directly beneath, which
+          takes one tab stop for the whole draft and arrows within it -- and
+          which is drawn to this chart's own measure, so the tick a key lands on
+          is under the band it names. */}
+      {rows.map((row, i) => (
+        <g key={i} className="group cursor-pointer" onClick={() => onSelect(i, "braid", true)}>
+          <rect
+            x={bandL(i)}
             y={CHANNEL}
             width={step}
             height={WELL_H}
-            className="fill-base-content/[0.08] stroke-base-content/25"
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
+            className="fill-transparent transition-colors group-hover:fill-base-content/[0.12]"
           />
-
-          {drifted.map((band) => (
-            <rect
-              key={band.key}
-              x={band.x}
-              y={CHANNEL}
-              width={band.width}
-              height={WELL_H}
-              className="fill-warning/[0.13]"
+          {isFork(row) && (
+            <line
+              x1={cx(i)}
+              y1={MID - tick}
+              x2={cx(i)}
+              y2={MID + tick}
+              strokeLinecap="round"
+              className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
             />
-          ))}
-
-          {tally.firstDrift !== undefined && (
-            <>
-              {/* The shaded region's own leading edge, which is the moment the
-                  caption names. Not a second notation for the drift -- the same
-                  one, drawn where it starts. */}
-              <line
-                x1={bandL(tally.firstDrift)}
-                y1={CHANNEL}
-                x2={bandL(tally.firstDrift)}
-                y2={CHANNEL + WELL_H}
-                stroke="currentColor"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-                className="text-warning/60"
-              />
-              {causingFork && (
-                // The delayed causal link, drawn as the arc it is: cause on the
-                // left, eight-or-more picks of nothing visible, effect on the
-                // right, landing exactly on the edge of the region it caused.
-                // In its own channel above the wells, because this is the claim
-                // the diagram exists to make and it spent two revisions as the
-                // faintest ink on the panel.
-                <path
-                  d={`M ${cx(causingFork.pickIndex)} ${CHANNEL - 1} C ${cx(
-                    causingFork.pickIndex,
-                  )} 1 ${bandL(tally.firstDrift)} 1 ${bandL(tally.firstDrift)} ${CHANNEL - 1}`}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 4"
-                  vectorEffect="non-scaling-stroke"
-                  className="text-warning/75"
-                />
-              )}
-            </>
           )}
+          <title>{titleOf(row)}</title>
+        </g>
+      ))}
 
-          {/* One target per pick, the whole floor-height band under it, and the
-              fork's gold tick riding along in the same group. Every one of them
-              is exactly one `step` wide, everywhere, including at the seams --
-              a target that quietly narrows because of where it sits in a pack is
-              a target that behaves differently for no reason a reader could
-              recover.
+      {/* THE THREAD FIRST, so the cords lie over the pick they share with it.
+          Before either of you had two cards of a colour there is no pair to
+          draw, and this is that stretch: one hairline on the strand's own
+          centreline, which forks into two cords at the pick the colours arrive.
+          It used to be a second grey cord, three shades off mono-black, in
+          exactly the stretch of the draft where telling those two apart matters
+          most -- see `THREAD` for why lightness was the wrong channel. */}
+      {SIDES.flatMap((side) =>
+        spans(rows, (r) => undecided(leanOf(r, side))).map((run) => (
+          <path
+            key={`${side}-thread-${run.from}`}
+            d={segment(side, 0, run.from, Math.min(rows.length - 1, run.to))}
+            fill="none"
+            stroke={THREAD}
+            strokeWidth={THREAD_W}
+            strokeDasharray={THREAD_DASH}
+            pointerEvents="none"
+          />
+        )),
+      )}
 
-              BENEATH THE STRANDS, with the strands made transparent to the
-              pointer. Above them the hover wash fell across the rope and dulled
-              it, and below them without that the rope swallowed every click that
-              landed on it -- which on a wide opening is most of the target. The
-              rope carries no interaction of its own, so it has nothing to lose
-              by not taking the click.
-
-              Keyboard reaches these picks through the track directly beneath,
-              which takes one tab stop for the whole draft and arrows within it
-              -- and which is drawn to this chart's own measure, so the tick a
-              key lands on is under the band it names. Forty-two more focus stops
-              up here would be the same draft offered twice. */}
-          {rows.map((row, i) => (
-            <g key={i} className="group cursor-pointer" onClick={() => onSelect(i, "braid", true)}>
-              <rect
-                x={bandL(i)}
-                y={CHANNEL}
-                width={step}
-                height={WELL_H}
-                className="fill-transparent transition-colors group-hover:fill-base-content/[0.12]"
-              />
-              {isFork(row) && (
-                // In the opening the strands have just made, which is the one
-                // place on this diagram it can sit and mean something -- and
-                // drawn as a tick, which is what a fork looks like on the track
-                // below. It reaches to whatever the opening happens to be, so a
-                // blip gets a short tick and a sustained parting a long one.
-                <line
-                  x1={cx(i)}
-                  y1={laneY(i, "yours") + STRAND / 2 + 3}
-                  x2={cx(i)}
-                  y2={laneY(i, "theirs") - STRAND / 2 - 3}
-                  strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                  className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
-                />
-              )}
-              <title>{titleOf(row)}</title>
-            </g>
-          ))}
-
-          {(["yours", "theirs"] as const).flatMap((side) =>
-            cords.map((cord) => (
-              <path
-                key={`${side}-${cord}`}
-                d={strandPath(side, cord)}
-                fill="none"
-                stroke={`url(#braid-${side}-${cord})`}
-                strokeWidth={CORD}
-                // Butt, not round: two cords lying against each other want a
-                // flat seam between them, and rounded caps on a 7-unit cord
-                // would round the strand's own ends into a lozenge.
-                strokeLinecap="butt"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
-              />
-            )),
-          )}
-        </svg>
-      </div>
-
-      {/* THE TRACK IS THIS CHART'S AXIS, which is the whole reason it is down
-          here and not up in the summary where it lived.
-
-          It was drawn three times on this page -- once beside the score, once as
-          the braid, once in the shelf's stepper -- with two legends between them,
-          and the braid says strictly more than the summary's copy did: the same
-          three states, plus each side's colours, plus how long every parting
-          held, plus the arc. What the ticks alone can do and the drawing cannot
-          is be a set of places to go from a keyboard. So the track keeps exactly
-          that job and gives up being a second picture of the draft: it sits
-          under the chart it drives, on the chart's own measure, and the tick you
-          are on is directly below the band that is lit.
-
-          The measure is shared rather than approximated. The SVG is a 1000-unit
-          box stretched to fill, so the track is inset by the same LEAD and PAD in
-          percent, its packs grow by their own pick counts exactly as the wells
-          do, and the page between packs is PACK_GAP expressed as a fraction of
-          the drafted span -- which is the width the track's own flex box spans.
-          Nothing here is a number that has to be kept in sync by hand.
-
-          No pack labels: the ruler under it already names them, and the wells
-          that come with labels carry an inset, which is precisely what would
-          stop a tick landing under its own pick. */}
-      <div className="flex gap-2">
-        <span className="w-28 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <div
-            style={
-              {
-                paddingLeft: `${(LEAD / 1000) * 100}%`,
-                paddingRight: `${(PAD / 1000) * 100}%`,
-                // Against the track's OWN box, which is the drafted span rather
-                // than the whole chart -- a percentage gap resolves against the
-                // flex container's content width, and the inset above has
-                // already taken the run-up and the right margin off it.
-                "--pick-track-gap": `${(PACK_GAP / (1000 - LEAD - PAD)) * 100}%`,
-              } as CSSProperties
-            }
-            onPointerDown={() => {
-              byPointer.current = true;
-            }}
-            onKeyDown={() => {
-              byPointer.current = false;
-            }}
-          >
-            <DiffTrack
-              rows={rows}
-              them={them}
-              at={here}
-              onAt={(i) => onSelect(i, "track", byPointer.current)}
-              label="Every pick in both drafts, in order. Select one opens it in the pick-by-pick panel."
-              packLabels={false}
+      {SIDES.flatMap((side) =>
+        CORDS.flatMap((cord) =>
+          spans(rows, (r) => !undecided(leanOf(r, side))).map((run) => (
+            <path
+              key={`${side}-${cord}-${run.from}`}
+              // The two cords ride half a seam's width either side of the
+              // strand's own line, so together they occupy exactly one strand.
+              d={segment(side, (cord === 0 ? -1 : 1) * ((CORD + SEAM) / 2), run.from, run.to - 1)}
+              fill="none"
+              stroke={`url(#braid-${side}-${cord})`}
+              strokeWidth={CORD}
+              // Butt, not round: two cords lying against each other want a flat
+              // seam between them, and rounded caps on a 7-unit cord would round
+              // the strand's own ends into a lozenge.
+              strokeLinecap="butt"
+              strokeLinejoin="round"
+              pointerEvents="none"
             />
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-2">
-        {/* Matches the gutter above, so the ruler starts where the chart does. */}
-        <span className="w-28 shrink-0" />
-        <PackRuler wells={wells} />
-      </div>
-
-      {/* THE CAPTION IS NOT DRAWN HERE ANY MORE. It was four sentences under the
-          chart, and the chart is the thing this panel is for -- so on every
-          reading after the first it was a paragraph standing between an
-          instrument and the section below it. It now hangs off the mark on the
-          header rule, in the same words, written once over in `Spine`. */}
-    </Panel>
+          )),
+        ),
+      )}
+    </>
   );
 }
 
 /**
- * A name, at the height its own rope comes in at.
+ * The delay, drawn: cause on the left, eight or more picks of nothing visible,
+ * effect on the right.
  *
- * Right-aligned and hard against the chart, so the word and the strand leaving
- * it are as close as the layout allows and the run-up reads as continuing the
- * line rather than as reaching across a gap.
- *
- * It wraps rather than truncating. It was in a fixed 6rem column with `truncate`
- * on it, and the other drafter is called "Your challenger" whenever they have
- * not been named -- so the label that exists to say whose half this is rendered
- * as "A FIXT…".
+ * IT HAS A HEAD ON IT NOW, and that is the fix for the one thing the arc could
+ * never say. A dashed curve between two points is symmetric -- it asserts that
+ * these two moments are related and leaves which caused which to the caption --
+ * and the whole argument of this panel is the direction. So it points, and it is
+ * drawn at full strength: it was `warning/75` at a pixel and a half, the
+ * faintest ink on a panel whose loudest mark is a floor shading nobody has to
+ * read.
  */
-function LaneLabel({ y, label }: { y: number; label: string }) {
+function CausalArc({ from, to }: { from: number; to: number }) {
+  const head = 4;
+
   return (
-    <span
-      className="eyebrow absolute right-0 w-full -translate-y-1/2 text-right leading-tight"
-      style={{ top: y }}
-    >
-      {label}
-    </span>
+    <g className="text-warning">
+      <path
+        d={`M ${from} ${CHANNEL - 1} C ${from} 1 ${to} 1 ${to} ${CHANNEL - head - 2}`}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeDasharray="4 4"
+      />
+      <path
+        d={`M ${to - head} ${CHANNEL - head - 3} L ${to} ${CHANNEL - 1} L ${to + head} ${
+          CHANNEL - head - 3
+        } Z`}
+        fill="currentColor"
+      />
+    </g>
   );
 }
 
 /**
- * The draft as one measured length, divided where the packs divide.
+ * The draft as one measured length, divided where the packs divide and numbered
+ * where the caption points.
  *
  * ONE RULE, not three. The first version drew a separate dimension line per
  * pack -- tick, rule, name, rule, tick -- which put two ticks and a gap at every
@@ -639,39 +843,82 @@ function LaneLabel({ y, label }: { y: number; label: string }) {
  * at each boundary. Nothing marks the two outer ends, because the rule simply
  * stopping is already where the draft stops.
  *
- * Positioned from the same `wells` the SVG draws, as percentages of the same
- * box: the chart is a 1000-unit viewBox stretched to fill, so one unit is a
- * tenth of a percent and every tick lands exactly on the seam above it.
+ * AND IT NUMBERS THE PICKS, which is the part it was missing for as long as it
+ * has existed. Naming three regions is a division, not a scale: a reader told
+ * the drift begins at pack 2 pick 5, or that a fork came back round eleven picks
+ * later, had nowhere on the drawing to put either number. The marks are the
+ * first pick of every pack and every fifth after it, in the pack-and-pick
+ * coordinate the rest of this screen speaks, at the same 10px the app sets every
+ * other axis label in.
  *
- * The names sit ON the rule with the panel's own colour behind them, which is
- * how a break in a rule is drawn when the thing breaking it is set in type of
+ * Positioned from the same `axis` the SVG draws, read as percentages of the same
+ * box: `pickAxis` was asked for fractions, so one unit here is one per cent and
+ * every tick lands exactly on the band above it.
+ *
+ * The pack names sit ON the rule with the panel's own colour behind them, which
+ * is how a break in a rule is drawn when the thing breaking it is set in type of
  * an unknown width.
  */
-function PackRuler({ wells }: { wells: { packNo: number; x: number; width: number }[] }) {
-  const seams = wells
+function PackRuler({ rows, axis }: { rows: DiffRow[]; axis: PickAxis }) {
+  const seams = axis.wells
     .slice(0, -1)
-    .map((well, i) => (well.x + well.width + wells[i + 1].x) / 2);
+    .map((well, i) => ((well.at + well.length + axis.wells[i + 1].at) / 2) * 100);
+
+  // Every fifth pick, and the first of every pack so a pack's own scale starts
+  // where the pack does. Fourteen picks to a pack gives 1, 5 and 10 -- three
+  // numbers across a hand's width, which is a scale rather than a ruler face.
+  const marks = rows.flatMap((row, i) =>
+    row.pickNo === 1 || row.pickNo % 5 === 0
+      ? [{ key: i, at: axis.mid(i) * 100, n: row.pickNo }]
+      : [],
+  );
 
   return (
-    <div className="relative h-4 min-w-0 flex-1">
+    <div className="relative h-9">
       <span
-        className="absolute top-1/2 h-px -translate-y-1/2 bg-base-content/20"
-        style={{ left: `${LEAD / 10}%`, right: `${PAD / 10}%` }}
+        className="absolute top-2 h-px -translate-y-1/2"
+        style={{
+          left: `${axis.at(0) * 100}%`,
+          right: `${(1 - axis.end(rows.length - 1)) * 100}%`,
+          backgroundColor: INK.rule,
+        }}
       />
       {seams.map((x) => (
         <span
           key={x}
-          className="absolute top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 bg-base-content/45"
-          style={{ left: `${x / 10}%` }}
+          className="absolute top-2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2"
+          style={{ left: `${x}%`, backgroundColor: INK.zero }}
         />
       ))}
-      {wells.map((well) => (
+      {axis.wells.map((well) => (
         <span
           key={well.packNo}
-          className="eyebrow absolute top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-base-200 px-2"
-          style={{ left: `${(well.x + well.width / 2) / 10}%` }}
+          className="eyebrow absolute top-2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-base-200 px-2"
+          style={{ left: `${(well.at + well.length / 2) * 100}%` }}
         >
           Pack {well.packNo}
+        </span>
+      ))}
+      {marks.map((mark) => (
+        <span
+          key={mark.key}
+          aria-hidden
+          // Clear of the pack names, which sit ON the rule and are as tall as
+          // their own type. Two rows: the pack a pick belongs to, and where in
+          // that pack it is.
+          className="absolute top-4 flex -translate-x-1/2 flex-col items-center gap-px tabular-nums"
+          style={{ left: `${mark.at}%` }}
+        >
+          <span className="h-1 w-px" style={{ backgroundColor: INK.rule }} />
+          <span
+            style={{
+              fontSize: TICK_TEXT.fontSize,
+              letterSpacing: TICK_TEXT.letterSpacing,
+              color: NEUTRAL.quiet,
+            }}
+          >
+            {mark.n}
+          </span>
         </span>
       ))}
     </div>
@@ -679,12 +926,153 @@ function PackRuler({ wells }: { wells: { packNo: number; x: number; width: numbe
 }
 
 /**
+ * What the cords are, in the colours the cords are drawn in.
+ *
+ * THE BRAID'S HEADLINE ENCODING HAD NO KEY BELOW 640px, which is the defect
+ * this closes. The two-bar colour chip beside each name was retired for a good
+ * reason -- it showed what a side FINISHED on while the rope beside it starts
+ * with no colours at all -- and what replaced it was one sentence in the panel's
+ * header rule, marked `hidden sm:inline`. So the drawing whose whole point is
+ * which two colours each of you was on explained itself on a laptop and said
+ * nothing on a phone.
+ *
+ * A KEY IS NOT A CHIP, and the difference is whose colour it claims to be. The
+ * chip said "this is your pair"; this says "this hue is blue", which stays true
+ * at every pick of the draft including the ones where nobody was blue. Only the
+ * colours actually in this comparison are listed -- a key naming five colours on
+ * a draft with two in it is a legend for a chart somebody else read.
+ *
+ * The thread is in it too, because "no colours yet" is a state of the rope and
+ * the one a reader meets first.
+ */
+function ColorKey({ rows }: { rows: DiffRow[] }) {
+  const present = new Set<string>();
+  let anyUndecided = false;
+  for (const row of rows) {
+    for (const lean of [row.yourLean, row.theirLean]) {
+      if (undecided(lean)) anyUndecided = true;
+      for (const c of lean) present.add(c);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 pt-0.5">
+      <span className="text-xs text-base-content/50">
+        each strand is the two colours that side was drafting most
+      </span>
+      <Key
+        entries={[
+          ...["W", "U", "B", "R", "G"]
+            .filter((c) => present.has(c))
+            .map((c) => ({ label: COLOR_NAMES[c], ink: cordInk(c, 0) })),
+          ...(anyUndecided
+            ? [
+                {
+                  label: "no colours yet",
+                  ink: THREAD,
+                  shape: "hollow" as const,
+                  means: "drawn as a thread, before two cards of a colour are in the pool",
+                },
+              ]
+            : []),
+        ]}
+      />
+    </div>
+  );
+}
+
+/**
+ * The same finding without the geometry, for a screen the rope cannot be drawn
+ * on honestly.
+ *
+ * It is not a smaller braid and it does not try to be. What the rope says and
+ * nothing else on this page prints is HOW LONG EACH PARTING HELD -- the quantity
+ * the amplitude encodes -- so that is what is listed: where every parting
+ * started and how many picks it ran for, with the decisions inside it marked.
+ *
+ * IT DOES NOT REPEAT THE PARTITION, which was the obvious thing to put here and
+ * would have been a fourth drawing of forty-two picks on one screen. `PickSplit`
+ * is on the summary panel at every width, including the widths this fallback
+ * appears at, and this screen has spent three revisions taking duplicate
+ * pictures of the same draft OFF it.
+ *
+ * The forks are marked on their runs rather than counted separately: a parting
+ * that contains a decision and one that is two people looking at different
+ * packs are different events, which is the whole distinction this screen is
+ * shaped around.
+ */
+function Fallback({
+  rows,
+  tally,
+  them,
+}: {
+  rows: DiffRow[];
+  tally: DiffTally;
+  them: string;
+}) {
+  const partings = spans(rows, (r) => !r.agree).map((run) => ({
+    key: run.from,
+    from: rows[run.from],
+    held: run.to - run.from,
+    forks: rows.slice(run.from, run.to).filter(isFork).length,
+  }));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs leading-relaxed text-base-content/60">
+        Too narrow to draw the two drafts as strands — the picks would be closer together
+        than a mark you could see. Every parting, in order:
+      </p>
+
+      {partings.length === 0 ? (
+        <p className="text-sm text-base-content/70">
+          There were none. You took the same card on all {rows.length} picks.
+        </p>
+      ) : (
+        <ScrollBox maxHeight="max-h-[18rem]">
+          <ul className="flex flex-col gap-1 text-sm">
+            {partings.map((parting) => (
+              <li key={parting.key} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="eyebrow w-16 shrink-0">
+                  P{parting.from.packNo}P{parting.from.pickNo}
+                </span>
+                <span className="text-base-content/70">
+                  apart for {parting.held} pick{parting.held === 1 ? "" : "s"}
+                </span>
+                {parting.forks > 0 && (
+                  <span className="flex items-center gap-1.5 text-xs text-primary/85">
+                    <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />
+                    {parting.forks} off the same pack
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </ScrollBox>
+      )}
+
+      {tally.firstDrift !== undefined && (
+        <p className="text-xs leading-relaxed text-base-content/60">
+          From pack {rows[tally.firstDrift].packNo}, pick {rows[tally.firstDrift].pickNo} on,
+          your pods drift in and out of step: {tally.rows - tally.comparable} of the picks put
+          different cards in front of you and {them}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * How to read the braid, written once.
  *
- * Exported because the rail form draws the same instrument in a box with no
- * room for prose, and puts this behind a question mark instead. One passage,
- * two places to put it: a reader who switches layouts must not find the page
- * making a different claim about the same drawing.
+ * It hangs off the mark on the panel's header rule rather than sitting under the
+ * chart, because it is load-bearing the first time and furniture the fifth.
+ *
+ * EVERY NUMBER IN IT IS A PLACE ON THE DRAWING, which took a change at both
+ * ends. It used to say "they begin at pick 19" -- a running count of the whole
+ * draft, in a screen that speaks in pack-and-pick everywhere else and now
+ * NUMBERS the drawing that way. A caption whose coordinate the ruler underneath
+ * it does not use is a caption a reader cannot follow with a finger.
  */
 export function BraidCaption({
   rows,
@@ -695,12 +1083,17 @@ export function BraidCaption({
   tally: DiffTally;
   causingFork?: { packNo: number; pickNo: number; pickIndex: number };
 }) {
+  const driftAt = tally.firstDrift === undefined ? undefined : rows[tally.firstDrift];
+
   return (
     <>
       The two strands run together while you were taking the same card and open where you
-      were not — wider the longer the parting held. A gold tick in the opening means you were
-      both looking at the same pack.{" "}
-      {tally.firstDrift === undefined ? (
+      were not — wider the longer the parting held, from about a third of the swing for a
+      single pick to all of it for a parting that never closed. A gold tick in the opening
+      means you were both looking at the same pack. Either rope runs as a dashed thread
+      until that side had two cards of a colour, because until then there is no pair to
+      draw.{" "}
+      {driftAt === undefined ? (
         <>
           The packs themselves never came apart — the two pods stayed in step for all{" "}
           {rows.length} picks, so every opening is a decision.
@@ -717,14 +1110,14 @@ export function BraidCaption({
               <strong className="font-semibold text-base-content/90">
                 pack {causingFork.packNo}, pick {causingFork.pickNo}
               </strong>{" "}
-              came back round to you {tally.firstDrift - causingFork.pickIndex} picks later,
-              where the shading starts. The arc is that delay: nothing you could see happened
-              in between.
+              came back round to you {tally.firstDrift! - causingFork.pickIndex} picks later,
+              at pack {driftAt.packNo}, pick {driftAt.pickNo}, where the shading starts. The
+              arc is that delay: nothing you could see happened in between.
             </>
           ) : (
             <>
-              They begin at pick {tally.firstDrift + 1}. No single fork before that accounts
-              for the drift, so none is drawn as its cause.
+              They begin at pack {driftAt.packNo}, pick {driftAt.pickNo}. No single fork
+              before that accounts for the drift, so none is drawn as its cause.
             </>
           )}
         </>
