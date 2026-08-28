@@ -20,6 +20,7 @@ import {
   TOOK,
 } from "../components/PickMarks";
 import { pct } from "../lib/format";
+import { INK } from "../charts/ink";
 import { LineNotTaken } from "./LineNotTaken";
 import type { Line } from "./useLines";
 import type { ReviewPick } from "./types";
@@ -82,7 +83,53 @@ function marksFor(
  * single left edge and the mark reads as a mark and not as an indent -- the same
  * bargain the deck board makes with its gold rail.
  */
-function ShortlistCard({ card, marks }: { card: Card; marks: Mark[] }) {
+/**
+ * The width the spread column is drawn in, and the range it is drawn against.
+ *
+ * SHARED ACROSS THE WHOLE SHORTLIST, which is the only thing that makes the
+ * column worth having. Ranked by win rate with the number alone, a pack whose
+ * best card is four points clear and a pack where all six sit inside half a
+ * point render identically -- and that distinction is not a detail, it is the
+ * lesson `Verdict` next door exists to teach. Positions on one scale make it a
+ * glance: six dots strung out is a pack with an answer, six dots on top of each
+ * other is a pack that does not have one.
+ */
+const SPREAD_W = 56;
+
+function Spread({ rate, lo, hi }: { rate: number | undefined; lo: number; hi: number }) {
+  // Nothing to place a card the data never rated, and a dot at the left end
+  // would say "worst in the pack" about a card the pack has no opinion on.
+  if (rate == null) return <span className="block" style={{ width: SPREAD_W }} />;
+
+  const at = hi > lo ? (rate - lo) / (hi - lo) : 0.5;
+
+  return (
+    <svg width={SPREAD_W} height={10} aria-hidden className="shrink-0">
+      <line
+        x1={3}
+        x2={SPREAD_W - 3}
+        y1={5}
+        y2={5}
+        stroke={INK.rule}
+        strokeWidth={1}
+        strokeLinecap="round"
+      />
+      <circle cx={3 + at * (SPREAD_W - 6)} cy={5} r={3} fill={INK.value} />
+    </svg>
+  );
+}
+
+function ShortlistCard({
+  card,
+  marks,
+  lo,
+  hi,
+}: {
+  card: Card;
+  marks: Mark[];
+  lo: number;
+  hi: number;
+}) {
   return (
     <li className={`flex items-stretch gap-2 ${marks.length > 0 ? "mt-3 first:mt-0" : ""}`}>
       <MarkRail marks={marks} />
@@ -97,8 +144,9 @@ function ShortlistCard({ card, marks }: { card: Card; marks: Mark[] }) {
             ))}
           </div>
         )}
-        <div className="grid grid-cols-[minmax(0,1fr)_3rem] items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_3rem] items-center gap-2">
           <CardPlacard card={card} />
+          <Spread rate={card.gihWinRate ?? undefined} lo={lo} hi={hi} />
           <span className="text-right text-sm tabular-nums text-base-content/60">
             {pct(card.gihWinRate)}
           </span>
@@ -169,6 +217,18 @@ export function PickReveal({
 }) {
   const contextBest = pick.contextBestName;
   const shown = useMemo(() => cardsToShow(pick, contextBest, guess), [pick, contextBest, guess]);
+
+  // The ends of the shortlist's own win rates, so every dot in the column is
+  // placed on one scale. Taken from what is SHOWN rather than from the whole
+  // pack: the column draws these six, and a scale stretched to a seventh card
+  // nobody can see would compress the six that matter for no reason a reader
+  // could work out.
+  const spread = useMemo(() => {
+    const rates = shown.map((c) => c.gihWinRate).filter((r): r is number => r != null);
+    return rates.length > 0
+      ? { lo: Math.min(...rates), hi: Math.max(...rates) }
+      : { lo: 0, hi: 0 };
+  }, [shown]);
   const advice = useMemo(
     () => splitCitations(verdict?.narrative ?? "", PRINCIPLES),
     [verdict?.narrative],
@@ -192,9 +252,19 @@ export function PickReveal({
               key={`${card.name}-${i}`}
               card={card}
               marks={marksFor(card, pick, contextBest, guess)}
+              lo={spread.lo}
+              hi={spread.hi}
             />
           ))}
         </ol>
+        {/* The scale, once, under the column it belongs to. Without it the dots
+            are a ranking drawn twice; with it they are a distance, and the whole
+            point is whether there IS one. */}
+        {spread.hi > spread.lo && (
+          <p className="text-[0.625rem] leading-none text-base-content/40">
+            Dots span {pct(spread.lo)}–{pct(spread.hi)} across these {shown.length}.
+          </p>
+        )}
       </div>
 
       <div className="flex max-w-prose flex-col gap-3">
