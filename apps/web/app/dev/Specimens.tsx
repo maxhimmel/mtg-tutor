@@ -9,6 +9,7 @@ import { CardText } from "../components/CardText";
 import { ColorPips } from "../components/ColorPips";
 import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
+import { PickTrack, TrackKey, type Tick, type TickState } from "../components/PickTrack";
 import { ScrollBox } from "../components/ScrollBox";
 import { pct } from "../lib/format";
 import {
@@ -43,7 +44,24 @@ export interface Specimen {
   // Said on the panel's header rule: what this is in the app, so a difference
   // you spot here can be traced to the screen it will show up on.
   note: string;
-  render: (props: SpecimenProps) => ReactNode;
+  // Drawn with the card the chip strip has focused. Most specimens are this.
+  render?: (props: SpecimenProps) => ReactNode;
+  /**
+   * Drawn from numbers of its own, so it is on the page before anything is
+   * staged.
+   *
+   * A SEPARATE FIELD RATHER THAN A FLAG, because the difference is a fact about
+   * the function's arguments and a boolean beside it would be a second, weaker
+   * statement of the same thing -- one the renderer has to remember to honour
+   * and the compiler cannot check. With two fields, a specimen that takes no
+   * card cannot be handed one and cannot be gated behind one.
+   *
+   * The gate was real: the playground drew nothing at all until a card was
+   * staged, so `archetype-reveal` -- which has never taken a card, and is the
+   * one specimen that can be looked at cold -- could only be reached by
+   * searching up an unrelated card first.
+   */
+  renderBare?: () => ReactNode;
 }
 
 function Bay({
@@ -123,12 +141,89 @@ const STOCK_UP_SEPARATED: RevealQuestion = {
   separated: true,
 };
 
+/**
+ * A review's worth of decision picks, with how each one went.
+ *
+ * Mixed on purpose rather than sorted: the thing a track is read for is WHERE
+ * the misses fall, and a run of five hits followed by five misses would show
+ * that working on the one arrangement it cannot fail on.
+ *
+ * `stood` is in here even though no single screen draws all three -- it belongs
+ * to the misses drill and the graded pair to the review -- because the point of
+ * a specimen is the three of them side by side, which is the comparison the app
+ * never puts on one page and the reason a collision between two of them can
+ * live for months.
+ */
+const RUN_STATES: TickState[] = [
+  "hit", "hit", "miss", "hit", "stood", "hit", "miss", "miss",
+  "hit", "hit", "stood", "hit", "miss", "hit", "hit",
+];
+
+const SAID: Partial<Record<TickState, string>> = {
+  hit: "you read it right",
+  miss: "you missed it",
+  stood: "you stood by it",
+};
+
+const RUN: Tick[] = RUN_STATES.map((state, i) => ({
+  state,
+  label: `Pick ${i + 1} — ${SAID[state] ?? state}`,
+}));
+
+// The other half of what this component draws: a draft in progress, where most
+// ticks carry a position and nothing else. The graded pair have to stand out of
+// this and the ungraded pair have to stay a rule, at the same time.
+const MID_RUN: Tick[] = RUN_STATES.map((_, i) => ({
+  state: i < 6 ? "past" : i === 6 ? "current" : "ahead",
+  label: `Pick ${i + 1}`,
+}));
+
+const TRACK_KEY = [
+  { state: "hit" as const, label: "read it right", aside: 9 },
+  { state: "miss" as const, label: "missed it", aside: 4 },
+  { state: "stood" as const, label: "stood by it", aside: 2 },
+];
+
 export const SPECIMENS: Specimen[] = [
+  {
+    id: "pick-track",
+    title: "Pick track",
+    note: "The draft board, both review surfaces and both drills. Hit against miss is the pair that has to survive greyscale",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="A graded run, at the width the review gives it">
+          <PickTrack groups={[RUN]} label="A finished review" />
+          <TrackKey className="mt-3" entries={TRACK_KEY} />
+        </Bay>
+
+        {/* THE BAY THE FIX EXISTS FOR. Hit and miss were success and error at
+            the same height, so this bay was two rows of identical grey marks --
+            and that is what a red-green reader had in colour. The hollow tick
+            has to still be a hollow tick here, and the key beside it has to
+            show the same difference the track does. */}
+        <Bay label="The same run in greyscale — hue removed">
+          <div style={{ filter: "grayscale(1)" }}>
+            <PickTrack groups={[RUN]} label="A finished review, in greyscale" />
+            <TrackKey className="mt-3" entries={TRACK_KEY} />
+          </div>
+        </Bay>
+
+        <div className="flex flex-wrap items-start gap-8">
+          <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
+            <PickTrack groups={[RUN]} label="A finished review on a phone" />
+          </Bay>
+          <Bay label="Mid-draft — nothing graded yet" width="w-[22rem] max-w-full">
+            <PickTrack groups={[MID_RUN]} label="A draft in progress" />
+          </Bay>
+        </div>
+      </div>
+    ),
+  },
   {
     id: "archetype-reveal",
     title: "Archetype quiz reveal",
     note: "Stock Up in SOS — the real case a player could not read, and the same numbers on a sample that would settle it",
-    render: () => (
+    renderBare: () => (
       <div className="flex flex-col gap-8">
         <Bay label="No difference (2.6 against a bar of 2.7)">
           <DeckBands question={STOCK_UP} guess="UG" />
@@ -137,6 +232,42 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="Same gaps, tighter samples — now it counts">
           <DeckBands question={STOCK_UP_SEPARATED} guess="UG" />
           <Verdict question={STOCK_UP_SEPARATED} />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "deck-bands-widths",
+    title: "Deck bands at every width",
+    note: "The same five decks in the three boxes the app gives them. 263px is the specimen — it is what a 375px phone leaves inside two panels",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-wrap items-start gap-8">
+          {/* THE CASE THAT WAS BROKEN. 375px, less the shell's 48 and two
+              panels' padding at 32 each. The row was 352px of columns that
+              cannot shrink, so the track -- the only part of this that carries
+              the argument -- was squeezed to nothing and the games count hung
+              ninety pixels off the panel. */}
+          <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
+            <DeckBands question={STOCK_UP} guess="UG" />
+            <Verdict question={STOCK_UP} />
+          </Bay>
+          <Bay label="480px — a phone turned over" width="w-[480px] max-w-full">
+            <DeckBands question={STOCK_UP} guess="UG" />
+            <Verdict question={STOCK_UP} />
+          </Bay>
+        </div>
+
+        {/* Under the axis's own minimum, where the ticks would be four numbers
+            on top of each other. Both charts here say their domain in words
+            instead, which is the whole of what `needs` and `instead` are for. */}
+        <Bay label="180px — under the axis's minimum" width="w-[180px] shrink-0">
+          <DeckBands question={STOCK_UP} guess="UG" />
+          <Verdict question={STOCK_UP} />
+        </Bay>
+
+        <Bay label="Full width — the desktop rendering, unchanged">
+          <DeckBands question={STOCK_UP} guess="UG" />
         </Bay>
       </div>
     ),

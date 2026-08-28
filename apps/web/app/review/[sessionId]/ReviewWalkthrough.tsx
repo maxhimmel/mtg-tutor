@@ -8,7 +8,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isCorrectGuess, isDecisionPick } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../components/PageShell";
 import { PageHeading } from "../../components/PageHeading";
-import { PickTrack, type Tick } from "../../components/PickTrack";
+import { PickTrack, TrackKey, type Tick } from "../../components/PickTrack";
 import { CardTile } from "../../components/CardTile";
 import { ColorPips } from "../../components/ColorPips";
 import { Panel } from "../../components/Panel";
@@ -181,6 +181,36 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
           onSelect={setStep}
         />
       </PageHeading>
+
+      {/* What the ticks above mean, once there is a tick that means anything.
+          Under the heading rather than in its slot, because the slot is one
+          height across a draft's three views and a key in it would make this the
+          only view whose page starts lower than the others.
+
+          It says the graded pair and nothing else. `past` and `ahead` are a rule
+          filling up to a point, which needs no key -- and the two that do are the
+          two the audit found carrying their whole meaning in a hue. The counts
+          come along because they are the score, and this page's score panel is
+          at the far end of the walkthrough. */}
+      {score.graded > 0 && (
+        <TrackKey
+          className="mb-4"
+          entries={[
+            {
+              state: "hit",
+              label: "read it right",
+              aside: score.correct,
+              means: "you named the better card before the answer",
+            },
+            {
+              state: "miss",
+              label: "missed it",
+              aside: score.graded - score.correct,
+              means: "the better card was still in the pack",
+            },
+          ]}
+        />
+      )}
 
       {/* The review still renders under this: every pick keeps its data-only
           reveal, which is the same degradation a deployment with no model key

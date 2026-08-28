@@ -14,6 +14,9 @@ import {
   scoreArchetypeRun,
   type ArchetypeResult,
 } from "@mtg-tutor/core";
+import { scaleLinear } from "@visx/scale";
+import { Plot, Reference, TICK_TEXT, ValueAxisBottom } from "../../charts/Plot";
+import { INK, MARK } from "../../charts/ink";
 import { CardFace } from "../../components/CardTile";
 import { useCardHover } from "../../components/CardPreview";
 import { ColorPips } from "../../components/ColorPips";
@@ -483,15 +486,57 @@ function Reveal({
  * dot's distance from it. It is one element rather than one per row for the
  * same reason -- a rule with gaps in it is six ticks again.
  */
-function ZeroLine({ left }: { left: number }) {
+function ZeroLine({ left, className }: { left: number; className?: string }) {
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute inset-y-0 z-0 w-px bg-base-content/45"
+      className={`pointer-events-none absolute inset-y-0 z-0 w-px bg-base-content/45 ${className ?? ""}`}
       style={{ left: `${left}%` }}
     />
   );
 }
+
+/**
+ * Where a label sitting at a point on the scale is allowed to hang from.
+ *
+ * Centred is right in the middle of a chart and wrong at either end, and this
+ * chart's zero is almost always near an end: a lift is usually positive, so the
+ * scale starts a hair below zero and the label that names the zero was centred
+ * on 5% of the width -- which hung sixty pixels off the left of the panel, on
+ * every card whose decks all wanted it a bit.
+ */
+const anchorAt = (percent: number) =>
+  percent < 25 ? "translate-x-0" : percent > 75 ? "-translate-x-full" : "-translate-x-1/2";
+
+// The columns the desktop row is laid out on, for the two SPACER rails that
+// have to land on the track's own box -- the zero rule through the list, and the
+// axis under it. Written out again in the row itself rather than shared with it,
+// because the row's copies carry `sm:` variants and Tailwind only generates a
+// class it can see written down: a prefix pasted on at runtime produces a class
+// name that exists in the DOM and in no stylesheet.
+const COL = {
+  pips: "w-14 shrink-0",
+  name: "min-w-[5.5rem] shrink-0",
+  lift: "w-16 shrink-0",
+  games: "w-20 shrink-0",
+} as const;
+
+// A tick number on this chart is a difference between two win rates, so it is
+// points and never per cent -- and zero is written as zero, because "+0.0pp" is
+// four characters of noise on the one tick whose meaning is already named under
+// it.
+const axisTick = (v: number) => (Math.abs(v) < 1e-9 ? "0" : points(v));
+
+// Four tick labels at ~44px each, plus air. Under this the axis is numbers
+// sitting on top of each other, and the domain is better said in a sentence.
+const AXIS_NEEDS = 200;
+
+// The rule, its ticks, and a line of 10px numbers under them: visx puts a tick
+// label a font-size below the tick's end, so an 8px tick wants 26 to sit in
+// without its descenders cut off. No margins, deliberately -- the axis has to
+// share the track's own left and right edge to the pixel, and a margin is
+// exactly the amount by which it would not.
+const AXIS_H = 26;
 
 /**
  * Every deck's appetite for the card, drawn to one scale.
@@ -506,6 +551,28 @@ function ZeroLine({ left }: { left: number }) {
  *
  * `decisionBand` says why the bands are the width they are: they touch exactly
  * when the gap clears the bar, so the picture cannot disagree with the grade.
+ *
+ * AND IT SAYS SO, because it does not look like that. A band beside a point
+ * estimate is a 95% interval everywhere else a reader has ever seen one, and a
+ * 95% interval is precisely the object `decisionBand`'s docblock refuses to draw
+ * -- two of those stop overlapping at about 2.8 error bars, which is past what
+ * five decks need and short of what ten do, so a reader would meet a card whose
+ * bands clearly miss and be told the decks are level. The caption now names what
+ * the band is instead of describing what it feels like.
+ *
+ * AND IT STATES ITS DOMAIN. It had no axis at all: band WIDTH is the whole
+ * argument on this panel and there was no way to read one as a number without a
+ * pointer. The scale is a real `scaleLinear` now, and the axis under the chart
+ * is drawn from the same domain the marks are placed on, so the two cannot
+ * drift.
+ *
+ * ON A PHONE IT STACKS, and that is the defect that made this the worst of the
+ * three overflows. The row was 352px of non-shrinkable columns in 263px of
+ * panel: the track is the only thing in it that can give, so it was squeezed to
+ * nothing and the numbers hung ninety pixels off the edge. There is nothing to
+ * fall back TO here -- the picture IS the explanation, and the sentence above it
+ * says a gap of 9.8 against 2.9 is not a gap -- so the phone form keeps the
+ * chart and gives the track a line of its own under the name.
  *
  * AND IT CAN BE ASKED. The band, the dot and the zero line each carry a
  * different claim, and the caption explains all three at once in a paragraph
@@ -525,8 +592,19 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
   // anyway, so the line it is measured from has to be on the chart.
   const lo = Math.min(0, ...question.decks.map((d) => d.lift - band(d.sd)));
   const hi = Math.max(0, ...question.decks.map((d) => d.lift + band(d.sd)));
-  const span = hi - lo || 1;
-  const pct = (v: number) => ((v - lo) / span) * 100;
+  // A card whose decks are all at zero on no games would collapse the domain to
+  // a point, and every mark would land on top of every other one at NaN.
+  const domain: [number, number] = hi > lo ? [lo, hi] : [lo, lo + 1];
+
+  // IN PER CENT RATHER THAN PIXELS, which is the one thing that keeps the marks
+  // as HTML. The rows carry mana pips and a deck name, neither of which belongs
+  // in an SVG, so the bands and dots are absolutely positioned spans -- and a
+  // span cannot be placed in pixels by a parent that has not been measured.
+  // `scaleLinear` maps onto 0..100 and the browser does the measuring, which is
+  // also what lets the same domain drive the axis below at whatever width it
+  // turns out to have.
+  const x = scaleLinear({ domain, range: [0, 100] });
+  const zero = x(0);
 
   /**
    * Which mark the pointer is nearest, and what that mark claims.
@@ -541,10 +619,10 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
     e: { clientX: number; currentTarget: HTMLElement },
   ): string {
     const box = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - box.left;
-    const value = lo + (x / box.width) * span;
+    const at = e.clientX - box.left;
+    const value = x.invert((at / box.width) * 100);
     const half = band(deck.sd);
-    const near = (v: number) => Math.abs(x - (pct(v) / 100) * box.width) < 8;
+    const near = (v: number) => Math.abs(at - (x(v) / 100) * box.width) < 8;
     const name = deckName(deck.colors);
     const games = deck.n.toLocaleString();
 
@@ -553,13 +631,13 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
       : near(0)
         ? `What ${name} wins anyway. Every bar is measured from this line, so a deck that wins a lot gets no credit for winning a lot.`
         : Math.abs(value - deck.lift) <= half
-          ? `${games} games only pin it down this far — anywhere in this band would look the same. Two bands that touch are two decks the data cannot tell apart.`
+          ? `The slack ${games} games leave. Not a margin of error — it is sized so that two bands touching is exactly two decks the data cannot tell apart.`
           : `${points(value)}, which is outside what ${name}'s ${games} games can support.`;
   }
 
   return (
     <div className="mt-4">
-      <ul className="relative flex flex-col gap-1">
+      <ul className="relative flex flex-col gap-2 sm:gap-1">
         {question.decks.map((deck) => {
           // Nothing is marked as the answer when there is no answer: colouring
           // the top row on a card whose decks are level would draw the ranking
@@ -568,25 +646,46 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
           const isGuess = deck.colors === guess;
           const isEnd = deck.colors === question.wants || deck.colors === question.spurns;
           const half = band(deck.sd);
+          const games = deck.n.toLocaleString();
 
           return (
             <li
               key={deck.colors}
-              className={`flex items-center gap-3 rounded-field px-2 py-1.5 text-sm ${
+              // Wrapping below `sm`, in one row above it. The track is the item
+              // that carries `w-full`, so it is the item that drops to a line of
+              // its own -- everything else keeps its place, and the desktop
+              // rendering is the same row it always was.
+              className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-field px-2 py-1.5 text-sm sm:flex-nowrap ${
                 isAnswer ? "bg-success/10" : isGuess ? "bg-error/10" : ""
               }`}
             >
               {/* Fixed width, wide enough for three pips. A wedge is a symbol
                   wider than a guild, so left to size itself this column moves
                   the track's left edge between rows -- and a scale whose zero
-                  sits at a different x on every row is not a shared scale. */}
-              <ColorPips colors={deck.colors} className="w-14 shrink-0" />
+                  sits at a different x on every row is not a shared scale.
+                  Below `sm` the track is on its own line and owes nothing to
+                  this column, so the pips take the room they need. */}
+              <ColorPips colors={deck.colors} className="shrink-0 sm:w-14" />
               <span
-                className={`min-w-[5.5rem] shrink-0 font-display font-semibold ${
+                className={`shrink-0 font-display font-semibold sm:min-w-[5.5rem] ${
                   isAnswer ? "text-success" : ""
                 }`}
               >
                 {deckName(deck.colors)}
+              </span>
+
+              {/* The two numbers, gathered to the end of the name line on a
+                  phone and split back into their own columns above `sm`. They
+                  are one object at this size -- "+9.8pp over 678 games" is a
+                  single fact -- and two columns of it would be two more things
+                  the track has to be narrower than. */}
+              <span className="ml-auto flex shrink-0 items-baseline gap-1.5 sm:hidden">
+                <span
+                  className={`tabular-nums ${isEnd ? "text-base-content/80" : "text-base-content/50"}`}
+                >
+                  {points(deck.lift)}
+                </span>
+                <span className="text-xs tabular-nums text-base-content/45">{games} games</span>
               </span>
 
               {/* The whole track takes the pointer, not the marks: the dot and
@@ -594,11 +693,21 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                   would spend the hover missing. `describe` works out which one
                   they meant from where they landed. */}
               <span
-                className="relative h-4 min-w-0 flex-1"
+                className="relative order-last h-4 w-full min-w-0 sm:order-none sm:w-auto sm:flex-1"
                 role="img"
-                aria-label={`${deckName(deck.colors)}: ${points(deck.lift)} over ${deck.n.toLocaleString()} games, give or take ${points(half).replace("+", "")}`}
+                aria-label={`${deckName(deck.colors)}: ${points(deck.lift)} over ${games} games, on a band ${points(half).replace("+", "")} either side — two decks whose bands touch are level.`}
                 {...tip.follow((e) => describe(deck, e))}
               >
+                {/* The zero, per row, only where the list has stopped being a
+                    stack of tracks. One unbroken rule is the right drawing above
+                    `sm` and the argument for it is below; on a phone there is a
+                    name and two numbers on the line between every pair of
+                    tracks, so the same rule would run through the deck names. A
+                    segment per track is what is left, and the axis under the
+                    chart -- which the phone form now has -- is what carries the
+                    domain instead. */}
+                <ZeroLine left={zero} className="sm:hidden" />
+
                 {/* The two decks the question was about are drawn solid and the
                     rest are dimmed. They are the only two the grade looked at,
                     and a chart that gave all of them the same weight would
@@ -609,8 +718,8 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                     isAnswer ? "bg-success/40" : isEnd ? "bg-base-content/30" : "bg-base-content/15"
                   }`}
                   style={{
-                    left: `${pct(deck.lift - half)}%`,
-                    width: `${(2 * half * 100) / span}%`,
+                    left: `${x(deck.lift - half)}%`,
+                    width: `${x(deck.lift + half) - x(deck.lift - half)}%`,
                   }}
                 />
                 <span
@@ -618,19 +727,19 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
                   className={`absolute top-1/2 z-10 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
                     isAnswer ? "bg-success" : isEnd ? "bg-base-content/80" : "bg-base-content/40"
                   }`}
-                  style={{ left: `${pct(deck.lift)}%` }}
+                  style={{ left: `${x(deck.lift)}%` }}
                 />
               </span>
 
               <span
-                className={`w-16 shrink-0 text-right tabular-nums ${
+                className={`hidden w-16 shrink-0 text-right tabular-nums sm:block ${
                   isEnd ? "text-base-content/80" : "text-base-content/50"
                 }`}
               >
                 {points(deck.lift)}
               </span>
-              <span className="w-20 shrink-0 text-right text-xs tabular-nums text-base-content/45">
-                {deck.n.toLocaleString()} games
+              <span className="hidden w-20 shrink-0 text-right text-xs tabular-nums text-base-content/45 sm:block">
+                {games} games
               </span>
             </li>
           );
@@ -641,42 +750,83 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
             anything having to know what those columns add up to. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-0 flex items-stretch gap-3 px-2"
+          className="pointer-events-none absolute inset-0 hidden items-stretch gap-3 px-2 sm:flex"
         >
-          <span className="w-14 shrink-0" />
-          <span className="min-w-[5.5rem] shrink-0" />
+          <span className={COL.pips} />
+          <span className={COL.name} />
           <span className="relative min-w-0 flex-1">
-            <ZeroLine left={pct(0)} />
+            <ZeroLine left={zero} />
           </span>
-          <span className="w-16 shrink-0" />
-          <span className="w-20 shrink-0" />
+          <span className={COL.lift} />
+          <span className={COL.games} />
         </span>
       </ul>
 
-      {/* The rule named, once, under the chart. Six dots scattered around a line
-          is the whole answer on a card whose decks are level, and a line nobody
-          has been told the meaning of is a line nobody reads. */}
-      <div className="flex items-start gap-3 px-2 pt-1.5">
-        <span className="w-14 shrink-0" />
-        <span className="min-w-[5.5rem] shrink-0" />
-        <span className="relative min-w-0 flex-1">
-          <span
-            className="absolute top-0 -translate-x-1/2 whitespace-nowrap text-[0.6875rem] uppercase tracking-[0.14em] text-base-content/45"
-            style={{ left: `${pct(0)}%` }}
+      {/* The scale, said in numbers, on the track's own box.
+          A band's WIDTH is the whole argument this panel makes, and until now
+          there was no way to read one as a number without a pointer -- the zero
+          rule was the only thing on the chart carrying a value, and it carries
+          the one value everybody could already guess.
+
+          The spacer columns are the same trick the rule above uses, and they
+          collapse below `sm` where the tracks are full width. `ParentSize`
+          inside `Plot` then measures whichever of the two boxes it ended up in,
+          so the axis is drawn at the width it is aligned to rather than at a
+          width anything here had to work out. */}
+      <div className="flex items-start gap-3 px-2 pt-1">
+        <span className={`hidden sm:block ${COL.pips}`} />
+        <span className={`hidden sm:block ${COL.name}`} />
+        <div className="min-w-0 flex-1">
+          <Plot
+            height={AXIS_H}
+            needs={AXIS_NEEDS}
+            instead={
+              <p className="eyebrow pt-1">
+                {axisTick(lo)} to {axisTick(hi)}
+              </p>
+            }
+            label={`How much more each deck won with this card in hand, from ${axisTick(lo)} to ${axisTick(hi)}. Zero is what the deck wins anyway.`}
           >
-            what the deck wins anyway
-          </span>
-        </span>
-        <span className="w-16 shrink-0" />
-        <span className="w-20 shrink-0" />
+            {({ width }) => (
+              // The same domain the marks are placed on, at this box's own
+              // width. Two scales rather than one because the marks are HTML in
+              // per cent and the axis is SVG in pixels; the domain is the thing
+              // that must not be duplicated, and it is not.
+              <ValueAxisBottom
+                scale={scaleLinear({ domain, range: [0, width] })}
+                top={1}
+                numTicks={4}
+                format={axisTick}
+              />
+            )}
+          </Plot>
+
+          {/* The zero named under its own tick. An axis tick says "0" and a
+              reader has to supply what the zero IS -- which on this chart is the
+              one thing nobody guesses, because every other chart's zero is
+              nothing at all rather than a whole deck's win rate. */}
+          <div className="relative h-3">
+            <span
+              className={`absolute top-0 whitespace-nowrap text-[0.6875rem] uppercase tracking-[0.14em] text-base-content/45 ${anchorAt(zero)}`}
+              style={{ left: `${zero}%` }}
+            >
+              what the deck wins anyway
+            </span>
+          </div>
+        </div>
+        <span className={`hidden sm:block ${COL.lift}`} />
+        <span className={`hidden sm:block ${COL.games}`} />
       </div>
 
       <p className="mt-6 pl-2 text-xs leading-relaxed text-base-content/50">
         The bar is how much better each deck did with this card in hand than it did
         in general, measured from that line — so a deck that wins a lot is not
-        credited for winning a lot. The band is how much of it is guesswork at that
-        many games, and it is drawn so that two bands touching is exactly the line
-        between a difference and none. Point at any of it to be told which is which.
+        credited for winning a lot. The band beside it is not a margin of error,
+        which is the thing it looks like. It is drawn to do one job: two bands
+        touching is exactly the line between a difference and none for a card with
+        this many decks in it. So a wide band is a deck with few games behind it,
+        and the picture can never disagree with the verdict below. Point at any of
+        it to be told which is which.
       </p>
 
       {tip.node}
@@ -693,7 +843,87 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
  * running, because the widest gap among five noisy numbers is wide even when
  * every deck wants the card the same. That is the single most surprising thing
  * on this screen and it was not on it.
+ *
+ * AND THE COMPARISON IS DRAWN, because "2.6 against a bar of 2.7" is a
+ * subtraction the reader was being asked to do. Two numbers side by side in
+ * type say nothing about how close they are until you work it out; a bar that
+ * stops a hair short of a line says it before you have read either of them --
+ * and it is the same picture whether the miss is by a tenth or by a mile, which
+ * the type is not.
  */
+
+// The bullet's parts, top to bottom: the threshold's own label, the bar, and the
+// axis under it. `Reference` prints its label BELOW the line, which is where the
+// axis numbers are, so this one is labelled above by hand.
+const GAP_H = { label: 16, bar: 12, axis: 26 };
+
+// The threshold's label is the widest thing on the mark at about 60px, and four
+// tick numbers want 120. Below that the numbers are already in the line above.
+const GAP_NEEDS = 200;
+
+/**
+ * How much of the scale is left beyond the further of the two marks.
+ *
+ * Enough that a bar which clears the bar comfortably still ends inside the
+ * drawing -- a mark that runs to the right edge reads as "off the scale", which
+ * is a claim about the measurement rather than about this card.
+ */
+const GAP_HEADROOM = 1.25;
+
+function GapAgainstBar({ sigmas, needed }: { sigmas: number; needed: number }) {
+  const top = Math.max(sigmas, needed) * GAP_HEADROOM;
+  const clears = sigmas >= needed;
+
+  return (
+    <Plot
+      className="mt-3"
+      height={GAP_H.label + GAP_H.bar + GAP_H.axis}
+      needs={GAP_NEEDS}
+      instead={
+        <p className="eyebrow mt-2">
+          on a scale of 0 to {top.toFixed(1)} error bars
+        </p>
+      }
+      label={`The widest gap between two decks was ${sigmas.toFixed(1)} error bars against the ${needed.toFixed(1)} this card needed, on a scale from 0 to ${top.toFixed(1)}.`}
+      margin={{ top: GAP_H.label, bottom: GAP_H.axis }}
+    >
+      {({ width, height }) => {
+        const x = scaleLinear({ domain: [0, top], range: [0, width] });
+        const mid = height / 2;
+
+        return (
+          <>
+            {/* Measured from zero and drawn as a bar rather than as a dot,
+                which is the opposite call `ScorePlot` makes and right for the
+                opposite reason: this axis genuinely starts at zero -- no gap at
+                all is a real, common answer here -- so length means what it
+                looks like it means. */}
+            <line
+              x1={x(0)}
+              x2={x(sigmas)}
+              y1={mid}
+              y2={mid}
+              stroke={clears ? INK.up : INK.value}
+              strokeWidth={MARK.band}
+              strokeLinecap="round"
+            />
+            <Reference at={x(needed)} height={height} />
+            <text x={x(needed)} y={-5} textAnchor="middle" {...TICK_TEXT}>
+              needs {needed.toFixed(1)}
+            </text>
+            <ValueAxisBottom
+              scale={x}
+              top={height}
+              numTicks={4}
+              format={(v) => v.toFixed(1)}
+            />
+          </>
+        );
+      }}
+    </Plot>
+  );
+}
+
 export function Verdict({ question }: { question: RevealQuestion }) {
   const k = question.decks.length;
   const needed = rangeThreshold(k, ARCHETYPE_QUIZ.falsePositive);
@@ -717,6 +947,8 @@ export function Verdict({ question }: { question: RevealQuestion }) {
           {needed.toFixed(1)}
         </span>
       </p>
+
+      <GapAgainstBar sigmas={question.sigmas} needed={needed} />
 
       <p className="mt-2 max-w-prose text-sm leading-relaxed text-base-content/70">
         {/* The count is what sets the bar, so the count is what the sentence is
