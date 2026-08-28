@@ -71,7 +71,7 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
-9.  We've got a lot of custom-coded charts/infographics/bars/graphics in general that I have consistently found to be hard to read. I'd love for you to do a thorough pass on the whole app, every page, etc, and create a list of these sub-par graphics. THEN, i'd love for you to do some deep research into using either Nivo or Tremor packages as replacements (but of course make sure it matches our app's overall theme). Be sure to also use the frontend skill if u think that's applicable here. FINALLY, start replacing these graphics using best practices Nivo/Tremor suggests and remember that the next time u wanna make a graphic.
+9.  We've got a lot of custom-coded charts/infographics/bars/graphics in general that I have consistently found to be hard to read. I'd love for you to do a thorough pass on the whole app, every page, etc, and create a list of these sub-par graphics. THEN, i'd love for you to do some deep research into using either Nivo or Tremor packages as replacements (but of course make sure it matches our app's overall theme and utilize the mana-font we have). Be sure to also use the frontend skill if u think that's applicable here. FINALLY, start replacing these graphics using best practices Nivo/Tremor suggests and remember that the next time u wanna make a graphic.
 
 # Ideas:
 
