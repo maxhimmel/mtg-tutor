@@ -1,6 +1,6 @@
 "use client";
 
-import { ParentSize } from "@visx/responsive";
+import { useParentSize } from "@visx/responsive";
 import { AxisBottom, AxisLeft } from "@visx/axis";
 import type { AxisScale } from "@visx/axis";
 import type { ReactNode } from "react";
@@ -77,32 +77,39 @@ export function Plot({
 }: PlotProps) {
   const m = { ...NO_MARGIN, ...margin };
 
+  // `useParentSize` rather than the `ParentSize` COMPONENT, and the difference
+  // is the whole reason the fallback works.
+  //
+  // ParentSize renders its children inside an `position:absolute; inset:0;
+  // overflow:hidden` box sized to the height you gave it -- which is right for
+  // an SVG of that exact height and silently wrong for anything else. A
+  // fifteen-row fallback list handed to it is CLIPPED to the chart's height with
+  // no scrollbar and no sign, which is precisely the class of failure `needs`
+  // exists to stop: the reader sees something that looks finished and is not.
+  // Measuring with the hook leaves the box ours, so the fallback sizes itself.
+  const { parentRef, width } = useParentSize({ debounceTime: 0 });
+  const fits = width >= needs;
+
   return (
-    <ParentSize
-      className={className}
-      // The chart is a fixed height and only ever asks about width, so there is
-      // nothing for a height observer to do but fire during layout.
-      parentSizeStyles={{ width: "100%", height }}
-    >
-      {({ width }) => {
-        // ParentSize reports 0 on the first frame, before the observer has
-        // measured. Drawing the fallback there would flash the phone version at
-        // everyone; drawing nothing holds the space the chart is about to take.
-        if (width === 0) return null;
-        if (width < needs) return instead;
-
-        const box = {
-          width: Math.max(0, width - m.left - m.right),
-          height: Math.max(0, height - m.top - m.bottom),
-        };
-
-        return (
-          <svg width={width} height={height} role="img" aria-label={label}>
-            <g transform={`translate(${m.left}, ${m.top})`}>{children(box)}</g>
-          </svg>
-        );
-      }}
-    </ParentSize>
+    <div ref={parentRef} className={className} style={{ width: "100%" }}>
+      {/* Width is 0 until the observer has measured. Drawing the fallback there
+          would flash the narrow version at everyone on first paint, so the
+          chart's own height is held empty for the one frame it takes. */}
+      {width === 0 ? (
+        <div style={{ height }} />
+      ) : fits ? (
+        <svg width={width} height={height} role="img" aria-label={label}>
+          <g transform={`translate(${m.left}, ${m.top})`}>
+            {children({
+              width: Math.max(0, width - m.left - m.right),
+              height: Math.max(0, height - m.top - m.bottom),
+            })}
+          </g>
+        </svg>
+      ) : (
+        instead
+      )}
+    </div>
   );
 }
 
