@@ -3,6 +3,7 @@
 import type { Card, PickScore } from "@mtg-tutor/core";
 import { gapMargin, loadPrinciples, splitCitations, tiebreakLine } from "@mtg-tutor/core";
 import { gradeColor, points } from "../lib/format";
+import { GapMark } from "../charts/GapMark";
 import { scoreWorkingViewed } from "../lib/analytics";
 import { CardPlacard } from "./CardPlacard";
 import { ScoreBreakdown } from "./ScoreBreakdown";
@@ -131,10 +132,23 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                     ? `The ${tied} the data cannot separate`
                     : "Just as good"}
               </span>
-              <span className="tabular-nums normal-case tracking-normal">
-                {lost}
-                <span className="text-base-content/45">
-                  {margin == null ? " · no margin" : ` ± ${points(margin).slice(1)}`}
+              {/* The numbers, and the same two numbers drawn.
+
+                  The paragraph above this component argues that a gap smaller
+                  than its error bars is not a gap, and then this line printed
+                  "−2.3pp ± 1.1pp" and left the comparison to the reader --
+                  which is arithmetic done in the head, at the exact moment a
+                  player has just been told they were wrong. The mark makes it a
+                  look: the bar reaches the zero rule or it does not. It is
+                  drawn from `gap` and `margin` and nothing else, so it cannot
+                  say something the sentence beside it does not. */}
+              <span className="flex items-center gap-2 tabular-nums normal-case tracking-normal">
+                <GapMark gap={-gap} margin={margin} />
+                <span>
+                  {lost}
+                  <span className="text-base-content/45">
+                    {margin == null ? " · no margin" : ` ± ${points(margin).slice(1)}`}
+                  </span>
                 </span>
               </span>
             </div>

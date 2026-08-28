@@ -27,6 +27,7 @@ import { Panel } from "./Panel";
 import { PrincipleBadge } from "./PrincipleBadge";
 import { AfterDraft } from "./AfterDraft";
 import { humanError } from "../lib/humanError";
+import { points } from "../lib/format";
 import { buildCompared } from "../lib/analytics";
 
 const PRINCIPLES = loadPrinciples();
@@ -415,7 +416,13 @@ export function Results({
                 </span>
                 <span className="text-base-content/60">
                   over <CardName card={m.best} />{" "}
-                  <span className="tabular-nums">+{(m.cost * 100).toFixed(1)}%</span>
+                  {/* `cost` is `contextBestValue − pickedContextValue`, a
+                      difference of two win rates -- so it is points, and
+                      printing it with a % sign is how a reader comes to think a
+                      4pp gap is a 4% one. `/stats` draws this same list off the
+                      same subtraction and has always said pp; this row is the
+                      one place the two screens disagreed. */}
+                  <span className="tabular-nums">{points(m.cost)}</span>
                 </span>
               </li>
             ))}
