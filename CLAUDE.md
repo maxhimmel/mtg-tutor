@@ -105,3 +105,80 @@ term added to it carries the page it came from or an explicit `sourced: false`.
 on `coach_shown.jargon`. A style rule nobody measures is a style rule that
 silently does not work — which is how this one got requested months after the
 prose went out.
+
+## A graphic states its scale, or it is not a graphic
+
+Every chart, bar, ruler, track and diagram in `apps/web` is drawn by hand, and
+in August 2026 an audit of all thirty of them found sixteen defects. Not one was
+a missing chart type. They were a missing axis, a scale that saturated three
+picks in and drew a twelve-pick parting the same as a three-pick one, bars
+renormalised per row so they could not sum to the total printed above them, a
+`%` on a figure that was points, and three charts that overflowed a 375px screen
+without looking broken. Every one of those is the same mistake in a different
+place: **the drawing made a claim the scale could not support, and nothing on
+screen said so.**
+
+So the rules are about the scale, not the picture.
+
+### Draw it with visx
+
+`@visx/*` is installed and is the only charting dependency this app has. It
+ships no chart components on purpose — scales, axes, tick generation, shape
+generators, responsive measurement — which is what leaves the bespoke half of
+this app possible. Nivo and Tremor were both measured and rejected; the
+reasoning is in the commit that added visx, and it does not need re-deriving.
+
+The house kit is `app/charts/`:
+
+- **`Plot`** — the frame. `needs` and `instead` are required, because a chart
+  squeezed past its minimum is not a smaller chart, it is a wrong one, and the
+  failure is silent. `label` is required and is the chart in one sentence with
+  its units and both ends of its scale; a label you cannot finish is a chart
+  with no axis.
+- **`ValueAxisBottom` / `ValueAxisLeft` / `Reference`** — a reference line is
+  always labelled. An unlabelled rule gets read as zero even when it is a 50%
+  win rate or a significance bar.
+- **`ink.ts`** — roles, never hues, because there is no free palette here.
+  `success`/`info`/`warning`/`error` ARE the grade scale, so a chart reaching
+  for green is making a claim about a grade whether it meant to or not; gold
+  means "yours"; the five Magic colours are `cardFrame`'s literal hex and must
+  not move with the theme. A new mark needs a role before it needs a colour.
+- **`Key`** — a legend carries each series' COUNT beside its swatch where there
+  is one, so no value on the chart needs a hover.
+
+### What the rules are
+
+- **Say the domain.** Both ends of the scale, in the drawing. A truncated axis
+  is fine and often right — `stats/plot.ts` snaps its floor to a grade threshold
+  and argues the case — but it must be visible, and a scale that stops short of
+  its data needs a mark saying so.
+- **Never encode with hue alone.** Height, fill against hollow, position, a
+  printed value: pick a second channel. Red and green at 6px with no legend is
+  the review pick track, and it is the worst graphic in the app.
+- **Never encode with opacity, area or angle.** Two tints of one gold at 8px is
+  not a categorical split. Against a 19%-lightness ground, `/25` and `/30` text
+  lands near 2:1 — fine for a hairline, never for a digit.
+- **A hover is not a channel.** `title=` does not exist on touch. Anything a
+  reader needs to understand the chart is printed, and `useCursorTip` is the
+  longer form for people who can point.
+- **Rates and differences are different things.** `pct()` for a rate, `points()`
+  for a difference of two rates. Rendering a delta as a percentage is how a
+  reader comes to think a 4pp charge is a 4% one.
+- **Show uncertainty where it changes the reading.** `DeckBands` in the
+  archetype quiz is the model: the band is sized so two bands touching IS the
+  significance threshold, so the picture cannot disagree with the verdict.
+
+### Tooltips are not visx's
+
+`useCursorTip` stays. visx's `useTooltip` holds position in React state and
+re-renders per pointer move, which is precisely the pathology `CursorTip.tsx`
+was rewritten to fix — it writes text with `textContent` and damps by elapsed
+time rather than by frame, so it behaves the same at 60Hz and 120Hz. Use visx
+for the scale and the marks, `useCursorTip` for what the pointer is over.
+
+### Before shipping a graphic
+
+Put it on `/dev` with real numbers, in a `Bay` at the widths the app gives it —
+including the narrowest. That page exists because the placard's ten-pip overflow
+was found in a real draft, by luck, after shipping, and a gallery of one
+comfortable copy of each component would have shown it working.
