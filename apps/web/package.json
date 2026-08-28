@@ -18,6 +18,7 @@
     "@mtg-tutor/core": "workspace:*",
     "@t3-oss/env-nextjs": "^0.13.11",
     "@visx/axis": "^4.0.0",
+    "@visx/glyph": "^4.0.0",
     "@visx/group": "^4.0.0",
     "@visx/responsive": "^4.0.0",
     "@visx/scale": "^4.0.0",

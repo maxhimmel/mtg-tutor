@@ -11,6 +11,7 @@ import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
 import { PickTrack, TrackKey, type Tick, type TickState } from "../components/PickTrack";
 import { ScrollBox } from "../components/ScrollBox";
+import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
 import { WinRateAxis } from "../glossary/figures/WinRateAxis";
 import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
@@ -584,6 +585,57 @@ export const SPECIMENS: Specimen[] = [
         </Bay>
         <Bay label="Grade ruler — a phone's 23rem" width="w-[23rem] max-w-full">
           <GradeRuler />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "mana-curve-channels",
+    title: "Mana curve — colour is never the only channel",
+    note: "The draft board's picks column and the misses drill's deck rail. The GREYSCALE bay is the specimen",
+    // THE SECOND AND THIRD BAYS ARE THE SPECIMEN, and the first is only there to
+    // be compared against.
+    //
+    // `cardFrame`'s WUBRG rings are Arena's and are not ours to re-pick. Put
+    // through a colour-vision check against this app's near-black ground they
+    // come back green-against-red 4.8 apart under deuteranopia -- below the
+    // floor at which a categorical palette is legal even WITH a second channel
+    // -- and colourless-against-green 14.2 apart to NORMAL vision.
+    //
+    // So the bar carries a letter and the key carries a count, and the
+    // greyscale bay is how you check that actually worked: with the hue gone,
+    // every band must still be nameable. If it is not, the letters are too
+    // small or the key is missing, and no amount of looking at the colour
+    // version will tell you.
+    render: ({ cards }) => (
+      <div className="flex flex-wrap items-start gap-8">
+        <Bay label="In the picks column (360px)" width="w-[22.5rem]">
+          <ManaCurve cards={cards} />
+        </Bay>
+        <Bay label="Greyscale — every band still nameable?" width="w-[22.5rem]">
+          <div style={{ filter: "grayscale(1)" }}>
+            <ManaCurve cards={cards} />
+          </div>
+        </Bay>
+        <Bay label="Deuteranopia — green and red are 4.8 apart here" width="w-[22.5rem]">
+          {/* A rough deuteranope simulation: enough to show whether the drawing
+              survives losing the red-green axis, not a clinical filter. */}
+          <div
+            style={{
+              filter:
+                "url(#deuter)",
+            }}
+          >
+            <ManaCurve cards={cards} />
+          </div>
+          <svg width="0" height="0" aria-hidden>
+            <filter id="deuter" colorInterpolationFilters="linearRGB">
+              <feColorMatrix
+                type="matrix"
+                values="0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0"
+              />
+            </filter>
+          </svg>
         </Bay>
       </div>
     ),
