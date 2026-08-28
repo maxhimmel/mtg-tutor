@@ -71,7 +71,44 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
-9.  We've got a lot of custom-coded charts/infographics/bars/graphics in general that I have consistently found to be hard to read. I'd love for you to do a thorough pass on the whole app, every page, etc, and create a list of these sub-par graphics. THEN, i'd love for you to do some deep research into using either Nivo or Tremor packages as replacements (but of course make sure it matches our app's overall theme and utilize the mana-font we have). Be sure to also use the frontend skill if u think that's applicable here. FINALLY, start replacing these graphics using best practices Nivo/Tremor suggests and remember that the next time u wanna make a graphic.
+9.  **The chart pass shipped 2026-08-28; what is left is four loose ends and a
+    measurement.** Every graphic in the app was audited, sixteen defects found,
+    and all sixteen fixed -- the working is in the git history and in
+    CLAUDE.md's "A graphic states its scale" section, not here. What stays open:
+
+    - **The `needs`/`instead` swap is a state a reader can land in and nothing
+      counts it.** Every chart now states the width below which its drawing
+      stops being true and shows something else instead, and those widths are
+      DERIVATIONS rather than measurements. If the braid's 606px is wrong, the
+      symptom is a phone user who never sees the rope and nobody knowing. The
+      capture belongs in `Plot` itself -- one event covering every chart in the
+      app -- and not in any one caller, which would be the `button_clicked`
+      failure mode. Deliberately not built, because an event whose whole
+      question is "how often" is worth designing once rather than sprinkling.
+    - **The braid is gone below about 606px of panel body**, roughly a 690px
+      viewport. That is what the rule asks for and the fallback carries the one
+      quantity the rope uniquely encodes, but it is the most visible
+      consequence of the whole pass and has been reasoned about rather than
+      looked at.
+    - **`CardStats` draws a point and a band, not a distribution.** The card
+      carries `rarityBaseline` and its own sample, so the win rate now has a
+      reference point without a new query -- but a real spread (quartiles, a
+      density strip) needs something the set document does not store. Worth it
+      only if the median turns out not to be enough.
+    - **The glossary figures switch layout on Tailwind's `sm:`**, which is a
+      viewport query and not a container one, so their `/dev` bays catch an
+      overflow at a phone's width and cannot show the stacked form -- the
+      window itself has to be narrowed. Making them container-driven is a real
+      change to both and was not attempted.
+
+    One thing ruled out while fixing the mana curve, worth not re-deriving:
+    **one segment per card does not survive a full pool.** At `min-h-0.5` with
+    `gap-px` in 36px of bar, twelve cards need 35px and fifteen need 44, so the
+    last colour band silently vanished while the count above still read
+    fifteen. One band per colour sized by count makes the clipping
+    structurally impossible rather than merely unlikely, and it is the better
+    reading anyway -- the count is already printed, so what the drawing is for
+    is the proportion.
 
 # Ideas:
 
@@ -2101,3 +2138,46 @@ The architecture, the data pipeline and the deploy story are all documented in
     statistic that is conventional for a number ON ITS OWN will disagree with
     whatever rule the number is actually being judged by, and the disagreement
     shows up as a reader who does not believe the app.
+
+27. **The charting library question is answered: visx, and it was not close**
+    (2026-08-28). Nivo and Tremor were the two asked about and both were
+    measured before the answer.
+
+    `@tremor/react` is dead -- last commit 2025-01-13, published peer
+    `react: ^18.0.0`, React-19 and Tailwind-4 issues open since 2024 and 2025.
+    Tremor Raw does want Tailwind 4, but it is copy-paste source carrying
+    `bg-gray-100 dark:bg-gray-800` on nearly every component, which is a second
+    theming system running beside daisyUI's `data-theme`. Nivo genuinely
+    supports React 19 -- and its `inheritedColor` path routes every colour
+    through `d3.rgb()`, so `var(--color-primary)` comes back NaN, and the way
+    round it is a MutationObserver rebuilding the palette in JS because daisyUI
+    fires no event on a theme swap. Adopting it means building a bridge back to
+    the styling we already have.
+
+    **The general finding is the part worth keeping.** Of thirty-odd graphics
+    here, four are a shape a chart library has a component for; and of the
+    sixteen defects the audit found, NOT ONE was a missing chart type. They
+    were a missing axis, a scale that saturated, bars that could not sum to
+    their own total, a `%` on a figure that was points, and three charts that
+    overflowed a phone without looking broken. Scales, axes, tick generation,
+    tooltip anchoring, responsive measurement -- that list is the defect list,
+    and it is exactly what visx is. It ships no chart components at all, which
+    is what leaves the braid and the card-segment curve possible.
+
+    Recharts 3 is the escape hatch if a chart ever needs interaction more than
+    it needs a shape, and only then: 7.3MB unpacked against visx's 54-221KB per
+    package, carrying @reduxjs/toolkit, react-redux, immer and victory-vendor
+    at runtime.
+
+    **What it actually cost, measured against `main` on the same machine:**
+    +23-26kB First Load JS on the eight routes that draw a chart, and +0kB on
+    the twelve that do not -- `/glossary` included, whose figures stayed HTML.
+    So the à-la-carte packaging is real and a route pays only for what it
+    imports, which is the property Nivo does not have (`@nivo/bar` pulls its
+    nine sibling packages whatever you use).
+
+    **The tooltip is deliberately NOT visx's.** `useTooltip` holds position in
+    React state and re-renders per pointer move, which is the exact pathology
+    `CursorTip.tsx` was rewritten to fix -- it writes text with `textContent`
+    and damps by elapsed time rather than by frame. visx for the scale and the
+    marks; `useCursorTip` for what the pointer is over.
