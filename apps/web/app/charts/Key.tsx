@@ -68,7 +68,7 @@ function Swatch({ ink, shape = "bar" }: { ink: string; shape?: KeyEntry["shape"]
     return (
       <span
         aria-hidden
-        className="mt-[0.3rem] size-2 shrink-0 rounded-full"
+        className="size-2 shrink-0 rounded-full"
         style={{ background: ink }}
       />
     );
@@ -77,7 +77,7 @@ function Swatch({ ink, shape = "bar" }: { ink: string; shape?: KeyEntry["shape"]
   return (
     <span
       aria-hidden
-      className="mt-[0.45rem] h-1.5 w-4 shrink-0 rounded-full"
+      className="h-1.5 w-4 shrink-0 rounded-full"
       style={shape === "hollow" ? { border: `1px solid ${ink}` } : { background: ink }}
     />
   );
@@ -88,7 +88,21 @@ export function Key({ entries, className }: { entries: KeyEntry[]; className?: s
     <dl className={`flex flex-wrap gap-x-5 gap-y-1.5 ${className ?? ""}`}>
       {entries.map((entry) => (
         <div key={entry.label} className="flex items-start gap-1.5">
-          {entry.swatch ?? <Swatch ink={entry.ink} shape={entry.shape} />}
+          {/* A box exactly one label-line tall, with the mark centred in it.
+              Each swatch used to nudge itself down with a hand-tuned margin,
+              which is a number that can only be right for one mark: a 6px bar
+              and a mana pip have different intrinsic heights, so the margin that
+              centred the bar sat the pip too high. Centring inside a box the
+              size of the thing it has to line up with holds for any mark,
+              including whatever a caller passes as `swatch`.
+
+              `h-4` is `text-xs`'s own line box, which is what `dt` renders in.
+              `items-start` on the row above, so an entry with a `means` line
+              keeps its mark beside the LABEL rather than floating to the middle
+              of two lines of text. */}
+          <span className="flex h-4 shrink-0 items-center">
+            {entry.swatch ?? <Swatch ink={entry.ink} shape={entry.shape} />}
+          </span>
           <div className="min-w-0">
             <dt className="flex items-baseline gap-1.5 text-xs text-base-content/70">
               {entry.label}

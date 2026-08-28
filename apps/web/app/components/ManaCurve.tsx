@@ -199,7 +199,7 @@ function legendFor(cards: DisplayCard[]): KeyEntry[] {
       // and a gradient in a four-pixel chip is a smudge whichever way it is
       // painted, where two pips are exactly as readable as one.
       swatch: (
-        <span aria-hidden className="mt-[0.15rem] leading-none">
+        <span aria-hidden className="leading-none">
           <ManaCost cost={pipCost(band.key)} className="text-[11px]" />
         </span>
       ),
