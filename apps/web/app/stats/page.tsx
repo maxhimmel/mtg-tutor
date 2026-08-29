@@ -217,6 +217,10 @@ function Lately({
       pips: draft.colorPair || undefined,
       href: `/review/${draft.id}`,
       title: `${name}${draft.colorPair ? ` ${spokenColors(draft.colorPair)}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
+      // The same sentence with the deck drawn rather than spelled. The
+      // column already prints these pips under it, so the tip and the mark
+      // a reader is pointing at say the colours the same way.
+      said: `${name}${draft.colorPair ? ` ${[...draft.colorPair].map((c) => `{${c}}`).join("")}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
     };
   });
 

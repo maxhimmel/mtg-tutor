@@ -66,6 +66,22 @@ const codeFor = (symbol: string): string | undefined => {
   return SYMBOLS.has(code) ? code : undefined;
 };
 
+/**
+ * The Mana font class for one symbol, or undefined for anything the font does
+ * not ship.
+ *
+ * Exported so the cursor tip can draw pips too. That box writes its content
+ * imperatively -- it changes on every pointer move and React cannot be in that
+ * loop -- so it cannot render the component above, and the thing that must not
+ * be copied is not the markup but THIS TABLE: two lists of which symbols the
+ * font has would disagree the first time a set prints a new one, and the
+ * failure is a silent empty box rather than an error.
+ */
+export const manaClass = (symbol: string): string | undefined => {
+  const code = codeFor(symbol);
+  return code && `ms ms-${code} ms-cost`;
+};
+
 export function ManaCost({
   cost,
   shadow,

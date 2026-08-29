@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TIP_GAP, damp, placeTip } from "./cursorTip";
+import { TIP_GAP, damp, placeTip, splitSymbols } from "./cursorTip";
 
 // The two numbers a cursor-follower gets wrong, tested where they can be
 // reached. Both of these shipped broken on the archetype quiz's reveal and both
@@ -83,5 +83,31 @@ describe("damp", () => {
   it("is a no-op at zero and instant at one", () => {
     expect(damp(0, 16)).toBe(0);
     expect(damp(1, 16)).toBe(1);
+  });
+});
+
+describe("splitSymbols", () => {
+  it("keeps plain text in one piece", () => {
+    expect(splitSymbols("2 cards")).toEqual([{ text: "2 cards" }]);
+  });
+
+  it("pulls a symbol out from between its words", () => {
+    expect(splitSymbols("2 {U}, 1 {R} — Bolt")).toEqual([
+      { text: "2 " },
+      { mana: "U" },
+      { text: ", 1 " },
+      { mana: "R" },
+      { text: " — Bolt" },
+    ]);
+  });
+
+  // The case a bare letter could not say at all, and the reason the tip takes
+  // the app's cost notation rather than a colour code.
+  it("keeps both halves of a gold pair as separate pips", () => {
+    expect(splitSymbols("{U}{B}")).toEqual([{ mana: "U" }, { mana: "B" }]);
+  });
+
+  it("says nothing about an empty sentence", () => {
+    expect(splitSymbols("")).toEqual([]);
   });
 });

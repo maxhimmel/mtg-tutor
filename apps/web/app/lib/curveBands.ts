@@ -33,8 +33,17 @@ export interface ColorBand {
   count: number;
   /** The ring paint from `cardFrame`: a flat colour, or a gradient for a pair. */
   frame: Frame;
-  /** Said out loud: "Blue", "Blue/Black", "Colorless". */
+  /** Said out loud: "Blue", "Blue/Black", "Colorless". What a key's label says. */
   name: string;
+  /**
+   * The same colours as a cost string -- "{U}{B}", or "{C}" for colourless.
+   *
+   * Beside `name` rather than instead of it, because the two are read in
+   * different places: a key has room for the word and the pip together, and a
+   * cursor tip has room for the pip only. Derived here so the chart, the key and
+   * the tip cannot end up spelling one band three ways.
+   */
+  pips: string;
 }
 
 const colorsOf = (card: DisplayCard): string[] => {
@@ -52,6 +61,11 @@ const nameOf = (colors: string[]): string =>
   colors.length === 0
     ? "Colorless"
     : colors.map((c) => COLOR_NAMES[c] ?? c).join("/");
+
+// A colourless card prints the game's own symbol for it rather than nothing --
+// an absent pip in a row of pips reads as a missing value, not as "no colour".
+const pipsOf = (colors: string[]): string =>
+  colors.length === 0 ? "{C}" : colors.map((c) => `{${c}}`).join("");
 
 /**
  * The bands in one column, in WUBRG order.
@@ -80,6 +94,7 @@ export function colorBands(cards: readonly DisplayCard[]): ColorBand[] {
       count: group.cards.length,
       frame: frameFor(group.cards[0]),
       name: nameOf(group.colors),
+      pips: pipsOf(group.colors),
     }));
 }
 
@@ -102,6 +117,6 @@ const rank = (key: string): number => {
 export function sayColumn(cards: readonly DisplayCard[]): string {
   const bands = colorBands(cards);
   if (bands.length === 0) return "";
-  const split = bands.map((b) => `${b.count} ${b.name}`).join(", ");
+  const split = bands.map((b) => `${b.count} ${b.pips}`).join(", ");
   return `${split} — ${cards.map((c) => c.name).join(", ")}`;
 }

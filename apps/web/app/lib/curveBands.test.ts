@@ -64,10 +64,19 @@ describe("colorBands", () => {
 });
 
 describe("sayColumn", () => {
-  it("leads with the split and follows with the names", () => {
+  // Pips and not words, which is the whole contract: the tip is the surface a
+  // reader is POINTING at a band to understand, and every other part of that
+  // chart -- the band, the key's swatch, the axis -- is already the symbol.
+  it("leads with the split in pips and follows with the names", () => {
     expect(sayColumn([card("Sailor", ["U"]), card("Sailor II", ["U"]), card("Bolt", ["R"])])).toBe(
-      "2 Blue, 1 Red — Sailor, Sailor II, Bolt",
+      "2 {U}, 1 {R} — Sailor, Sailor II, Bolt",
     );
+  });
+
+  // A gold band is the case a bare letter could never say, and the one the key
+  // draws as two pips.
+  it("prints both halves of a gold band", () => {
+    expect(sayColumn([card("Fire // Ice", ["U", "R"])])).toBe("1 {U}{R} — Fire // Ice");
   });
 
   it("says nothing about an empty column", () => {

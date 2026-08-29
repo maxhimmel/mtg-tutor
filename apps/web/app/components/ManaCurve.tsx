@@ -35,11 +35,6 @@ const BAR_HEIGHT = 44;
 // the whole reason that key is not optional on this chart.
 const PIP_FLOOR = 13;
 
-// A band's colours as a cost string ManaCost can draw: "UB" -> "{U}{B}". A
-// colourless band has no letters and takes the game's own symbol for that, which
-// is what a card with no coloured pips prints.
-const pipCost = (key: string) => (key === "" ? "{C}" : [...key].map((c) => `{${c}}`).join(""));
-
 export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
   const curve = manaCurve(cards);
   const tallest = Math.max(...curve.map((b) => b.cards.length));
@@ -132,7 +127,7 @@ export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
                       {tall >= PIP_FLOOR && (
                         <span aria-hidden className="leading-none drop-shadow-sm">
                           <ManaCost
-                            cost={pipCost(band.key)}
+                            cost={band.pips}
                             className="text-[9px]"
                             shadow
                           />
@@ -200,7 +195,7 @@ function legendFor(cards: DisplayCard[]): KeyEntry[] {
       // painted, where two pips are exactly as readable as one.
       swatch: (
         <span aria-hidden className="leading-none">
-          <ManaCost cost={pipCost(band.key)} className="text-[11px]" />
+          <ManaCost cost={band.pips} className="text-[11px]" />
         </span>
       ),
     }));

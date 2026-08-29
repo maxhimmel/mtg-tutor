@@ -65,8 +65,18 @@ export interface ScoreColumn {
   pips?: string;
   /** Makes the column a place to go. Omitted, the plot is a picture. */
   href?: string;
-  /** The column said in full, for a screen reader and for a hover. */
+  /** The column said in full, for a screen reader. Words, never symbols. */
   title: string;
+  /**
+   * The same sentence for the POINTER, where the game's symbols can be drawn.
+   *
+   * Two fields because the two surfaces cannot carry the same notation. `title`
+   * is the accessible name, and a row of pips read aloud is nothing; the cursor
+   * tip is explicitly not an accessible name and is read by somebody pointing
+   * at a column whose colours are already drawn under it in pips. Falls back to
+   * `title` where a column has no colours to say -- a pick number has none.
+   */
+  said?: string;
 }
 
 // Tall enough for a point of score to be visible across a zoomed axis, short
@@ -285,7 +295,8 @@ export function ScorePlot({
  * already carry, because it is what the COLOUR says and the caller does not
  * know which colour its score will land in.
  */
-const say = (column: ScoreColumn) => `${column.title} — grade ${gradeFor(column.score)}`;
+const say = (column: ScoreColumn) =>
+  `${column.said ?? column.title} — grade ${gradeFor(column.score)}`;
 
 /**
  * The grade bands, as the letters they are painted with.

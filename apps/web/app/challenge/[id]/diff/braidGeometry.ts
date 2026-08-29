@@ -123,6 +123,19 @@ export const spoken = (colors: string): string =>
     ? "no colours yet"
     : [...colors].map((c) => COLOR_NAMES[c] ?? c).join("-");
 
+/**
+ * The same pair as a cost string, for a surface that can draw the game's symbol.
+ *
+ * BESIDE `spoken` RATHER THAN REPLACING IT, and the split is the point. `spoken`
+ * feeds the plot's accessible NAME, where a screen reader needs the words and a
+ * row of pips is nothing at all; this feeds the cursor tip, which is explicitly
+ * not an accessible name and is read by somebody pointing at a cord that is
+ * already painted in these colours. The same fact, in the notation each surface
+ * can carry.
+ */
+export const pipped = (colors: string): string =>
+  colors.length === 0 ? "no colours yet" : [...colors].map((c) => `{${c}}`).join("");
+
 /** Same pack, different card: the one disagreement that was a decision. */
 export const isFork = (row: DiffRow) => row.samePack && !row.agree;
 
@@ -142,7 +155,7 @@ export function titleOf(row: DiffRow, them: string): string {
     : row.samePack
       ? `${row.yours.pickedName} vs ${row.theirs.pickedName}`
       : `different packs — ${row.yours.pickedName} vs ${row.theirs.pickedName}`;
-  return `${where}: ${cards}. You on ${spoken(row.yourLean)}, ${them} on ${spoken(row.theirLean)}.`;
+  return `${where}: ${cards}. You on ${pipped(row.yourLean)}, ${them} on ${pipped(row.theirLean)}.`;
 }
 
 /**

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { damp, placeTip, type Point } from "../lib/cursorTip";
+import { damp, placeTip, splitSymbols, type Point } from "../lib/cursorTip";
+import { manaClass } from "./ManaCost";
 
 /**
  * A tooltip that follows the pointer and says what is under it.
@@ -83,6 +84,34 @@ export interface CursorTipOptions {
 
 const DEFAULTS = { ease: 0.28, maxWidth: 272 };
 
+/**
+ * Write a tip's sentence into its box, drawing `{U}` as the game's own pip.
+ *
+ * Imperative because this is called from inside an animation frame, which is
+ * the one place React must not be -- see the note on `showing`. The symbol
+ * classes come from `ManaCost` rather than a second table here: which symbols
+ * the font ships is the thing that would drift, and it drifts silently, into an
+ * empty box.
+ *
+ * An unknown symbol falls back to its own braces, which is `ManaCost`'s rule
+ * too -- visible and ugly beats invisible.
+ */
+function paint(el: HTMLElement, text: string): void {
+  el.replaceChildren(
+    ...splitSymbols(text).map((part) => {
+      if ("text" in part) return document.createTextNode(part.text);
+      const cls = manaClass(part.mana);
+      if (!cls) return document.createTextNode(`{${part.mana}}`);
+      const pip = document.createElement("i");
+      pip.className = cls;
+      // The tip's own line is 12px; a pip at the text's size sits on the
+      // baseline beside it rather than towering over the words.
+      pip.style.fontSize = "0.95em";
+      return pip;
+    }),
+  );
+}
+
 export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
   const { ease, maxWidth } = { ...DEFAULTS, ...options };
 
@@ -132,7 +161,17 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
         // Written rather than rendered, for the reason above. React only paints
         // this node on show and on hide, and it paints the current text both
         // times, so the two can never disagree.
-        if (el.textContent !== want.current.text) el.textContent = want.current.text;
+        //
+        // `paint` and not `textContent` because a tip that names a colour draws
+        // the pip, and a pip is an element. It runs on exactly the frames
+        // `textContent` used to be assigned on -- the guard is the same string
+        // comparison, kept on a data attribute now that the node's own text no
+        // longer holds the braces -- so the cost is unchanged: one DOM write
+        // when the sentence changes, none while the pointer moves inside a mark.
+        if (el.dataset.said !== want.current.text) {
+          el.dataset.said = want.current.text;
+          paint(el, want.current.text);
+        }
       }
       frame = requestAnimationFrame(step);
     };
@@ -217,7 +256,18 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
         transform: `translate3d(${Math.round(first.x)}px, ${Math.round(first.y)}px, 0)`,
       }}
     >
-      {want.current.text}
+      {/* Rendered by React on the show frame and by `paint` on every frame
+          after. Both go through `splitSymbols`, so the first picture and the
+          second cannot disagree -- and drawing the pips here rather than
+          leaving the box empty for a frame is what stops a flash of the raw
+          braces before the font arrives. */}
+      {splitSymbols(want.current.text).map((part, i) =>
+        "text" in part ? (
+          <Fragment key={i}>{part.text}</Fragment>
+        ) : (
+          <i key={i} className={manaClass(part.mana) ?? ""} style={{ fontSize: "0.95em" }} />
+        ),
+      )}
     </div>
   ) : null;
 
