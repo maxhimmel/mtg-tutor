@@ -244,28 +244,41 @@ export function Playground() {
             pnpm --filter @mtg-tutor/backend dev
           </pre>
         </div>
-      ) : subject == null ? (
-        <p className="text-base-content/60">
-          Search a card to put it on the stage. Everything below is the app&apos;s own
-          components, drawn with the card you picked — hover works, so does the preview.
-        </p>
       ) : (
         <div className="flex flex-col gap-5">
-          {SPECIMENS.map((specimen) => (
-            <Panel
-              key={specimen.id}
-              title={specimen.title}
-              aside={<span className="text-xs text-base-content/50">{specimen.note}</span>}
-            >
-              {specimen.render({
-                card: subject,
-                cards: staged,
-                selected: selected === subject.name,
-                onSelect: () =>
-                  setSelected((was) => (was === subject.name ? null : subject.name)),
-              })}
-            </Panel>
-          ))}
+          {/* Not a gate any more, which it used to be: nothing on this page
+              rendered until a card was staged, so the specimens that take no
+              card -- the archetype panel, the pick track -- were reachable only
+              by searching up a card they have nothing to do with. Now it is what
+              it should have been, a line saying what the empty half of the page
+              is waiting for. */}
+          {subject == null && (
+            <p className="text-base-content/60">
+              Search a card to put it on the stage — the specimens that draw one are
+              below this line. Hover works, so does the preview.
+            </p>
+          )}
+
+          {SPECIMENS.filter((specimen) => specimen.renderBare != null || subject != null).map(
+            (specimen) => (
+              <Panel
+                key={specimen.id}
+                title={specimen.title}
+                aside={<span className="text-xs text-base-content/50">{specimen.note}</span>}
+              >
+                {specimen.renderBare
+                  ? specimen.renderBare()
+                  : subject &&
+                    specimen.render?.({
+                      card: subject,
+                      cards: staged,
+                      selected: selected === subject.name,
+                      onSelect: () =>
+                        setSelected((was) => (was === subject.name ? null : subject.name)),
+                    })}
+              </Panel>
+            ),
+          )}
         </div>
       )}
     </PageShell>

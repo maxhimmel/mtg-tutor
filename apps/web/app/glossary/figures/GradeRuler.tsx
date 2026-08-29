@@ -1,6 +1,10 @@
+"use client";
+
+import { scaleLinear } from "@visx/scale";
 import { SCORING, gradeFor } from "@mtg-tutor/core";
+import { Plot, ValueAxisBottom } from "../../charts/Plot";
 import { gradeColor } from "../../lib/format";
-import { FIG_LABEL, Figure, Term } from "./Figure";
+import { FIG_LABEL, Figure } from "./Figure";
 
 // A score is one subtraction: how far your pick's win rate fell short of the
 // best card in the pack. Everything after that -- the number out of a hundred,
@@ -33,8 +37,14 @@ const gapFor = (score: number) => ((100 - score) / K) * 100;
 // Where the axis stops. A score bottoms out at 0 somewhere past thirteen points,
 // but drawing that far would squeeze every band a player actually sees into the
 // left third, so the F band runs off the end instead.
+//
+// AND THE RUNNING OFF IS DRAWN. Truncating here is the right call and it was the
+// silent part that was wrong: the bar used to end in a tidy rounded corner, which
+// reads as the scale finishing rather than as the scale giving up. So the F band
+// now fades out into a gutter that prints where it really ends, and the ruler
+// keeps its square right edge. A scale that stops short of its data has to say
+// so somewhere a reader can see it.
 const AXIS_MAX = 8;
-const TICKS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 // The lowest score in each grade, asked of gradeFor rather than transcribed.
 const FLOORS = (() => {
@@ -52,14 +62,54 @@ const BANDS = FLOORS.map((band, i) => ({
   grade: band.grade,
   from: i === 0 ? 0 : gapFor(FLOORS[i - 1].floor),
   to: Math.min(gapFor(band.floor), AXIS_MAX),
+  // Where the band actually ends, before the axis clips it. Only F differs, and
+  // it differs by more than the whole rest of the ruler -- so this is what the
+  // gutter prints and what the spoken form announces.
+  end: gapFor(band.floor),
 })).filter((band) => band.from < AXIS_MAX);
 
-const pos = (gap: number) => Math.round((gap / AXIS_MAX) * 1e4) / 100;
+const LAST = BANDS[BANDS.length - 1];
+const truncated = LAST.end > LAST.to;
 
-// A+ is a sliver -- which is the point, and also why its letter cannot sit
-// inside its band. The letters ride above the bar instead, held off the ends so
-// the first and last are not half outside the figure.
-const clamp = (v: number) => Math.min(Math.max(v, 2.5), 97.5);
+// The rows, in the order they stack. The letters ride ABOVE the bar rather than
+// inside it because A+ is a sliver -- which is the point of the drawing, and
+// also why its letter will not fit in its own band.
+const LETTER_ROW = 17;
+const BAR_H = 28;
+const TICK_ROW = 22;
+const HEIGHT = LETTER_ROW + BAR_H + TICK_ROW;
+
+// Enough for half a tick label to hang off each end of the scale. Unlike a CSS
+// box, an SVG clips at its own edge, so a "0" centred on x=0 loses its left half
+// rather than spilling harmlessly.
+const SIDE = 7;
+
+// A+ and A are the closest pair of letters on the ruler, and everything else
+// follows from that: below the width where those two centres are a letter apart,
+// the row of letters is a smear and the drawing stops being true. Derived rather
+// than guessed, so it moves on its own the day a band moves.
+const LETTER_W = 16;
+const clamp = (v: number) => Math.min(Math.max(v, 0.025), 0.975);
+const CENTRES = BANDS.map((band) => clamp((band.from + band.to) / 2 / AXIS_MAX));
+const TIGHTEST = Math.min(...CENTRES.slice(1).map((at, i) => at - CENTRES[i]));
+const NEEDS = Math.ceil(LETTER_W / TIGHTEST) + SIDE * 2;
+
+// A mask id has to be unique on the page. This figure renders once, and the name
+// says which drawing owns it if a second ever appears.
+const FADE = "grade-ruler-truncation";
+
+// Every band as a RANGE, because a list of lower edges is not a scale. The old
+// label read "F: 4.0 percentage points behind" and left the listener to infer
+// where it ended from where the next one started -- which for the last band is
+// nowhere, since there is no next one. Both ends, and the truncation said out
+// loud, since a listener cannot see the fade.
+const spoken = [
+  "Grade by how far behind the best card in the pack a pick lands, in percentage points.",
+  truncated ? `The drawn axis stops at ${AXIS_MAX}; ${LAST.grade} runs on to ${LAST.end.toFixed(1)}.` : "",
+  BANDS.map((band) => `${band.grade}: ${band.from.toFixed(1)} to ${band.end.toFixed(1)}`).join("; "),
+]
+  .filter(Boolean)
+  .join(" ");
 
 export function GradeRuler() {
   return (
@@ -82,61 +132,164 @@ export function GradeRuler() {
         </>
       }
     >
-      <div>
-        <div className="relative h-4">
-          {BANDS.map((band) => (
-            <span
-              key={band.grade}
-              className="absolute top-0 -translate-x-1/2 font-display text-sm font-semibold leading-none"
-              style={{
-                left: `${clamp(pos((band.from + band.to) / 2))}%`,
-                color: gradeColor(band.grade),
-              }}
-            >
-              {band.grade}
-            </span>
-          ))}
-        </div>
-
-        <div
-          role="img"
-          aria-label={BANDS.map(
-            (band) => `${band.grade}: ${band.from.toFixed(1)} percentage points behind`,
-          ).join("; ")}
-          className="mt-1.5 flex h-7 overflow-hidden rounded-field"
+      {/* A gutter to the right of the scale, outside it, so the number the axis
+          cannot reach has somewhere to be printed and the F band has somewhere
+          to dissolve into. Both rows share the first column, so the plot
+          measures the ruler and not the ruler plus its footnote. */}
+      <div className="grid grid-cols-[1fr_2.75rem]">
+        <Plot
+          height={HEIGHT}
+          needs={NEEDS}
+          instead={<BandList />}
+          label={spoken}
+          // The letters ARE the legend. Every band on this ruler carries its own
+          // grade directly above it, in the same colour the band is painted, so
+          // a key would be those eight letters printed a second time six
+          // inches lower -- which is the defect the audit found on the two
+          // charts that already had keys they did not need.
+          legend={{
+            none: "Each band is labelled with its own grade, in the colour it is painted.",
+          }}
+          // Nothing moves and nothing is hidden. The values are fixed teaching
+          // numbers, every band's letter is drawn on it, both ends of the scale
+          // are on the axis, and the one number the axis cannot reach is
+          // printed in the gutter. There is no fact left for a hover to hold.
+          tip={{
+            none: "Every band is named where it sits and the truncated end prints its own number.",
+          }}
+          margin={{ left: SIDE, right: SIDE }}
         >
-          {BANDS.map((band) => (
-            <div
-              key={band.grade}
-              className="border-r border-base-200 last:border-r-0"
-              style={{
-                width: `${pos(band.to - band.from)}%`,
-                backgroundColor: `color-mix(in oklab, ${gradeColor(band.grade)} 22%, transparent)`,
-              }}
-            />
-          ))}
-        </div>
+          {({ width }) => {
+            const x = scaleLinear<number>({ domain: [0, AXIS_MAX], range: [0, width] });
 
-        <div className="relative mt-1.5 h-4">
-          <div className="absolute inset-x-0 top-0 h-px bg-base-content/10" />
-          {TICKS.map((tick) => (
-            <span
-              key={tick}
-              className="absolute top-1.5 -translate-x-1/2 text-[0.625rem] tabular-nums text-base-content/40"
-              style={{ left: `${pos(tick)}%` }}
-            >
-              {tick}
-            </span>
-          ))}
-        </div>
+            return (
+              <>
+                {/* The clipped band dissolves rather than stopping, so the eye
+                    reads it as carrying on past the edge -- which it does, for
+                    another five points. */}
+                <defs>
+                  <linearGradient
+                    id={`${FADE}-ramp`}
+                    gradientUnits="userSpaceOnUse"
+                    x1={x(LAST.from)}
+                    x2={x(LAST.to)}
+                  >
+                    <stop offset="40%" stopColor="#fff" />
+                    <stop offset="100%" stopColor="#fff" stopOpacity={0} />
+                  </linearGradient>
+                  <mask id={FADE}>
+                    <rect
+                      x={x(LAST.from)}
+                      y={LETTER_ROW}
+                      width={x(LAST.to) - x(LAST.from)}
+                      height={BAR_H}
+                      fill={`url(#${FADE}-ramp)`}
+                    />
+                  </mask>
+                </defs>
 
-        <div className="mt-5 flex justify-between">
+                {BANDS.map((band) => (
+                  <g key={band.grade}>
+                    <rect
+                      x={x(band.from)}
+                      y={LETTER_ROW}
+                      width={x(band.to) - x(band.from)}
+                      height={BAR_H}
+                      fill={`color-mix(in oklab, ${gradeColor(band.grade)} 22%, transparent)`}
+                      mask={band === LAST && truncated ? `url(#${FADE})` : undefined}
+                    />
+                    {/* The seam between two bands. Same job as the 2px gap in
+                        the kit's stacked marks: two fills that touch read as
+                        one fill of a colour neither of them is. */}
+                    {band !== LAST && (
+                      <line
+                        x1={x(band.to)}
+                        x2={x(band.to)}
+                        y1={LETTER_ROW}
+                        y2={LETTER_ROW + BAR_H}
+                        stroke="var(--color-base-200)"
+                        strokeWidth={1}
+                      />
+                    )}
+                  </g>
+                ))}
+
+                {BANDS.map((band, i) => (
+                  <text
+                    key={band.grade}
+                    x={CENTRES[i] * width}
+                    y={LETTER_ROW - 5}
+                    textAnchor="middle"
+                    fontSize={14}
+                    fill={gradeColor(band.grade)}
+                    // A class rather than a `font-family` attribute: the
+                    // display face is a CSS variable, and a presentation
+                    // attribute does not resolve `var()`.
+                    className="font-display font-semibold"
+                  >
+                    {band.grade}
+                  </text>
+                ))}
+
+                {/* One tick per percentage point, which is the unit the reader
+                    is being taught to think in. d3 lands exactly on the
+                    integers for a nine-tick request over a span of eight. */}
+                <ValueAxisBottom
+                  scale={x}
+                  top={LETTER_ROW + BAR_H}
+                  numTicks={AXIS_MAX + 1}
+                />
+              </>
+            );
+          }}
+        </Plot>
+
+        {truncated ? (
+          <div
+            aria-hidden
+            className="flex h-7 items-center pl-1.5 text-[0.625rem] leading-none tabular-nums text-base-content/55"
+            style={{ marginTop: LETTER_ROW }}
+          >
+            …{LAST.end.toFixed(1)}
+          </div>
+        ) : (
+          <span />
+        )}
+
+        <div className="col-start-1 mt-4 flex justify-between">
           <span className={`${FIG_LABEL} text-base-content/55`}>Took the best card</span>
-          <span className={`${FIG_LABEL} text-base-content/45`}>
-            Percentage points behind it
-          </span>
+          <span className={`${FIG_LABEL} text-base-content/45`}>Percentage points behind it</span>
         </div>
+        <span />
       </div>
     </Figure>
+  );
+}
+
+/**
+ * The same scale as a list, for a screen too narrow to keep the letters apart.
+ *
+ * The figure's whole claim is that the top of the scale is crowded, so a ruler
+ * whose first three letters have merged is not a smaller version of it -- it is
+ * one that says the opposite. Both ends of every band, and the band that runs
+ * off the axis stated in full, because there is no fade here to imply it.
+ */
+function BandList() {
+  return (
+    <dl className="grid grid-cols-[2.5rem_1fr] gap-x-3 text-sm tabular-nums">
+      {BANDS.map((band) => (
+        <div key={band.grade} className="contents">
+          <dt
+            className="border-t border-base-300 py-1 font-display font-semibold"
+            style={{ color: gradeColor(band.grade) }}
+          >
+            {band.grade}
+          </dt>
+          <dd className="border-t border-base-300 py-1 text-base-content/70">
+            {band.from.toFixed(1)} to {band.end.toFixed(1)} points behind
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }

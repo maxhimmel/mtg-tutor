@@ -14,7 +14,7 @@ import { DeckShape } from "../../components/DeckShape";
 import { PageHeading } from "../../components/PageHeading";
 import { Panel } from "../../components/Panel";
 import { ScrollBox } from "../../components/ScrollBox";
-import { PickTrack, type Tick } from "../../components/PickTrack";
+import { PickTrack, TrackKey, type Tick } from "../../components/PickTrack";
 import {
   CONTEXT_BEST,
   MARK,
@@ -158,6 +158,10 @@ export function MissesDrill() {
     [questions, answers],
   );
   const results = useMemo(() => graded.filter((r): r is MissResult => r != null), [graded]);
+  // The split, counted once. It is what gets reported at the end of a run and
+  // what the key under the track prints, and those two disagreeing about a run
+  // would be the drill contradicting its own analytics.
+  const score = useMemo(() => scoreMissRun(results), [results]);
 
   // Freezing the hand and counting it are the same moment, so they are one
   // effect: whatever is reported as served is exactly what gets played.
@@ -182,8 +186,8 @@ export function MissesDrill() {
     const id = `${skip}:${questions.length}`;
     if (reported.current === id) return;
     reported.current = id;
-    drillFinished({ drill: "misses", served: questions.length, ...scoreMissRun(results) });
-  }, [finished, questions.length, results, skip]);
+    drillFinished({ drill: "misses", served: questions.length, ...score });
+  }, [finished, questions.length, score, skip]);
 
   function answer(question: Question, card: Card) {
     const result = gradeMiss(question, card.name);
@@ -274,6 +278,40 @@ export function MissesDrill() {
           onSelect={setStep}
         />
       </PageHeading>
+
+      {/* The three tones named, with how many of each, as soon as there is one.
+          This drill and the archetype quiz both refuse to print a fraction --
+          "6/12" invites reading a run as a test, and a run is a set of packs you
+          have now seen the answer to -- on the stated grounds that the track has
+          already said how it went. That was only true while the track was
+          legible, and hit against miss was a hue away from being nothing at all.
+          A split is not a score: three counts beside three swatches is what the
+          track is already drawing, said in words. */}
+      {results.length > 0 && (
+        <TrackKey
+          className="mb-5"
+          entries={[
+            {
+              state: "hit",
+              label: "took it back",
+              aside: score.fixed,
+              means: "you found the card the deck wanted",
+            },
+            {
+              state: "stood",
+              label: "stood by it",
+              aside: score.stood,
+              means: "same call as last time",
+            },
+            {
+              state: "miss",
+              label: "missed again",
+              aside: score.missed,
+              means: "a different card, still short",
+            },
+          ]}
+        />
+      )}
 
       {finished ? (
         <Finish
@@ -662,7 +700,14 @@ function Finish({
     .filter((row): row is { question: Question; result: MissResult } => row.result != null);
 
   const score = scoreMissRun(rows.map((r) => r.result));
-  // The same three colours the ticks above use, for the same three things.
+  // The CARD vocabulary, not the track's, and the two are no longer the same
+  // three colours. Every row here names a card -- the one the deck wanted where
+  // you took it back, the one you took where you did not -- so the rail beside it
+  // is a claim about that card and belongs in the marks: green for the card the
+  // deck wanted, blue for the card you took. The ticks above are a claim about
+  // how a pack came out, which is a different question and now has a palette of
+  // its own; PickTrack's note carries why. `missed` is the one that is neither,
+  // so it takes the same red the track spends on a pick that went wrong.
   const tone: Record<MissResult["outcome"], Mark> = {
     fixed: CONTEXT_BEST,
     stood: TOOK,

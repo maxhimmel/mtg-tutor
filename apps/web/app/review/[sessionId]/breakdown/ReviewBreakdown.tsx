@@ -8,7 +8,7 @@ import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isDecisionPick } from "@mtg-tutor/core";
 import { PageNotice, PageShell } from "../../../components/PageShell";
 import { PageHeading } from "../../../components/PageHeading";
-import { PickTrack, type Tick } from "../../../components/PickTrack";
+import { PickTrack, TrackKey, type Tick } from "../../../components/PickTrack";
 import { ColorPips } from "../../../components/ColorPips";
 import { Panel } from "../../../components/Panel";
 import { SetIcon } from "../../../components/SetIcon";
@@ -49,6 +49,47 @@ const SCOPES: { key: Scope; label: string }[] = [
  * a tick you clicked would scroll its record underneath it.
  */
 const PINNED_H = "5.625rem";
+
+/**
+ * The two vocabularies this page reads in, drawn one above the other.
+ *
+ * THEY ARE NOT THE SAME KIND OF CLAIM AND THE PAGE USED TO SAY SO NOWHERE. The
+ * track in the masthead says HOW A PICK CAME OUT; the marks on the cards say
+ * WHICH CARD WAS WHICH. Read apart they are both obvious, and read together they
+ * collided -- the track drew its hits in the green the marks spend on the
+ * context-best card, over picks where the card you took was the one the marks
+ * draw in orange. PickTrack's own note carries the whole argument and the fix;
+ * what is left for this page is to put the two keys where a reader meets them at
+ * the same moment, so the split reads as a split.
+ *
+ * The counts ride on the track's half because the masthead's sentence is the
+ * only other place they are said, and it is read once on the way past.
+ */
+function ReviewKeys({ took, missed }: { took: number; missed: number }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <TrackKey
+        entries={[
+          {
+            state: "hit",
+            label: "took the best",
+            aside: took,
+            means: "nothing in the pack was rated above it",
+          },
+          {
+            state: "miss",
+            label: "missed it",
+            aside: missed,
+            means: "another card in the pack rated higher",
+          },
+        ]}
+      />
+      <div className="border-t border-base-300 pt-3">
+        <PickMarksKey />
+      </div>
+    </div>
+  );
+}
 
 // The whole diagnostic at once: no guessing, no stepping. Unlike the
 // walkthrough it does not ask for anything on its own -- one breakdown is ~35
@@ -344,7 +385,7 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
               {/* Where the rail beside the page has no room to exist. Same key,
                   above the first record instead of alongside every one. */}
               <div className="px-4 pt-1 xl:hidden">
-                <PickMarksKey />
+                <ReviewKeys took={decisions.length - missed} missed={missed} />
               </div>
               {shown.map((pick) => {
                 const tick = tickOf.get(pick.pickIndex) ?? 0;
@@ -419,7 +460,7 @@ export function ReviewBreakdown({ sessionId }: { sessionId: string }) {
         <aside className="hidden w-52 shrink-0 xl:block" aria-label="How to read these picks">
           {/* Below the masthead, which pins above it. */}
           <div className="sticky" style={{ top: `calc(${PINNED_H} + 0.75rem)` }}>
-            <PickMarksKey />
+            <ReviewKeys took={decisions.length - missed} missed={missed} />
           </div>
         </aside>
       </div>

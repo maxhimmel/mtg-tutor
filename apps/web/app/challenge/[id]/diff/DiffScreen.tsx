@@ -422,10 +422,14 @@ type Parts = {
  *   section.
  *
  * TWO MORE WERE TRIED AND ARE NOT HERE. Both stood the braid on end and pinned
- * it down the left, and the drawing did not survive the rotation -- `Spine.tsx`
- * is kept, unwired, with what went wrong written on it. What they settled is why
- * `console` looks the way it does: PERMANENCE was the good idea, the rotation
- * was not, so the braid is pinned in the orientation it was always drawn in.
+ * it down the left, and the drawing did not survive the rotation. `Spine.tsx`
+ * was kept unwired for a while with the diagnosis written on it, and has now
+ * been deleted -- five hundred lines nothing imported is a file that gets read
+ * as live code and maintained by mistake, and the part worth keeping was never
+ * the geometry. The diagnosis is in `Braid.tsx`'s header instead, beside the
+ * drawing it is about. What the two settled is why `console` looks the way it
+ * does: PERMANENCE was the good idea, the rotation was not, so the braid is
+ * pinned in the orientation it was always drawn in.
  *
  * CONSOLE COLLAPSES TO THE RIBBON BELOW `xl`, which is not a fallback so much as
  * the honest answer: a rail needs a column of its own and a phone has one column

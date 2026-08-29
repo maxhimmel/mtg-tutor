@@ -46,6 +46,18 @@ export interface ScoreAxis {
   floor: number;
   /** The thresholds strictly inside the plot, lowest first -- the gridlines. */
   bands: GradeBand[];
+  /**
+   * Every grade a column on this plot can land in, highest first.
+   *
+   * Not the same list as `bands`, and the difference is the one a legend gets
+   * wrong. `bands` is the GRIDLINES -- the thresholds strictly inside the plot
+   * -- and it leaves out the grade the plot stands on, because that threshold
+   * is the floor and drawing a line along the bottom edge says nothing. But
+   * that band is a region columns land in, and by construction it is the one
+   * the LOWEST column is in. A key built from `bands` would therefore be
+   * missing exactly the entry the reader looking at the worst column needs.
+   */
+  grades: GradeBand[];
   /** Where a score sits between floor and 100, as a fraction. */
   at: (score: number) => number;
 }
@@ -60,6 +72,9 @@ export function scoreAxis(values: readonly number[]): ScoreAxis {
   return {
     floor,
     bands: GRADE_BANDS.filter((band) => band.floor > floor).reverse(),
+    // `>=`, where `bands` is `>`: the floor's own band is on the plot even
+    // though its threshold is not drawn as a line inside it.
+    grades: GRADE_BANDS.filter((band) => band.floor >= floor),
     at: (score) => Math.min(Math.max((score - floor) / span, 0), 1),
   };
 }

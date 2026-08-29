@@ -19,7 +19,10 @@ import {
   RAW_BEST,
   TOOK,
 } from "../components/PickMarks";
-import { pct } from "../lib/format";
+import { useCursorTip, type CursorTip } from "../components/CursorTip";
+import { Key, type KeyEntry } from "../charts/Key";
+import { pct, points } from "../lib/format";
+import { INK, NEUTRAL } from "../charts/ink";
 import { LineNotTaken } from "./LineNotTaken";
 import type { Line } from "./useLines";
 import type { ReviewPick } from "./types";
@@ -82,7 +85,95 @@ function marksFor(
  * single left edge and the mark reads as a mark and not as an indent -- the same
  * bargain the deck board makes with its gold rail.
  */
-function ShortlistCard({ card, marks }: { card: Card; marks: Mark[] }) {
+/**
+ * The width the spread column is drawn in, and the range it is drawn against.
+ *
+ * SHARED ACROSS THE WHOLE SHORTLIST, which is the only thing that makes the
+ * column worth having. Ranked by win rate with the number alone, a pack whose
+ * best card is four points clear and a pack where all six sit inside half a
+ * point render identically -- and that distinction is not a detail, it is the
+ * lesson `Verdict` next door exists to teach. Positions on one scale make it a
+ * glance: six dots strung out is a pack with an answer, six dots on top of each
+ * other is a pack that does not have one.
+ */
+const SPREAD_W = 56;
+
+/**
+ * What ONE dot says, which is the thing this column is for and the one number
+ * it does not print.
+ *
+ * The rate is already in the row beside it, so a readout repeating it would be
+ * the same fact twice. What is nowhere on the screen is the DISTANCE -- how far
+ * behind the best of these six this card is, in points -- and that is the whole
+ * lesson the column exists to teach: six dots strung out is a pack with an
+ * answer, six on top of each other is a pack that does not have one. A reader
+ * can see which of those two they are looking at and cannot read the size of it
+ * off a 56-pixel rule.
+ *
+ * `points` and not `pct`, because a gap between two rates is points. The column
+ * itself is rates and prints them as rates one cell to the right.
+ */
+const saySpread = (name: string, rate: number, hi: number): string =>
+  rate >= hi
+    ? `${name}: ${pct(rate)} — the best win rate of these.`
+    : `${name}: ${pct(rate)}, ${points(rate - hi).replace("−", "")} behind the best of these.`;
+
+function Spread({
+  card,
+  rate,
+  lo,
+  hi,
+  follow,
+}: {
+  card: string;
+  rate: number | undefined;
+  lo: number;
+  hi: number;
+  follow: CursorTip["follow"];
+}) {
+  // Nothing to place a card the data never rated, and a dot at the left end
+  // would say "worst in the pack" about a card the pack has no opinion on. The
+  // key under the column is what says so -- an empty cell explains nothing on
+  // its own, which is the reason that entry exists.
+  if (rate == null) return <span className="block" style={{ width: SPREAD_W }} />;
+
+  const at = hi > lo ? (rate - lo) / (hi - lo) : 0.5;
+
+  return (
+    <svg
+      width={SPREAD_W}
+      height={10}
+      aria-hidden
+      className="shrink-0"
+      {...follow(() => saySpread(card, rate, hi))}
+    >
+      <line
+        x1={3}
+        x2={SPREAD_W - 3}
+        y1={5}
+        y2={5}
+        stroke={INK.rule}
+        strokeWidth={1}
+        strokeLinecap="round"
+      />
+      <circle cx={3 + at * (SPREAD_W - 6)} cy={5} r={3} fill={INK.value} />
+    </svg>
+  );
+}
+
+function ShortlistCard({
+  card,
+  marks,
+  lo,
+  hi,
+  follow,
+}: {
+  card: Card;
+  marks: Mark[];
+  lo: number;
+  hi: number;
+  follow: CursorTip["follow"];
+}) {
   return (
     <li className={`flex items-stretch gap-2 ${marks.length > 0 ? "mt-3 first:mt-0" : ""}`}>
       <MarkRail marks={marks} />
@@ -97,8 +188,15 @@ function ShortlistCard({ card, marks }: { card: Card; marks: Mark[] }) {
             ))}
           </div>
         )}
-        <div className="grid grid-cols-[minmax(0,1fr)_3rem] items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_3rem] items-center gap-2">
           <CardPlacard card={card} />
+          <Spread
+            card={card.name}
+            rate={card.gihWinRate ?? undefined}
+            lo={lo}
+            hi={hi}
+            follow={follow}
+          />
           <span className="text-right text-sm tabular-nums text-base-content/60">
             {pct(card.gihWinRate)}
           </span>
@@ -169,10 +267,57 @@ export function PickReveal({
 }) {
   const contextBest = pick.contextBestName;
   const shown = useMemo(() => cardsToShow(pick, contextBest, guess), [pick, contextBest, guess]);
+
+  // The ends of the shortlist's own win rates, so every dot in the column is
+  // placed on one scale. Taken from what is SHOWN rather than from the whole
+  // pack: the column draws these six, and a scale stretched to a seventh card
+  // nobody can see would compress the six that matter for no reason a reader
+  // could work out.
+  const spread = useMemo(() => {
+    const rates = shown.map((c) => c.gihWinRate).filter((r): r is number => r != null);
+    return rates.length > 0
+      ? { lo: Math.min(...rates), hi: Math.max(...rates) }
+      : { lo: 0, hi: 0 };
+  }, [shown]);
   const advice = useMemo(
     () => splitCitations(verdict?.narrative ?? "", PRINCIPLES),
     [verdict?.narrative],
   );
+
+  const tip = useCursorTip();
+
+  /**
+   * What the dots mean, which the column said only half of.
+   *
+   * The domain was already stated -- "dots span 54.1%-58.4% across these six" --
+   * and that is the axis rung answered in prose, which is right for a 56-pixel
+   * rule that cannot hold tick labels. What was missing is the other half: a
+   * card the data never rated draws NOTHING, and an empty cell in a column of
+   * dots reads as a rendering fault rather than as an absence of evidence. That
+   * is the entry worth having, and it appears only when there is one.
+   */
+  const spreadKey: KeyEntry[] =
+    spread.hi > spread.lo
+      ? [
+          {
+            label: "win rate",
+            ink: INK.value,
+            shape: "dot",
+            means: `one scale across these ${shown.length}: ${pct(spread.lo)} at the left, ${pct(spread.hi)} at the right`,
+          },
+          ...(shown.some((c) => c.gihWinRate == null)
+            ? [
+                {
+                  label: "no dot",
+                  ink: NEUTRAL.rule,
+                  shape: "bar" as const,
+                  means:
+                    "17Lands has no games for that card, so there is no place on the scale to put it",
+                },
+              ]
+            : []),
+        ]
+      : [];
 
   return (
     // 19rem is a placard plus its win-rate gutter and nothing else, so the
@@ -192,9 +337,21 @@ export function PickReveal({
               key={`${card.name}-${i}`}
               card={card}
               marks={marksFor(card, pick, contextBest, guess)}
+              lo={spread.lo}
+              hi={spread.hi}
+              follow={tip.follow}
             />
           ))}
         </ol>
+        {/* The scale, once, under the column it belongs to. Without it the dots
+            are a ranking drawn twice; with it they are a distance, and the whole
+            point is whether there IS one.
+
+            As a `Key` rather than a sentence, because the sentence could only
+            carry the domain and the column has a second thing to say -- see
+            `spreadKey`. The ends are still written out in full, in that entry's
+            own `means`, so nothing was traded away for the swatch. */}
+        {spreadKey.length > 0 && <Key entries={spreadKey} />}
       </div>
 
       <div className="flex max-w-prose flex-col gap-3">
@@ -292,6 +449,8 @@ export function PickReveal({
             question once the argument has been made. */}
         {onAskLine && <LineNotTaken pick={pick} line={line} onAsk={onAskLine} />}
       </div>
+
+      {tip.node}
     </div>
   );
 }

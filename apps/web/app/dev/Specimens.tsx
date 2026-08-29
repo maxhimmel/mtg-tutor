@@ -1,15 +1,25 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Card } from "@mtg-tutor/core";
+import { tally } from "@mtg-tutor/core";
+import type { Card, DiffRow, DiffTally, PoolCard, ValueTerm } from "@mtg-tutor/core";
 import { CardPlacard, CardPlacardList } from "../components/CardPlacard";
 import { CardFace, CardTile } from "../components/CardTile";
 import { CardStats, hasStats } from "../components/CardStats";
 import { CardText } from "../components/CardText";
-import { ColorPips } from "../components/ColorPips";
+import { ColorPips, ColorTally } from "../components/ColorPips";
 import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
+import { PickTrack, TrackKey, type Tick, type TickState } from "../components/PickTrack";
 import { ScrollBox } from "../components/ScrollBox";
+import { PickStrip } from "../glossary/figures/PickStrip";
+import { Braid } from "../challenge/[id]/diff/Braid";
+import { ScoreBreakdown } from "../components/ScoreBreakdown";
+import { spokenColors } from "../lib/colorTokens";
+import { ManaCurve } from "../components/ManaCurve";
+import { GradeRuler } from "../glossary/figures/GradeRuler";
+import { WinRateAxis } from "../glossary/figures/WinRateAxis";
+import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
 import { pct } from "../lib/format";
 import {
   DeckBands,
@@ -43,7 +53,24 @@ export interface Specimen {
   // Said on the panel's header rule: what this is in the app, so a difference
   // you spot here can be traced to the screen it will show up on.
   note: string;
-  render: (props: SpecimenProps) => ReactNode;
+  // Drawn with the card the chip strip has focused. Most specimens are this.
+  render?: (props: SpecimenProps) => ReactNode;
+  /**
+   * Drawn from numbers of its own, so it is on the page before anything is
+   * staged.
+   *
+   * A SEPARATE FIELD RATHER THAN A FLAG, because the difference is a fact about
+   * the function's arguments and a boolean beside it would be a second, weaker
+   * statement of the same thing -- one the renderer has to remember to honour
+   * and the compiler cannot check. With two fields, a specimen that takes no
+   * card cannot be handed one and cannot be gated behind one.
+   *
+   * The gate was real: the playground drew nothing at all until a card was
+   * staged, so `archetype-reveal` -- which has never taken a card, and is the
+   * one specimen that can be looked at cold -- could only be reached by
+   * searching up an unrelated card first.
+   */
+  renderBare?: () => ReactNode;
 }
 
 function Bay({
@@ -123,12 +150,221 @@ const STOCK_UP_SEPARATED: RevealQuestion = {
   separated: true,
 };
 
+/**
+ * A review's worth of decision picks, with how each one went.
+ *
+ * Mixed on purpose rather than sorted: the thing a track is read for is WHERE
+ * the misses fall, and a run of five hits followed by five misses would show
+ * that working on the one arrangement it cannot fail on.
+ *
+ * `stood` is in here even though no single screen draws all three -- it belongs
+ * to the misses drill and the graded pair to the review -- because the point of
+ * a specimen is the three of them side by side, which is the comparison the app
+ * never puts on one page and the reason a collision between two of them can
+ * live for months.
+ */
+const RUN_STATES: TickState[] = [
+  "hit", "hit", "miss", "hit", "stood", "hit", "miss", "miss",
+  "hit", "hit", "stood", "hit", "miss", "hit", "hit",
+];
+
+const SAID: Partial<Record<TickState, string>> = {
+  hit: "you read it right",
+  miss: "you missed it",
+  stood: "you stood by it",
+};
+
+const RUN: Tick[] = RUN_STATES.map((state, i) => ({
+  state,
+  label: `Pick ${i + 1} — ${SAID[state] ?? state}`,
+}));
+
+// The other half of what this component draws: a draft in progress, where most
+// ticks carry a position and nothing else. The graded pair have to stand out of
+// this and the ungraded pair have to stay a rule, at the same time.
+const MID_RUN: Tick[] = RUN_STATES.map((_, i) => ({
+  state: i < 6 ? "past" : i === 6 ? "current" : "ahead",
+  label: `Pick ${i + 1}`,
+}));
+
+const TRACK_KEY = [
+  { state: "hit" as const, label: "read it right", aside: 9 },
+  { state: "miss" as const, label: "missed it", aside: 4 },
+  { state: "stood" as const, label: "stood by it", aside: 2 },
+];
+
+// A hundred drafts of per-pick averages, shaped like a history rather than a
+// curve. The slide from pick 4 to pick 8 is the thing the panel exists to show;
+// the late picks climb back because a pack of four cards has little left to get
+// wrong; and pick 15 is a 97.4 on forty-one picks, because only some sets deal a
+// fifteenth card. That last column is the whole case for printing n -- on this
+// axis it is the tallest dot on the plot and the least worth believing.
+const BY_PICK: ScoreColumn[] = [
+  { key: "1", label: "1", score: 93.1, n: 300, title: "Pick 1: 93.1 average over 300 picks" },
+  { key: "2", label: "2", score: 91.8, n: 300, title: "Pick 2: 91.8 average over 300 picks" },
+  { key: "3", label: "3", score: 90.4, n: 300, title: "Pick 3: 90.4 average over 300 picks" },
+  { key: "4", label: "4", score: 88.9, n: 300, title: "Pick 4: 88.9 average over 300 picks" },
+  { key: "5", label: "5", score: 87.2, n: 300, title: "Pick 5: 87.2 average over 300 picks" },
+  { key: "6", label: "6", score: 85.6, n: 300, title: "Pick 6: 85.6 average over 300 picks" },
+  { key: "7", label: "7", score: 84.1, n: 300, title: "Pick 7: 84.1 average over 300 picks" },
+  { key: "8", label: "8", score: 82.6, n: 300, title: "Pick 8: 82.6 average over 300 picks" },
+  { key: "9", label: "9", score: 83.4, n: 300, title: "Pick 9: 83.4 average over 300 picks" },
+  { key: "10", label: "10", score: 85.0, n: 300, title: "Pick 10: 85.0 average over 300 picks" },
+  { key: "11", label: "11", score: 87.3, n: 300, title: "Pick 11: 87.3 average over 300 picks" },
+  { key: "12", label: "12", score: 89.9, n: 300, title: "Pick 12: 89.9 average over 300 picks" },
+  { key: "13", label: "13", score: 92.6, n: 299, title: "Pick 13: 92.6 average over 299 picks" },
+  { key: "14", label: "14", score: 95.8, n: 299, title: "Pick 14: 95.8 average over 299 picks" },
+  { key: "15", label: "15", score: 97.4, n: 41, title: "Pick 15: 97.4 average over 41 picks" },
+];
+
+// Ten finished drafts, oldest first, the way /stats draws a run of them: no n,
+// because every column is forty-five picks by construction, and a set symbol
+// instead of a label. The symbols are masked from Scryfall over the network,
+// exactly as the live panel loads them, so an offline bay draws empty gutters
+// rather than the wrong thing. The hrefs go nowhere here; on /stats each one is
+// the way back into that draft.
+const DRAFT_RUN: [code: string, score: number, colors: string][] = [
+  ["dft", 78.4, "UB"],
+  ["tdm", 81.0, "RG"],
+  ["fin", 79.6, "WU"],
+  ["eoe", 84.2, "BR"],
+  ["ecl", 83.1, "WG"],
+  ["blb", 86.7, "GU"],
+  ["dsk", 85.9, "WB"],
+  ["otj", 88.3, "UR"],
+  // THE SPLASH IS THE SPECIMEN. Three pips is what pushes a column past the
+  // width the value label was measured for, so `needs` has to grow with it -- a
+  // run that quietly cropped the third colour would look completely fine.
+  ["mkm", 87.4, "WUB"],
+  ["lci", 91.2, "RW"],
+];
+
+const BY_DRAFT: ScoreColumn[] = DRAFT_RUN.map(([code, score, colors]) => ({
+  key: code,
+  label: code.toUpperCase(),
+  iconUri: `https://svgs.scryfall.io/sets/${code}.svg`,
+  score,
+  pips: colors,
+  href: "#",
+  title: `${code.toUpperCase()} ${spokenColors(colors)}: ${score.toFixed(1)}`,
+}));
+
+const BY_PICK_SPOKEN =
+  "Average score by pick number within a pack — " + BY_PICK.map((c) => c.title).join("; ");
+
+const BY_DRAFT_SPOKEN =
+  "Score by draft, oldest first — " + BY_DRAFT.map((c) => c.title).join("; ");
+
+
+const BRAID_PACK: PoolCard[] = [
+  { name: "Spectral Sailor", colors: ["U"] },
+  { name: "Bake into a Pie", colors: ["B"] },
+  { name: "Shock", colors: ["R"] },
+  { name: "Llanowar Elves", colors: ["G"] },
+  { name: "Wall of Runes", colors: ["U"] },
+];
+
+const braidSide = (i: number, name: string, score: number) => ({
+  pickIndex: i,
+  packNo: Math.floor(i / 14) + 1,
+  pickNo: (i % 14) + 1,
+  pack: BRAID_PACK,
+  pickedName: name,
+  score,
+  grade: "B",
+});
+
+// Blue-black against green-red ON PURPOSE: G against R is the pair that comes
+// out 2.5 apart under deuteranopia once the cords are mixed, and mono-black is
+// the one that fails contrast raw. So this fixture is every case the pips exist
+// for, at once. Two forks, one stretch of drift, and both sides undecided for
+// the first several picks -- which is also the only way to see THREAD, the
+// dashed hairline that means "no pair yet".
+const BRAID_ROWS: DiffRow[] = Array.from({ length: 42 }, (_, i) => {
+  const fork = i === 6 || i === 17;
+  const apart = i >= 24 && i <= 29;
+  return {
+    pickIndex: i,
+    packNo: Math.floor(i / 14) + 1,
+    pickNo: (i % 14) + 1,
+    yours: braidSide(i, fork ? "Spectral Sailor" : "Wall of Runes", 71),
+    theirs: braidSide(i, fork || apart ? "Llanowar Elves" : "Wall of Runes", 68),
+    samePack: !apart,
+    agree: !fork && !apart,
+    offShelf: apart,
+    yourLean: i < 4 ? "" : i < 8 ? "U" : "UB",
+    theirLean: i < 5 ? "" : i < 10 ? "G" : "GR",
+  };
+});
+
+const BRAID_TALLY: DiffTally = {
+  rows: 42,
+  agreed: 34,
+  apart: 6,
+  comparable: 36,
+  guaranteedThrough: 23,
+  firstDrift: 24,
+  yourAverage: 71,
+  theirAverage: 68,
+  forks: [
+    { pickIndex: 6, packNo: 1, pickNo: 7, yours: "Spectral Sailor", theirs: "Llanowar Elves" },
+    { pickIndex: 17, packNo: 2, pickNo: 4, yours: "Spectral Sailor", theirs: "Llanowar Elves" },
+  ],
+};
+
+const TERMS: ValueTerm[] = [
+  { label: "archetype", delta: 0.031 },
+  { label: "trust", delta: -0.012 },
+  { label: "splash", delta: -0.0042 },
+];
+
+// `off-color` charges a card its entire win rate, which is the case the track
+// was never sized for and the only case the torn end exists to draw.
+const TERMS_TORN: ValueTerm[] = [
+  { label: "off-color", delta: -0.5 },
+  { label: "archetype", delta: 0.018 },
+];
+
 export const SPECIMENS: Specimen[] = [
+  {
+    id: "pick-track",
+    title: "Pick track",
+    note: "The draft board, both review surfaces and both drills. Hit against miss is the pair that has to survive greyscale",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="A graded run, at the width the review gives it">
+          <PickTrack groups={[RUN]} label="A finished review" />
+          <TrackKey className="mt-3" entries={TRACK_KEY} />
+        </Bay>
+
+        {/* THE BAY THE FIX EXISTS FOR. Hit and miss were success and error at
+            the same height, so this bay was two rows of identical grey marks --
+            and that is what a red-green reader had in colour. The hollow tick
+            has to still be a hollow tick here, and the key beside it has to
+            show the same difference the track does. */}
+        <Bay label="The same run in greyscale — hue removed">
+          <div style={{ filter: "grayscale(1)" }}>
+            <PickTrack groups={[RUN]} label="A finished review, in greyscale" />
+            <TrackKey className="mt-3" entries={TRACK_KEY} />
+          </div>
+        </Bay>
+
+        <div className="flex flex-wrap items-start gap-8">
+          <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
+            <PickTrack groups={[RUN]} label="A finished review on a phone" />
+          </Bay>
+          <Bay label="Mid-draft — nothing graded yet" width="w-[22rem] max-w-full">
+            <PickTrack groups={[MID_RUN]} label="A draft in progress" />
+          </Bay>
+        </div>
+      </div>
+    ),
+  },
   {
     id: "archetype-reveal",
     title: "Archetype quiz reveal",
     note: "Stock Up in SOS — the real case a player could not read, and the same numbers on a sample that would settle it",
-    render: () => (
+    renderBare: () => (
       <div className="flex flex-col gap-8">
         <Bay label="No difference (2.6 against a bar of 2.7)">
           <DeckBands question={STOCK_UP} guess="UG" />
@@ -137,6 +373,44 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="Same gaps, tighter samples — now it counts">
           <DeckBands question={STOCK_UP_SEPARATED} guess="UG" />
           <Verdict question={STOCK_UP_SEPARATED} />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "deck-bands-widths",
+    title: "Deck bands at every width",
+    note: "The same five decks in the three boxes the app gives them. 263px is the specimen — it is what a 375px phone leaves inside two panels",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-wrap items-start gap-8">
+          {/* THE CASE THAT WAS BROKEN. 375px, less the shell's 48 and two
+              panels' padding at 32 each. The row was 352px of columns that
+              cannot shrink, so the track -- the only part of this that carries
+              the argument -- was squeezed to nothing and the games count hung
+              ninety pixels off the panel. */}
+          <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
+            <DeckBands question={STOCK_UP} guess="UG" />
+            <Verdict question={STOCK_UP} />
+          </Bay>
+          <Bay label="480px — a phone turned over" width="w-[480px] max-w-full">
+            <DeckBands question={STOCK_UP} guess="UG" />
+            <Verdict question={STOCK_UP} />
+          </Bay>
+        </div>
+
+        {/* Under the axis's own minimum, where the ticks would be four numbers
+            on top of each other, so the bands say their domain in words
+            instead -- which is the whole of what `needs` and `instead` are for.
+            The verdict's own mark is fixed at 80px and does not swap: it has no
+            axis to lose, which is the argument in `GapMark`. */}
+        <Bay label="180px — under the axis's minimum" width="w-[180px] shrink-0">
+          <DeckBands question={STOCK_UP} guess="UG" />
+          <Verdict question={STOCK_UP} />
+        </Bay>
+
+        <Bay label="Full width — the desktop rendering, unchanged">
+          <DeckBands question={STOCK_UP} guess="UG" />
         </Bay>
       </div>
     ),
@@ -234,6 +508,13 @@ export const SPECIMENS: Specimen[] = [
           </Bay>
           <Bay label="Expanded" width="w-64">
             <CardStats card={card} expanded />
+          </Bay>
+          {/* Under the win-rate scale's `needs`, so the chart gives way to its
+              one-line caption. The bay is here because that is the state the
+              block's grouping has to survive too: the row, a sentence, and then
+              the rest of the table, with nothing left hanging. */}
+          <Bay label="Too narrow for the scale — the caption instead" width="w-[8.5rem]">
+            <CardStats card={card} />
           </Bay>
         </div>
       ) : (
@@ -342,5 +623,132 @@ export const SPECIMENS: Specimen[] = [
         </Bay>
       </div>
     ),
+  },
+{
+    id: "score-plot",
+    title: "Score plot",
+    note: "All three panels on /stats — a run of drafts, by pack, by pick",
+    // THE THIRD BAY IS THE SPECIMEN. The first two show the plot working; the
+    // third is the same fifteen columns at 20rem, which is under `needs`, so it
+    // must draw the table and not a squeezed chart. If a fifteen-column plot
+    // ever appears in that bay, `needs` has been under-stated and every phone is
+    // getting the wrong drawing.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="By pick — fifteen columns, every label with room">
+          <ScorePlot columns={BY_PICK} label={BY_PICK_SPOKEN} counting="picks" />
+        </Bay>
+        <Bay label="A run of drafts — set symbols, no sample size, columns are links">
+          <ScorePlot columns={BY_DRAFT} label={BY_DRAFT_SPOKEN} />
+        </Bay>
+        {/* THE GRADE KEY HAS TO SURVIVE THIS. The dots are painted from the
+            grade scale and nothing else, so with the hue gone the only things
+            left saying which grade a column landed in are the letter in the key
+            and the letter at the end of its threshold line. Ten identical grey
+            dots over an unreadable key means the swatch is doing nothing. */}
+        <Bay label="The run in greyscale — the key's letters are the second channel">
+          <div style={{ filter: "grayscale(1)" }}>
+            <ScorePlot columns={BY_DRAFT} label={BY_DRAFT_SPOKEN} />
+          </div>
+        </Bay>
+        <Bay label="The same fifteen at 20rem — under needs, so the table" width="w-[20rem] max-w-full">
+          <ScorePlot columns={BY_PICK} label={BY_PICK_SPOKEN} counting="picks" />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "glossary-figures",
+    title: "Glossary figures",
+    note: "The page's opening dumbbell and the grade ruler, at full width and at a phone's",
+    // NARROW THE WINDOW to check these. The narrow bay gives the figure the
+    // 23rem a 375px phone gives it, which is what catches an overflow -- but the
+    // layouts inside both figures switch on Tailwind's `sm:`, and that is a
+    // VIEWPORT media query, not a container one. The bay cannot trip it. So the
+    // stacked forms -- the dumbbell's axis and end labels, which used to vanish
+    // below 640px -- only appear once the browser window itself is under 640px.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Win-rate dumbbell — full width">
+          <WinRateAxis />
+        </Bay>
+        <Bay label="Win-rate dumbbell — a phone's 23rem" width="w-[23rem] max-w-full">
+          <WinRateAxis />
+        </Bay>
+        <Bay label="Grade ruler — full width, F fading past the axis end">
+          <GradeRuler />
+        </Bay>
+        <Bay label="Grade ruler — a phone's 23rem" width="w-[23rem] max-w-full">
+          <GradeRuler />
+        </Bay>
+        <Bay label="Pick strip — full width, the wheel at the seam after pick 8">
+          <PickStrip />
+        </Bay>
+        {/* THE BAY THE KEY EXISTS FOR. The two ends were gold against neutral
+            and nothing else, which in greyscale is two marks of the same size
+            with no way to tell the SEEING from the TAKING. The ALSA dot has to
+            still read as hollow here, and the key beside it has to show the
+            same difference. */}
+        <Bay label="Pick strip in greyscale — hollow against filled has to survive">
+          <div style={{ filter: "grayscale(1)" }}>
+            <PickStrip />
+          </div>
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "mana-curve-channels",
+    title: "Mana curve — colour is never the only channel",
+    note: "The draft board's picks column and the misses drill's deck rail. The GREYSCALE bay is the specimen",
+    // THE SECOND AND THIRD BAYS ARE THE SPECIMEN, and the first is only there to
+    // be compared against.
+    //
+    // `cardFrame`'s WUBRG rings are Arena's and are not ours to re-pick. Put
+    // through a colour-vision check against this app's near-black ground they
+    // come back green-against-red 4.8 apart under deuteranopia -- below the
+    // floor at which a categorical palette is legal even WITH a second channel
+    // -- and colourless-against-green 14.2 apart to NORMAL vision.
+    //
+    // So the bar carries a letter and the key carries a count, and the
+    // greyscale bay is how you check that actually worked: with the hue gone,
+    // every band must still be nameable. If it is not, the letters are too
+    // small or the key is missing, and no amount of looking at the colour
+    // version will tell you.
+    render: ({ cards }) => {
+      // Drawn the way both real callers draw it: the tally sits in the panel
+      // header above the bars, and it IS this chart's key -- the component does
+      // not carry one, because a second copy under the bars was the same
+      // colours and counts twice in one panel. A bay without it would be
+      // testing a screen the app does not have.
+      const curve = (
+        <div className="flex flex-col gap-2">
+          <ColorTally colors={tally(cards, (c) => c.colors)} />
+          <ManaCurve cards={cards} />
+        </div>
+      );
+
+      return (
+        <div className="flex flex-wrap items-start gap-8">
+          <Bay label="In the picks column (360px)" width="w-[22.5rem]">
+            {curve}
+          </Bay>
+          <Bay label="Greyscale — every band still nameable?" width="w-[22.5rem]">
+            <div style={{ filter: "grayscale(1)" }}>{curve}</div>
+          </Bay>
+          <Bay label="Deuteranopia — green and red are 4.8 apart here" width="w-[22.5rem]">
+            <div style={{ filter: "url(#deuter)" }}>{curve}</div>
+            <svg width="0" height="0" aria-hidden>
+              <filter id="deuter" colorInterpolationFilters="linearRGB">
+                <feColorMatrix
+                  type="matrix"
+                  values="0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0"
+                />
+              </filter>
+            </svg>
+          </Bay>
+        </div>
+      );
+    },
   },
 ];

@@ -9,6 +9,7 @@ import { PageShell } from "../components/PageShell";
 import { Panel } from "../components/Panel";
 import { SetIcon } from "../components/SetIcon";
 import { SignedOut } from "../components/SignedOut";
+import { spokenColors } from "../lib/colorTokens";
 import { pct, points, releaseDate } from "../lib/format";
 import { statsViewed } from "../lib/analytics";
 import { ScorePlot, type ScoreColumn } from "./ScorePlot";
@@ -50,6 +51,7 @@ export default function StatsIndex() {
 
 function Overview() {
   const data = useQuery(api.stats.overview, {});
+  const icons = useSetIcons();
 
   // Once per visit, not once per render, the way the review list counts itself:
   // `stats.overview` is a live subscription and re-answers whenever any draft in
@@ -146,9 +148,9 @@ function Overview() {
         </p>
       )}
 
-      <Lately recent={data.recent} />
+      <Lately recent={data.recent} icons={icons} />
       <Breakdowns data={data} />
-      <Mistakes data={data} />
+      <Mistakes data={data} icons={icons} />
     </div>
   );
 }
@@ -165,18 +167,35 @@ function Overview() {
  * for finding a particular draft; this is for the shape of a run of them, and
  * the columns are links so it is still a way into any one of them.
  */
-function Lately({ recent }: { recent: Stats["recent"] }) {
-  // Only for the symbol. `stats.overview` carries the set code and not its
-  // icon, and the rest of the app names a set by its symbol first. Keyed by code
-  // alone, unlike the review list: this row has no format on it, and the symbol
-  // is a property of the set rather than of the format it was drafted in.
+/**
+ * Every set this page names, by its symbol.
+ *
+ * Only for the symbol. `stats.overview` carries the set code and not its icon,
+ * and the rest of the app names a set by its symbol first. Keyed by code alone,
+ * unlike the review list: these rows have no format on them, and the symbol is
+ * a property of the set rather than of the format it was drafted in.
+ *
+ * Asked once for the whole page rather than once per panel. Two panels name
+ * sets -- the run of drafts and the missed picks -- and `sets.list` reads every
+ * set document to answer, which is the query that drained the bandwidth tier
+ * once already.
+ */
+function useSetIcons() {
   const sets = useQuery(api.sets.list);
-  const icons = useMemo(() => {
+  return useMemo(() => {
     const byCode = new Map<string, { name?: string; iconUri?: string }>();
     for (const set of sets ?? []) if (!byCode.has(set.code)) byCode.set(set.code, set);
     return byCode;
   }, [sets]);
+}
 
+function Lately({
+  recent,
+  icons,
+}: {
+  recent: Stats["recent"];
+  icons: Map<string, { name?: string; iconUri?: string }>;
+}) {
   if (recent.length === 0) return null;
 
   // The query answers newest first, which is right for a list and backwards for
@@ -188,14 +207,20 @@ function Lately({ recent }: { recent: Stats["recent"] }) {
 
     return {
       key: draft.id,
-      label: set?.iconUri ? (
-        <SetIcon uri={set.iconUri} className="mx-auto size-3.5" />
-      ) : (
-        draft.setCode.toUpperCase()
-      ),
+      label: draft.setCode.toUpperCase(),
+      iconUri: set?.iconUri,
       score: draft.overallScore,
+      // The deck, under its own column. It was only ever in the hover text and
+      // only ever as "WU", which is a database key rather than a way of saying
+      // a colour -- see ColorPips. The spoken form below keeps the letters,
+      // because a screen reader gets the colour names from the pips themselves.
+      pips: draft.colorPair || undefined,
       href: `/review/${draft.id}`,
-      title: `${name}${draft.colorPair ? ` ${draft.colorPair}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
+      title: `${name}${draft.colorPair ? ` ${spokenColors(draft.colorPair)}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
+      // The same sentence with the deck drawn rather than spelled. The
+      // column already prints these pips under it, so the tip and the mark
+      // a reader is pointing at say the colours the same way.
+      said: `${name}${draft.colorPair ? ` ${[...draft.colorPair].map((c) => `{${c}}`).join("")}` : ""}, ${on}: ${draft.overallScore.toFixed(1)}, ${pct(draft.accuracy)} best-pick accuracy`,
     };
   });
 
@@ -260,18 +285,25 @@ function Breakdowns({ data }: { data: Stats }) {
 
   const covers = coverage(data);
 
+  // The count travels with the average and into the spoken form of it. These
+  // two panels are the only ones on the page where a column can be built from a
+  // handful of picks -- a pick number that only some sets reach, a pack a
+  // half-finished history barely covers -- and on an axis this zoomed that
+  // column looks exactly as authoritative as the ones beside it.
   const packs: ScoreColumn[] = byPackNo.map((row) => ({
     key: String(row.packNo),
     label: `Pack ${row.packNo}`,
     score: row.avgScore,
-    title: `Pack ${row.packNo}: ${row.avgScore.toFixed(1)} average`,
+    n: row.n,
+    title: `Pack ${row.packNo}: ${row.avgScore.toFixed(1)} average over ${row.n.toLocaleString()} picks`,
   }));
 
   const picks: ScoreColumn[] = byPickNo.map((row) => ({
     key: String(row.pickNo),
     label: String(row.pickNo),
     score: row.avgScore,
-    title: `Pick ${row.pickNo}: ${row.avgScore.toFixed(1)} average`,
+    n: row.n,
+    title: `Pick ${row.pickNo}: ${row.avgScore.toFixed(1)} average over ${row.n.toLocaleString()} picks`,
   }));
 
   return (
@@ -282,7 +314,7 @@ function Breakdowns({ data }: { data: Stats }) {
         className="lg:w-64 lg:shrink-0"
         bodyClassName="gap-3"
       >
-        <ScorePlot columns={packs} label={spoken("Average score by pack", packs)} />
+        <ScorePlot columns={packs} label={spoken("Average score by pack", packs)} counting="picks" />
         <p className="text-xs leading-relaxed text-base-content/50">
           Pack three is drafted with a deck already half-decided, so a slip here is usually a
           pool that stopped offering anything you can play.
@@ -293,6 +325,7 @@ function Breakdowns({ data }: { data: Stats }) {
         <ScorePlot
           columns={picks}
           label={spoken("Average score by pick number within a pack", picks)}
+          counting="picks"
         />
         <p className="text-xs leading-relaxed text-base-content/50">
           How deep into a pack, counted the same way in all three. The late numbers are
@@ -315,7 +348,13 @@ function Breakdowns({ data }: { data: Stats }) {
  * silently starts missing picks past it -- so `stats.overview` clamps instead of
  * serving a wrong list, and asking for more here would get the same ten.
  */
-function Mistakes({ data }: { data: Stats }) {
+function Mistakes({
+  data,
+  icons,
+}: {
+  data: Stats;
+  icons: Map<string, { name?: string; iconUri?: string }>;
+}) {
   if (data.topMistakes.length === 0) return null;
 
   return (
@@ -340,11 +379,19 @@ function Mistakes({ data }: { data: Stats }) {
             key={`${i}-${m.setCode}-${m.packNo}-${m.pickNo}`}
             className="flex flex-wrap justify-between gap-x-4 gap-y-1 border-b border-base-300 py-1.5 text-sm last:border-0"
           >
-            <span>
-              <span className="mr-1.5 tabular-nums text-base-content/60">
+            <span className="flex items-baseline gap-1.5">
+              {/* The symbol beside the code, the way the run of drafts above
+                  draws it and the way the rest of the app names a set. A bare
+                  three letters is the one place on this page a set is named
+                  and not shown. */}
+              <span className="flex items-baseline gap-1 tabular-nums text-base-content/60">
+                <SetIcon
+                  uri={icons.get(m.setCode)?.iconUri}
+                  className="size-3 self-center"
+                />
                 {m.setCode.toUpperCase()} P{m.packNo}P{m.pickNo}
               </span>
-              took {m.pickedName}
+              <span>took {m.pickedName}</span>
             </span>
             <span className="text-base-content/60">
               over {m.bestName}{" "}

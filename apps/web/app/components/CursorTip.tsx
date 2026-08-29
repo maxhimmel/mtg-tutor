@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { damp, placeTip, type Point } from "../lib/cursorTip";
+import { Fragment, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { damp, placeTip, splitSymbols, type Point } from "../lib/cursorTip";
+import { manaClass } from "./ManaCost";
 
 /**
  * A tooltip that follows the pointer and says what is under it.
@@ -53,8 +55,14 @@ export interface CursorTip {
    * without calling a hook per item, which is the rule-of-hooks violation
    * `useCardHoverFactory` exists to avoid and the same answer to it.
    */
-  follow: (say: (e: MouseEvent<HTMLElement>) => string | null) => {
-    onMouseMove: (e: MouseEvent<HTMLElement>) => void;
+  // `Element` rather than `HTMLElement`, because a chart's hoverable is often a
+  // `<g>` or a `<rect>`. Every caller so far hung this on a div, so the narrower
+  // type never bit -- and then `Plot` started requiring a tip and the first SVG
+  // chart needed a cast to say what it already meant. The handlers read nothing
+  // but `clientX`/`clientY`, which every element has, so the wider type is not a
+  // loosening: it is the type these two functions always had.
+  follow: (say: (e: MouseEvent<Element>) => string | null) => {
+    onMouseMove: (e: MouseEvent<Element>) => void;
     onMouseLeave: () => void;
   };
   /** The box. Render it once, anywhere inside the component that owns the hook. */
@@ -75,6 +83,34 @@ export interface CursorTipOptions {
 }
 
 const DEFAULTS = { ease: 0.28, maxWidth: 272 };
+
+/**
+ * Write a tip's sentence into its box, drawing `{U}` as the game's own pip.
+ *
+ * Imperative because this is called from inside an animation frame, which is
+ * the one place React must not be -- see the note on `showing`. The symbol
+ * classes come from `ManaCost` rather than a second table here: which symbols
+ * the font ships is the thing that would drift, and it drifts silently, into an
+ * empty box.
+ *
+ * An unknown symbol falls back to its own braces, which is `ManaCost`'s rule
+ * too -- visible and ugly beats invisible.
+ */
+function paint(el: HTMLElement, text: string): void {
+  el.replaceChildren(
+    ...splitSymbols(text).map((part) => {
+      if ("text" in part) return document.createTextNode(part.text);
+      const cls = manaClass(part.mana);
+      if (!cls) return document.createTextNode(`{${part.mana}}`);
+      const pip = document.createElement("i");
+      pip.className = cls;
+      // The tip's own line is 12px; a pip at the text's size sits on the
+      // baseline beside it rather than towering over the words.
+      pip.style.fontSize = "0.95em";
+      return pip;
+    }),
+  );
+}
 
 export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
   const { ease, maxWidth } = { ...DEFAULTS, ...options };
@@ -125,7 +161,17 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
         // Written rather than rendered, for the reason above. React only paints
         // this node on show and on hide, and it paints the current text both
         // times, so the two can never disagree.
-        if (el.textContent !== want.current.text) el.textContent = want.current.text;
+        //
+        // `paint` and not `textContent` because a tip that names a colour draws
+        // the pip, and a pip is an element. It runs on exactly the frames
+        // `textContent` used to be assigned on -- the guard is the same string
+        // comparison, kept on a data attribute now that the node's own text no
+        // longer holds the braces -- so the cost is unchanged: one DOM write
+        // when the sentence changes, none while the pointer moves inside a mark.
+        if (el.dataset.said !== want.current.text) {
+          el.dataset.said = want.current.text;
+          paint(el, want.current.text);
+        }
       }
       frame = requestAnimationFrame(step);
     };
@@ -154,6 +200,12 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
     onMouseLeave: hide,
   });
 
+  // Client-only, so the portal has a `document.body` to reach for. State and not
+  // a `typeof window` test: the server renders nothing here, and a first client
+  // render that already had the box would not match the HTML it is hydrating.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Placed at render rather than on the first frame. Without this the element
   // paints at the origin and jumps to the pointer once the effect has run and a
   // frame has been asked for -- two frames of a tooltip in the corner of the
@@ -166,20 +218,61 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
     { width: typeof window === "undefined" ? 0 : window.innerWidth, height: 0 },
   );
 
+  /**
+   * THROUGH A PORTAL, BECAUSE `position: fixed` IS NOT ENOUGH ON ITS OWN.
+   *
+   * `fixed` positions against the viewport only while no ancestor has made
+   * itself a containing block, and a `z-index` only outranks what shares its
+   * stacking context. Rendered where the caller renders it, this box inherits
+   * whatever the surrounding page happens to be doing -- so the diff screen's
+   * masthead, which is `z-20 xl:sticky`, was capping a z-50 tooltip inside a
+   * stacking context at 20, and the panel in the next grid column painted
+   * straight over it. Nothing about the tooltip was wrong; it was in the wrong
+   * tree.
+   *
+   * That is not a one-off. `ScrollBox` carries a `mask-image`, which is a
+   * containing block AND a clip: any chart that puts a tip inside one -- the
+   * fork list and the braid's parting list both do -- would have had the box
+   * cut off at the scroller's edge instead. Every future `z-*` on any ancestor
+   * of any chart is the same bug waiting.
+   *
+   * `document.body` is the one parent with no such ancestors. It is also what
+   * makes this behave like `CardPreview`, whose surface has always worked for
+   * exactly this reason and no other: it is rendered once, at the root, by the
+   * provider. The docblock at the top of this file calls the hook-not-provider
+   * split a cost worth paying; the portal is what stops it costing this.
+   *
+   * `mounted` guards the server render, where there is no `document` -- and it
+   * has to be state rather than a `typeof window` check, or the first client
+   * render would disagree with the HTML it is hydrating.
+   */
+  const tip = showing ? (
+    <div
+      ref={box}
+      role="presentation"
+      className="pointer-events-none fixed left-0 top-0 z-50 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
+      style={{
+        maxWidth,
+        transform: `translate3d(${Math.round(first.x)}px, ${Math.round(first.y)}px, 0)`,
+      }}
+    >
+      {/* Rendered by React on the show frame and by `paint` on every frame
+          after. Both go through `splitSymbols`, so the first picture and the
+          second cannot disagree -- and drawing the pips here rather than
+          leaving the box empty for a frame is what stops a flash of the raw
+          braces before the font arrives. */}
+      {splitSymbols(want.current.text).map((part, i) =>
+        "text" in part ? (
+          <Fragment key={i}>{part.text}</Fragment>
+        ) : (
+          <i key={i} className={manaClass(part.mana) ?? ""} style={{ fontSize: "0.95em" }} />
+        ),
+      )}
+    </div>
+  ) : null;
+
   return {
     follow,
-    node: showing ? (
-      <div
-        ref={box}
-        role="presentation"
-        className="pointer-events-none fixed left-0 top-0 z-50 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
-        style={{
-          maxWidth,
-          transform: `translate3d(${Math.round(first.x)}px, ${Math.round(first.y)}px, 0)`,
-        }}
-      >
-        {want.current.text}
-      </div>
-    ) : null,
+    node: mounted && tip ? createPortal(tip, document.body) : null,
   };
 }

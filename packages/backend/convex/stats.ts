@@ -84,9 +84,13 @@ export const overview = query({
       }
     }
 
+    // The count rides along with the mean it made. On a zoomed axis -- which is
+    // the only axis these averages are legible on -- a bucket built from three
+    // picks draws exactly like one built from three hundred, so the plot cannot
+    // say which of its columns is worth believing unless it is handed n.
     const avg = (m: Map<number, { total: number; n: number }>) =>
       [...m]
-        .map(([key, { total, n }]) => ({ key, avgScore: total / n }))
+        .map(([key, { total, n }]) => ({ key, avgScore: total / n, n }))
         .sort((a, b) => a.key - b.key);
 
     const scored = window.filter((s) => s.summary);
@@ -108,8 +112,8 @@ export const overview = query({
         accuracy: s.summary?.accuracy ?? 0,
         colorPair: s.summary?.colorPair ?? "",
       })),
-      byPickNo: avg(byPickNo).map((r) => ({ pickNo: r.key, avgScore: r.avgScore })),
-      byPackNo: avg(byPackNo).map((r) => ({ packNo: r.key, avgScore: r.avgScore })),
+      byPickNo: avg(byPickNo).map((r) => ({ pickNo: r.key, avgScore: r.avgScore, n: r.n })),
+      byPackNo: avg(byPackNo).map((r) => ({ packNo: r.key, avgScore: r.avgScore, n: r.n })),
       // Clamped to what a digest keeps. Each draft stores its own worst
       // DIGEST_MISTAKES, which answers a global top-N exactly for N up to that
       // -- a global top-N can draw at most N from any one draft. Past it the

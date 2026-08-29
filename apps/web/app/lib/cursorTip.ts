@@ -80,3 +80,39 @@ export function damp(ease: number, ms: number): number {
   if (ease >= 1) return 1;
   return 1 - Math.pow(1 - ease, ms / FRAME);
 }
+
+/** A run of plain text, or one mana symbol to be drawn in the game's font. */
+export type TipPart = { text: string } | { mana: string };
+
+/**
+ * A tip's text, split into the parts that are words and the parts that are pips.
+ *
+ * THE TIPS WERE SAYING COLOURS IN ENGLISH while every other surface in the app
+ * printed the symbol -- "3 Blue, 2 Red" under a chart whose bands, key and axis
+ * were all pips. `ColorPips` has argued since it was written that the pip is how
+ * the game writes a colour and needs no decoding where a word does, and a
+ * tooltip is the last place that should stop being true: it is the surface a
+ * reader is pointing at a mark to understand.
+ *
+ * The notation is the app's own -- `{U}`, the same braces `ManaCost` takes and
+ * Scryfall prints -- so a `say` function writes the cost it already knows and
+ * nothing has to learn a second spelling.
+ *
+ * Pure, and here rather than in the component, for the reason the rest of this
+ * file is: the component does this inside an animation frame, where nothing can
+ * be tested. What is left there is four lines of `createElement`.
+ */
+export function splitSymbols(text: string): TipPart[] {
+  const parts: TipPart[] = [];
+  let at = 0;
+
+  for (const match of text.matchAll(/\{([^{}]+)\}/g)) {
+    const start = match.index;
+    if (start > at) parts.push({ text: text.slice(at, start) });
+    parts.push({ mana: match[1] });
+    at = start + match[0].length;
+  }
+  if (at < text.length) parts.push({ text: text.slice(at) });
+
+  return parts;
+}

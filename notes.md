@@ -71,7 +71,57 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
-9.  We've got a lot of custom-coded charts/infographics/bars/graphics in general that I have consistently found to be hard to read. I'd love for you to do a thorough pass on the whole app, every page, etc, and create a list of these sub-par graphics. THEN, i'd love for you to do some deep research into using either Nivo or Tremor packages as replacements (but of course make sure it matches our app's overall theme). Be sure to also use the frontend skill if u think that's applicable here. FINALLY, start replacing these graphics using best practices Nivo/Tremor suggests and remember that the next time u wanna make a graphic.
+9.  **The chart library shipped 2026-08-29. What is left is one measurement
+    and one palette that cannot be fixed.** Every graphic was audited, sixteen
+    defects fixed, then the whole set rebuilt on visx behind `app/charts/`. The
+    working is in the git history and the rules are CLAUDE.md's "A graphic
+    states its scale"; neither belongs here. What stays open:
+
+    - **WUBRG IS NOT A LEGAL CATEGORICAL PALETTE ON THIS GROUND, AT ANY MIX.**
+      `cardFrame`'s rings are Arena's and cannot move. Measured against
+      base-100: raw, green against red is 4.8 apart under deuteranopia; mixed
+      55% toward base-content the way the braid's cords are, 2.5 — and the
+      normal-vision floor falls from 14.4 to 8.0, so green and black are hard
+      to separate with full colour vision. Sweeping the ratio finds nothing
+      that passes; at 100% mono-black loses its 3:1 against the panel. The mix
+      is therefore a real trade and not a bug. **The permanent consequence is
+      that a Magic colour is never the only channel** — `manaMark` returns a
+      fill and its pips together so a chart cannot take one without the other.
+      Do not re-open this by proposing a nicer five-colour palette.
+    - **The `needs`/`instead` swap is a state a reader lands in and nothing
+      counts it.** Every chart states the width below which its drawing stops
+      being true. Those widths are now mostly DERIVED — the grade ruler's from
+      its tightest pair of letter centres, the pick strip's from `MARK.dot` —
+      but the braid's 606px is still a judgement, and if it is wrong the
+      symptom is a phone user who never sees the rope and nobody knowing. The
+      capture belongs in `Plot`, one event for every chart in the app, not in
+      any caller. Deliberately unbuilt: an event whose whole question is "how
+      often" is worth designing once.
+    - **`CardStats` draws a point and a band, not a distribution.** The card
+      carries `rarityBaseline` and its own sample, so the win rate has a
+      reference point with no new query — but a real spread (quartiles, a
+      density strip) needs something the set document does not store.
+    - **The glossary figures reflow on Tailwind's `sm:`**, a viewport query,
+      so their `/dev` bays catch an overflow at a phone's width and cannot show
+      the stacked form — the window itself has to be narrowed. Making them
+      container-driven is a real change to all three.
+    - **`PickMarksKey` is a hand-rolled `<dl>` that mirrors `Key`** and was
+      deliberately not ported: its `dt` is painted in the mark's own tone, and
+      that coloured label is half the encoding it explains, where `Key`'s label
+      is fixed ink. Porting it needs `Key` to take a `ReactNode` label first.
+
+    Two things ruled out and worth not re-deriving. **A legend is not a rule
+    that applies to every chart**: it is for telling marks apart, so a chart of
+    one series gets none, and what earns one is marks a reader cannot separate
+    -- the card-stats scale draws its dot and its margin band at the same spot
+    and names those two, while its reference rule has clear space and takes a
+    direct label instead. Naming all three cost four lines under a chart 36px
+    tall, and putting them in two columns only halved the width they wrapped in.
+
+    And **a letter is not a second channel for a Magic colour.** It was the
+    first answer and it is wrong twice — a bare letter is a mark that appears
+    nowhere else in the game, and a gold card has no single letter, so exactly
+    the bands whose ring is a gradient got nothing. Pips have neither problem and a two-colour mark prints both.
 
 # Ideas:
 
@@ -2101,3 +2151,60 @@ The architecture, the data pipeline and the deploy story are all documented in
     statistic that is conventional for a number ON ITS OWN will disagree with
     whatever rule the number is actually being judged by, and the disagreement
     shows up as a reader who does not believe the app.
+
+27. **The charting library question is answered: visx, and it was not close**
+    (2026-08-28). Nivo and Tremor were the two asked about and both were
+    measured before the answer.
+
+    `@tremor/react` is dead -- last commit 2025-01-13, published peer
+    `react: ^18.0.0`, React-19 and Tailwind-4 issues open since 2024 and 2025.
+    Tremor Raw does want Tailwind 4, but it is copy-paste source carrying
+    `bg-gray-100 dark:bg-gray-800` on nearly every component, which is a second
+    theming system running beside daisyUI's `data-theme`. Nivo genuinely
+    supports React 19 -- and its `inheritedColor` path routes every colour
+    through `d3.rgb()`, so `var(--color-primary)` comes back NaN, and the way
+    round it is a MutationObserver rebuilding the palette in JS because daisyUI
+    fires no event on a theme swap. Adopting it means building a bridge back to
+    the styling we already have.
+
+    **The general finding is the part worth keeping.** Of thirty-odd graphics
+    here, four are a shape a chart library has a component for; and of the
+    sixteen defects the audit found, NOT ONE was a missing chart type. They
+    were a missing axis, a scale that saturated, bars that could not sum to
+    their own total, a `%` on a figure that was points, and three charts that
+    overflowed a phone without looking broken. Scales, axes, tick generation,
+    tooltip anchoring, responsive measurement -- that list is the defect list,
+    and it is exactly what visx is. It ships no chart components at all, which
+    is what leaves the braid and the card-segment curve possible.
+
+    Recharts 3 is the escape hatch if a chart ever needs interaction more than
+    it needs a shape, and only then: 7.3MB unpacked against visx's 54-221KB per
+    package, carrying @reduxjs/toolkit, react-redux, immer and victory-vendor
+    at runtime.
+
+    **What it actually cost, measured against `main` on the same machine:**
+    +23-26kB First Load JS on the eight routes that draw a chart, and +0kB on
+    the twelve that do not -- `/glossary` included, whose figures stayed HTML.
+    So the à-la-carte packaging is real and a route pays only for what it
+    imports, which is the property Nivo does not have (`@nivo/bar` pulls its
+    nine sibling packages whatever you use).
+
+    **The kit is `app/charts/`, and its one structural idea is the GUIDES.**
+    Axis, legend and tooltip are not three features but one question — can a
+    reader who has never seen this work out what it says — answered at three
+    distances: across the room, at arm's length, at the cursor. `Plot` requires
+    `legend` and `tip`, and off is `{ none: "reason" }` rather than `false`,
+    because the reasons turn out to be the valuable part and a boolean throws
+    them away. That is not a guard rail: turning a guide off stays one line, on
+    purpose, since a kit that makes the exception expensive gets worked around.
+
+    **The tooltip is deliberately NOT visx's.** `useTooltip` holds position in
+    React state and re-renders per pointer move, which is the exact pathology
+    `CursorTip.tsx` was rewritten to fix -- it writes its content imperatively
+    from one animation frame and damps by elapsed time rather than by frame.
+    visx for the scale and the marks; `useCursorTip` for what the pointer is
+    over. Two things it learned the hard way and neither is worth rediscovering:
+    the box must be PORTALLED to `document.body`, because `position: fixed` is
+    only fixed until an ancestor becomes a containing block and any `z-*` on
+    one caps it; and it draws mana pips, so a tip that names a colour says it
+    the way the rest of the app does.

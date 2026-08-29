@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Key } from "../charts/Key";
+import { useCursorTip } from "./CursorTip";
 
 // A draft, drawn as the thing it is: a run of picks in order.
 //
@@ -47,28 +49,68 @@ export interface Tick {
   label: string;
 }
 
-// Ahead and past differ by weight alone, so the track reads as a rule that has
-// been filled up to a point. The graded pair are the app's own grade colours
-// (see gradeColor in lib/format), and gold is where you are -- the same thing it
-// means on a card you are holding.
+// What a tick is painted with and how it is built, in one table.
 //
-// A miss is `error`, not `warning`, and the reason is the page it sits on rather
-// than the tick itself. The review marks a pack's cards with the same four
-// colours every time: blue for the card you took, ORANGE FOR THE RAW-BEST, green
-// for the card that was right for your deck. A track drawing its misses in
-// orange therefore said "raw-best" a dozen times over about picks where the
-// raw-best was the card you did not take -- the exact opposite claim, in the
-// colour that makes it. Red is the one grade colour the marks do not use, and it
-// is already what this app means by a pick that went wrong: gradeFor sends D and
-// F here, and the walkthrough writes "✗ not this time" in it two inches away.
-// `stood` belongs to the misses drill, where a question can come back a third
-// way: you were dealt a pick you got wrong, and you made the same call again.
-// That is not a hit and the drill refuses to call it a failure -- it is a
-// disagreement with the grader rather than a slip. Blue rather than a fifth
-// hue, because blue is already what this app marks THE CARD YOU TOOK with (see
-// PickMarks), and standing by a pick is precisely answering with that card. The
-// tick and the mark on the card it refers to are then the same colour saying
-// the same thing, which is the test any new state here has to pass.
+// ONE TABLE AND NOT THREE, because the legend has to read from the same place
+// the track paints from. A tone list in Tailwind classes and a legend in CSS
+// colours are two copies of one decision, and the day one of them moves nobody
+// finds out -- which is a worse bug than the one the legend was added to fix.
+// `TrackKey` at the foot of this file is the only other reader.
+const mix = (token: string, percent: number) =>
+  `color-mix(in oklab, var(--color-${token}) ${percent}%, transparent)`;
+
+interface TickPaint {
+  /** The paint. A theme token through `mix`, never a literal colour. */
+  ink: string;
+  /** An outline with nothing in it, rather than a filled body. */
+  hollow?: boolean;
+  /** An object -- 6px -- rather than a rule. */
+  tall?: boolean;
+}
+
+// Ahead and past differ by weight alone, so the track reads as a rule that has
+// been filled up to a point. Gold is where you are -- the same thing it means on
+// a card you are holding.
+//
+// A HIT IS HOLLOW AND A MISS IS FILLED, WHICH IS THE FIX. These were success
+// and error at the same height: green against red, six pixels tall, with nothing
+// on either review surface saying which was which. Hue was the only channel and
+// it was the one pair of hues a red-green reader cannot separate. Fill against
+// hollow survives greyscale, survives 4px of width, and says the right thing
+// besides -- a miss is an object, the thing you came back to look at, and a hit
+// is a pick with nothing left in it.
+//
+// AND THE GREEN LEFT THE TRACK RATHER THAN THE CARDS. That is a vocabulary
+// decision, not a palette one. The walkthrough draws `PickMarksKey` a few inches
+// under this track teaching green for the CONTEXT-BEST card, orange for the
+// raw-best and blue for the one you took -- so one page said green twice about
+// two different things. On the breakdown it was worse: a hit there means you
+// took the card the marks draw in ORANGE, so the tick and the card disagreed
+// outright.
+//
+// PickMarks wins, and this file had already conceded the point once. `stood`
+// below is blue because blue is what PickMarks marks the card you took with,
+// and the rule it set -- the tick and the mark on the card it refers to are the
+// same colour saying the same thing -- is a test `hit` never passed. The marks
+// are also older, wider (both review surfaces, the misses drill, and the CLI
+// reveal share the words and the colours) and drawn ON THE CARDS, which is where
+// the lesson is.
+//
+// So the graded pair is a claim about HOW A PICK CAME OUT rather than about
+// which card was which, and it is drawn in what the card vocabulary does not
+// spend: a neutral outline for right, red for wrong. Red is the one grade colour
+// the marks never use, it is already what this app means by a pick that went
+// wrong -- gradeFor sends D and F there, and the walkthrough writes "✗ not this
+// time" in it two inches away -- and it is the tone the eye should land on,
+// since the misses are what both review surfaces are for.
+//
+// `stood` keeps its blue, and it is the exception that proves the split. It
+// belongs to the misses drill, where a question can come back a third way: you
+// were dealt a pick you got wrong and you made the same call again. That is not
+// a hit and the drill refuses to call it a failure -- it is a disagreement with
+// the grader rather than a slip. It is also the one graded tick that IS a claim
+// about a card ("you answered with the one you took"), so it belongs in the card
+// vocabulary and stays in it.
 //
 // The comparison's three read as one sentence: nothing happened, a decision
 // happened, or the question was not the same one. Agreeing is the hairline,
@@ -80,16 +122,23 @@ export interface Tick {
 // feature says drift in -- and it is deliberately NOT one of the grade colours
 // doing grade work, since a pick off a different pack has not been judged badly,
 // it has not been judged at all.
-const TONE: Record<TickState, string> = {
-  ahead: "bg-base-content/10",
-  past: "bg-base-content/65",
-  current: "bg-primary",
-  hit: "bg-success/60",
-  miss: "bg-error/70",
-  stood: "bg-info/60",
-  agreed: "bg-base-content/25",
-  fork: "bg-primary",
-  apart: "bg-warning/45",
+//
+// `tall` is the other half of the old height rule: a tick that carries a result
+// is an object, a tick that only carries a position is a rule. That is what
+// stops the review's two surfaces drawing the same draft at two different
+// weights. Where you ARE is still never said with size -- it is said with the
+// halo (see tick-lit in globals.css), because a tick is too small for size or
+// colour alone to be findable among forty-four siblings.
+const PAINT: Record<TickState, TickPaint> = {
+  ahead: { ink: mix("base-content", 10) },
+  past: { ink: mix("base-content", 65) },
+  current: { ink: "var(--color-primary)", tall: true },
+  hit: { ink: mix("base-content", 70), hollow: true, tall: true },
+  miss: { ink: mix("error", 70), tall: true },
+  stood: { ink: mix("info", 60), tall: true },
+  agreed: { ink: mix("base-content", 25) },
+  fork: { ink: "var(--color-primary)", tall: true },
+  apart: { ink: mix("warning", 45), tall: true },
 };
 
 // `ahead` is the one tone that depends on what the track IS, and the same
@@ -97,18 +146,10 @@ const TONE: Record<TickState, string> = {
 // made can recede to almost nothing where the track is a picture. In the review
 // every tick is a place to go, and a target you cannot see is not one -- so
 // there, ahead stays aimable.
-const AHEAD_NAVIGABLE = "bg-base-content/30";
+const AHEAD_NAVIGABLE = mix("base-content", 30);
 
-// A tick that carries a result is an object; a tick that only carries a position
-// is a rule. So `hit`, `miss` and `current` all stand at the same height and the
-// ungraded pair stay a hairline -- which is also what stops the review's two
-// surfaces drawing the same draft at two different weights, the breakdown's
-// graded track being a 2px line where the walkthrough's is 6px.
-//
-// Where you ARE is still not said with size. It is said with the halo (see
-// tick-lit in globals.css), for the reason recorded there: a tick is too small
-// for size or colour alone to be findable among forty-four siblings.
-const TALL: TickState[] = ["current", "hit", "miss", "stood", "fork", "apart"];
+const paintOf = (state: TickState, navigable: boolean): TickPaint =>
+  state === "ahead" && navigable ? { ink: AHEAD_NAVIGABLE } : PAINT[state];
 
 // The tick you are ON is an object too, whatever it happens to say. That is the
 // one exception, and it is not an exception to the idea above so much as the
@@ -125,10 +166,20 @@ const TALL: TickState[] = ["current", "hit", "miss", "stood", "fork", "apart"];
 // graded tick in it is already this tall, so promoting one changes nothing. A
 // track of nothing but agreements is 4px taller from its first paint and stays
 // there, since exactly one tick is here at a time.
-const bar = (state: TickState, navigable: boolean, here: boolean) =>
-  `w-full rounded-full ${state === "ahead" && navigable ? AHEAD_NAVIGABLE : TONE[state]} ${
-    state === "current" ? "tick-lit h-1.5" : here || TALL.includes(state) ? "h-1.5" : "h-0.5"
-  }`;
+// Split into a class and a style because the paint is now a value rather than a
+// utility: a hollow tick spends its ink on a border and a filled one on a
+// background, and Tailwind has no way to say "this colour, either way round".
+const bar = (state: TickState, navigable: boolean, here: boolean) => {
+  const paint = paintOf(state, navigable);
+  return {
+    className: `w-full rounded-full ${state === "current" ? "tick-lit " : ""}${
+      here || paint.tall ? "h-1.5" : "h-0.5"
+    }`,
+    style: paint.hollow
+      ? { border: `1px solid ${paint.ink}` }
+      : { backgroundColor: paint.ink },
+  };
+};
 
 // The tick the page is scrolled to, which is not the same claim as `current`.
 // `current` is where you are in the DRAFT -- the pick being stepped through, the
@@ -314,6 +365,25 @@ function FlatTrack({
   const ref = useRef<HTMLDivElement>(null);
   const flat = groups.flat();
 
+  /**
+   * Which pick is under the pointer, in the words the tick already carries.
+   *
+   * IT REPLACES `title=`, which is the whole point of it. A tick is four pixels
+   * of a forty-two pick run and the only thing naming it was a native tooltip:
+   * it does not exist on a touch screen, it waits a second before appearing,
+   * and it cannot be styled to sit anywhere near the mark it belongs to. The
+   * house rule says a hover is not a channel and `useCursorTip` is the longer
+   * form for people who can point -- this is that, on the app's oldest
+   * `title=`.
+   *
+   * The sentence is `tick.label` unchanged, which is the same string the button
+   * announces as its accessible name. That is deliberate: what a tick MEANS is
+   * carried by `TrackKey` beside the track, and this only ever adds which pick
+   * it is -- so the pointer and the screen reader are told the same thing and
+   * neither is the only way to get it.
+   */
+  const tip = useCursorTip();
+
   // One tab stop for the whole track, arrows to move within it -- the same
   // bargain a radio group makes, and for the same reason: a review has twenty-odd
   // decisions in it, and tabbing past twenty-odd ticks to reach the page is worse
@@ -395,6 +465,7 @@ function FlatTrack({
             {ticks.map((tick, i) => {
               const isHere = start + i === here;
               const lit = isHere ? HERE : "";
+              const mark = bar(tick.state, onSelect != null, isHere);
 
               return onSelect ? (
                 <button
@@ -420,6 +491,7 @@ function FlatTrack({
                   // cannot be found any other way.
                   className={`group flex flex-1 cursor-pointer items-end rounded-sm py-1.5 ${TICK_X} transition-colors hover:bg-base-content/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70`}
                   aria-label={tick.label}
+                  {...tip.follow(() => tick.label)}
                   aria-current={tick.state === "current" ? "true" : undefined}
                   tabIndex={start + i === stop ? 0 : -1}
                   onClick={() => onSelect(start + i)}
@@ -428,16 +500,22 @@ function FlatTrack({
                       up to full height is a good extra cue and costs nothing.
                       It is no longer the only cue. */}
                   <span
-                    className={`${bar(tick.state, true, isHere)} ${lit} motion-safe:transition-[height,transform] group-hover:h-1.5`}
+                    className={`${mark.className} ${lit} motion-safe:transition-[height,transform] group-hover:h-1.5`}
+                    style={mark.style}
                   />
                 </button>
               ) : (
                 // Same box the navigable form's button is, padding included, so
                 // the track occupies one height on every page that draws one --
                 // whether or not its ticks are places to go.
-                <span key={i} className={`flex flex-1 items-end py-1.5 ${TICK_X}`}>
+                <span
+                  key={i}
+                  className={`flex flex-1 items-end py-1.5 ${TICK_X}`}
+                  {...tip.follow(() => tick.label)}
+                >
                   <span
-                    className={`${bar(tick.state, false, isHere)} ${lit} motion-safe:transition-[height,transform]`}
+                    className={`${mark.className} ${lit} motion-safe:transition-[height,transform]`}
+                    style={mark.style}
                   />
                 </span>
               );
@@ -448,7 +526,17 @@ function FlatTrack({
     </div>
   );
 
-  if (!groupLabels) return track;
+  // Outside the `role="img"` / `role="group"` element either way: that subtree
+  // is one labelled object, and a box that follows the pointer is not part of
+  // it.
+  if (!groupLabels) {
+    return (
+      <>
+        {track}
+        {tip.node}
+      </>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -467,6 +555,56 @@ function FlatTrack({
           </span>
         ))}
       </div>
+      {tip.node}
     </div>
+  );
+}
+
+/**
+ * What the tones on a track mean, with the count of each beside them.
+ *
+ * WHY IT IS HERE AND NOT AT THE CALL SITES. A legend that transcribes a chart's
+ * colours is a second copy of them, and the copy is wrong from the first time
+ * anybody re-tones a state -- silently, because a legend cannot look wrong. This
+ * one reads `PAINT`, the table the ticks themselves are painted from, so the two
+ * cannot disagree and a new state gets a legend entry for free.
+ *
+ * IT CARRIES COUNTS BECAUSE THE TRACK IS THE ONLY PLACE SOME OF THEM ARE SAID.
+ * Both drills refuse to print a fraction on purpose -- a run is a set of packs
+ * you have now seen the answer to, not a test -- on the grounds that the track
+ * has already said how it went. That was only true while the track was legible.
+ * `aside` is the same slot `PickSplit` prints its counts in, and for the same
+ * reason: three counts beside three swatches is the split, which is what a
+ * reader wanted, and it is not a score.
+ *
+ * The shape follows the tick: a hollow tick gets a hollow swatch, so the second
+ * channel is in the key as well as on the chart.
+ */
+export function TrackKey({
+  entries,
+  className,
+}: {
+  entries: {
+    state: TickState;
+    /** The word the rest of the screen uses for this outcome. */
+    label: string;
+    /** How many of them. Printed beside the swatch. */
+    aside?: ReactNode;
+    /** What it means, where the label alone is a verdict rather than a fact. */
+    means?: string;
+  }[];
+  className?: string;
+}) {
+  return (
+    <Key
+      className={className}
+      entries={entries.map((entry) => ({
+        label: entry.label,
+        ink: PAINT[entry.state].ink,
+        shape: PAINT[entry.state].hollow ? "hollow" : "bar",
+        aside: entry.aside,
+        means: entry.means,
+      }))}
+    />
   );
 }
