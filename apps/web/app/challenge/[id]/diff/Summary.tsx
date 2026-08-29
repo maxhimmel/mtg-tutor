@@ -1,8 +1,10 @@
 "use client";
 
+import type { MouseEvent } from "react";
 import { scaleLinear } from "@visx/scale";
 import type { DiffRow, DiffTally } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
+import { useCursorTip } from "../../../components/CursorTip";
 import { Plot, ValueAxisBottom } from "../../../charts/Plot";
 import { INK, MARK, NEUTRAL } from "../../../charts/ink";
 import { Explain } from "./Explain";
@@ -201,6 +203,12 @@ export function Summary({
   );
 }
 
+// The plot's own margins, named because the pointer has to undo them: a
+// readout that says which score the cursor is over reads x back through the
+// same scale the marks were drawn with, and a margin copied into two places is
+// a readout that drifts half a tick off its own axis.
+const PAD = { top: 10, right: 12, bottom: 18, left: 12 };
+
 // A fifth of the score, which is the window the two averages are drawn in. Wide
 // enough that a one-point lead is a mark rather than a rounding error, narrow
 // enough that a nine-point one is not off the end -- and FIXED, so the size of
@@ -226,6 +234,8 @@ function Margin({
   tally: DiffTally;
   them: string;
 }) {
+  const tip = useCursorTip();
+
   const yours = tally.yourAverage;
   const theirs = tally.theirAverage;
   const lead = yours - theirs;
@@ -256,60 +266,123 @@ function Margin({
       ? "level"
       : `${lead > 0 ? "you" : them} ${Math.abs(lead)} point${Math.abs(lead) === 1 ? "" : "s"} ahead`;
 
+  /**
+   * What the cursor is over, which on a scale is a PLACE and not a mark.
+   *
+   * The two dots are eight pixels on a track a foot wide, so a reader aiming at
+   * one spends the hover missing -- the same finding the archetype quiz wrote
+   * down when it moved its tooltip off the marks and onto the whole row. What a
+   * spot on this axis means is a score, and the two dots are near enough that
+   * naming whichever one the pointer is closest to is the reading somebody
+   * pointing between them actually wants.
+   *
+   * Both numbers are printed above this in full, so nothing here is only
+   * available to a pointer. This is the longer form.
+   */
+  const say = (e: MouseEvent<Element>): string | null => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const inner = box.width - PAD.left - PAD.right;
+    if (inner <= 0) return null;
+    const at = from + ((e.clientX - box.left - PAD.left) / inner) * span;
+    if (at < from || at > to) return null;
+
+    const near = Math.abs(at - yours) <= Math.abs(at - theirs) ? "yours" : "theirs";
+    const whose = near === "yours" ? "you" : them;
+    const score = near === "yours" ? yours : theirs;
+    const between = at > Math.min(yours, theirs) && at < Math.max(yours, theirs);
+    return `${Math.round(at)} of 100 — ${between ? `inside the gap, ${gapWords}. ` : ""}${whose} averaged ${score}.`;
+  };
+
   return (
     <div className="flex flex-col gap-2">
-      <Plot
-        height={52}
-        // Two dots, a bar between them and three axis numbers. Under this the
-        // numbers collide with each other and with their own scale, and the two
-        // averages are printed in full a line above in any case.
-        needs={260}
-        instead={
-          <p className="text-xs leading-relaxed text-base-content/60">
-            Average pick score out of 100: you {yours}, {them} {theirs} — {gapWords}.
-          </p>
-        }
-        label={`Average pick score for both drafters on a ${span}-point window of the 0 to 100 scale, from ${from} to ${to}. You ${yours}, ${them} ${theirs} — ${gapWords}.`}
-        margin={{ top: 10, right: 12, bottom: 18, left: 12 }}
-        className="max-w-[26rem]"
-      >
-        {(box) => {
-          const x = scaleLinear({ domain: [from, to], range: [0, box.width] });
-          const y = box.height / 2;
+      {/* The pointer is taken on the box rather than on the marks, for the
+          reason `say` records. `Plot` owns its own div, so the handlers go on
+          one wrapped around it -- and the box the readout measures from is
+          therefore exactly the box the SVG is drawn in. */}
+      <div className="max-w-[26rem]" {...tip.follow(say)}>
+        <Plot
+          height={52}
+          // Two dots, a bar between them and three axis numbers. Under this the
+          // numbers collide with each other and with their own scale, and the two
+          // averages are printed in full a line above in any case.
+          needs={260}
+          instead={
+            <p className="text-xs leading-relaxed text-base-content/60">
+              Average pick score out of 100: you {yours}, {them} {theirs} — {gapWords}.
+            </p>
+          }
+          label={`Average pick score for both drafters on a ${span}-point window of the 0 to 100 scale, from ${from} to ${to}. You ${yours}, ${them} ${theirs} — ${gapWords}.`}
+          // Filled gold against a hollow ring is how this screen has said "yours"
+          // and "theirs" since `sides.tsx`, and it is a real second channel --
+          // fill against outline, not two hues. What it was missing is anywhere
+          // saying so: the mark is unlabelled on the drawing, and the sentence
+          // that explained it lived in a code comment. The counts ride on it, so
+          // neither average needs a hover to be read.
+          legend={[
+            { label: "You", ink: INK.yours, shape: "dot", aside: yours },
+            {
+              label: them,
+              ink: INK.theirs,
+              // `Key`'s own hollow swatch is a bar, which is the wrong shape for a
+              // point estimate -- the mark on the chart is a ring.
+              swatch: (
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0 rounded-full border-[1.5px]"
+                  style={{ borderColor: INK.theirs }}
+                />
+              ),
+              aside: theirs,
+            },
+            {
+              label: "the gap",
+              ink: NEUTRAL.hollow,
+              shape: "bar",
+              aside: gapWords,
+              means: "out of 100, over all " + rows.length + " picks",
+            },
+          ]}
+          tip={tip.node}
+          margin={PAD}
+        >
+          {(box) => {
+            const x = scaleLinear({ domain: [from, to], range: [0, box.width] });
+            const y = box.height / 2;
 
-          return (
-            <>
-              {/* The gap itself, as the thing between the two of you rather than
-                  as two marks a reader has to subtract. */}
-              <rect
-                x={Math.min(x(yours), x(theirs))}
-                y={y - MARK.band / 2}
-                width={Math.abs(x(yours) - x(theirs))}
-                height={MARK.band}
-                rx={MARK.band / 2}
-                fill={NEUTRAL.hollow}
-              />
-              {/* Filled gold against a hollow ring, which is how this screen has
-                  said "yours" and "theirs" since `sides.tsx` -- so the mark needs
-                  no key and no second hue, and it survives being read by
-                  somebody who cannot separate gold from anything.
+            return (
+              <>
+                {/* The gap itself, as the thing between the two of you rather than
+                    as two marks a reader has to subtract. */}
+                <rect
+                  x={Math.min(x(yours), x(theirs))}
+                  y={y - MARK.band / 2}
+                  width={Math.abs(x(yours) - x(theirs))}
+                  height={MARK.band}
+                  rx={MARK.band / 2}
+                  fill={NEUTRAL.hollow}
+                />
+                {/* Filled gold against a hollow ring, which is how this screen has
+                    said "yours" and "theirs" since `sides.tsx` -- so the mark needs
+                    no key and no second hue, and it survives being read by
+                    somebody who cannot separate gold from anything.
 
-                  The ring goes on last so that a dead heat, where the two dots
-                  are the same dot, still shows both of them. */}
-              <circle cx={x(yours)} cy={y} r={MARK.dot / 2} fill={INK.yours} />
-              <circle
-                cx={x(theirs)}
-                cy={y}
-                r={MARK.dot / 2}
-                fill="none"
-                stroke={INK.theirs}
-                strokeWidth={1.5}
-              />
-              <ValueAxisBottom scale={x} top={box.height} numTicks={3} />
-            </>
-          );
-        }}
-      </Plot>
+                    The ring goes on last so that a dead heat, where the two dots
+                    are the same dot, still shows both of them. */}
+                <circle cx={x(yours)} cy={y} r={MARK.dot / 2} fill={INK.yours} />
+                <circle
+                  cx={x(theirs)}
+                  cy={y}
+                  r={MARK.dot / 2}
+                  fill="none"
+                  stroke={INK.theirs}
+                  strokeWidth={1.5}
+                />
+                <ValueAxisBottom scale={x} top={box.height} numTicks={3} />
+              </>
+            );
+          }}
+        </Plot>
+      </div>
 
       {/* NOT A CAVEAT ON THE MARK -- the reading of it. A lead built out of five
           picks and a lead built out of forty are different findings, and only

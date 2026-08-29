@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, type CSSProperties } from "react";
+import { useRef, type CSSProperties, type MouseEvent } from "react";
 import { useParentSize } from "@visx/responsive";
 import { Text } from "@visx/text";
 import type { DiffRow, DiffTally } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
 import { ScrollBox } from "../../../components/ScrollBox";
+import { ManaCost } from "../../../components/ManaCost";
+import { ColorPips } from "../../../components/ColorPips";
+import { useCursorTip } from "../../../components/CursorTip";
 import { Key } from "../../../charts/Key";
+import { manaMark } from "../../../charts/marks";
 import { Plot, TICK_TEXT } from "../../../charts/Plot";
 import { INK, NEUTRAL } from "../../../charts/ink";
 import { COLOR_NAMES } from "../../../lib/format";
@@ -21,6 +25,7 @@ import {
   TOGETHER,
   cordInk,
   isFork,
+  leanRuns,
   opennessOf,
   pickAxis,
   spans,
@@ -261,6 +266,30 @@ type Side = "yours" | "theirs";
 const SIDES: Side[] = ["yours", "theirs"];
 const CORDS = [0, 1] as const;
 
+/**
+ * How far a strand may leave its lane, which is a question about the width.
+ *
+ * The ease from one lane to the next spans a single band, so a swing bigger
+ * than that band is a corner however smoothly it is specified -- which is
+ * exactly what the fixed sixteen units became once the box stopped being a
+ * fixed size. Capping the swing at one band holds every lane change at or
+ * under forty-five degrees at every width the chart is drawn at, and what
+ * gives way on a narrow panel is the SIZE of the openings rather than their
+ * shape. A shallower rope is still a rope; a square wave is not.
+ *
+ * Out here rather than inside `Rope` because the pips are drawn in HTML over
+ * the same box -- see `CordPips` -- and two definitions of where a strand is
+ * would be a label floating off the thing it labels the day either moved.
+ */
+const swingFor = (step: number) => Math.min(OPEN_MAX, step);
+
+/** A strand's centreline at one pick: the line its two cords ride either side of. */
+const strandY = (open: number, swing: number, side: Side) =>
+  side === "yours" ? MID - TOGETHER / 2 - swing * open : MID + TOGETHER / 2 + swing * open;
+
+const leanFor = (side: Side) => (row: DiffRow) =>
+  side === "yours" ? row.yourLean : row.theirLean;
+
 export function Braid({
   rows,
   tally,
@@ -301,6 +330,26 @@ export function Braid({
    */
   const { parentRef, width } = useParentSize({ debounceTime: 0 });
 
+  /**
+   * What is under the pointer, which on this chart is a POSITION and not an
+   * element -- the case `useCursorTip` exists for.
+   *
+   * It replaces a bare SVG `<title>` on each band. That was a hover-only
+   * affordance that does not exist on a touch screen, it named the two cards
+   * and said nothing about the two PAIRS -- which is the encoding on this chart
+   * that colour cannot carry alone -- and it sat inside a `role="img"` subtree
+   * where a screen reader will not reach it anyway. The chart's own label and
+   * the track beneath carry the accessible reading; this is the longer form for
+   * somebody who can point.
+   *
+   * Wired to the whole plot rather than to each band because the bands are
+   * inside an SVG the pointer already passes through: one handler on the box,
+   * and the x it lands at is read back through the same `axis` the rope is
+   * drawn from. The pack gaps and the margins belong to no pick and say
+   * nothing, which is the honest answer there.
+   */
+  const tip = useCursorTip();
+
   if (rows.length === 0) return null;
 
   // The fork the first drift is attributable to: the last one before it. Only
@@ -328,6 +377,17 @@ export function Braid({
   const last = rows[rows.length - 1];
 
   const fallback = <Fallback rows={rows} tally={tally} them={them} />;
+
+  const sayPick = (e: MouseEvent<Element>): string | null => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const span = box.width - NAMES_W;
+    if (span <= 0) return null;
+    const f = (e.clientX - box.left - NAMES_W) / span;
+    for (let i = 0; i < rows.length; i++) {
+      if (f >= axis.at(i) && f < axis.end(i)) return titleOf(rows[i], them);
+    }
+    return null;
+  };
 
   const label =
     `Two strands over ${rows.length} picks, running together where you took the same card ` +
@@ -361,29 +421,41 @@ export function Braid({
         {width > 0 && (
           <div className="flex flex-col gap-1.5">
             {drawn ? (
-              <Plot
-                height={H}
-                // The same threshold the branch above already applied, so the
-                // SVG's own guard and the instrument's agree by construction.
-                needs={needs}
-                instead={fallback}
-                label={label}
-                margin={{ left: NAMES_W }}
-              >
-                {(box) => (
-                  <Rope
-                    rows={rows}
-                    tally={tally}
-                    them={them}
-                    axis={axis}
-                    open={open}
-                    here={here}
-                    causingFork={causingFork}
-                    width={box.width}
-                    onSelect={onSelect}
-                  />
-                )}
-              </Plot>
+              // The pips ride over the SVG rather than inside it: mana-font is a
+              // font, and `ManaCost` is the app's one renderer of it. A second
+              // one written against `<foreignObject>` would drift the day a
+              // hybrid or a snow symbol turns up, which is the argument that put
+              // every other pip in this app through the same component.
+              <div className="relative" {...tip.follow(sayPick)}>
+                <Plot
+                  height={H}
+                  // The same threshold the branch above already applied, so the
+                  // SVG's own guard and the instrument's agree by construction.
+                  needs={needs}
+                  instead={fallback}
+                  label={label}
+                  legend={{
+                    none: "Drawn at the foot of the whole instrument by `ColorKey`, below the track and the pack ruler. Those two are this chart's axis -- same measure, same pack widths -- and a key set between a drawing and its own axis parts them.",
+                  }}
+                  tip={tip.node}
+                  margin={{ left: NAMES_W }}
+                >
+                  {(box) => (
+                    <Rope
+                      rows={rows}
+                      tally={tally}
+                      them={them}
+                      axis={axis}
+                      open={open}
+                      here={here}
+                      causingFork={causingFork}
+                      width={box.width}
+                      onSelect={onSelect}
+                    />
+                  )}
+                </Plot>
+                <CordPips rows={rows} axis={axis} open={open} width={width - NAMES_W} />
+              </div>
             ) : (
               fallback
             )}
@@ -477,26 +549,11 @@ function Rope({
   const cx = (i: number) => axis.mid(i) * width;
   const step = axis.step * width;
 
-  /**
-   * How far a strand may leave its lane, which is a question about the width.
-   *
-   * The ease from one lane to the next spans a single band, so a swing bigger
-   * than that band is a corner however smoothly it is specified -- which is
-   * exactly what the fixed sixteen units became once the box stopped being a
-   * fixed size. Capping the swing at one band holds every lane change at or
-   * under forty-five degrees at every width the chart is drawn at, and what
-   * gives way on a narrow panel is the SIZE of the openings rather than their
-   * shape. A shallower rope is still a rope; a square wave is not.
-   */
-  const swing = Math.min(OPEN_MAX, step);
+  const swing = swingFor(step);
 
-  const laneY = (i: number, side: Side) =>
-    side === "yours"
-      ? MID - TOGETHER / 2 - swing * open[i]
-      : MID + TOGETHER / 2 + swing * open[i];
+  const laneY = (i: number, side: Side) => strandY(open[i], swing, side);
 
-  const leanOf = (row: DiffRow, side: Side) =>
-    side === "yours" ? row.yourLean : row.theirLean;
+  const leanOf = (row: DiffRow, side: Side) => leanFor(side)(row);
 
   /**
    * One stretch of one cord, as a path: a point per pick, eased between them.
@@ -745,7 +802,6 @@ function Rope({
               className="stroke-primary [stroke-width:3] transition-[stroke-width] group-hover:[stroke-width:5]"
             />
           )}
-          <title>{titleOf(row)}</title>
         </g>
       ))}
 
@@ -792,6 +848,101 @@ function Rope({
         ),
       )}
     </>
+  );
+}
+
+/**
+ * THE SECOND CHANNEL ON THE CORDS, and the reason there has to be one.
+ *
+ * The cords are painted from `cordInk`, and that function's own header carries
+ * the measurement: on this panel's floor the five mixed cords come out dE 2.5
+ * apart at the closest pair under deuteranopia and dE 8.0 apart at the closest
+ * pair under NORMAL vision. No mix ratio fixes it -- the sweep is in that
+ * header too. WUBRG is not a categorical palette and cannot be made into one,
+ * so the hue on this chart is a second reading of something else and never the
+ * encoding.
+ *
+ * PIPS RATHER THAN A DASH PATTERN, which was the other candidate. Three
+ * reasons, in order of weight. A dash is already spoken for on this drawing:
+ * `THREAD` is a dashed hairline and it means "nobody has committed to anything
+ * yet", so a dashed cord would put two meanings on one texture in the one panel
+ * where that distinction is the point. A cord's side is a PAIR, and a dash
+ * pattern can encode one thing where two pips print two. And this app settled
+ * the question already -- `ManaCurve`, `ColorPips` and `manaMark` all say a
+ * colour with the game's own symbol, and a second vocabulary on the same screen
+ * is the drift the kit exists to stop.
+ *
+ * A PIP PER RUN, not per pick. A strand's colour is a timeline: it is a pair
+ * from the pick that pair arrived until it changes, so the thing to name is the
+ * run and the place to name it is where the run starts. `leanRuns` is that
+ * unit. In a normal draft each side takes two or three pairs across
+ * forty-two picks, so this is a handful of marks and not a rash of them.
+ *
+ * AND IT DRAWS NOTHING WHERE IT WOULD NOT FIT, which is `manaMark`'s own
+ * ruling rather than a number invented here: below eleven pixels a colour the
+ * pips are a smudge, and a smudge is worse than the key. That is also what
+ * keeps two short runs from colliding -- a run that has no room for its own
+ * pips has no room to overlap its neighbour's either.
+ *
+ * Set on the strand's centreline, so the mark covers both cords: it is naming
+ * the PAIR, which is what a strand is, not one half of it.
+ */
+function CordPips({
+  rows,
+  axis,
+  open,
+  width,
+}: {
+  rows: DiffRow[];
+  axis: PickAxis;
+  open: number[];
+  /** The drawn width inside the plot's margins -- the same box `Rope` gets. */
+  width: number;
+}) {
+  const swing = swingFor(axis.step * width);
+
+  const marks = SIDES.flatMap((side) =>
+    leanRuns(rows, leanFor(side)).flatMap((run) => {
+      const mark = manaMark(run.lean);
+      // From the first band's CENTRE, which is where the rope is actually at
+      // the lane this mark is placed on -- at the band's edge it is still
+      // halfway through the turn.
+      const from = axis.mid(run.from) * width;
+      const to = axis.end(run.to - 1) * width;
+      if (!mark.fits(to - from, STRAND)) return [];
+      return [
+        {
+          key: `${side}-${run.from}`,
+          left: from,
+          top: strandY(open[run.from], swing, side),
+          pips: mark.pips,
+        },
+      ];
+    }),
+  );
+
+  return (
+    // `aria-hidden`, because every one of these is already in the chart's label
+    // and in the key below it. This is the drawing's second channel, not a
+    // second announcement of it.
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0"
+      style={{ left: NAMES_W, right: 0 }}
+    >
+      {marks.map((mark) => (
+        <span
+          key={mark.key}
+          className="absolute -translate-y-1/2 leading-none"
+          style={{ left: mark.left, top: mark.top }}
+        >
+          {/* `shadow` because these land on a cord rather than on the page, and
+              the mana font's own disc against a cord of nearly its own
+              lightness is exactly the edge the shadow exists for. */}
+          <ManaCost cost={mark.pips} className="text-[9px]" shadow />
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -964,7 +1115,21 @@ function ColorKey({ rows }: { rows: DiffRow[] }) {
         entries={[
           ...["W", "U", "B", "R", "G"]
             .filter((c) => present.has(c))
-            .map((c) => ({ label: COLOR_NAMES[c], ink: cordInk(c, 0) })),
+            .map((c) => ({
+              label: COLOR_NAMES[c],
+              ink: cordInk(c, 0),
+              // The pip, not a chip of the cord's colour, and for the same
+              // reason the cords carry pips at all: a chip would explain the
+              // hue with the hue. `Key` takes a `swatch` for exactly this --
+              // where the app already has a better mark for a thing than a
+              // rectangle of its colour -- and it makes the key a smaller copy
+              // of what is drawn above rather than a second vocabulary.
+              swatch: (
+                <span aria-hidden className="leading-none">
+                  <ManaCost cost={`{${c}}`} className="text-[11px]" />
+                </span>
+              ),
+            })),
           ...(anyUndecided
             ? [
                 {
@@ -1010,6 +1175,8 @@ function Fallback({
   tally: DiffTally;
   them: string;
 }) {
+  const last = rows[rows.length - 1];
+
   const partings = spans(rows, (r) => !r.agree).map((run) => ({
     key: run.from,
     from: rows[run.from],
@@ -1023,6 +1190,21 @@ function Fallback({
         Too narrow to draw the two drafts as strands — the picks would be closer together
         than a mark you could see. Every parting, in order:
       </p>
+
+      {/* WHICH TWO COLOURS EACH OF YOU ENDED ON, which this fallback did not
+          say and the rope it replaces says at every pick. The list below is the
+          quantity the AMPLITUDE encodes -- how long each parting held -- and
+          that was the right thing to rescue first; but the cords encode a
+          second thing, and dropping it meant a reader on a phone got the shape
+          of the disagreement with no idea what either of you was drafting.
+
+          In pips, because that is how the game writes a colour and how the key
+          under the drawn form writes it two paragraphs up. A word here and a
+          symbol there would be one screen with two vocabularies for one fact. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        <Finish who="You" lean={last.yourLean} />
+        <Finish who={them} lean={last.theirLean} />
+      </div>
 
       {partings.length === 0 ? (
         <p className="text-sm text-base-content/70">
@@ -1059,6 +1241,30 @@ function Fallback({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * One side's pair at the end of the draft, in the game's own symbols.
+ *
+ * `spoken` is what the chart's accessible label uses and it is right there --
+ * read aloud, "Blue-Black" is a name and two pips are not. On the page it is
+ * the other way round, which is `ColorPips`' standing argument: a reader who
+ * has seen one card knows what the blue drop means, and the deck rows, the
+ * placards and the pool counts on this same screen all print the symbol.
+ */
+function Finish({ who, lean }: { who: string; lean: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-base-content/60">{who} finished</span>
+      {undecided(lean) ? (
+        // Not an em dash: "no colours" is a thing that happened, and a dash is
+        // how this app writes a value it does not have.
+        <span className="text-base-content/45">on no pair</span>
+      ) : (
+        <ColorPips colors={lean} className="text-base" />
+      )}
+    </span>
   );
 }
 

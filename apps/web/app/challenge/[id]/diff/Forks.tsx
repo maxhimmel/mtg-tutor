@@ -5,6 +5,8 @@ import { scaleLinear } from "@visx/scale";
 import type { DiffRow, DiffTally, ForkImpact } from "@mtg-tutor/core";
 import { Panel } from "../../../components/Panel";
 import { ScrollBox } from "../../../components/ScrollBox";
+import { useCursorTip, type CursorTip } from "../../../components/CursorTip";
+import { Key, type KeyEntry } from "../../../charts/Key";
 import { INK, MARK, NEUTRAL } from "../../../charts/ink";
 import { gradeColor } from "../../../lib/format";
 import { Explain } from "./Explain";
@@ -110,6 +112,7 @@ export function Forks({
   className?: string;
 }) {
   const [sort, setSort] = useState<SortKey>("order");
+  const tip = useCursorTip();
 
   const byIndex = new Map(rows.map((r) => [r.pickIndex, r]));
   const forkRows = tally.forks
@@ -165,6 +168,21 @@ export function Forks({
     valueOf: (row: DiffRow) => number;
     inkOf: (row: DiffRow) => string;
     says: ReactNode;
+    /**
+     * What the ink means, which for one of the three orderings is a claim the
+     * column could not otherwise make.
+     *
+     * THE `gap` COLUMN PAINTS WITH THE GRADE SCALE and nothing said so. Green
+     * left of the rule and red right of it is "this call did not cost you" and
+     * "it did" -- the same claim a grade makes, which is why those are the
+     * right two hues -- but the column had no key, so the only place that
+     * mapping existed was a comment in this file. The sign is on every row in
+     * words as well, so the key names the hue rather than being the one thing
+     * separating the two.
+     */
+    legend: KeyEntry[];
+    /** What ONE mark says, for a reader pointing at it. */
+    saysMark: (row: DiffRow) => string;
   } =
     sort === "gap"
       ? {
@@ -183,6 +201,19 @@ export function Forks({
               you.
             </>
           ),
+          legend: [
+            { label: "cost you", ink: INK.down, shape: "dot", means: "right of the rule" },
+            { label: "you were ahead", ink: INK.up, shape: "dot", means: "left of it" },
+            ...(gaps.some((g) => g === 0)
+              ? [{ label: "level", ink: INK.zero, shape: "dot" as const, means: "on the rule" }]
+              : []),
+          ],
+          saysMark: (row) => {
+            const gap = gapOf(row);
+            return gap === 0
+              ? `Pack ${row.packNo}, pick ${row.pickNo}: level on score, so this mark sits on the rule. The column runs ${widest} points either way.`
+              : `Pack ${row.packNo}, pick ${row.pickNo}: ${gap > 0 ? `theirs scored ${gap} points higher` : `yours scored ${-gap} points higher`}, out of 100. The column runs ${widest} points either way.`;
+          },
         }
       : sort === "changed"
         ? {
@@ -196,6 +227,21 @@ export function Forks({
                 packs.
               </>
             ),
+            legend: [
+              {
+                label: "what it changed",
+                ink: INK.yours,
+                shape: "dot",
+                means: `on the rule is nothing; the far end is ${furthest} of your later packs`,
+              },
+            ],
+            saysMark: (row) => {
+              const impact = impacts.get(row.pickIndex);
+              const reach = impact?.reach ?? 0;
+              return reach === 0
+                ? `Pack ${row.packNo}, pick ${row.pickNo}: changed nothing you went on to see, which is where the rule is.`
+                : `Pack ${row.packNo}, pick ${row.pickNo}: changed ${reach} of your ${impact?.of ?? 0} later packs, from ${impact?.delay} picks on. The column runs to ${furthest}.`;
+            },
           }
         : {
             domain: [0, Math.max(1, rows.length - 1)],
@@ -204,6 +250,16 @@ export function Forks({
             says: (
               <>The marks run left to right through the draft, pick 1 to pick {rows.length}.</>
             ),
+            legend: [
+              {
+                label: "when it happened",
+                ink: INK.value,
+                shape: "dot",
+                means: `left is pick 1, right is pick ${rows.length}`,
+              },
+            ],
+            saysMark: (row) =>
+              `Pack ${row.packNo}, pick ${row.pickNo} — pick ${row.pickIndex + 1} of ${rows.length} in the draft.`,
           };
 
   if (forkRows.length === 0) {
@@ -297,6 +353,8 @@ export function Forks({
               impact={impacts.get(row.pickIndex)}
               faceOf={faceOf}
               onOpen={onOpen}
+              follow={tip.follow}
+              says={scale.saysMark}
               mark={
                 <ForkMark
                   value={scale.valueOf(row)}
@@ -319,6 +377,11 @@ export function Forks({
         <span>Pick scores are out of 100.</span>
       </p>
 
+      {/* WITH THE MARKS, WHICH MEANS GONE WITH THEM. The column is dropped
+          below `sm` rather than squeezed -- see the header -- so a key for it
+          below `sm` would be a legend for a chart that is not on the page. */}
+      <Key className="hidden sm:flex" entries={scale.legend} />
+
       {/* A failed replay stays a paragraph whatever the page has been told about
           notes: it is not a caveat on a number, it is the reason a column the
           reader can see is missing. */}
@@ -332,6 +395,10 @@ export function Forks({
       )}
 
       {apartAndDiffered > 0 && <Apart count={apartAndDiffered} them={them} />}
+
+      {/* Outside every `role="img"` on the panel: a box that follows the
+          pointer is not part of any of the pictures it explains. */}
+      {tip.node}
     </Panel>
   );
 }
@@ -484,6 +551,8 @@ function Fork({
   faceOf,
   onOpen,
   mark,
+  follow,
+  says,
 }: {
   row: DiffRow;
   them: string;
@@ -494,6 +563,9 @@ function Fork({
   onOpen: (pickIndex: number) => void;
   /** Where this fork stands on the quantity the list is ordered by. */
   mark: ReactNode;
+  follow: CursorTip["follow"];
+  /** The same standing, in words, for a reader pointing at the mark. */
+  says: (row: DiffRow) => string;
 }) {
   const colorsOf = (pack: DiffRow["yours"]["pack"], name: string) =>
     pack.find((c) => c.name === name)?.colors ?? [];
@@ -567,8 +639,16 @@ function Fork({
 
         {/* Gone below `sm` rather than squeezed. A scale narrower than its own
             dots is not a smaller scale, and the number this mark places is
-            printed on the row either way. */}
-        <span className="hidden shrink-0 sm:block">{mark}</span>
+            printed on the row either way.
+
+            The pointer is taken by the whole column and not by the dot: the dot
+            is eight pixels on a 132-pixel track, and a reader aiming at it
+            spends the hover missing. What the readout adds is the DOMAIN -- how
+            far this mark is along a scale whose ends are stated once at the
+            foot of a list you may have scrolled past. */}
+        <span className="hidden shrink-0 sm:block" {...follow(() => says(row))}>
+          {mark}
+        </span>
       </button>
     </li>
   );

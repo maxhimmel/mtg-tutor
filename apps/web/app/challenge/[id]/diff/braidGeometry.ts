@@ -34,7 +34,8 @@ export const STRAND = CORD * 2 + SEAM;
 export const TOGETHER = 18;
 
 /**
- * A cord's colour, where a cord is half a strand.
+ * A cord's colour, where a cord is half a strand -- AND WHY IT IS NEVER THE
+ * ONLY THING SAYING WHICH COLOUR THIS IS.
  *
  * WHICH HUE IS `cardFrame`'S TO SAY, and this file no longer keeps a second
  * opinion. It used to hold five literal hex values of its own -- the only
@@ -44,17 +45,50 @@ export const TOGETHER = 18;
  * pool counts and the deck rows are drawn from. A blue rope and a blue card
  * being different blues is the kind of drift nobody reports and everybody feels.
  *
- * SO THE RING SAYS THE HUE AND THE MIX SAYS THE GROUND. `ringFor` is sampled
- * off Arena's own deck-list rows, which sit on a near-white plate; these cords
- * lie on a 19%-lightness floor, where black's #5e5c5a is a smudge. Mixing each
- * ring toward `base-content` lifts every colour by the same amount, off the one
- * token that already knows how light this theme's foreground has to be -- so the
- * hue comes from the card and the contrast comes from the theme, and neither is
- * a number tuned by hand here.
+ * THE GROUND IS NOT `base-100`, which is where the first measurement of this
+ * went wrong. The cords lie in a WELL -- `fill-base-100/70` over the panel's
+ * `bg-base-200` -- so the real surface is the composite #1a1613, a little
+ * lighter than base-100 and therefore a slightly harder floor for a pale cord
+ * than base-100 would be. Every number below is against #1a1613.
+ *
+ * THE LIFT IS 6% AND IT USED TO BE 45%, and that change is the measurement.
+ * Mixing each ring toward `base-content` was doing one job -- putting mono
+ * black's #5e5c5a over 3:1 against the floor, where it sits at 2.70 raw -- and
+ * it was charging the whole palette for it. Swept against the well:
+ *
+ *     ring    deutan worst   normal worst   darkest cord vs floor
+ *     100%    G-R  4.8       G-B  14.4      2.70   under 3:1
+ *      94%    G-R  4.5       G-B  13.6      3.00   PASSES
+ *      80%    G-R  3.9       G-B  11.4      pass
+ *      70%    G-R  3.4       G-B  10.0      pass
+ *      55%    G-R  2.5       G-B   8.0      pass      <- what this was
+ *
+ * Every column but the last gets worse the further the mix goes, and the last
+ * one stops improving the moment it clears its threshold. At 55% the cords were
+ * five greys: green against red at 2.5 to a deuteranope, green against black at
+ * 8.0 to NORMAL vision, and all five below the chroma floor -- the palette
+ * reading grey to everybody, to buy one cord a contrast check it clears at 94%.
+ *
+ * SO THE RATIO IS DERIVED AND NOT CHOSEN. It is the least lift that puts the
+ * darkest ring over 3:1 on this well, which is the one thing the mix was ever
+ * for. It is an answer about THIS theme: re-derive it if `base-100`, `base-200`
+ * or `base-content` move, because a number tuned to a floor is stale the moment
+ * the floor is.
+ *
+ * AND IT IS STILL NOT A LEGAL PALETTE, which is why `CordPips` exists. 4.5 is
+ * below even the 6-8 floor band at which a categorical palette is allowed WITH
+ * a second channel behind it, and black is achromatic by definition -- no lift
+ * fixes that. WUBRG is not a categorical palette and cannot be made into one.
+ * The strand carries its pair as PIPS, the key under the chart prints the same
+ * pips beside every colour it names, and the pointer says both leans in words.
+ * This function may be read as "make the rope look like the cards"; it may not
+ * be read as "this is how a reader tells blue from green".
  */
+export const CORD_LIFT = 94;
+
 export const cordInk = (lean: string, cord: 0 | 1): string => {
   const color = lean[lean.length === 1 ? 0 : cord];
-  return `color-mix(in oklab, ${ringFor(color)} 55%, var(--color-base-content))`;
+  return `color-mix(in oklab, ${ringFor(color)} ${CORD_LIFT}%, var(--color-base-content))`;
 };
 
 /**
@@ -92,12 +126,47 @@ export const spoken = (colors: string): string =>
 /** Same pack, different card: the one disagreement that was a decision. */
 export const isFork = (row: DiffRow) => row.samePack && !row.agree;
 
-/** What a pick was, for the pointer that is hovering it. */
-export function titleOf(row: DiffRow): string {
+/**
+ * What a pick was, for the pointer that is hovering it.
+ *
+ * IT NAMES BOTH PAIRS, which is the half it used to leave to the cords. The
+ * cords are the one encoding on this chart that hue cannot carry alone -- see
+ * `cordInk` for the numbers -- so the reading a pointer is owed at this spot is
+ * not only which two cards, but which two decks. In words, because this is read
+ * by `textContent` and a pip is a font.
+ */
+export function titleOf(row: DiffRow, them: string): string {
   const where = `P${row.packNo}P${row.pickNo}`;
-  if (row.agree) return `${where}: you both took ${row.yours.pickedName}`;
-  if (row.samePack) return `${where}: ${row.yours.pickedName} vs ${row.theirs.pickedName}`;
-  return `${where}: different packs — ${row.yours.pickedName} vs ${row.theirs.pickedName}`;
+  const cards = row.agree
+    ? `you both took ${row.yours.pickedName}`
+    : row.samePack
+      ? `${row.yours.pickedName} vs ${row.theirs.pickedName}`
+      : `different packs — ${row.yours.pickedName} vs ${row.theirs.pickedName}`;
+  return `${where}: ${cards}. You on ${spoken(row.yourLean)}, ${them} on ${spoken(row.theirLean)}.`;
+}
+
+/**
+ * Consecutive picks over which one side's pair did not change.
+ *
+ * The unit the pips are drawn in: a strand's colour is a timeline, so "where
+ * does this cord start being blue-black" is a run and not a pick. Undecided
+ * stretches are dropped rather than returned empty -- there is no pair there to
+ * name, which is the whole meaning of the thread.
+ */
+export function leanRuns(
+  rows: DiffRow[],
+  leanOf: (row: DiffRow) => string,
+): { from: number; to: number; lean: string }[] {
+  const out: { from: number; to: number; lean: string }[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    const lean = leanOf(rows[i]);
+    let j = i + 1;
+    while (j < rows.length && leanOf(rows[j]) === lean) j++;
+    if (!undecided(lean)) out.push({ from: i, to: j, lean });
+    i = j;
+  }
+  return out;
 }
 
 /**
