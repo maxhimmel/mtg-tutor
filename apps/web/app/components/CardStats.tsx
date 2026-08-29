@@ -154,37 +154,44 @@ function WinRateScale({ card, expanded }: { card: DisplayCard; expanded: boolean
   return (
     <Plot
       height={36}
-      /* DERIVED FROM THE ONE LABEL THAT CAN COLLIDE. The baseline is always dead
-         centre -- `lo` and `hi` are the arm either side of it -- so its label is
-         centred, and the two end labels are pinned to the edges. "62.3% median
-         uncommon" with its glyph is about 122px at this size and an end is
-         about 30px, so the centre label clears them once (W − 122) / 2 exceeds
-         38px of end plus air: W > 198, plus the dot's own margins. Below that
-         the caption says the same thing in a sentence, which is what a 130px
-         panel wanted anyway. */
+      /* TWO CONSTRAINTS, AND THIS IS THE LARGER OF THEM.
+
+         The axis: the baseline is always dead centre -- `lo` and `hi` are the
+         arm either side of it -- so its label is centred while the two end
+         labels are pinned to the edges. "62.3% median uncommon" with its glyph
+         is about 122px at this size and an end is about 30px, so the centre
+         label clears them once (W − 122) / 2 exceeds 38px of end plus air:
+         W > 198.
+
+         The legend: "This card" and "Margin ± 1.3pp" with their swatches and the
+         gap between them come to about 198px, and they have to sit on ONE row --
+         two entries that wrap are what this block looked like before, and the
+         wrap is what made it unreadable rather than the entries.
+
+         Both land near 200, so 210 clears each with a little air. Below it the
+         caption says the whole thing in a sentence, which is what a panel that
+         narrow wanted anyway. */
       needs={210}
       instead={<p className="text-[11px] text-base-content/60">{caption}</p>}
-      /* NO LEGEND, AND THE RULE IS THE REASON RATHER THAN THE EXCEPTION.
-         A legend is for telling two or more series apart. This chart has ONE
-         series -- one card's win rate -- and its three marks are not three
-         series but three claims about that one number: where it sits, how far
-         the sample can pin it down, and what it is being compared against.
+      /* TWO ENTRIES, AND THE THIRD IS THE ONE THAT WAS WRONG.
 
-         Named in a key, those three cost four lines under a chart thirty-six
-         pixels tall, which is a legend larger than the drawing it explains --
-         and in a 260px panel the third entry wrapped, so it read as a separate
-         remark rather than the last of a list. Putting the key in two columns
-         made it worse: half the width, so two entries wrapped instead of one.
+         This chart is one series -- one card's win rate -- so it does not get a
+         legend the way a chart of several would. What it gets is a name for the
+         marks a reader cannot otherwise tell apart, and there are exactly two:
+         the dot and the band are drawn at the same spot, the band centred on the
+         dot, so neither can be labelled in place without its label landing on
+         the other's.
 
-         So the marks are direct-labelled instead, selectively. The dot needs no
-         name: it is gold, which means "yours" everywhere in this app, and its
-         value is the row directly above. The band needs none either -- it is
-         drawn on the dot, and what it MEANS is a sentence, which is what the
-         shift reveal is for. Only the rule is a claim a reader cannot infer,
-         and it says so where it stands. */
-      legend={{
-        none: "One series. The dot is gold, which means yours, and its value is the row above; the band is drawn on it; and the only mark a reader cannot infer is the rule, which is labelled where it sits.",
-      }}
+         The rule was the third entry and it was the one making this list wrap
+         onto a second line in a 260px panel. It has clear space under it and
+         takes a direct label with its value, which beats a key entry on every
+         count -- it sits with the mark rather than below the chart, and it is
+         the only mark here whose meaning a reader could not guess.
+
+         (Naming all three in a key cost four lines under a chart 36px tall, and
+         putting that key in two columns only halved the width they had to wrap
+         in. Both are in the history; neither is worth repeating.) */
+      legend={legendFor({ se, expanded })}
       /* NO TIP, and the reason is the surface rather than the chart. This rides
          in the card hover panel, which is `pointer-events: none` -- it has to
          be, because it opens under the cursor and would otherwise take the
@@ -294,19 +301,24 @@ function WinRateScale({ card, expanded }: { card: DisplayCard; expanded: boolean
  * rule, so the two halves of the same symbol are spelled differently on
  * purpose.
  */
-function legendFor({
-  baseline,
-  norm,
-  ranked,
-  se,
-  expanded,
-}: {
-  baseline: number;
-  norm: string;
-  ranked: boolean;
-  se: number | null;
-  expanded: boolean;
-}): KeyEntry[] {
+/**
+ * The two marks that sit on top of each other, and nothing else.
+ *
+ * A legend is for telling marks apart, and on this chart exactly two need it:
+ * the dot and the band are drawn at the same place, the band centred on the
+ * dot, so neither can be direct-labelled without its label landing on the
+ * other's. That is the case a key is actually for.
+ *
+ * The rule is not in here. It has room under it and takes a direct label with
+ * its value, which is better than a key entry on every count -- it sits with
+ * the mark instead of below the chart, and it was the third entry that used to
+ * push this list onto a second line.
+ *
+ * `aside` only where the value is not already on the panel. The card's own rate
+ * is the row directly above the chart, so "This card" carries none; the margin
+ * appears nowhere else, so it carries its own.
+ */
+function legendFor({ se, expanded }: { se: number | null; expanded: boolean }): KeyEntry[] {
   return [
     { label: "This card", ink: INK.yours, shape: "dot" },
     ...(se != null
@@ -327,25 +339,6 @@ function legendFor({
           },
         ]
       : []),
-    {
-      label: norm.charAt(0).toUpperCase() + norm.slice(1),
-      ink: INK.zero,
-      aside: pct(baseline),
-      // THE FONT SHIPS ONE RARITY GLYPH, NOT FOUR. On a printed card the shape
-      // is the set and the COLOUR is the rarity -- and colour is the channel
-      // this app is least willing to hand a claim to. So the glyph says
-      // "rarity" and the word beside it says which, the same division
-      // `ManaCurve` uses when it prints a pip beside a colour's name. Drawn in
-      // the label's own ink rather than tinted, because a tint would be a
-      // second and quieter statement of what the word already says, in the one
-      // channel greyscale takes away.
-      swatch: (
-        <span aria-hidden className="flex items-center gap-1">
-          <span className="block h-3.5 w-px shrink-0" style={{ background: INK.zero }} />
-          {ranked && <i className="ms ms-rarity text-[11px] text-base-content/55" />}
-        </span>
-      ),
-    },
   ];
 }
 
