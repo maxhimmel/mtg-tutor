@@ -51,3 +51,27 @@ describe("the axis", () => {
     expect(scoreAxis([0]).floor).toBe(0);
   });
 });
+
+describe("the grades a legend has to name", () => {
+  // The whole reason `grades` exists beside `bands`: a key built from the
+  // gridlines alone is missing the band the lowest column is standing in.
+  it("includes the band the plot stands on, which the gridlines leave out", () => {
+    const axis = scoreAxis([88.2, 92.4]);
+    expect(axis.bands.map((band) => band.grade)).toEqual(["A", "A+"]);
+    expect(axis.grades.map((band) => band.grade)).toEqual(["A+", "A", "B+"]);
+  });
+
+  it("names every value's own grade", () => {
+    for (const values of [[88.2, 91], [61, 74.5], [12], [99.9], [45]]) {
+      const named = new Set(scoreAxis(values).grades.map((band) => band.grade));
+      for (const value of values) expect(named).toContain(gradeFor(value));
+    }
+  });
+
+  it("never names a grade that falls below the floor", () => {
+    for (const values of [[88.2], [61, 74.5], [12], [99.9]]) {
+      const axis = scoreAxis(values);
+      for (const band of axis.grades) expect(band.floor).toBeGreaterThanOrEqual(axis.floor);
+    }
+  });
+});

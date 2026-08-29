@@ -4,10 +4,13 @@ import Link from "next/link";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { gradeFor } from "@mtg-tutor/core";
 import { Plot } from "../charts/Plot";
+import type { KeyEntry } from "../charts/Key";
 import { INK, MARK, NEUTRAL } from "../charts/ink";
+import { ColorPips } from "../components/ColorPips";
+import { useCursorTip } from "../components/CursorTip";
 import { SetIcon } from "../components/SetIcon";
-import { gradeColor } from "../lib/format";
-import { scoreAxis } from "./plot";
+import { COLOR_NAMES, gradeColor } from "../lib/format";
+import { scoreAxis, type GradeBand } from "./plot";
 
 // The one plot this page has, drawn three times.
 //
@@ -47,6 +50,19 @@ export interface ScoreColumn {
    * picks each, and printing that under all ten would be noise.
    */
   n?: number;
+  /**
+   * The deck's colours, as letters -- "WU". Drawn as PIPS, which is the only
+   * way this app writes a colour: `ColorPips` has argued since it was written
+   * that the pip is on every card in the pack and needs no key where "WU" has
+   * to be decoded, and `manaMark` in the kit refuses to paint a Magic colour
+   * without them because `cardFrame`'s green and red are 4.8 apart under
+   * deuteranopia.
+   *
+   * Takes the same row as `n`, and never collides with it: a column is either a
+   * draft you took, which has colours and a fixed forty-five picks, or an
+   * average over picks, which has a count and no colours.
+   */
+  pips?: string;
   /** Makes the column a place to go. Omitted, the plot is a picture. */
   href?: string;
   /** The column said in full, for a screen reader and for a hover. */
@@ -83,6 +99,17 @@ const COUNT_ROW = 12;
 const PER_COLUMN = 24;
 
 /**
+ * One mana pip's box in the third row, at the 10px the pips are drawn at.
+ *
+ * A column carrying colours is wider than one carrying a count, and it has to
+ * be: a three-colour deck prints three pips and `committedColors` is never
+ * capped, so a splash makes the column wider rather than dropping a colour off
+ * the end. Below the width that holds them all, `needs` sends the reader to the
+ * table, where the colours are named in words.
+ */
+const PIP_W = 11;
+
+/**
  * The floor under that, whatever the column count.
  *
  * A plot narrower than it is tall turns a two-point drift into a cliff -- the
@@ -106,15 +133,25 @@ export function ScorePlot({
 }) {
   const axis = scoreAxis(columns.map((c) => c.score));
   const counted = columns.some((c) => c.n != null);
-  const bottom = LABEL_ROW + VALUE_ROW + (counted ? COUNT_ROW : 0);
+  const piped = columns.some((c) => c.pips);
+  const bottom = LABEL_ROW + VALUE_ROW + (counted || piped ? COUNT_ROW : 0);
   const margin = { ...MARGIN, bottom };
+  const tip = useCursorTip();
+
+  // The widest thing a column has to hold under it. Usually the value label,
+  // which is what `PER_COLUMN` was measured on; a plot of drafts instead has to
+  // hold a deck's pips, and a three-colour deck needs more room than "88.4".
+  const widestPips = Math.max(0, ...columns.map((c) => c.pips?.length ?? 0));
+  const perColumn = Math.max(PER_COLUMN, widestPips * PIP_W);
 
   return (
     <Plot
       height={MARGIN.top + AXIS_H + bottom}
-      needs={Math.max(MIN_WIDTH, MARGIN.left + MARGIN.right + columns.length * PER_COLUMN)}
+      needs={Math.max(MIN_WIDTH, MARGIN.left + MARGIN.right + columns.length * perColumn)}
       instead={<ScoreTable columns={columns} label={label} counting={counting} />}
       label={label}
+      legend={gradeKey(axis.grades, columns)}
+      tip={tip.node}
       margin={margin}
     >
       {({ width, height }) => {
@@ -204,20 +241,30 @@ export function ScorePlot({
                 />
               );
 
-              return column.href ? (
-                <Link
-                  key={column.key}
-                  href={column.href}
-                  aria-label={column.title}
-                  className="group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70"
-                >
-                  <title>{column.title}</title>
-                  {marks}
-                </Link>
-              ) : (
-                <g key={column.key}>
-                  <title>{column.title}</title>
-                  {marks}
+              // The whole column answers, not just the dot: a reader pointing
+              // halfway up a column is asking about that column, which is the
+              // case `useCursorTip` exists for. It replaces an SVG `<title>`,
+              // which was a hover that does not exist on a touch screen -- and
+              // nothing accessible goes with it, because `Plot` already names
+              // the whole picture with a sentence built from these same titles.
+              const hover = tip.follow(() => say(column));
+
+              // The group carries the hover in both cases, so the band lights
+              // up and answers whether or not the column is also a link -- it
+              // used to do neither on the two panels whose columns go nowhere.
+              return (
+                <g key={column.key} className="group" {...hover}>
+                  {column.href ? (
+                    <Link
+                      href={column.href}
+                      aria-label={column.title}
+                      className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70"
+                    >
+                      {marks}
+                    </Link>
+                  ) : (
+                    marks
+                  )}
                 </g>
               );
             })}
@@ -226,6 +273,65 @@ export function ScorePlot({
       }}
     </Plot>
   );
+}
+
+/**
+ * The column at the cursor, said in full.
+ *
+ * The caller's own sentence with the grade added, rather than a second
+ * description assembled here: `title` is what the plot's accessible name is
+ * built from, so a hover that said something else would be the chart
+ * disagreeing with itself. The grade is the one thing the sentence cannot
+ * already carry, because it is what the COLOUR says and the caller does not
+ * know which colour its score will land in.
+ */
+const say = (column: ScoreColumn) => `${column.title} — grade ${gradeFor(column.score)}`;
+
+/**
+ * The grade bands, as the letters they are painted with.
+ *
+ * WHY THIS PLOT NEEDS A KEY AT ALL, given the letters are already printed at
+ * the right end of every threshold line: the lines say where a grade STARTS and
+ * the letters say which grade it is, and neither says how the run fell across
+ * them. The count is what turns this from a thing you consult into a thing you
+ * read -- `PickSplit` is the model, and it is the same argument `Key` makes for
+ * `aside`. Ten drafts as "B+ x7, A x2, B x1" is a sentence about the run that
+ * the dots make you count off the gridlines.
+ *
+ * Only the grades something landed in. Every threshold on the plot is drawn as
+ * a line carrying its own letter, so an entry for a band with no column in it
+ * would be a legend explaining a mark that is not there.
+ */
+function gradeKey(grades: GradeBand[], columns: ScoreColumn[]): KeyEntry[] {
+  const landed = new Map<string, number>();
+  for (const column of columns) {
+    const grade = gradeFor(column.score);
+    landed.set(grade, (landed.get(grade) ?? 0) + 1);
+  }
+
+  return grades
+    .filter((band) => landed.has(band.grade))
+    .map((band) => ({
+      // The threshold rather than the letter, because the letter is the mark:
+      // a key whose label repeated its own swatch would say one thing twice.
+      // Each band runs from its own number to wherever the next entry above it
+      // starts, which is why they are listed highest first.
+      label: `from ${band.floor}`,
+      ink: gradeColor(band.grade),
+      aside: `×${landed.get(band.grade)}`,
+      // The same letter, in the same colour, as the one at the end of that
+      // grade's line on the plot -- so the key is a smaller copy of the thing
+      // it explains rather than a chip in a colour that appears nowhere.
+      swatch: (
+        <span
+          aria-hidden
+          className="w-4 text-center font-display text-xs font-semibold leading-none"
+          style={{ color: gradeColor(band.grade) }}
+        >
+          {band.grade}
+        </span>
+      ),
+    }));
 }
 
 function Column({
@@ -332,6 +438,34 @@ function Column({
           {column.n}
         </text>
       )}
+
+      {/* THE DECK'S COLOURS, IN THE GAME'S OWN NOTATION. The set symbol above
+          says which pack this draft came out of and the score says how it went;
+          what a player scanning their last ten drafts is actually looking for
+          is which decks those were. It was in the hover text as "WU" and
+          nowhere on the drawing, which is the one place this app is not allowed
+          to write a colour as letters.
+
+          A foreignObject for the same reason the set symbol is one: `ManaCost`
+          is the app's only mana-font renderer and a second one would drift the
+          day a hybrid turns up, so the pips come through the component rather
+          than being redrawn as SVG here. */}
+      {column.pips && (
+        <foreignObject
+          x={left}
+          y={floor + LABEL_ROW + VALUE_ROW}
+          width={band}
+          height={COUNT_ROW}
+        >
+          <span className="flex items-center justify-center leading-none">
+            <ColorPips
+              colors={column.pips}
+              label={[...column.pips].map((c) => COLOR_NAMES[c] ?? c).join(" ")}
+              className="text-[10px]"
+            />
+          </span>
+        </foreignObject>
+      )}
     </>
   );
 }
@@ -362,6 +496,7 @@ function ScoreTable({
   counting?: string;
 }) {
   const counted = columns.some((c) => c.n != null);
+  const piped = columns.some((c) => c.pips);
 
   return (
     <table className="w-full text-sm tabular-nums">
@@ -371,6 +506,11 @@ function ScoreTable({
           <th scope="col" className="py-1 text-left font-semibold">
             <span className="sr-only">What</span>
           </th>
+          {piped && (
+            <th scope="col" className="py-1 pl-3 text-left font-semibold">
+              Colors
+            </th>
+          )}
           <th scope="col" className="py-1 pl-3 text-right font-semibold">
             Score
           </th>
@@ -398,6 +538,18 @@ function ScoreTable({
                   column.label
                 )}
               </th>
+              {/* Still pips here rather than "WU": the row is narrower than the
+                  drawing, not less of a place to write a colour properly, and
+                  `ColorPips` names them in words for a screen reader. */}
+              {piped && (
+                <td className="py-1 pl-3 text-left">
+                  <ColorPips
+                    colors={column.pips ?? ""}
+                    label={[...(column.pips ?? "")].map((c) => COLOR_NAMES[c] ?? c).join(" ")}
+                    className="text-[11px]"
+                  />
+                </td>
+              )}
               <td className="py-1 pl-3 text-right text-base-content/80">
                 {column.score.toFixed(1)}
               </td>
