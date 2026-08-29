@@ -99,6 +99,11 @@ const ARM = 0.1;
 
 const RANKED = new Set(["common", "uncommon", "rare", "mythic"]);
 
+// The Mana font's expansion symbol. A codepoint rather than the `ms-rarity`
+// class because this is drawn inside an SVG `<text>`, which cannot reach a CSS
+// `::before` -- the class is what every HTML caller uses.
+const RARITY_GLYPH = "\ue96c";
+
 /**
  * The one number on this panel with a reference point, and where it comes from.
  *
@@ -149,25 +154,37 @@ function WinRateScale({ card, expanded }: { card: DisplayCard; expanded: boolean
   return (
     <Plot
       height={36}
-      needs={140}
+      /* DERIVED FROM THE ONE LABEL THAT CAN COLLIDE. The baseline is always dead
+         centre -- `lo` and `hi` are the arm either side of it -- so its label is
+         centred, and the two end labels are pinned to the edges. "62.3% median
+         uncommon" with its glyph is about 122px at this size and an end is
+         about 30px, so the centre label clears them once (W − 122) / 2 exceeds
+         38px of end plus air: W > 198, plus the dot's own margins. Below that
+         the caption says the same thing in a sentence, which is what a 130px
+         panel wanted anyway. */
+      needs={210}
       instead={<p className="text-[11px] text-base-content/60">{caption}</p>}
-      /* THE THREE MARKS, NAMED. A dot, a band and a rule is three claims in
-         thirty-six pixels and nothing on the panel said which was which -- the
-         band in particular reads as a bar the dot sits on rather than as the
-         margin around it, which is the reading that makes a one-point miss
-         look like two grades.
+      /* NO LEGEND, AND THE RULE IS THE REASON RATHER THAN THE EXCEPTION.
+         A legend is for telling two or more series apart. This chart has ONE
+         series -- one card's win rate -- and its three marks are not three
+         series but three claims about that one number: where it sits, how far
+         the sample can pin it down, and what it is being compared against.
 
-         An `aside` only where the value is not already on the panel. The
-         card's own rate is the row directly above this chart, so repeating it
-         here would be the same number twice in two centimetres; the margin and
-         the baseline appear nowhere else once the drawing fits, so they carry
-         theirs. */
-      legend={legendFor({ baseline, norm, ranked, se, expanded })}
-      // Three entries do not fit one line in a 260px panel, and left to
-      // wrap the third hangs under the middle of the other two looking
-      // like a separate thing. Two columns make the second line read as
-      // the rest of the same list.
-      legendColumns={2}
+         Named in a key, those three cost four lines under a chart thirty-six
+         pixels tall, which is a legend larger than the drawing it explains --
+         and in a 260px panel the third entry wrapped, so it read as a separate
+         remark rather than the last of a list. Putting the key in two columns
+         made it worse: half the width, so two entries wrapped instead of one.
+
+         So the marks are direct-labelled instead, selectively. The dot needs no
+         name: it is gold, which means "yours" everywhere in this app, and its
+         value is the row directly above. The band needs none either -- it is
+         drawn on the dot, and what it MEANS is a sentence, which is what the
+         shift reveal is for. Only the rule is a claim a reader cannot infer,
+         and it says so where it stands. */
+      legend={{
+        none: "One series. The dot is gold, which means yours, and its value is the row above; the band is drawn on it; and the only mark a reader cannot infer is the rule, which is labelled where it sits.",
+      }}
       /* NO TIP, and the reason is the surface rather than the chart. This rides
          in the card hover panel, which is `pointer-events: none` -- it has to
          be, because it opens under the cursor and would otherwise take the
@@ -199,18 +216,27 @@ function WinRateScale({ card, expanded }: { card: DisplayCard; expanded: boolean
           <>
             <line x1={0} x2={width} y1={mid} y2={mid} stroke={INK.rule} strokeWidth={MARK.axis} />
 
-            {/* The rule, unlabelled HERE and named in the key instead.
+            {/* The rule, labelled where it stands, with its value.
 
-                It used to carry its own text under the line -- the expansion
-                symbol and then "median uncommon" -- while the key beneath the
-                chart named it a second time and added the value. Two labels for
-                one mark in a panel this narrow, and the pair of them is what
-                pushed the key's third entry onto a line of its own.
+                A direct label rather than a key entry, because it is one mark
+                and not a series -- and because a reference line a reader cannot
+                name is the one thing on this chart that is genuinely
+                ambiguous. The value rides with the name for the same reason:
+                62.3% appears nowhere else on the panel, so leaving it off would
+                make the rule a position with no number.
 
-                So the division is the one `Plot` already draws everywhere else:
-                the AXIS says the scale -- both ends, under the rule -- and the
-                KEY says the marks. The baseline is a mark. */}
+                The expansion symbol carries "rarity" and the word carries which
+                one. The font ships ONE rarity glyph, not four -- on a printed
+                card the shape is the set and the COLOUR is the rarity, and
+                colour is the channel this app is least willing to hand a claim
+                to. Drawn in the label's own ink rather than tinted, because a
+                tint would say the same thing again in the one channel
+                greyscale takes away. */}
             <Reference at={at(baseline)} height={height} />
+            <text x={at(baseline)} y={height + 12} textAnchor="middle" {...TICK_TEXT}>
+              {ranked && <tspan fontFamily="Mana">{RARITY_GLYPH}</tspan>}
+              <tspan dx={ranked ? "0.3em" : 0}>{`${pct(baseline)} ${norm}`}</tspan>
+            </text>
 
             {se != null && beyond === 0 && (
               <rect

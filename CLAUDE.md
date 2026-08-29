@@ -144,7 +144,11 @@ The house kit is `app/charts/`:
   means "yours"; the five Magic colours are `cardFrame`'s literal hex and must
   not move with the theme. A new mark needs a role before it needs a colour.
 - **`Key`** — a legend carries each series' COUNT beside its swatch where there
-  is one, so no value on the chart needs a hover.
+  is one, so no value on the chart needs a hover. **A legend is for telling two
+  or more series apart; a one-series chart gets none and its title names it.**
+  Three marks about ONE number — a value, its uncertainty, a reference — are not
+  three series: direct-label the one a reader cannot infer and leave the rest.
+  A legend taller than the chart it explains is the tell that this was missed.
 
 ### What the rules are
 

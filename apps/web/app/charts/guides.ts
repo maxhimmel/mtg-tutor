@@ -83,7 +83,13 @@ export interface AxisSaid {
  * the legend stops being a thing you consult and becomes a thing you read.
  *
  * `shape` is not decoration. It is the second channel, and for one palette in
- * this app it is mandatory -- see `ManaBand` in `marks.tsx`.
+ * this app it is mandatory -- see `manaMark` in `marks.tsx`.
+ *
+ * A LEGEND IS FOR TELLING TWO OR MORE SERIES APART. One series gets none: the
+ * chart's own title names it, and its marks are direct-labelled instead. The
+ * card-stats win-rate scale is the case that taught this -- a dot, a band and a
+ * rule are not three series but three claims about one number, and named in a
+ * key they cost four lines under a chart thirty-six pixels tall.
  */
 export interface LegendSaid {
   label: string;
