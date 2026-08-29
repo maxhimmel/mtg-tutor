@@ -1,12 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { tally } from "@mtg-tutor/core";
 import type { Card, DiffRow, DiffTally, PoolCard, ValueTerm } from "@mtg-tutor/core";
 import { CardPlacard, CardPlacardList } from "../components/CardPlacard";
 import { CardFace, CardTile } from "../components/CardTile";
 import { CardStats, hasStats } from "../components/CardStats";
 import { CardText } from "../components/CardText";
-import { ColorPips } from "../components/ColorPips";
+import { ColorPips, ColorTally } from "../components/ColorPips";
 import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
 import { PickTrack, TrackKey, type Tick, type TickState } from "../components/PickTrack";
@@ -707,85 +708,40 @@ export const SPECIMENS: Specimen[] = [
     // every band must still be nameable. If it is not, the letters are too
     // small or the key is missing, and no amount of looking at the colour
     // version will tell you.
-    render: ({ cards }) => (
-      <div className="flex flex-wrap items-start gap-8">
-        <Bay label="In the picks column (360px)" width="w-[22.5rem]">
+    render: ({ cards }) => {
+      // Drawn the way both real callers draw it: the tally sits in the panel
+      // header above the bars, and it IS this chart's key -- the component does
+      // not carry one, because a second copy under the bars was the same
+      // colours and counts twice in one panel. A bay without it would be
+      // testing a screen the app does not have.
+      const curve = (
+        <div className="flex flex-col gap-2">
+          <ColorTally colors={tally(cards, (c) => c.colors)} />
           <ManaCurve cards={cards} />
-        </Bay>
-        <Bay label="Greyscale — every band still nameable?" width="w-[22.5rem]">
-          <div style={{ filter: "grayscale(1)" }}>
-            <ManaCurve cards={cards} />
-          </div>
-        </Bay>
-        <Bay label="Deuteranopia — green and red are 4.8 apart here" width="w-[22.5rem]">
-          {/* A rough deuteranope simulation: enough to show whether the drawing
-              survives losing the red-green axis, not a clinical filter. */}
-          <div
-            style={{
-              filter:
-                "url(#deuter)",
-            }}
-          >
-            <ManaCurve cards={cards} />
-          </div>
-          <svg width="0" height="0" aria-hidden>
-            <filter id="deuter" colorInterpolationFilters="linearRGB">
-              <feColorMatrix
-                type="matrix"
-                values="0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0"
-              />
-            </filter>
-          </svg>
-        </Bay>
-      </div>
-    ),
-  },
-  {
-    id: "braid-cords",
-    title: "Braid cords",
-    note: "Blue-black against green-red — the pair that is 2.5 apart under deuteranopia. The pips are the encoding; the hue is a second reading of it",
-    renderBare: () => (
-      <div className="flex flex-col gap-8">
-        <Bay label="Full width — the pips at every lean change">
-          <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
-        </Bay>
+        </div>
+      );
 
-        {/* THE BAY THE PIPS EXIST FOR. Without them these four cords are two
-            pairs of near-identical greys, which is what a deuteranope has in
-            colour. Every strand still has to be nameable here. */}
-        <Bay label="Hue removed — the cords must still be readable">
-          <div style={{ filter: "grayscale(1)" }}>
-            <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
-          </div>
-        </Bay>
-
+      return (
         <div className="flex flex-wrap items-start gap-8">
-          <Bay label="606px — the last width the rope is true at" width="w-[606px] max-w-full">
-            <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
+          <Bay label="In the picks column (360px)" width="w-[22.5rem]">
+            {curve}
           </Bay>
-          <Bay label="375px — the fallback, with both finishes in pips" width="w-[375px] shrink-0">
-            <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
+          <Bay label="Greyscale — every band still nameable?" width="w-[22.5rem]">
+            <div style={{ filter: "grayscale(1)" }}>{curve}</div>
+          </Bay>
+          <Bay label="Deuteranopia — green and red are 4.8 apart here" width="w-[22.5rem]">
+            <div style={{ filter: "url(#deuter)" }}>{curve}</div>
+            <svg width="0" height="0" aria-hidden>
+              <filter id="deuter" colorInterpolationFilters="linearRGB">
+                <feColorMatrix
+                  type="matrix"
+                  values="0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0"
+                />
+              </filter>
+            </svg>
           </Bay>
         </div>
-      </div>
-    ),
-  },
-  {
-    id: "score-breakdown",
-    title: "Score breakdown",
-    note: "Every term on one ±8pp scale, with the axis that says so. A torn end is a bar that is not drawn to length",
-    renderBare: () => (
-      <div className="flex flex-wrap items-start gap-8">
-        <Bay label="Ordinary terms — all inside the track" width="w-[22rem] max-w-full">
-          <ScoreBreakdown base={0.551} total={0.566} terms={TERMS} />
-        </Bay>
-        <Bay label="A card the deck cannot cast — torn at −50pp" width="w-[22rem] max-w-full">
-          <ScoreBreakdown base={0.551} total={0.069} terms={TERMS_TORN} />
-        </Bay>
-        <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
-          <ScoreBreakdown base={0.551} total={0.566} terms={TERMS} />
-        </Bay>
-      </div>
-    ),
+      );
+    },
   },
 ];

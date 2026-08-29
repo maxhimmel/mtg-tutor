@@ -2,7 +2,6 @@
 
 import { type DisplayCard, CURVE_TOP, manaCurve } from "@mtg-tutor/core";
 import { colorBands, sayColumn } from "../lib/curveBands";
-import { Key, type KeyEntry } from "../charts/Key";
 import { ManaCost } from "./ManaCost";
 import { useCursorTip } from "./CursorTip";
 
@@ -19,6 +18,18 @@ import { useCursorTip } from "./CursorTip";
 //
 // Columns are scaled against the tallest, not against a fixed height, because
 // the reading is comparative: this is a shape, not a measurement.
+//
+// THE KEY IS `ColorTally`, AND IT IS NOT DRAWN HERE. A chart painted in WUBRG
+// may not go without one -- `cardFrame`'s green and red are 4.8 apart under
+// deuteranopia, below the floor at which a palette is legal even with a second
+// channel, so the pips on the bands and a key are both load-bearing. But the
+// requirement is a key IN VIEW, not a key this component owns, and both callers
+// already print one: `PicksColumn` and the misses drill each put a `ColorTally`
+// in the panel header directly above these bars. A second copy under them was
+// the same colours and the same counts twice in one panel.
+//
+// So a third caller owes the reader a tally of its own. There is nowhere for
+// this component to enforce that, which is the honest cost of not drawing it.
 
 // Tall enough that a one-card difference between neighbouring columns is visible
 // in a 360px side panel, short enough to leave the picks list the room.
@@ -32,7 +43,8 @@ const BAR_HEIGHT = 44;
 
 // The shortest a band can be and still hold its pips. Below it the band is a
 // stripe of colour and the key underneath is the only thing naming it, which is
-// the whole reason that key is not optional on this chart.
+// the whole reason a key has to be somewhere in view -- see the note above on
+// `ColorTally`, which is where it is.
 const PIP_FLOOR = 13;
 
 export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
@@ -121,9 +133,8 @@ export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
                           one card knows what the blue drop means, and a two
                           colour band simply prints both.
 
-                          Where a band is too thin to hold them, the key below is
-                          what carries it -- which is why that key may not be
-                          argued away. */}
+                          Where a band is too thin to hold them, the panel
+                          header's `ColorTally` is what carries it. */}
                       {tall >= PIP_FLOOR && (
                         <span aria-hidden className="leading-none drop-shadow-sm">
                           <ManaCost
@@ -153,18 +164,6 @@ export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
         ))}
       </div>
 
-      {/* THE KEY IS NOT OPTIONAL ON THIS CHART, which is the one place in the
-          kit where that is true rather than preferred. `guides.ts` allows any
-          chart to argue its way out of a legend; a chart painted in WUBRG
-          cannot, because those five are 4.8 apart at the closest pair under
-          deuteranopia and the letters on the bands go away as the bands get
-          thin. Counts ride on it so no number here needs a hover.
-
-          It is the same tally `PicksColumn` already prints in its panel header,
-          drawn again under the bars it explains -- a key eight inches from its
-          chart is a glossary, not a key. */}
-      <Key className="mt-2" entries={legendFor(cards)} />
-
       {/* Outside the figure rather than inside it: `role="img"` makes its whole
           subtree one labelled image, and a box that follows the pointer is not
           part of that picture. */}
@@ -173,30 +172,3 @@ export function ManaCurve({ cards }: { cards: DisplayCard[] }) {
   );
 }
 
-/**
- * One entry per colour actually in the pool, commonest first.
- *
- * Off the same `colorBands` the bars are drawn from, so the key cannot name a
- * colour the chart does not paint or miss one it does -- a legend transcribed
- * from a second list is wrong the first time anybody adds a band.
- */
-function legendFor(cards: DisplayCard[]): KeyEntry[] {
-  return colorBands(cards)
-    .slice()
-    .sort((a, b) => b.count - a.count)
-    .map((band) => ({
-      label: band.name,
-      ink: band.frame.ring,
-      aside: band.count,
-      // The same pips the band carries, so the key is a smaller copy of the
-      // thing it explains rather than a second vocabulary beside it. It also
-      // sidesteps the swatch problem entirely: a gold band's ring is a gradient,
-      // and a gradient in a four-pixel chip is a smudge whichever way it is
-      // painted, where two pips are exactly as readable as one.
-      swatch: (
-        <span aria-hidden className="leading-none">
-          <ManaCost cost={band.pips} className="text-[11px]" />
-        </span>
-      ),
-    }));
-}
