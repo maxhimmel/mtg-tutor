@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { damp, placeTip, type Point } from "../lib/cursorTip";
 
 /**
@@ -160,6 +161,12 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
     onMouseLeave: hide,
   });
 
+  // Client-only, so the portal has a `document.body` to reach for. State and not
+  // a `typeof window` test: the server renders nothing here, and a first client
+  // render that already had the box would not match the HTML it is hydrating.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Placed at render rather than on the first frame. Without this the element
   // paints at the origin and jumps to the pointer once the effect has run and a
   // frame has been asked for -- two frames of a tooltip in the corner of the
@@ -172,20 +179,50 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
     { width: typeof window === "undefined" ? 0 : window.innerWidth, height: 0 },
   );
 
+  /**
+   * THROUGH A PORTAL, BECAUSE `position: fixed` IS NOT ENOUGH ON ITS OWN.
+   *
+   * `fixed` positions against the viewport only while no ancestor has made
+   * itself a containing block, and a `z-index` only outranks what shares its
+   * stacking context. Rendered where the caller renders it, this box inherits
+   * whatever the surrounding page happens to be doing -- so the diff screen's
+   * masthead, which is `z-20 xl:sticky`, was capping a z-50 tooltip inside a
+   * stacking context at 20, and the panel in the next grid column painted
+   * straight over it. Nothing about the tooltip was wrong; it was in the wrong
+   * tree.
+   *
+   * That is not a one-off. `ScrollBox` carries a `mask-image`, which is a
+   * containing block AND a clip: any chart that puts a tip inside one -- the
+   * fork list and the braid's parting list both do -- would have had the box
+   * cut off at the scroller's edge instead. Every future `z-*` on any ancestor
+   * of any chart is the same bug waiting.
+   *
+   * `document.body` is the one parent with no such ancestors. It is also what
+   * makes this behave like `CardPreview`, whose surface has always worked for
+   * exactly this reason and no other: it is rendered once, at the root, by the
+   * provider. The docblock at the top of this file calls the hook-not-provider
+   * split a cost worth paying; the portal is what stops it costing this.
+   *
+   * `mounted` guards the server render, where there is no `document` -- and it
+   * has to be state rather than a `typeof window` check, or the first client
+   * render would disagree with the HTML it is hydrating.
+   */
+  const tip = showing ? (
+    <div
+      ref={box}
+      role="presentation"
+      className="pointer-events-none fixed left-0 top-0 z-50 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
+      style={{
+        maxWidth,
+        transform: `translate3d(${Math.round(first.x)}px, ${Math.round(first.y)}px, 0)`,
+      }}
+    >
+      {want.current.text}
+    </div>
+  ) : null;
+
   return {
     follow,
-    node: showing ? (
-      <div
-        ref={box}
-        role="presentation"
-        className="pointer-events-none fixed left-0 top-0 z-50 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
-        style={{
-          maxWidth,
-          transform: `translate3d(${Math.round(first.x)}px, ${Math.round(first.y)}px, 0)`,
-        }}
-      >
-        {want.current.text}
-      </div>
-    ) : null,
+    node: mounted && tip ? createPortal(tip, document.body) : null,
   };
 }
