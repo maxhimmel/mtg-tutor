@@ -75,6 +75,8 @@ export interface PlotProps {
    * where nothing could reach it.
    */
   legend: Guide<KeyEntry[]>;
+  /** Passed through to `Key`: lay the entries out in a grid of this many. */
+  legendColumns?: number;
   /**
    * What the reader gets at the cursor. `Plot` renders the node; the caller
    * wires `tip.follow(...)` onto whatever should answer.
@@ -97,6 +99,7 @@ export function Plot({
   instead,
   label,
   legend,
+  legendColumns,
   tip,
   margin,
   children,
@@ -143,7 +146,9 @@ export function Plot({
           reader who fell through to `instead` still needs to know what the
           words mean, and a key that disappears with the drawing takes the
           vocabulary with it. */}
-      {key && key.length > 0 && <Key className="mt-2" entries={key} />}
+      {key && key.length > 0 && (
+        <Key className="mt-2" entries={key} columns={legendColumns} />
+      )}
 
       {/* Outside the `role="img"` element on purpose -- that subtree is one
           labelled picture, and a box that follows the pointer is not part of

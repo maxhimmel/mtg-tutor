@@ -100,27 +100,6 @@ const ARM = 0.1;
 const RANKED = new Set(["common", "uncommon", "rare", "mythic"]);
 
 /**
- * The expansion symbol, as the Mana font's own glyph.
- *
- * A CARD SAYS ITS RARITY WITH THIS MARK and this app was saying it with the
- * word alone, on the one line of the panel where the word is doing real work --
- * the baseline is per rarity, and a reader who misses that is comparing a
- * common against the mythics without knowing it.
- *
- * The font ships ONE rarity glyph, not four. On a printed card the shape is the
- * set and the COLOUR is the rarity, and colour is the channel this app is least
- * willing to hand a claim to -- so the glyph says "rarity" and the word beside
- * it says which, exactly the division `ManaCurve` uses when it prints a pip
- * beside a colour's name. Drawn in the label's own ink for that reason: tinting
- * it would be a second, quieter statement of something the word already makes,
- * in the one channel that cannot be read in greyscale.
- *
- * Only for the four rarities a drafter names a card by. A bonus-sheet card
- * falls back to "median card", which is not a rarity and has no symbol.
- */
-const RARITY_GLYPH = "\ue96c";
-
-/**
  * The one number on this panel with a reference point, and where it comes from.
  *
  * "56.2%" ANSWERS NOTHING ON ITS OWN. A Limited win rate is meaningful only
@@ -184,6 +163,11 @@ function WinRateScale({ card, expanded }: { card: DisplayCard; expanded: boolean
          the baseline appear nowhere else once the drawing fits, so they carry
          theirs. */
       legend={legendFor({ baseline, norm, ranked, se, expanded })}
+      // Three entries do not fit one line in a 260px panel, and left to
+      // wrap the third hangs under the middle of the other two looking
+      // like a separate thing. Two columns make the second line read as
+      // the rest of the same list.
+      legendColumns={2}
       /* NO TIP, and the reason is the surface rather than the chart. This rides
          in the card hover panel, which is `pointer-events: none` -- it has to
          be, because it opens under the cursor and would otherwise take the
@@ -215,20 +199,18 @@ function WinRateScale({ card, expanded }: { card: DisplayCard; expanded: boolean
           <>
             <line x1={0} x2={width} y1={mid} y2={mid} stroke={INK.rule} strokeWidth={MARK.axis} />
 
-            {/* The rule from the kit, its label drawn here rather than passed
-                in. `Reference` takes a `label?: string`, and this one is not a
-                string: it is the game's expansion symbol and then the word, in
-                two different fonts, which an SVG says with two tspans. Its
-                twin in `marks.tsx` -- `Baseline` -- already takes a ReactNode
-                for exactly this, so the seam is one word wide and worth
-                closing in the kit; until then the rule is the kit's and the
-                label is the chart's, which is the division `Plot` already
-                describes for everything between the margins. */}
+            {/* The rule, unlabelled HERE and named in the key instead.
+
+                It used to carry its own text under the line -- the expansion
+                symbol and then "median uncommon" -- while the key beneath the
+                chart named it a second time and added the value. Two labels for
+                one mark in a panel this narrow, and the pair of them is what
+                pushed the key's third entry onto a line of its own.
+
+                So the division is the one `Plot` already draws everywhere else:
+                the AXIS says the scale -- both ends, under the rule -- and the
+                KEY says the marks. The baseline is a mark. */}
             <Reference at={at(baseline)} height={height} />
-            <text x={at(baseline)} y={height + 12} textAnchor="middle" {...TICK_TEXT}>
-              {ranked && <tspan fontFamily="Mana">{RARITY_GLYPH}</tspan>}
-              <tspan dx={ranked ? "0.3em" : 0}>{norm}</tspan>
-            </text>
 
             {se != null && beyond === 0 && (
               <rect
@@ -323,6 +305,14 @@ function legendFor({
       label: norm.charAt(0).toUpperCase() + norm.slice(1),
       ink: INK.zero,
       aside: pct(baseline),
+      // THE FONT SHIPS ONE RARITY GLYPH, NOT FOUR. On a printed card the shape
+      // is the set and the COLOUR is the rarity -- and colour is the channel
+      // this app is least willing to hand a claim to. So the glyph says
+      // "rarity" and the word beside it says which, the same division
+      // `ManaCurve` uses when it prints a pip beside a colour's name. Drawn in
+      // the label's own ink rather than tinted, because a tint would be a
+      // second and quieter statement of what the word already says, in the one
+      // channel greyscale takes away.
       swatch: (
         <span aria-hidden className="flex items-center gap-1">
           <span className="block h-3.5 w-px shrink-0" style={{ background: INK.zero }} />
@@ -354,9 +344,17 @@ export function CardStats({ card, expanded }: { card: DisplayCard; expanded?: bo
               <span className="text-xs text-base-content/60">{label}</span>
               <span className="font-mono text-xs tabular-nums">{value}</span>
             </div>
-            {/* Under the row it explains, so the scale is read with the number
-                rather than as a chart of its own. */}
-            {id === "gih" && <WinRateScale card={card} expanded={expanded === true} />}
+            {/* Under the row it explains AND hung off it, so the block reads as
+                part of that row rather than as a chart parked between two.
+                Everything else on this panel is a `label ... value` line, and
+                four unindented lines of chart in the middle of them broke the
+                table's rhythm without saying what they belonged to. The rule is
+                the cheapest thing that says "still the win rate". */}
+            {id === "gih" && (
+              <div className="mt-1 border-l border-base-content/15 pl-2.5">
+                <WinRateScale card={card} expanded={expanded === true} />
+              </div>
+            )}
             {explains && (
               <p className="mt-0.5 text-[11px] leading-snug text-base-content/70">
                 {def.short}

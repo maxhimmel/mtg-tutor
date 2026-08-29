@@ -509,6 +509,13 @@ export const SPECIMENS: Specimen[] = [
           <Bay label="Expanded" width="w-64">
             <CardStats card={card} expanded />
           </Bay>
+          {/* Under the win-rate scale's `needs`, so the chart gives way to its
+              one-line caption. The bay is here because that is the state the
+              block's grouping has to survive too: the row, a sentence, and then
+              the rest of the table, with nothing left hanging. */}
+          <Bay label="Too narrow for the scale — the caption instead" width="w-[8.5rem]">
+            <CardStats card={card} />
+          </Bay>
         </div>
       ) : (
         // Not an error: a card with no 17Lands row is exactly what the app has

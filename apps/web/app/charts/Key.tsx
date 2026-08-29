@@ -83,9 +83,32 @@ function Swatch({ ink, shape = "bar" }: { ink: string; shape?: KeyEntry["shape"]
   );
 }
 
-export function Key({ entries, className }: { entries: KeyEntry[]; className?: string }) {
+export function Key({
+  entries,
+  columns,
+  className,
+}: {
+  entries: KeyEntry[];
+  /**
+   * Lay the entries out in a fixed grid rather than letting them wrap.
+   *
+   * A flex row that wraps puts each entry wherever the one before it ended, so
+   * three entries in a narrow panel come out as two on one line and a third
+   * hanging under the middle of them -- which reads as a separate thing rather
+   * than as the last of three. Where a key is too wide for one line, a column
+   * is what makes the wrap look intended.
+   *
+   * Opt-in, because a key that DOES fit on one line is better on one line: a
+   * grid would space two entries out across the panel with nothing between them.
+   */
+  columns?: number;
+  className?: string;
+}) {
   return (
-    <dl className={`flex flex-wrap gap-x-5 gap-y-1.5 ${className ?? ""}`}>
+    <dl
+      className={`gap-x-4 gap-y-1.5 ${columns ? "grid" : "flex flex-wrap gap-x-5"} ${className ?? ""}`}
+      style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, auto))` } : undefined}
+    >
       {entries.map((entry) => (
         <div key={entry.label} className="flex items-start gap-1.5">
           {/* A box exactly one label-line tall, with the mark centred in it.
