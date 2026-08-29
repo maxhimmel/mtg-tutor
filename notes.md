@@ -71,44 +71,50 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
-9.  **The chart pass shipped 2026-08-28; what is left is four loose ends and a
-    measurement.** Every graphic in the app was audited, sixteen defects found,
-    and all sixteen fixed -- the working is in the git history and in
-    CLAUDE.md's "A graphic states its scale" section, not here. What stays open:
+9.  **The chart library shipped 2026-08-29. What is left is one measurement
+    and one palette that cannot be fixed.** Every graphic was audited, sixteen
+    defects fixed, then the whole set rebuilt on visx behind `app/charts/`. The
+    working is in the git history and the rules are CLAUDE.md's "A graphic
+    states its scale"; neither belongs here. What stays open:
 
-    - **The `needs`/`instead` swap is a state a reader can land in and nothing
-      counts it.** Every chart now states the width below which its drawing
-      stops being true and shows something else instead, and those widths are
-      DERIVATIONS rather than measurements. If the braid's 606px is wrong, the
+    - **WUBRG IS NOT A LEGAL CATEGORICAL PALETTE ON THIS GROUND, AT ANY MIX.**
+      `cardFrame`'s rings are Arena's and cannot move. Measured against
+      base-100: raw, green against red is 4.8 apart under deuteranopia; mixed
+      55% toward base-content the way the braid's cords are, 2.5 — and the
+      normal-vision floor falls from 14.4 to 8.0, so green and black are hard
+      to separate with full colour vision. Sweeping the ratio finds nothing
+      that passes; at 100% mono-black loses its 3:1 against the panel. The mix
+      is therefore a real trade and not a bug. **The permanent consequence is
+      that a Magic colour is never the only channel** — `manaMark` returns a
+      fill and its pips together so a chart cannot take one without the other.
+      Do not re-open this by proposing a nicer five-colour palette.
+    - **The `needs`/`instead` swap is a state a reader lands in and nothing
+      counts it.** Every chart states the width below which its drawing stops
+      being true. Those widths are now mostly DERIVED — the grade ruler's from
+      its tightest pair of letter centres, the pick strip's from `MARK.dot` —
+      but the braid's 606px is still a judgement, and if it is wrong the
       symptom is a phone user who never sees the rope and nobody knowing. The
-      capture belongs in `Plot` itself -- one event covering every chart in the
-      app -- and not in any one caller, which would be the `button_clicked`
-      failure mode. Deliberately not built, because an event whose whole
-      question is "how often" is worth designing once rather than sprinkling.
-    - **The braid is gone below about 606px of panel body**, roughly a 690px
-      viewport. That is what the rule asks for and the fallback carries the one
-      quantity the rope uniquely encodes, but it is the most visible
-      consequence of the whole pass and has been reasoned about rather than
-      looked at.
+      capture belongs in `Plot`, one event for every chart in the app, not in
+      any caller. Deliberately unbuilt: an event whose whole question is "how
+      often" is worth designing once.
     - **`CardStats` draws a point and a band, not a distribution.** The card
-      carries `rarityBaseline` and its own sample, so the win rate now has a
-      reference point without a new query -- but a real spread (quartiles, a
-      density strip) needs something the set document does not store. Worth it
-      only if the median turns out not to be enough.
-    - **The glossary figures switch layout on Tailwind's `sm:`**, which is a
-      viewport query and not a container one, so their `/dev` bays catch an
-      overflow at a phone's width and cannot show the stacked form -- the
-      window itself has to be narrowed. Making them container-driven is a real
-      change to both and was not attempted.
+      carries `rarityBaseline` and its own sample, so the win rate has a
+      reference point with no new query — but a real spread (quartiles, a
+      density strip) needs something the set document does not store.
+    - **The glossary figures reflow on Tailwind's `sm:`**, a viewport query,
+      so their `/dev` bays catch an overflow at a phone's width and cannot show
+      the stacked form — the window itself has to be narrowed. Making them
+      container-driven is a real change to all three.
+    - **`PickMarksKey` is a hand-rolled `<dl>` that mirrors `Key`** and was
+      deliberately not ported: its `dt` is painted in the mark's own tone, and
+      that coloured label is half the encoding it explains, where `Key`'s label
+      is fixed ink. Porting it needs `Key` to take a `ReactNode` label first.
 
-    One thing ruled out while fixing the mana curve, worth not re-deriving:
-    **one segment per card does not survive a full pool.** At `min-h-0.5` with
-    `gap-px` in 36px of bar, twelve cards need 35px and fifteen need 44, so the
-    last colour band silently vanished while the count above still read
-    fifteen. One band per colour sized by count makes the clipping
-    structurally impossible rather than merely unlikely, and it is the better
-    reading anyway -- the count is already printed, so what the drawing is for
-    is the proportion.
+    One thing ruled out and worth not re-deriving: **a letter is not a second
+    channel for a Magic colour.** It was the first answer and it is wrong twice
+    — a bare letter is a mark that appears nowhere else in the game, and a gold
+    card has no single letter, so exactly the bands whose ring is a gradient
+    got nothing. Pips have neither problem and a two-colour mark prints both.
 
 # Ideas:
 
@@ -2175,6 +2181,15 @@ The architecture, the data pipeline and the deploy story are all documented in
     So the à-la-carte packaging is real and a route pays only for what it
     imports, which is the property Nivo does not have (`@nivo/bar` pulls its
     nine sibling packages whatever you use).
+
+    **The kit is `app/charts/`, and its one structural idea is the GUIDES.**
+    Axis, legend and tooltip are not three features but one question — can a
+    reader who has never seen this work out what it says — answered at three
+    distances: across the room, at arm's length, at the cursor. `Plot` requires
+    `legend` and `tip`, and off is `{ none: "reason" }` rather than `false`,
+    because the reasons turn out to be the valuable part and a boolean throws
+    them away. That is not a guard rail: turning a guide off stays one line, on
+    purpose, since a kit that makes the exception expensive gets worked around.
 
     **The tooltip is deliberately NOT visx's.** `useTooltip` holds position in
     React state and re-renders per pointer move, which is the exact pathology
