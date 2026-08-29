@@ -74,12 +74,19 @@ export function ColorTally({
         <span
           key={color}
           className="flex items-center gap-1.5 text-xs tabular-nums text-base-content/70"
-          title={COLOR_NAMES[color] ?? color}
         >
           {/* Hidden rather than left to speak for itself: ManaCost names what it
               draws "Mana cost White", which is true of a card's cost and wrong
               for a count of cards. The name a reader needs is on the line below,
-              where it can be said as "7 White". */}
+              where it can be said as "7 White".
+
+              There used to be a `title` here naming the colour on hover, and it
+              was carrying nothing: the name is already in the `sr-only` below,
+              and this file's own argument is that the pip needs no key -- a
+              reader who has seen one card knows what the blue drop means. What
+              a title does add is the impression that a mark in this app is
+              allowed to hide something behind a pointer, which on a touch
+              screen is nowhere. */}
           <span aria-hidden className="leading-none">
             <ManaCost cost={`{${color}}`} className="text-[11px]" />
           </span>

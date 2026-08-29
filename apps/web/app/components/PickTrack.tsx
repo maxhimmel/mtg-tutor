@@ -2,6 +2,7 @@
 
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Key } from "../charts/Key";
+import { useCursorTip } from "./CursorTip";
 
 // A draft, drawn as the thing it is: a run of picks in order.
 //
@@ -364,6 +365,25 @@ function FlatTrack({
   const ref = useRef<HTMLDivElement>(null);
   const flat = groups.flat();
 
+  /**
+   * Which pick is under the pointer, in the words the tick already carries.
+   *
+   * IT REPLACES `title=`, which is the whole point of it. A tick is four pixels
+   * of a forty-two pick run and the only thing naming it was a native tooltip:
+   * it does not exist on a touch screen, it waits a second before appearing,
+   * and it cannot be styled to sit anywhere near the mark it belongs to. The
+   * house rule says a hover is not a channel and `useCursorTip` is the longer
+   * form for people who can point -- this is that, on the app's oldest
+   * `title=`.
+   *
+   * The sentence is `tick.label` unchanged, which is the same string the button
+   * announces as its accessible name. That is deliberate: what a tick MEANS is
+   * carried by `TrackKey` beside the track, and this only ever adds which pick
+   * it is -- so the pointer and the screen reader are told the same thing and
+   * neither is the only way to get it.
+   */
+  const tip = useCursorTip();
+
   // One tab stop for the whole track, arrows to move within it -- the same
   // bargain a radio group makes, and for the same reason: a review has twenty-odd
   // decisions in it, and tabbing past twenty-odd ticks to reach the page is worse
@@ -471,12 +491,7 @@ function FlatTrack({
                   // cannot be found any other way.
                   className={`group flex flex-1 cursor-pointer items-end rounded-sm py-1.5 ${TICK_X} transition-colors hover:bg-base-content/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content/70`}
                   aria-label={tick.label}
-                  // The same sentence the screen reader gets, for a reader who
-                  // can point. It is the LONGER form and never the only one:
-                  // `title` does not exist on a touch screen, so what a tick
-                  // means is said by the key beside the track and this only ever
-                  // adds which pick it is.
-                  title={tick.label}
+                  {...tip.follow(() => tick.label)}
                   aria-current={tick.state === "current" ? "true" : undefined}
                   tabIndex={start + i === stop ? 0 : -1}
                   onClick={() => onSelect(start + i)}
@@ -493,7 +508,11 @@ function FlatTrack({
                 // Same box the navigable form's button is, padding included, so
                 // the track occupies one height on every page that draws one --
                 // whether or not its ticks are places to go.
-                <span key={i} className={`flex flex-1 items-end py-1.5 ${TICK_X}`} title={tick.label}>
+                <span
+                  key={i}
+                  className={`flex flex-1 items-end py-1.5 ${TICK_X}`}
+                  {...tip.follow(() => tick.label)}
+                >
                   <span
                     className={`${mark.className} ${lit} motion-safe:transition-[height,transform]`}
                     style={mark.style}
@@ -507,7 +526,17 @@ function FlatTrack({
     </div>
   );
 
-  if (!groupLabels) return track;
+  // Outside the `role="img"` / `role="group"` element either way: that subtree
+  // is one labelled object, and a box that follows the pointer is not part of
+  // it.
+  if (!groupLabels) {
+    return (
+      <>
+        {track}
+        {tip.node}
+      </>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -526,6 +555,7 @@ function FlatTrack({
           </span>
         ))}
       </div>
+      {tip.node}
     </div>
   );
 }

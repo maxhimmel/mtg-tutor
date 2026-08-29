@@ -1,10 +1,19 @@
 "use client";
 
 import type { DeckRow } from "@mtg-tutor/core";
-import { INK, NEUTRAL } from "../charts/ink";
+import { INK } from "../charts/ink";
 import { Key } from "../charts/Key";
 import { CardPlacard } from "./CardPlacard";
-import { CurveBar, LANDS_PILE, PILE_LABELS, PileGrid, PileWell, pileIndexOf } from "./CurvePiles";
+import {
+  CurveBar,
+  LANDS_PILE,
+  LaneMark,
+  PILE_LABELS,
+  type PileLabel,
+  PileGrid,
+  PileWell,
+  pileIndexOf,
+} from "./CurvePiles";
 
 /**
  * A forty, laid out the way a forty is laid out on a table.
@@ -30,9 +39,7 @@ import { CurveBar, LANDS_PILE, PILE_LABELS, PileGrid, PileWell, pileIndexOf } fr
  * matters, instead of a separate panel you have to hold in your head.
  */
 
-interface Pile {
-  label: string;
-  spoken: string;
+interface Pile extends PileLabel {
   rows: DeckRow[];
   mine: number;
   theirs: number;
@@ -129,8 +136,24 @@ function Legend({ theirs }: { theirs: string }) {
     <div className="flex flex-col gap-2">
       <Key
         entries={[
-          { label: "Your build", ink: INK.yours, shape: "bar" },
-          { label: `In ${theirs}`, ink: INK.theirs, shape: "hollow" },
+          // `swatch` rather than the default chip, because the chip is a pill
+          // and what these entries stand for is a BAR ON A TRACK -- the key was
+          // explaining a shape that appears nowhere on the board. `LaneMark`
+          // draws the lane itself, which also carries the remainder: a bar here
+          // is a share of the widest well, and a mark with no track behind it
+          // cannot say that.
+          {
+            label: "Your build",
+            ink: INK.yours,
+            shape: "bar",
+            swatch: <LaneMark ink={INK.yours} track />,
+          },
+          {
+            label: `In ${theirs}`,
+            ink: INK.theirs,
+            shape: "hollow",
+            swatch: <LaneMark ink={INK.theirs} hollow track />,
+          },
         ]}
       />
       <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-base-content/55">
@@ -167,6 +190,8 @@ function PileColumn({
     <PileWell
       label={pile.label}
       spoken={pile.spoken}
+      mv={pile.mv}
+      andUp={pile.andUp}
       aside={
         <>
           {/* Two bare numbers side by side say nothing out loud, so the pair is
@@ -180,19 +205,31 @@ function PileColumn({
               carried by the weakest channel on the page. It is carried by the
               bars under here now, where a difference is an overhang -- a
               length, which is what the rest of the well is already read in. */}
-          <span aria-hidden className="text-xs tabular-nums">
+          <span aria-hidden className="flex items-center gap-2 text-xs tabular-nums">
             {/* Gold on the left number only while there is a right one. It is
                 the same statement the key makes and the same the bar under it
                 makes -- this side is yours -- and with nothing to compare
                 against there is nothing for it to distinguish, so it goes back
                 to plain ink rather than spending the one saturated colour on
-                the page for a decoration. */}
-            <span style={{ color: agreed ? INK.value : INK.yours }}>{pile.mine}</span>
+                the page for a decoration.
+
+                EACH NUMBER CARRIES ITS OWN MARK once there are two, which is
+                the half the pair was missing. Gold against plain ink is hue
+                doing the whole job -- the exact thing this app is not allowed
+                to ask of a colour -- and the middle dot said nothing at all
+                about which side was which. Filled against hollow is the same
+                vocabulary the key states and the two lanes below draw, so the
+                header, the bars and the legend are now one sentence rather
+                than three that happen to agree. */}
+            <span className="flex items-center gap-1" style={{ color: agreed ? INK.value : INK.yours }}>
+              {!agreed && <LaneMark ink={INK.yours} />}
+              {pile.mine}
+            </span>
             {!agreed && (
-              <>
-                <span style={{ color: NEUTRAL.rule }}> · </span>
-                <span style={{ color: INK.theirs }}>{pile.theirs}</span>
-              </>
+              <span className="flex items-center gap-1" style={{ color: INK.theirs }}>
+                <LaneMark ink={INK.theirs} hollow />
+                {pile.theirs}
+              </span>
             )}
           </span>
           <span className="sr-only">

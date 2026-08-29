@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import {
   type Bench,
@@ -22,6 +22,7 @@ import { deckShaped } from "../lib/analytics";
 import { INK, NEUTRAL } from "../charts/ink";
 import { Key } from "../charts/Key";
 import { CardPlacard } from "./CardPlacard";
+import { type CursorTip, useCursorTip } from "./CursorTip";
 import { ColorTally } from "./ColorPips";
 import { CurveBar, LANDS_PILE, PILE_LABELS, PileGrid, PileWell, pileUp } from "./CurvePiles";
 import { Panel } from "./Panel";
@@ -46,6 +47,12 @@ function DeckSlots({ spells, lands, size }: { spells: number; lands: number; siz
   // gets to spend on a category.
   const ink = full ? INK.yours : INK.value;
 
+  // IT STAYS A GRID OF DIVS. There is no continuous scale here to hand visx:
+  // forty slots is forty, the marks are discrete and countable on purpose, and
+  // the layout question -- twenty per row, at a card's aspect ratio, wrapping
+  // to two -- is one CSS grid does exactly and an SVG would have to be told.
+  // The rule the kit is actually enforcing is the one below, and it is met.
+  //
   // Three marks, three FORMS, because two tints of one colour at eight pixels
   // is not a categorical split and spells-against-lands is half of what this
   // drawing promises. A spell is a solid card, a land is the same card hollow,
@@ -53,11 +60,25 @@ function DeckSlots({ spells, lands, size }: { spells: number; lands: number; siz
   // for either. The land count agreeing with the stepper two elements along is
   // the point rather than a duplication: it is how you check that the picture
   // and the number are describing the same deck.
-  const mark = (i: number) => {
-    if (i < spells) return { background: ink };
-    if (i < spells + lands) return { border: `1px solid ${ink}` };
-    return { background: NEUTRAL.rule, borderRadius: "1px", transform: "scaleY(0.3)" };
-  };
+  //
+  // The three survive greyscale, which is the test that matters here and the
+  // one the drawing was built to pass: filled, outlined and a third-height dash
+  // differ in FORM, so desaturating the page takes nothing away. There is no
+  // hue on this graphic to lose -- both live marks are the same ink, and the
+  // gold is a state of the whole forty rather than a category within it.
+  const FORMS = {
+    spell: { background: ink },
+    land: { border: `1px solid ${ink}` },
+    open: { background: NEUTRAL.rule, borderRadius: "1px", transform: "scaleY(0.3)" },
+  } satisfies Record<string, CSSProperties>;
+
+  const mark = (i: number) =>
+    i < spells ? FORMS.spell : i < spells + lands ? FORMS.land : FORMS.open;
+
+  // Forty slots, a stated number of them still open. It is the reading the
+  // graphic is FOR -- how many left -- and until now the one mark on it the key
+  // did not name.
+  const empty = DECK.size - size;
 
   return (
     <div className="flex w-[13rem] shrink-0 flex-col gap-2">
@@ -76,14 +97,51 @@ function DeckSlots({ spells, lands, size }: { spells: number; lands: number; siz
         ))}
       </div>
 
+      {/* `swatch` on every entry, because the default chip is a pill and every
+          mark on this graphic is a CARD -- forty slots drawn at a card's aspect
+          ratio, which is the whole conceit. A key in a shape the drawing never
+          uses asks the reader to match a rounded bar to a little rectangle, and
+          the empty slot has no bar to match at all. Handing each entry the same
+          span the grid draws, painted out of the same `FORMS` the grid itself
+          is painted from, means the key cannot describe a mark the board is not
+          drawing. */}
       <Key
         entries={[
-          { label: "Spells", ink, shape: "bar", aside: spells },
-          { label: "Lands", ink, shape: "hollow", aside: lands },
+          { label: "Spells", ink, shape: "bar", aside: spells, swatch: <SlotMark style={FORMS.spell} /> },
+          {
+            label: "Lands",
+            ink,
+            shape: "hollow",
+            aside: lands,
+            swatch: <SlotMark style={FORMS.land} />,
+          },
+          ...(empty > 0
+            ? [
+                {
+                  label: "Still open",
+                  ink: NEUTRAL.rule,
+                  aside: empty,
+                  swatch: <SlotMark style={FORMS.open} />,
+                },
+              ]
+            : []),
         ]}
         className="gap-x-4"
       />
     </div>
+  );
+}
+
+// One slot from the grid above, at the size a key entry has room for. Sized in
+// px rather than by the grid's own column width, which is a fraction of a
+// 13rem row and would come out three pixels wide beside a label.
+function SlotMark({ style }: { style: CSSProperties }) {
+  return (
+    <span
+      aria-hidden
+      className="card-aspect block w-[9px] shrink-0 rounded-[1px]"
+      style={style}
+    />
   );
 }
 
@@ -136,6 +194,9 @@ export function DeckBuilder({
   sideboard: Bench[];
   onBuilt: () => void;
 }) {
+  // One hook for the whole board rather than one per row: `follow` is a factory
+  // for exactly this, and twenty-three rows are twenty-three hooks otherwise.
+  const tip = useCursorTip();
   const bench = useMutation(api.draft.bench);
   const lockIn = useMutation(api.draft.build);
   const [pending, setPending] = useState<Bench[] | null>(null);
@@ -220,6 +281,8 @@ export function DeckBuilder({
               key={pile.label}
               label={pile.label}
               spoken={pile.spoken}
+              mv={pile.mv}
+              andUp={pile.andUp}
               aside={
                 <span
                   className="text-xs tabular-nums"
@@ -238,7 +301,14 @@ export function DeckBuilder({
               {playingPiles[i].length > 0 && (
                 <ul className="flex flex-col gap-0.5">
                   {playingPiles[i].map((pick) => (
-                    <BuildRow key={pick.pos} pick={pick} cut={false} rates={rates} onMove={move} />
+                    <BuildRow
+                      key={pick.pos}
+                      pick={pick}
+                      cut={false}
+                      rates={rates}
+                      onMove={move}
+                      follow={tip.follow}
+                    />
                   ))}
                 </ul>
               )}
@@ -276,7 +346,14 @@ export function DeckBuilder({
                   </p>
                   <ul className="flex flex-col gap-0.5">
                     {cutPiles[i].map((pick) => (
-                      <BuildRow key={pick.pos} pick={pick} cut rates={rates} onMove={move} />
+                      <BuildRow
+                        key={pick.pos}
+                        pick={pick}
+                        cut
+                        rates={rates}
+                        onMove={move}
+                        follow={tip.follow}
+                      />
                     ))}
                   </ul>
                 </div>
@@ -345,6 +422,10 @@ export function DeckBuilder({
           </button>
         </div>
       </div>
+
+      {/* Outside both boxes: it follows the pointer and belongs to neither the
+          panel nor the confirm bar. */}
+      {tip.node}
     </>
   );
 }
@@ -364,12 +445,33 @@ export function DeckBuilder({
  * rated card posts the same rate, gives a scale with no width, and a bar drawn
  * on it would put every card at either end.
  */
-function winRateSpan(pool: readonly Card[]): { lo: number; hi: number } | null {
+function winRateSpan(pool: readonly Card[]): Rates | null {
   const rates = pool.map((c) => c.gihWinRate).filter((r): r is number => r != null);
   if (rates.length === 0) return null;
   const lo = Math.min(...rates);
   const hi = Math.max(...rates);
-  return hi > lo ? { lo, hi } : null;
+  if (hi <= lo) return null;
+
+  // Best first, so a rank is a position in this array and the tip can say it
+  // without re-sorting per row. Ties take the better rank -- two cards on the
+  // same rate are the same card as far as this decision goes, and numbering
+  // one of them below the other would be an ordering the data does not have.
+  const ranked = rates.slice().sort((a, b) => b - a);
+  return {
+    lo,
+    hi,
+    rated: ranked.length,
+    rankOf: (rate) => ranked.findIndex((r) => r <= rate) + 1,
+  };
+}
+
+interface Rates {
+  lo: number;
+  hi: number;
+  /** How many cards in the pool 17Lands has a rate for. The tip's denominator. */
+  rated: number;
+  /** Where a rate places among them, best first and 1-based. */
+  rankOf: (rate: number) => number;
 }
 
 /**
@@ -395,14 +497,32 @@ function BuildRow({
   cut,
   rates,
   onMove,
+  follow,
 }: {
   pick: DeckPick<Card>;
   cut: boolean;
-  rates: { lo: number; hi: number } | null;
+  rates: Rates | null;
   onMove: (pos: number, cut: boolean) => void;
+  follow: CursorTip["follow"];
 }) {
   const wr = pick.card.gihWinRate;
   const at = rates && wr != null ? (wr - rates.lo) / (rates.hi - rates.lo) : null;
+
+  // WHAT THE BAR IS, SAID AT THE CURSOR. The gutter is a POSITION on a scale --
+  // the one case `useCursorTip` is for -- and the position is what the digits
+  // beside it cannot state: "56.3%" is a rate, and where that rate falls among
+  // the forty-five cards in front of you is the thing a cut is decided on. The
+  // rank is the same arithmetic the bar's length already does, printed. The
+  // scale it is measured on is stated in prose above the board, which is this
+  // chart's legend; the rate itself is printed in the gutter, which is why the
+  // hover is allowed to be the longer form rather than the only form.
+  //
+  // Null for an unrated card, which hides the box: there is no bar under a
+  // basic land and nothing a pointer could be asking about.
+  const say = () =>
+    rates && wr != null
+      ? `${pick.card.name}: ${pct(wr)} — #${rates.rankOf(wr)} of ${rates.rated} rated cards in your pool, which run ${pct(rates.lo)} to ${pct(rates.hi)}.`
+      : null;
 
   return (
     <li className="flex items-center gap-1.5">
@@ -426,13 +546,18 @@ function BuildRow({
           The bar is a background rather than a second element, and that is what
           makes it affordable: twenty-three rows each three pixels taller is a
           board that has grown by most of a placard. Painted as a gradient under
-          the digits it costs no layout at all.
+          the digits it costs no layout at all -- which is also why it did not
+          go to visx. `scaleLinear` would compute the same fraction a percentage
+          stop already is, and drawing it would cost forty-five SVGs and a
+          measurement each, to put a three-pixel rule where a background is
+          already free.
 
           Full ink on both states. The cut cards used to render at /25 -- around
           2:1 against this ground -- which put the faintest number on the screen
           on exactly the card you are deciding whether to bring back. The placard
           beside it already says which pile it is in. */}
       <span
+        {...follow(say)}
         className="w-10 shrink-0 pb-[4px] text-right text-[11px] tabular-nums"
         style={{
           color: INK.value,
