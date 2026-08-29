@@ -110,11 +110,18 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
       that coloured label is half the encoding it explains, where `Key`'s label
       is fixed ink. Porting it needs `Key` to take a `ReactNode` label first.
 
-    One thing ruled out and worth not re-deriving: **a letter is not a second
-    channel for a Magic colour.** It was the first answer and it is wrong twice
-    — a bare letter is a mark that appears nowhere else in the game, and a gold
-    card has no single letter, so exactly the bands whose ring is a gradient
-    got nothing. Pips have neither problem and a two-colour mark prints both.
+    Two things ruled out and worth not re-deriving. **A legend is not a rule
+    that applies to every chart**: it is for telling marks apart, so a chart of
+    one series gets none, and what earns one is marks a reader cannot separate
+    -- the card-stats scale draws its dot and its margin band at the same spot
+    and names those two, while its reference rule has clear space and takes a
+    direct label instead. Naming all three cost four lines under a chart 36px
+    tall, and putting them in two columns only halved the width they wrapped in.
+
+    And **a letter is not a second channel for a Magic colour.** It was the
+    first answer and it is wrong twice — a bare letter is a mark that appears
+    nowhere else in the game, and a gold card has no single letter, so exactly
+    the bands whose ring is a gradient got nothing. Pips have neither problem and a two-colour mark prints both.
 
 # Ideas:
 
@@ -2193,6 +2200,11 @@ The architecture, the data pipeline and the deploy story are all documented in
 
     **The tooltip is deliberately NOT visx's.** `useTooltip` holds position in
     React state and re-renders per pointer move, which is the exact pathology
-    `CursorTip.tsx` was rewritten to fix -- it writes text with `textContent`
-    and damps by elapsed time rather than by frame. visx for the scale and the
-    marks; `useCursorTip` for what the pointer is over.
+    `CursorTip.tsx` was rewritten to fix -- it writes its content imperatively
+    from one animation frame and damps by elapsed time rather than by frame.
+    visx for the scale and the marks; `useCursorTip` for what the pointer is
+    over. Two things it learned the hard way and neither is worth rediscovering:
+    the box must be PORTALLED to `document.body`, because `position: fixed` is
+    only fixed until an ancestor becomes a containing block and any `z-*` on
+    one caps it; and it draws mana pips, so a tip that names a colour says it
+    the way the rest of the app does.
