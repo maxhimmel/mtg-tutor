@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { Card } from "@mtg-tutor/core";
+import type { Card, DiffRow, DiffTally, PoolCard, ValueTerm } from "@mtg-tutor/core";
 import { CardPlacard, CardPlacardList } from "../components/CardPlacard";
 import { CardFace, CardTile } from "../components/CardTile";
 import { CardStats, hasStats } from "../components/CardStats";
@@ -11,6 +11,10 @@ import { ManaCost } from "../components/ManaCost";
 import { PILE_LABELS, PileGrid, PileWell, pileUp } from "../components/CurvePiles";
 import { PickTrack, TrackKey, type Tick, type TickState } from "../components/PickTrack";
 import { ScrollBox } from "../components/ScrollBox";
+import { PickStrip } from "../glossary/figures/PickStrip";
+import { Braid } from "../challenge/[id]/diff/Braid";
+import { ScoreBreakdown } from "../components/ScoreBreakdown";
+import { spokenColors } from "../lib/colorTokens";
 import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
 import { WinRateAxis } from "../glossary/figures/WinRateAxis";
@@ -218,34 +222,107 @@ const BY_PICK: ScoreColumn[] = [
 // exactly as the live panel loads them, so an offline bay draws empty gutters
 // rather than the wrong thing. The hrefs go nowhere here; on /stats each one is
 // the way back into that draft.
-const DRAFT_RUN: [code: string, score: number][] = [
-  ["dft", 78.4],
-  ["tdm", 81.0],
-  ["fin", 79.6],
-  ["eoe", 84.2],
-  ["ecl", 83.1],
-  ["blb", 86.7],
-  ["dsk", 85.9],
-  ["otj", 88.3],
-  ["mkm", 87.4],
-  ["lci", 91.2],
+const DRAFT_RUN: [code: string, score: number, colors: string][] = [
+  ["dft", 78.4, "UB"],
+  ["tdm", 81.0, "RG"],
+  ["fin", 79.6, "WU"],
+  ["eoe", 84.2, "BR"],
+  ["ecl", 83.1, "WG"],
+  ["blb", 86.7, "GU"],
+  ["dsk", 85.9, "WB"],
+  ["otj", 88.3, "UR"],
+  // THE SPLASH IS THE SPECIMEN. Three pips is what pushes a column past the
+  // width the value label was measured for, so `needs` has to grow with it -- a
+  // run that quietly cropped the third colour would look completely fine.
+  ["mkm", 87.4, "WUB"],
+  ["lci", 91.2, "RW"],
 ];
 
-const BY_DRAFT: ScoreColumn[] = DRAFT_RUN.map(([code, score]) => ({
+const BY_DRAFT: ScoreColumn[] = DRAFT_RUN.map(([code, score, colors]) => ({
   key: code,
   label: code.toUpperCase(),
   iconUri: `https://svgs.scryfall.io/sets/${code}.svg`,
   score,
+  pips: colors,
   href: "#",
-  title: `${code.toUpperCase()}: ${score.toFixed(1)}`,
+  title: `${code.toUpperCase()} ${spokenColors(colors)}: ${score.toFixed(1)}`,
 }));
 
 const BY_PICK_SPOKEN =
-  "Average score by pick number within a pack — " +
-  BY_PICK.map((c) => c.title).join("; ");
+  "Average score by pick number within a pack — " + BY_PICK.map((c) => c.title).join("; ");
 
 const BY_DRAFT_SPOKEN =
   "Score by draft, oldest first — " + BY_DRAFT.map((c) => c.title).join("; ");
+
+
+const BRAID_PACK: PoolCard[] = [
+  { name: "Spectral Sailor", colors: ["U"] },
+  { name: "Bake into a Pie", colors: ["B"] },
+  { name: "Shock", colors: ["R"] },
+  { name: "Llanowar Elves", colors: ["G"] },
+  { name: "Wall of Runes", colors: ["U"] },
+];
+
+const braidSide = (i: number, name: string, score: number) => ({
+  pickIndex: i,
+  packNo: Math.floor(i / 14) + 1,
+  pickNo: (i % 14) + 1,
+  pack: BRAID_PACK,
+  pickedName: name,
+  score,
+  grade: "B",
+});
+
+// Blue-black against green-red ON PURPOSE: G against R is the pair that comes
+// out 2.5 apart under deuteranopia once the cords are mixed, and mono-black is
+// the one that fails contrast raw. So this fixture is every case the pips exist
+// for, at once. Two forks, one stretch of drift, and both sides undecided for
+// the first several picks -- which is also the only way to see THREAD, the
+// dashed hairline that means "no pair yet".
+const BRAID_ROWS: DiffRow[] = Array.from({ length: 42 }, (_, i) => {
+  const fork = i === 6 || i === 17;
+  const apart = i >= 24 && i <= 29;
+  return {
+    pickIndex: i,
+    packNo: Math.floor(i / 14) + 1,
+    pickNo: (i % 14) + 1,
+    yours: braidSide(i, fork ? "Spectral Sailor" : "Wall of Runes", 71),
+    theirs: braidSide(i, fork || apart ? "Llanowar Elves" : "Wall of Runes", 68),
+    samePack: !apart,
+    agree: !fork && !apart,
+    offShelf: apart,
+    yourLean: i < 4 ? "" : i < 8 ? "U" : "UB",
+    theirLean: i < 5 ? "" : i < 10 ? "G" : "GR",
+  };
+});
+
+const BRAID_TALLY: DiffTally = {
+  rows: 42,
+  agreed: 34,
+  apart: 6,
+  comparable: 36,
+  guaranteedThrough: 23,
+  firstDrift: 24,
+  yourAverage: 71,
+  theirAverage: 68,
+  forks: [
+    { pickIndex: 6, packNo: 1, pickNo: 7, yours: "Spectral Sailor", theirs: "Llanowar Elves" },
+    { pickIndex: 17, packNo: 2, pickNo: 4, yours: "Spectral Sailor", theirs: "Llanowar Elves" },
+  ],
+};
+
+const TERMS: ValueTerm[] = [
+  { label: "archetype", delta: 0.031 },
+  { label: "trust", delta: -0.012 },
+  { label: "splash", delta: -0.0042 },
+];
+
+// `off-color` charges a card its entire win rate, which is the case the track
+// was never sized for and the only case the torn end exists to draw.
+const TERMS_TORN: ValueTerm[] = [
+  { label: "off-color", delta: -0.5 },
+  { label: "archetype", delta: 0.018 },
+];
 
 export const SPECIMENS: Specimen[] = [
   {
@@ -556,6 +633,16 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="A run of drafts — set symbols, no sample size, columns are links">
           <ScorePlot columns={BY_DRAFT} label={BY_DRAFT_SPOKEN} />
         </Bay>
+        {/* THE GRADE KEY HAS TO SURVIVE THIS. The dots are painted from the
+            grade scale and nothing else, so with the hue gone the only things
+            left saying which grade a column landed in are the letter in the key
+            and the letter at the end of its threshold line. Ten identical grey
+            dots over an unreadable key means the swatch is doing nothing. */}
+        <Bay label="The run in greyscale — the key's letters are the second channel">
+          <div style={{ filter: "grayscale(1)" }}>
+            <ScorePlot columns={BY_DRAFT} label={BY_DRAFT_SPOKEN} />
+          </div>
+        </Bay>
         <Bay label="The same fifteen at 20rem — under needs, so the table" width="w-[20rem] max-w-full">
           <ScorePlot columns={BY_PICK} label={BY_PICK_SPOKEN} counting="picks" />
         </Bay>
@@ -585,6 +672,19 @@ export const SPECIMENS: Specimen[] = [
         </Bay>
         <Bay label="Grade ruler — a phone's 23rem" width="w-[23rem] max-w-full">
           <GradeRuler />
+        </Bay>
+        <Bay label="Pick strip — full width, the wheel at the seam after pick 8">
+          <PickStrip />
+        </Bay>
+        {/* THE BAY THE KEY EXISTS FOR. The two ends were gold against neutral
+            and nothing else, which in greyscale is two marks of the same size
+            with no way to tell the SEEING from the TAKING. The ALSA dot has to
+            still read as hollow here, and the key beside it has to show the
+            same difference. */}
+        <Bay label="Pick strip in greyscale — hollow against filled has to survive">
+          <div style={{ filter: "grayscale(1)" }}>
+            <PickStrip />
+          </div>
         </Bay>
       </div>
     ),
@@ -636,6 +736,54 @@ export const SPECIMENS: Specimen[] = [
               />
             </filter>
           </svg>
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "braid-cords",
+    title: "Braid cords",
+    note: "Blue-black against green-red — the pair that is 2.5 apart under deuteranopia. The pips are the encoding; the hue is a second reading of it",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Full width — the pips at every lean change">
+          <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
+        </Bay>
+
+        {/* THE BAY THE PIPS EXIST FOR. Without them these four cords are two
+            pairs of near-identical greys, which is what a deuteranope has in
+            colour. Every strand still has to be nameable here. */}
+        <Bay label="Hue removed — the cords must still be readable">
+          <div style={{ filter: "grayscale(1)" }}>
+            <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
+          </div>
+        </Bay>
+
+        <div className="flex flex-wrap items-start gap-8">
+          <Bay label="606px — the last width the rope is true at" width="w-[606px] max-w-full">
+            <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
+          </Bay>
+          <Bay label="375px — the fallback, with both finishes in pips" width="w-[375px] shrink-0">
+            <Braid rows={BRAID_ROWS} tally={BRAID_TALLY} them="Rin" at={17} onSelect={() => {}} />
+          </Bay>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "score-breakdown",
+    title: "Score breakdown",
+    note: "Every term on one ±8pp scale, with the axis that says so. A torn end is a bar that is not drawn to length",
+    renderBare: () => (
+      <div className="flex flex-wrap items-start gap-8">
+        <Bay label="Ordinary terms — all inside the track" width="w-[22rem] max-w-full">
+          <ScoreBreakdown base={0.551} total={0.566} terms={TERMS} />
+        </Bay>
+        <Bay label="A card the deck cannot cast — torn at −50pp" width="w-[22rem] max-w-full">
+          <ScoreBreakdown base={0.551} total={0.069} terms={TERMS_TORN} />
+        </Bay>
+        <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
+          <ScoreBreakdown base={0.551} total={0.566} terms={TERMS} />
         </Bay>
       </div>
     ),
