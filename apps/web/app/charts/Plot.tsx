@@ -1,6 +1,8 @@
 "use client";
 
 import { useParentSize } from "@visx/responsive";
+import { Key, type KeyEntry } from "./Key";
+import { type Guide, given } from "./guides";
 import { AxisBottom, AxisLeft } from "@visx/axis";
 import type { AxisScale } from "@visx/axis";
 import type { ReactNode } from "react";
@@ -59,6 +61,29 @@ export interface PlotProps {
    * Becomes the accessible name.
    */
   label: string;
+  /**
+   * What the colours and shapes mean, or why this chart does not need saying.
+   *
+   * REQUIRED, and that is the point. The audit found keys on the two charts
+   * that needed them least and none on the one place hue was genuinely
+   * load-bearing, which is what a convention gets you. A required field turns
+   * "did anybody think about the legend" from something you have to go and
+   * check into something the compiler asks.
+   *
+   * `{ none: "..." }` is the same one line as `false` would have been and keeps
+   * the argument -- `WinRateAxis` had already written its reason into a comment
+   * where nothing could reach it.
+   */
+  legend: Guide<KeyEntry[]>;
+  /**
+   * What the reader gets at the cursor. `Plot` renders the node; the caller
+   * wires `tip.follow(...)` onto whatever should answer.
+   *
+   * Required for the same reason as `legend`, and the honest "off" is common
+   * here: a chart that labels every value in place has nothing a hover could
+   * add, and should say so.
+   */
+  tip: Guide<ReactNode>;
   margin?: { top?: number; right?: number; bottom?: number; left?: number };
   children: (box: PlotBox) => ReactNode;
   className?: string;
@@ -71,10 +96,14 @@ export function Plot({
   needs,
   instead,
   label,
+  legend,
+  tip,
   margin,
   children,
   className,
 }: PlotProps) {
+  const key = given(legend);
+  const tipNode = given(tip);
   const m = { ...NO_MARGIN, ...margin };
 
   // `useParentSize` rather than the `ParentSize` COMPONENT, and the difference
@@ -109,6 +138,17 @@ export function Plot({
       ) : (
         instead
       )}
+
+      {/* Under the chart rather than over it, and drawn in both states: a
+          reader who fell through to `instead` still needs to know what the
+          words mean, and a key that disappears with the drawing takes the
+          vocabulary with it. */}
+      {key && key.length > 0 && <Key className="mt-2" entries={key} />}
+
+      {/* Outside the `role="img"` element on purpose -- that subtree is one
+          labelled picture, and a box that follows the pointer is not part of
+          it. */}
+      {tipNode}
     </div>
   );
 }
@@ -205,7 +245,11 @@ export function Reference({
 }: {
   at: number;
   height: number;
-  label?: string;
+  // `ReactNode`, matching `Baseline` in marks.tsx. A reference line's label is
+  // often two families at once -- CardStats names its baseline with the Mana
+  // font's rarity glyph and then a word -- which an SVG says as two tspans and a
+  // string cannot hold at all.
+  label?: ReactNode;
   ink?: string;
   dashed?: boolean;
 }) {

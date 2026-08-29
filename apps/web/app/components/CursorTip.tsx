@@ -53,8 +53,14 @@ export interface CursorTip {
    * without calling a hook per item, which is the rule-of-hooks violation
    * `useCardHoverFactory` exists to avoid and the same answer to it.
    */
-  follow: (say: (e: MouseEvent<HTMLElement>) => string | null) => {
-    onMouseMove: (e: MouseEvent<HTMLElement>) => void;
+  // `Element` rather than `HTMLElement`, because a chart's hoverable is often a
+  // `<g>` or a `<rect>`. Every caller so far hung this on a div, so the narrower
+  // type never bit -- and then `Plot` started requiring a tip and the first SVG
+  // chart needed a cast to say what it already meant. The handlers read nothing
+  // but `clientX`/`clientY`, which every element has, so the wider type is not a
+  // loosening: it is the type these two functions always had.
+  follow: (say: (e: MouseEvent<Element>) => string | null) => {
+    onMouseMove: (e: MouseEvent<Element>) => void;
     onMouseLeave: () => void;
   };
   /** The box. Render it once, anywhere inside the component that owns the hook. */

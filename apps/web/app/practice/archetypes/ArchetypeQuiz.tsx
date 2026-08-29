@@ -616,7 +616,10 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
    */
   function describe(
     deck: RevealQuestion["decks"][number],
-    e: { clientX: number; currentTarget: HTMLElement },
+    // `Element`, matching what `useCursorTip` now hands a listener: this reads
+    // `getBoundingClientRect`, which every element has, and the row it is bound
+    // to could as easily be an SVG node on the next chart that borrows this.
+    e: { clientX: number; currentTarget: Element },
   ): string {
     const box = e.currentTarget.getBoundingClientRect();
     const at = e.clientX - box.left;
@@ -786,6 +789,16 @@ export function DeckBands({ question, guess }: { question: RevealQuestion; guess
               </p>
             }
             label={`How much more each deck won with this card in hand, from ${axisTick(lo)} to ${axisTick(hi)}. Zero is what the deck wins anyway.`}
+            // This `Plot` is the AXIS ONLY -- the marks are the HTML rows above
+            // it, because they carry mana pips -- so both of its guides belong
+            // to the chart rather than to the frame, and saying so here is what
+            // stops a second key appearing under a rule.
+            legend={{
+              none: "Every row names its own deck in pips and prints its own value; the dot and the band are explained in the caption under the chart.",
+            }}
+            tip={{
+              none: "The rows own the pointer, not the axis: `useCursorTip` is wired onto each track above, where the marks a reader is aiming at actually are.",
+            }}
           >
             {({ width }) => (
               // The same domain the marks are placed on, at this box's own
