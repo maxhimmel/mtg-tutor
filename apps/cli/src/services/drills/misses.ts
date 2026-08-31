@@ -44,6 +44,17 @@ const points = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixe
 const ageInDays = (iso: string) =>
   Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Read off the string rather than through Date, which takes a bare ISO date as
+// UTC midnight and renders the day before for anyone west of Greenwich.
+function stamp(iso: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!parts) return "";
+  const [, , month, day] = parts;
+  return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+}
+
 export async function runMisses(convex: ConvexHttpClient): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" Take the pick back ")));
 
@@ -184,6 +195,25 @@ function reveal(question: Question, result: MissResult, guess: string): string {
       pc.dim(
         `${guess} is the strongest card in the pack on raw win rate. This is the gap\n` +
           "between the best card and the best card for you.",
+      ),
+    );
+  }
+  // The last time this same pack came round, and only after answering. Its own
+  // wording rather than the web component's, the way every other line on this
+  // screen is -- and "this time" rather than "for the first time", because
+  // `askedBefore` is the latest answer and not the whole history.
+  if (question.askedBefore) {
+    const when = stamp(question.askedBefore.at);
+    lines.push("");
+    lines.push(
+      pc.dim(
+        question.askedBefore.fixed
+          ? result.correct
+            ? `You had this one right on ${when} as well.`
+            : `You had this one right on ${when}, and let it go this time.`
+          : result.correct
+            ? `You missed this one on ${when} too — this time you took it back.`
+            : `You missed this one on ${when} as well.`,
       ),
     );
   }

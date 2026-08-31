@@ -275,6 +275,15 @@ export const deal = query({
         // apart from holding onto one already taken back, and the second is the
         // only evidence that any of this sticks.
         tier: missTier(candidate),
+        // The last time this same question was put to them, and how it went.
+        //
+        // On the wire before it is earned, the way `tookName` already is: the
+        // pack screen renders neither, and the drill's blindness is a property
+        // of what is DRAWN rather than of what is loaded. What it buys is the
+        // one sentence in this app that can say "you had this one right in
+        // June" -- the whole point of keeping the rows, said at the moment it
+        // means something rather than only in a tally on another screen.
+        askedBefore: candidate.asked,
         scoreThen: row.score.score,
         gradeThen: row.score.grade,
       });
