@@ -226,38 +226,22 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 - And then we could leverage the challenge diff views for this daily challenge.
 - And see the best drafts/decks people made, most popular archetype - biggest/most common mistakes.
 
-9. **Shipped as `asked-again`, and what is left is the number that would mean
-   the most.** The app remembers answers now (`pickAnswers`), the misses drill
-   leads with what you have not taken back, and `/stats` has a panel that says
-   a direction rather than a standing. Three things stayed open on purpose:
+9. **Shipped as `asked-again` 2026-08-31. Three things stayed open.**
 
-   - **The headline is confounded by memory and says so, and the clean number
-     is not built.** Being dealt a pack a second time is not a clean test of
-     judgement, because the first answer came with a reveal naming the card. The
-     one measure memory cannot inflate is a question's FIRST answer, so "of the
-     picks the drill asked you for the first time this month you took the better
-     card 34%, against 21% in July" is the honest version of this whole idea —
-     and it needs a bucketing rule and enough history to fill two buckets.
-     Deliberately not invented ahead of either.
-
-     It carries a bias worth writing down before anyone reads it: the ranking
-     deals the widest gaps first, so the questions get HARDER as the history
-     grows. That works against showing improvement, which is the safe direction
-     for it to run in, and it must be stated beside any trend drawn from it.
-
-   - **No rest interval, on purpose.** Spacing wants a constant — do not ask
-     this again for a week — and there is nothing measured to derive one from.
-     `rankMisses` sorts least-recently-asked first inside a tier instead, which
-     gets the same behaviour out of how much history exists. When there is
-     enough data to fit a retention curve, that is the moment for a number.
-
-   - **The archetype quiz writes nothing**, and neither does anything about a
-     draft's own picks. Its question is a card and two decks out of a set's
-     statistics: a different identity, no pick behind it, and being asked again
-     corrects no error of yours. Taking it means a second identity shape on the
-     row or a second table, and neither is worth guessing at before the pick
-     half has been played twice.
-
+   - **The headline is confounded by memory** — the first answer came with a
+     reveal naming the card — and the clean measure is a question's FIRST
+     answer over time. That needs a bucketing rule and two buckets of history,
+     neither invented yet. It carries a bias that must be stated beside any
+     trend drawn from it: the ranking deals the widest gaps first, so the
+     questions get HARDER as history grows, which works against showing
+     improvement.
+   - **No rest interval, on purpose.** Nothing measured derives one, so
+     `rankMisses` sorts least-recently-asked first instead. A retention curve
+     is what would earn a number here.
+   - **The archetype quiz writes nothing.** Its question is a card and two
+     decks out of a set's statistics — no pick behind it, so being asked again
+     corrects no error of yours. Taking it costs a second identity shape on the
+     row or a second table.
 10. --
 11. --
 
@@ -337,25 +321,13 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    quiz outcomes today — `reviewVerdicts` stores the coach's verdict, not your
    guess.
 
-   **The row exists and this half still does not read it** (2026-08-31,
-   `asked-again`). `pickAnswers` is the table both surfaces wanted — which
-   question, what was answered, when — and the review walkthrough and the CLI
-   quiz both write to it, from the same `(sessionId, pickIndex)` the drill uses.
-   What reads it is `stats.progress`, and it reads the DRILL's rows only.
-
-   Two reasons, and the second is the one that keeps this item open rather than
-   closing it. A review guess is graded leniently, against a card the coach may
-   name after the fact, so a run of them mixes two answers to "what was right
-   here" — the row stores both of the pick's own answers so either rule can be
-   applied later, and the screen's on-screen verdict can still differ from what
-   a re-grade says. And every review is a different draft of a different set, so
-   a trend across them is exactly the cross-set comparison the drill half was
-   built to avoid.
-
-   So what is left is a real design question rather than a schema one: what a
-   trend over quiz outcomes is allowed to claim when each point is a different
-   format. The data is being collected from today either way, which is the
-   point of writing the rows before anything reads them.
+   **The row exists and this half does not read it** (2026-08-31,
+   `asked-again`). Both quiz surfaces write to `pickAnswers`; `stats.progress`
+   reads the drill's rows only. What is left is a design question rather than a
+   schema one: a review guess is graded leniently against a card the coach may
+   name after the fact, and every review is a different draft of a different
+   set, so what a trend over quiz outcomes may CLAIM is unanswered. The data
+   accumulates from today either way.
 
 # Still open from shipped work:
 
@@ -594,50 +566,19 @@ it is derived from what the field DID, so grading a person against it is marking
 them against the crowd rather than against what wins — the circularity
 `trophyPickRate` is kept out of the scorer for.
 
-`asked-again` shipped 2026-08-31, in three phases, and it started from a
-question the app could not answer about itself. Three surfaces asked a question
-with a known right answer — the review walkthrough's quiz, the misses drill, the
-archetype quiz — and none of them wrote the answer down, so "am I getting
-better" had nothing behind it and `/stats` was averaging `overallScore` across
-drafts of different sets to reach for it.
+`asked-again` shipped 2026-08-31. Three surfaces asked a question with a known
+right answer and none wrote the answer down, so `/stats` was averaging
+`overallScore` across drafts of different sets to reach for "am I getting
+better".
 
-**A run of draft scores cannot be made into a direction, and that is the whole
-argument for where this went instead.** Each is a different set, different packs
-and a different pod, and trap #3 is that most of the gaps a pick is graded on
-are smaller than the error bars on the win rates they came from. The drill is
-the one place that is not true: the same pack, out of the same pool, against an
-answer written down at the time. It is the only comparison this app can draw
-with no set-to-set variance in it, which is why the readout leads with it and
-why the review's rows are stored and deliberately unread (Deferred #2).
-
-**The ranking is three tiers and no constant** — never asked, asked and still
-wrong, taken back — least-recently-asked first inside a tier, gap last. Nothing
-changes until somebody has played, because with no history every candidate sits
-in the first tier and that is the old rule exactly. See Ideas #9 for why there
-is no rest interval and what it would take to earn one.
-
-**The tier's own test could not fail, and it looked fine.** The comparator
-defaulted an absent date to `""` for the second key, which sorts ahead of every
-real date and therefore did the tier's job by itself — flatten the tiers and the
-expected order still came out. Trap #4 in three characters, in a comparator
-written the same afternoon as a commit citing trap #4. Perturbing each sort key
-in turn is what caught it and is the cheap habit worth keeping.
-
-**What is written down is facts, never a verdict.** A row carries what was
-answered and both of the pick's own answers as they stood, because the review
-grades leniently and the drill strictly and both rules are computable from those
-two names — a stored `correct` would have baked one rule into rows that outlive
-it, and would let a re-ingest that moves a win rate silently re-decide an answer
-somebody already gave.
-
-**The write is fire-and-forget in the browser and awaited in the CLI**, which is
-the same decision made twice about different rooms: a reveal that waited on a
-round trip would be a worse drill than one that forgot, while a terminal is
-already blocked on the next prompt. Nothing on screen reads the table back, so a
-rejection is silent and costs the measurement rather than the person — hence
-`answer_unrecorded`, read as a rate against `drill_answered` and as a raw count
-for the review, which has no per-guess event and is not getting one to serve a
-divisor.
+**The one thing here worth not re-deriving is why the readout is built on the
+drill.** A run of draft scores cannot be made into a direction: each is a
+different set, different packs and a different pod, and trap #3 is that most of
+the gaps a pick is graded on are smaller than the error bars on the win rates
+they came from. The drill asks the same pack twice out of the same pool against
+an answer written down at the time — the only comparison this app can draw with
+no set-to-set variance in it. That is also why the review's rows are stored and
+unread (Deferred #2), and what is left open is Ideas #9.
 
 3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
@@ -805,6 +746,12 @@ to the data work.
     noticed the change they existed to catch — every ALSA value sat at the nudge's
     pivot or past its clamp. Perturb the thing under test and watch the guard go
     red before trusting it.
+
+    **A third instance, in a sort comparator** (2026-08-31, `rankMisses`): a
+    `?? ""` on the second key sorted ahead of every real date and so did the
+    first key's job unaided, and flattening the first key left the expected
+    order standing. A default value in a comparator is a silent tie-break, so
+    perturb EACH key, not the function.
 5.  **A test one function upstream of the hole also reads as coverage, and this
     one passes.** Trap #4 is a test that cannot go red. This is a test that is
     correct, goes red properly, and is pointed at the wrong function. `layout` and
