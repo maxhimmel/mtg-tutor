@@ -1,8 +1,14 @@
 import { v } from "convex/values";
-import { REVIEW, cardsLeftAtMiss, isDecisionPick } from "@mtg-tutor/core";
+import {
+  REVIEW,
+  cardsLeftAtMiss,
+  isDecisionPick,
+  missFixed,
+  missProgress,
+} from "@mtg-tutor/core";
 import { query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
-import { ownSessions } from "./sessions.js";
+import { ownSessions, requireUserId } from "./sessions.js";
 import { DIGEST_MISTAKES, digestFor } from "./draftDigests.js";
 import type { DigestMistake } from "./validators.js";
 
@@ -126,6 +132,54 @@ export const overview = query({
       truncated,
       countedDrafts: counted,
       forcedMistakes: forced,
+    };
+  },
+});
+
+/**
+ * What the drill has taught, counted by question.
+ *
+ * ITS OWN QUERY, not another branch of `overview`. That one reads a hundred
+ * session documents and a digest each to average drafts; this reads one index
+ * on one table and nothing else, and pooling them would make a screen showing
+ * either pay for both. They also answer different questions -- `overview` is a
+ * standing and this is a direction -- which is the distinction the stats screen
+ * has been missing rather than a second cut of the same number.
+ *
+ * WHY THE DRILL AND NOT THE REVIEW QUIZ, when both write rows. A review guess
+ * is graded leniently and against a card the coach may have named after the
+ * fact, so a run of them mixes two answers to "what was right here"; and every
+ * review is a different draft of a different set, so a trend across them is the
+ * cross-set comparison this whole feature exists to avoid. The drill asks the
+ * same pack twice out of the same pool. Those rows are stored and this does not
+ * read them, deliberately -- see notes.md, Deferred #2, which wanted both
+ * surfaces on one table and one reader at a time.
+ */
+export const progress = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const answers = await ctx.db
+      .query("pickAnswers")
+      .withIndex("by_user_and_asked", (q) => q.eq("userId", userId).eq("asked", "misses"))
+      .collect();
+
+    return {
+      ...missProgress(
+        answers.map((answer) => ({
+          key: `${answer.sessionId}:${answer.pickIndex}`,
+          at: answer.at,
+          fixed: missFixed(answer),
+        })),
+      ),
+      // When the record starts, so a screen can say how long these numbers took
+      // to gather instead of implying they are a standing over all time. Not the
+      // earliest DRAFT -- the questions reach back further than the answers do,
+      // and saying so would date the history to somebody's first ever pick.
+      since: answers.reduce<string | undefined>(
+        (earliest, answer) => (!earliest || answer.at < earliest ? answer.at : earliest),
+        undefined,
+      ),
     };
   },
 });

@@ -737,8 +737,49 @@ function Reveal({
           </>
         )}
       </p>
+
+      {/* WHAT HAPPENED THE LAST TIME THIS CAME ROUND, and only after answering.
+          Two clauses, both plain: what you did then, what you did now. This is
+          the only place in the app where a person is told something about
+          themselves that spans two sittings, and it is worth more here than in
+          any tally -- the pack is on the screen and the card is in front of
+          them.
+
+          Not a claim about improvement. A pick taken back a second time may be
+          a better read or may be remembering the reveal, and the panel on
+          /stats says so where the numbers are added up; a line under one pack
+          should say what happened and stop. */}
+      {question.askedBefore && (
+        <p className="max-w-prose border-t border-base-300 pt-3 text-sm leading-relaxed text-base-content/55">
+          {lastTime(stamp(question.askedBefore.at), question.askedBefore.fixed, result.correct)}
+        </p>
+      )}
     </div>
   );
+}
+
+/**
+ * The two sittings in one sentence.
+ *
+ * Four cases and four sentences rather than clauses assembled out of a
+ * condition, because the assembled version said "You found it on 12 Aug too,
+ * and again just now" -- which is the outcome line above repeated, with a date
+ * bolted on. Written out, each one only says the half the reader does not
+ * already have on screen.
+ *
+ * "This time you took it back" and never "for the first time": `askedBefore` is
+ * the LAST answer and not the whole history, so a pick fixed in June, missed in
+ * July and fixed now would be told something false.
+ */
+function lastTime(when: string, hadIt: boolean, has: boolean): string {
+  if (hadIt) {
+    return has
+      ? `You had this one right on ${when} as well.`
+      : `You had this one right on ${when}, and let it go this time.`;
+  }
+  return has
+    ? `You missed this one on ${when} too — this time you took it back.`
+    : `You missed this one on ${when} as well.`;
 }
 
 /**

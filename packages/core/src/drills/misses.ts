@@ -245,3 +245,115 @@ export function scoreMissRun(results: readonly MissResult[]): MissRunScore {
     missed: count("missed"),
   };
 }
+
+/**
+ * The drill's grading rule, over a stored answer rather than a live one.
+ *
+ * `gradeMiss` above is the same rule against a question in hand; this is it
+ * against a row, which is what every reader of `pickAnswers` needs and what two
+ * of them had each written out inline. Strict, because it is this drill's rule
+ * and not the review's -- a row carries both of the pick's answers so either
+ * surface can grade it, and a second reader copying the wrong one is exactly
+ * what naming it once prevents.
+ */
+export const missFixed = (answer: {
+  answered: string;
+  contextBestName: string;
+}): boolean => answer.answered === answer.contextBestName;
+
+/** One stored answer, reduced to what a tally over them needs. */
+export interface MissAnswer {
+  /** Which question it answers. Any stable key -- the fold only groups by it. */
+  key: string;
+  at: string;
+  /** Whether it took the card the pick was graded against. */
+  fixed: boolean;
+}
+
+/**
+ * What a run of answers says about one person, counted by QUESTION.
+ *
+ * Every number here is a count of distinct questions except `answers`, which is
+ * the attempts they came from, and the split of `askedAgain` is exhaustive on
+ * purpose: `tookBack + heldOn + slipped + stillWrong === askedAgain`, so a
+ * screen printing three of the four cannot imply a fourth that is not there.
+ */
+export interface MissProgress {
+  /** Distinct questions the drill has put to them at least once. */
+  asked: number;
+  /** Of those, the ones whose LATEST answer took the graded card. */
+  fixed: number;
+  /** Distinct questions put to them more than once. */
+  askedAgain: number;
+  /** Missed the first time, taken back by the latest. */
+  tookBack: number;
+  /** Taken back the first time, and again by the latest. */
+  heldOn: number;
+  /** Taken back the first time, and not by the latest. */
+  slipped: number;
+  /** Missed the first time and still missed. */
+  stillWrong: number;
+  /** Attempts, so a reader can weigh how much history is behind the rest. */
+  answers: number;
+}
+
+/**
+ * The fold this whole feature exists to make possible.
+ *
+ * FIRST AGAINST LATEST, never a chain of transitions. A question answered four
+ * times has three transitions and one story, and counting the transitions would
+ * let one stubborn pick answered a dozen times outvote eleven picks answered
+ * twice -- an average over decisions hiding the decisions, which is trap #7 in
+ * notes.md with the units changed.
+ *
+ * WHAT THIS DOES NOT MEASURE, and it has to be said wherever the numbers are
+ * printed. Being dealt a pack a second time is not a clean test of judgement:
+ * the first answer came with a reveal naming the card, so a second one can be
+ * memory rather than a better read. The drill's own header has always worried
+ * about this. It is why the honest headline is `tookBack` out of `askedAgain`
+ * -- what happened, stated as what happened -- and never "you have got better
+ * by N points", which is a claim this cannot support.
+ *
+ * The one number here that memory cannot inflate is a question's FIRST answer,
+ * which is why `asked` and `fixed` are kept beside the repeat split rather than
+ * folded into it.
+ */
+export function missProgress(answers: readonly MissAnswer[]): MissProgress {
+  const byQuestion = new Map<string, MissAnswer[]>();
+  for (const answer of answers) {
+    const seen = byQuestion.get(answer.key);
+    if (seen) seen.push(answer);
+    else byQuestion.set(answer.key, [answer]);
+  }
+
+  const progress: MissProgress = {
+    asked: byQuestion.size,
+    fixed: 0,
+    askedAgain: 0,
+    tookBack: 0,
+    heldOn: 0,
+    slipped: 0,
+    stillWrong: 0,
+    answers: answers.length,
+  };
+
+  for (const attempts of byQuestion.values()) {
+    // Sorted here rather than trusted from the caller: the rows come out of an
+    // index whose order is insertion, which is nearly this and is not it.
+    const ordered = [...attempts].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    const first = ordered[0];
+    const latest = ordered[ordered.length - 1];
+
+    if (latest.fixed) progress.fixed++;
+    if (ordered.length < 2) continue;
+
+    progress.askedAgain++;
+    if (first.fixed) {
+      if (latest.fixed) progress.heldOn++;
+      else progress.slipped++;
+    } else if (latest.fixed) progress.tookBack++;
+    else progress.stillWrong++;
+  }
+
+  return progress;
+}

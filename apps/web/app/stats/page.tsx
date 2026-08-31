@@ -13,6 +13,7 @@ import { spokenColors } from "../lib/colorTokens";
 import { pct, points, releaseDate } from "../lib/format";
 import { statsViewed } from "../lib/analytics";
 import { ScorePlot, type ScoreColumn } from "./ScorePlot";
+import { ProgressPanel } from "./Progress";
 
 export default function StatsIndex() {
   return (
@@ -51,6 +52,10 @@ export default function StatsIndex() {
 
 function Overview() {
   const data = useQuery(api.stats.overview, {});
+  // Its own subscription, on its own table. Answered separately so a page whose
+  // drafts have not loaded still fills this panel in, and so the drill writing a
+  // row does not re-run the hundred-session average above.
+  const progress = useQuery(api.stats.progress, {});
   const icons = useSetIcons();
 
   // Once per visit, not once per render, the way the review list counts itself:
@@ -68,8 +73,11 @@ function Overview() {
       mistakes: data.topMistakes.length,
       forced: data.forcedMistakes,
       truncated: data.truncated,
+      asked: progress?.asked,
+      askedAgain: progress?.askedAgain,
+      tookBack: progress?.tookBack,
     });
-  }, [data]);
+  }, [data, progress]);
 
   if (data === undefined) {
     return <p className="text-base-content/60">Tallying up…</p>;
@@ -149,6 +157,7 @@ function Overview() {
       )}
 
       <Lately recent={data.recent} icons={icons} />
+      {progress && <ProgressPanel progress={progress} />}
       <Breakdowns data={data} />
       <Mistakes data={data} icons={icons} />
     </div>
