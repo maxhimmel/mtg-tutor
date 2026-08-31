@@ -33,13 +33,15 @@ import { ownSessions } from "../sessions.js";
 // and filtering after would cost roughly forty times as much to reach the same
 // ten.
 //
-// WHAT THIS DELIBERATELY DOES NOT DO IS REMEMBER. Nothing records that a run
-// happened, so two runs in a row deal the same questions -- `skip` is what a
-// client uses to page past them. That is the whole of the bet: whether being
-// dealt your worst picks again is worth anything is a question about people,
-// and it gets answered by the `drill_*` events rather than by a table built
-// before the answer is in. Persisting attempts (notes.md, Deferred #2) is the
-// follow-on if it is.
+// THE ANSWERS ARE NOW REMEMBERED AND THE SELECTION IS NOT, which is where this
+// stands rather than where it stops. Every answer goes to `pickAnswers.record`,
+// because the same pack coming back around and being taken differently is the
+// only evidence of improvement this app can gather that is not confounded by
+// having drafted a different set. What still reads nothing back is the ranking
+// below: it is the worst gaps first, so two runs in a row deal the same
+// questions and `skip` is what a client pages past them with. Leading with the
+// ones you have not fixed is the next thing this query learns, and it wants
+// rows to learn it from.
 
 /**
  * How many rows a run may read before it gives up on filling itself.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Card, DisplayCard } from "@mtg-tutor/core";
 import { useCardHoverFactory } from "../../components/CardPreview";
@@ -25,7 +25,12 @@ import {
 } from "../../components/PickMarks";
 import { SetIcon } from "../../components/SetIcon";
 import { points } from "../../lib/format";
-import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics";
+import {
+  answerUnrecorded,
+  drillAnswered,
+  drillFinished,
+  drillStarted,
+} from "../../lib/analytics";
 
 // The misses drill, played.
 //
@@ -43,10 +48,18 @@ import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics"
 // gold ring is the same "card you are holding" the draft board lights a
 // selection with.
 //
-// NOTHING PERSISTS. A run is state in this component and is gone on reload --
-// see convex/drills/misses.ts for why that is the design rather than a stage of
-// it. `skip` is how a second run avoids repeating the first, and it resets with
-// the page for the same reason.
+// THE RUN DOES NOT PERSIST AND THE ANSWERS NOW DO, which is a smaller
+// distinction than it sounds and worth keeping straight. Where you are in a run
+// is state in this component and is gone on reload; `skip` is how a second run
+// avoids repeating the first, and it resets with the page for the same reason.
+// What each answer WAS goes to `pickAnswers.record`, because the same pack
+// coming back around months later and being taken differently is the only
+// evidence of improvement this app can gather that is not confounded by having
+// drafted a different set -- see schema.ts.
+//
+// The write is fire-and-forget and a rejection is reported rather than shown. A
+// reveal that waited on a round trip would be a worse drill than one that
+// forgot, and nothing on this screen reads the table back.
 
 type Run = NonNullable<ReturnType<typeof useDeal>>;
 type Question = Run["questions"][number];
@@ -141,6 +154,7 @@ export function MissesDrill() {
   const live = useDeal(skip);
   const [run, setRun] = useState<Run>();
   const sets = useQuery(api.sets.list);
+  const record = useMutation(api.pickAnswers.record);
 
   const questions = useMemo(() => run?.questions ?? [], [run]);
   const current = questions[step];
@@ -192,6 +206,18 @@ export function MissesDrill() {
   function answer(question: Question, card: Card) {
     const result = gradeMiss(question, card.name);
     setAnswers((prev) => new Map(prev).set(key(question), card.name));
+    // Both of the pick's own answers go with it, so the row can be graded later
+    // by either surface's rule rather than by whichever one wrote it.
+    void record({
+      sessionId: question.sessionId,
+      pickIndex: question.pickIndex,
+      asked: "misses",
+      answered: card.name,
+      rawBestName: question.rawBestName,
+      contextBestName: question.gradedName,
+    }).catch((error: unknown) => {
+      answerUnrecorded({ asked: "misses", reason: String(error) });
+    });
     drillAnswered({
       drill: "misses",
       outcome: result.outcome,

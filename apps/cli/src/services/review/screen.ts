@@ -6,6 +6,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { pct } from "../../core/ui/format.js";
+import { recordAnswer } from "../../core/answers.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { spinner } from "../../core/ui/spinner.js";
 import { humanError } from "../../core/ui/humanError.js";
@@ -64,6 +65,17 @@ export async function runReview(
         p.cancel("Review abandoned.");
         return;
       }
+      // The pick's own two answers, not the verdict's -- which has not been
+      // asked for yet, and would not be on a guess somebody walks away from.
+      // See the same note in the web walkthrough for what that costs.
+      await recordAnswer(convex, {
+        sessionId,
+        pickIndex: pick.pickIndex,
+        asked: "review",
+        answered: guess.name,
+        rawBestName: pick.bestName,
+        contextBestName: pick.contextBestName,
+      });
     }
 
     const verdict = await resolveVerdictInteractive(convex, sessionId, pick);

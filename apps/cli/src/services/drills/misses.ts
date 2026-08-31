@@ -11,6 +11,7 @@ import {
   tally,
   type MissResult,
 } from "@mtg-tutor/core";
+import { recordAnswer } from "../../core/answers.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { curveLine, renderManaCost } from "../../core/ui/format.js";
 import { spinner } from "../../core/ui/spinner.js";
@@ -23,10 +24,14 @@ import { spinner } from "../../core/ui/spinner.js";
 // it stood goes above it, because the question is which card served THAT deck
 // and not which card is strongest.
 //
-// The one thing the CLI cannot do here is report. A run writes nothing, so
-// there is no mutation for a capture to ride on and no drill event is sent from
-// this side; the web's numbers are the whole measurement. Stated rather than
-// quietly true -- it is the same gap the CLI's review quiz already has.
+// What each answer WAS is now written down here too, through `recordAnswer`,
+// so a run played in a terminal is not invisible to anything measuring whether
+// the same pack gets taken differently the second time.
+//
+// The drill EVENTS are still web-only, and that gap is unchanged: there is no
+// PostHog in this process, so `drill_started` / `drill_answered` /
+// `drill_finished` are sent from the browser alone and the web's numbers remain
+// the whole of how often these get played. Stated rather than quietly true.
 
 type Run = Awaited<ReturnType<typeof deal>>;
 type Question = Run["questions"][number];
@@ -58,7 +63,7 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
       return;
     }
 
-    const results = await play(run);
+    const results = await play(convex, run);
     if (!results) {
       p.cancel("Left mid-run. Nothing is recorded either way.");
       return;
@@ -78,7 +83,7 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
 }
 
 /** Null when the player walked away, which is not a score of zero. */
-async function play(run: Run): Promise<MissResult[] | null> {
+async function play(convex: ConvexHttpClient, run: Run): Promise<MissResult[] | null> {
   const results: MissResult[] = [];
 
   for (const [i, question] of run.questions.entries()) {
@@ -95,6 +100,15 @@ async function play(run: Run): Promise<MissResult[] | null> {
 
     const result = gradeMiss(question, guess.name);
     results.push(result);
+    // Before the reveal, which is when the answer is still only theirs.
+    await recordAnswer(convex, {
+      sessionId: question.sessionId,
+      pickIndex: question.pickIndex,
+      asked: "misses",
+      answered: guess.name,
+      rawBestName: question.rawBestName,
+      contextBestName: question.gradedName,
+    });
     p.note(reveal(question, result, guess.name), head(question, result));
   }
 

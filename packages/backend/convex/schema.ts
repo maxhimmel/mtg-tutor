@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  answerSurface,
   benchEntry,
   cardContext,
   cardStats,
@@ -521,6 +522,65 @@ export default defineSchema({
     phase: v.union(v.literal("open"), v.literal("close")),
     text: v.string(),
   }).index("by_session_and_phase", ["sessionId", "phase"]),
+
+  // Every answer the player has given to a question about a pick they had
+  // already made, kept so that two of them can be set beside each other.
+  //
+  // WHY IT EXISTS. Three surfaces ask a question with a known right answer --
+  // the review walkthrough's quiz, the misses drill, the archetype quiz -- and
+  // until this table not one of them wrote the answer down. So the question
+  // somebody actually opens this app with, am I getting better, had nothing
+  // behind it at all: `stats.overview` was left averaging `overallScore` over
+  // drafts of different sets, and its own comment concedes the problem, that a
+  // standing cannot show a direction.
+  //
+  // A run of draft scores cannot be turned into one either. Each is a different
+  // set, different packs and a different pod, and notes.md trap #3 is that most
+  // of the gaps a pick is graded on are smaller than the error bars on the win
+  // rates they came from. The drill is the one place that is not true: it deals
+  // back a pack that was already dealt, out of a pool that was already drafted,
+  // against an answer written down at the time. The same question asked twice
+  // is the only comparison this app can draw with no set-to-set variance in it.
+  //
+  // ONE ROW PER ATTEMPT, and never patched. The second answer to a pick IS the
+  // measurement, so a table keeping only the latest could say how someone is
+  // doing and never how they are doing NOW against then. Neither surface can
+  // answer a question twice within a run -- both replace the pack with its
+  // reveal on the first click -- so a second row for one pick and one surface
+  // means the question came back around, which is the event worth counting.
+  //
+  // WHAT IS DELIBERATELY NOT HERE is the archetype quiz. Its question is a card
+  // and two decks derived from a set's statistics: a different identity, with
+  // no pick behind it and no history of the player's in it, so being asked
+  // again corrects no error of theirs. Taking it would mean a second identity
+  // shape on this row or a second table, and neither is worth guessing at
+  // before the pick half has been played twice.
+  pickAnswers: defineTable({
+    // On the row rather than reached through the session, because the reader
+    // this table exists for asks across every session at once. Joining for it
+    // would be a ~2KB session read per answer to recover a string the caller
+    // already had in hand.
+    userId: v.string(),
+    sessionId: v.id("draftSessions"),
+    pickIndex: v.number(),
+    asked: answerSurface,
+    /** The card they took this time. */
+    answered: v.string(),
+    // Both of the pick's stored answers, copied off its own score at the moment
+    // of the attempt -- and not a correctness flag, which is the call worth
+    // explaining.
+    //
+    // The two surfaces grade by different rules and both rules are computable
+    // from these two names, so storing a verdict would bake one of them into
+    // rows that outlive it. It also keeps an old attempt honest: the score that
+    // judged the pick is what the player was shown, and a re-ingest that moves
+    // a win rate must not silently re-decide an answer somebody already gave.
+    rawBestName: v.string(),
+    contextBestName: v.string(),
+    at: v.string(),
+  })
+    // One pick's answers, oldest first, which is the repeat itself.
+    .index("by_user_and_pick", ["userId", "sessionId", "pickIndex"]),
 
   // Someone asking to be let in, from the signed-out page. Written by a public
   // mutation -- it has to be, the caller has no account and cannot get one

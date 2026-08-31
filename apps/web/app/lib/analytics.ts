@@ -1296,3 +1296,29 @@ export function drillFinished(p: {
   if (!on()) return;
   posthog.capture("drill_finished", p);
 }
+
+/**
+ * An answer the app failed to write down.
+ *
+ * The only event here that fires on a path nobody is standing on, and it earns
+ * its place for exactly that reason. `pickAnswers` is written without being
+ * awaited, so a rejection changes nothing on screen: the reveal comes up, the
+ * run finishes, and the row is simply not there. What that costs is not a
+ * feature but a measurement -- a progression readout over a store that quietly
+ * drops rows reports improvement that is really attrition, and there is nothing
+ * downstream to catch it.
+ *
+ * READ AS A RATE FOR THE DRILL and as a raw count for the review. Every drill
+ * answer already mints `drill_answered`, which is the denominator; the review
+ * walkthrough has no per-guess event and is not getting one to serve this, since
+ * an event name is permanent and a whole new family for a screen with none is a
+ * lot to spend on a divisor. A nonzero count there is the finding on its own.
+ */
+export function answerUnrecorded(p: {
+  asked: "review" | "misses";
+  /** The rejection, as the client saw it. */
+  reason: string;
+}): void {
+  if (!on()) return;
+  posthog.capture("answer_unrecorded", p);
+}
