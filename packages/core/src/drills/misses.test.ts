@@ -5,6 +5,7 @@ import {
   cardsLeftAtMiss,
   gradeMiss,
   missGap,
+  missTier,
   pickIndexOfMiss,
   rankMisses,
   scoreMissRun,
@@ -62,10 +63,68 @@ describe("cardsLeftAtMiss", () => {
   });
 });
 
+const asked = (m: MissCandidate, at: string, fixed: boolean): MissCandidate => ({
+  ...m,
+  asked: { at, fixed },
+});
+
+describe("missTier", () => {
+  it("calls a candidate with no history unasked", () => {
+    expect(missTier(miss(1, 1, 0.05))).toBe("unasked");
+  });
+
+  it("separates a fixed one from one still wrong", () => {
+    expect(missTier(asked(miss(1, 1, 0.05), "2026-08-01", true))).toBe("fixed");
+    expect(missTier(asked(miss(1, 1, 0.05), "2026-08-01", false))).toBe("unfixed");
+  });
+});
+
 describe("rankMisses", () => {
   it("puts the largest gap first", () => {
     const ranked = rankMisses([miss(1, 1, 0.01), miss(2, 2, 0.09), miss(3, 3, 0.04)], 10);
     expect(ranked.map(missGap)).toEqual([0.09, 0.04, 0.01].map((n) => expect.closeTo(n, 10)));
+  });
+
+  // The tier beats both other keys, which is the whole change: the biggest miss
+  // in the history stops being dealt first once it has been taken back.
+  //
+  // Built so that EVERY other key disagrees with the answer -- the fixed one has
+  // the widest gap and the oldest date, the unasked one the narrowest gap -- so
+  // this can only come out right on the tier. The first draft of it could not
+  // fail: flattening the tiers left the same order standing.
+  it("deals what has never been asked before what has", () => {
+    const fresh = miss(1, 1, 0.01);
+    const ranked = rankMisses(
+      [
+        asked(miss(2, 2, 0.05), "2026-08-01", false),
+        asked(miss(3, 3, 0.09), "2026-07-01", true),
+        fresh,
+      ],
+      10,
+    );
+    expect(ranked.map(missTier)).toEqual(["unasked", "unfixed", "fixed"]);
+    expect(ranked[0]).toBe(fresh);
+  });
+
+  // Spacing, without a rest interval to pick out of the air.
+  it("brings back the least recently asked first", () => {
+    const ranked = rankMisses(
+      [
+        asked(miss(1, 1, 0.09), "2026-08-20", false),
+        asked(miss(2, 2, 0.01), "2026-08-01", false),
+        asked(miss(3, 3, 0.05), "2026-08-10", false),
+      ],
+      10,
+    );
+    expect(ranked.map((m) => m.asked?.at)).toEqual(["2026-08-01", "2026-08-10", "2026-08-20"]);
+  });
+
+  it("falls back to the gap inside one tier on one date", () => {
+    const ranked = rankMisses(
+      [asked(miss(1, 1, 0.01), "2026-08-01", false), asked(miss(2, 2, 0.09), "2026-08-01", false)],
+      10,
+    );
+    expect(ranked.map(missGap)).toEqual([0.09, 0.01].map((n) => expect.closeTo(n, 10)));
   });
 
   it("takes only what was asked for", () => {
