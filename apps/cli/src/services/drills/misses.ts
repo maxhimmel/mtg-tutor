@@ -52,9 +52,15 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
     const spin = spinner();
     spin.start("Finding the ones you got wrong");
     const run = await deal(convex, skip);
+    // How many come round again, and never which -- the same rule the web's
+    // table screen keeps. You remember taking a card back better than you
+    // remember the pack, so naming them would answer them before they are
+    // asked, which is what `blind` below is protecting.
+    const repeats = run.questions.filter((q) => q.tier !== "unasked").length;
     spin.stop(
       run.questions.length > 0
-        ? `${run.questions.length} pack${run.questions.length === 1 ? "" : "s"} to take again`
+        ? `${run.questions.length} pack${run.questions.length === 1 ? "" : "s"} to take again` +
+            (repeats === 0 ? "" : pc.dim(` · ${repeats} you have answered before`))
         : "",
     );
 

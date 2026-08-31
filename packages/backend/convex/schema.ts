@@ -580,7 +580,18 @@ export default defineSchema({
     at: v.string(),
   })
     // One pick's answers, oldest first, which is the repeat itself.
-    .index("by_user_and_pick", ["userId", "sessionId", "pickIndex"]),
+    .index("by_user_and_pick", ["userId", "sessionId", "pickIndex"])
+    // Every answer one surface has taken from one person, which is what the
+    // misses drill folds into "have I been asked this, and did I fix it".
+    //
+    // A scan rather than a lookup per candidate, and the arithmetic is why: a
+    // run considers up to DRILLS.draftWindow x DIGEST_MISTAKES candidates, so
+    // asking by_user_and_pick about each would be 250 indexed reads to answer a
+    // question about at most ten answers per run ever played. This grows with
+    // runs played and nothing else. If it ever stops being small the fix is a
+    // rollup and not a narrower index -- the fold genuinely wants every row,
+    // because a pick fixed a year ago is still fixed.
+    .index("by_user_and_asked", ["userId", "asked"]),
 
   // Someone asking to be let in, from the signed-out page. Written by a public
   // mutation -- it has to be, the caller has no account and cannot get one
