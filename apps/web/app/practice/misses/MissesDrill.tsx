@@ -6,7 +6,14 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Card, DisplayCard } from "@mtg-tutor/core";
 import { useCardHoverFactory } from "../../components/CardPreview";
-import { byCurve, gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
+import {
+  byCurve,
+  gradeMiss,
+  scoreMissRun,
+  tally,
+  type MissResult,
+  type MissTier,
+} from "@mtg-tutor/core";
 import { CardPlacardList } from "../../components/CardPlacard";
 import { CardFace, CardTile } from "../../components/CardTile";
 import { ColorTally } from "../../components/ColorPips";
@@ -184,12 +191,21 @@ export function MissesDrill() {
     if (!live || dealtFor.current === skip) return;
     dealtFor.current = skip;
     setRun(live);
+    // Counted over what was actually SERVED rather than over the candidates
+    // ranked, which are not the same list -- a candidate can be read and then
+    // refused. What the run was made of is the only thing that can say whether
+    // ranking by history ever fires.
+    const tiers = tally(live.questions, (q) => [q.tier]);
+    const of = (tier: MissTier) => tiers.find(([t]) => t === tier)?.[1] ?? 0;
     drillStarted({
       drill: "misses",
       served: live.questions.length,
       drafts: live.drafts,
       candidates: live.candidates,
       unavailable: live.unavailable,
+      unasked: of("unasked"),
+      unfixed: of("unfixed"),
+      fixed: of("fixed"),
       skip,
     });
   }, [live, skip]);
@@ -221,6 +237,7 @@ export function MissesDrill() {
     drillAnswered({
       drill: "misses",
       outcome: result.outcome,
+      tier: question.tier,
       tookRawBest: result.tookRawBest,
       gap: question.gap,
       ageDays: ageInDays(question.draftedAt),
@@ -446,6 +463,19 @@ function Table({
     (days, q) => Math.max(days, ageInDays(q.draftedAt)),
     0,
   );
+  // HOW MANY, AND NEVER WHICH. A run leads with what you have never answered,
+  // so once it starts reaching back for repeats the screen has to say so --
+  // "the packs you got wrong" is the wrong sentence for a pack you already took
+  // back, and being asked one without being told is the drill quietly changing
+  // what it is.
+  //
+  // Naming them would leak the answer. You remember taking a card back far
+  // better than you remember the pack, so a stack with three cards marked
+  // "seen before" is three questions answered before they are asked -- which is
+  // the same blindness `pickCard`'s `blind` option and the face-down card are
+  // both protecting. A count over the whole run tells you what kind of run this
+  // is and tells you nothing about any one pack in it.
+  const again = questions.filter((q) => q.tier !== "unasked").length;
 
   return (
     <section className="grid items-center gap-10 py-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
@@ -467,7 +497,15 @@ function Table({
             ["From", `${codes.length} ${codes.length === 1 ? "set" : "sets"} — ${codes
               .map((c) => c.toUpperCase())
               .join(", ")}`],
-            ["Order", "worst first"],
+            ["Order", again === 0 ? "worst first" : "the ones you have not answered, worst first"],
+            ...(again === 0
+              ? []
+              : [
+                  [
+                    "Come round again",
+                    `${again} of ${questions.length}`,
+                  ] as [string, string],
+                ]),
           ].map(([term, value]) => (
             <div key={term}>
               <dt className="eyebrow">{term}</dt>
@@ -480,7 +518,9 @@ function Table({
           <button type="button" className="btn btn-primary" onClick={onBegin}>
             Deal the first pack
           </button>
-          <span className="text-sm text-base-content/50">Nothing is saved either way.</span>
+          <span className="text-sm text-base-content/50">
+            Your answers are kept — the ones you fix stop being dealt first.
+          </span>
         </div>
 
         {run.unavailable > 0 && (
