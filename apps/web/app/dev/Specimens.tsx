@@ -20,6 +20,7 @@ import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
 import { WinRateAxis } from "../glossary/figures/WinRateAxis";
 import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
+import { ProgressPanel } from "../stats/Progress";
 import { pct } from "../lib/format";
 import {
   DeckBands,
@@ -750,5 +751,82 @@ export const SPECIMENS: Specimen[] = [
         </div>
       );
     },
+  },
+  {
+    id: "progress-panel",
+    title: "Coming back to them",
+    note: "The /stats progress panel through the three states it has",
+    // ALL THREE STATES, because two of them are the ones nobody has data for
+    // yet and are therefore the ones that ship unlooked-at. A panel that has
+    // only ever been seen full is a panel whose empty branch is a guess.
+    //
+    // The middle bay is the state this feature spends its first weeks in: the
+    // drill leads with what you have never answered, so a run of them all lands
+    // here and the headline it is built for cannot be computed. If that bay
+    // ever reads like a failure, the ranking is being blamed for working.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Nothing answered yet — the drill has never been played">
+          <ProgressPanel
+            progress={{
+              asked: 0,
+              fixed: 0,
+              askedAgain: 0,
+              tookBack: 0,
+              heldOn: 0,
+              slipped: 0,
+              stillWrong: 0,
+              answers: 0,
+              since: undefined,
+            }}
+          />
+        </Bay>
+        <Bay label="Answered, none twice — where this sits for the first few weeks">
+          <ProgressPanel
+            progress={{
+              asked: 14,
+              fixed: 6,
+              askedAgain: 0,
+              tookBack: 0,
+              heldOn: 0,
+              slipped: 0,
+              stillWrong: 0,
+              answers: 14,
+              since: "2026-08-14T19:02:11.000Z",
+            }}
+          />
+        </Bay>
+        <Bay label="A real history — the four counts sum to the headline's denominator">
+          <ProgressPanel
+            progress={{
+              asked: 34,
+              fixed: 21,
+              askedAgain: 12,
+              tookBack: 7,
+              heldOn: 3,
+              slipped: 1,
+              stillWrong: 1,
+              answers: 47,
+              since: "2026-06-02T18:40:00.000Z",
+            }}
+          />
+        </Bay>
+        <Bay label="263px — what a 375px phone leaves" width="w-[263px] shrink-0">
+          <ProgressPanel
+            progress={{
+              asked: 34,
+              fixed: 21,
+              askedAgain: 12,
+              tookBack: 7,
+              heldOn: 3,
+              slipped: 1,
+              stillWrong: 1,
+              answers: 47,
+              since: "2026-06-02T18:40:00.000Z",
+            }}
+          />
+        </Bay>
+      </div>
+    ),
   },
 ];

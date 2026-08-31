@@ -863,6 +863,20 @@ export function statsViewed(p: {
   forced: number;
   /** The window clipped their history, so the averages are of a subset. */
   truncated: boolean;
+  /**
+   * What the progress panel had to say, if its own query had answered by the
+   * time this fired. Absent means it had not, which is a third thing from zero.
+   *
+   * The panel is the one part of this page that claims a DIRECTION rather than a
+   * standing, and it has three states nothing else can distinguish: never played
+   * the drill, played it and never been dealt a repeat, and a real
+   * `tookBack`/`askedAgain`. If almost every view is the second, the ranking is
+   * dealing repeats too rarely to teach anybody anything and the panel is a
+   * promissory note.
+   */
+  asked?: number;
+  askedAgain?: number;
+  tookBack?: number;
 }): void {
   if (!on()) return;
   posthog.capture("stats_viewed", p);
