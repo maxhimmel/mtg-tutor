@@ -4,6 +4,7 @@ import {
   REVIEW,
   cardsLeftAtMiss,
   isDecisionPick,
+  missFixed,
   missGap,
   missTier,
   normalizeBench,
@@ -90,7 +91,7 @@ async function askedBefore(ctx: QueryCtx, userId: string) {
   for (const answer of answers) {
     history.set(`${answer.sessionId}:${answer.pickIndex}`, {
       at: answer.at,
-      fixed: answer.answered === answer.contextBestName,
+      fixed: missFixed(answer),
     });
   }
   return history;

@@ -246,6 +246,21 @@ export function scoreMissRun(results: readonly MissResult[]): MissRunScore {
   };
 }
 
+/**
+ * The drill's grading rule, over a stored answer rather than a live one.
+ *
+ * `gradeMiss` above is the same rule against a question in hand; this is it
+ * against a row, which is what every reader of `pickAnswers` needs and what two
+ * of them had each written out inline. Strict, because it is this drill's rule
+ * and not the review's -- a row carries both of the pick's answers so either
+ * surface can grade it, and a second reader copying the wrong one is exactly
+ * what naming it once prevents.
+ */
+export const missFixed = (answer: {
+  answered: string;
+  contextBestName: string;
+}): boolean => answer.answered === answer.contextBestName;
+
 /** One stored answer, reduced to what a tally over them needs. */
 export interface MissAnswer {
   /** Which question it answers. Any stable key -- the fold only groups by it. */
