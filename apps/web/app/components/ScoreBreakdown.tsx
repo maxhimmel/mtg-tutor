@@ -191,8 +191,60 @@ function Track({ delta, strong }: { delta: number; strong?: boolean }) {
   );
 }
 
-/** The grid every row, and the axis under them, is set in. */
-const ROW = "grid grid-cols-[minmax(0,1fr)_auto_3.5rem] items-center gap-x-2";
+/**
+ * The grid every row, and the axis under them, is set in -- in the two shapes
+ * it has to have, because ONE OF THESE COLUMNS IS PROSE AND TWO OF THEM ARE
+ * PIXELS.
+ *
+ * The track is 88px and the figure beside it is 56px and neither may shrink:
+ * the docblock above is an argument that a point of win rate is the same number
+ * of pixels on every breakdown in the app, and a track that gives way under
+ * pressure is exactly the per-pick scale that ruling exists to forbid. So on a
+ * narrow container the label is the only thing left that can yield, and `1fr`
+ * yields all the way down to nothing.
+ *
+ * It did. The draft board's coach rail is 300px (`DraftBoard`'s `wide:` grid);
+ * the panel's own padding takes 32 and the grade column beside it takes 80,
+ * which leaves this component 188px. Minus 160px of track, figure and gaps, the
+ * label column was TWENTY-EIGHT PIXELS -- "What the archetype wants" rendered as
+ * "W…" and the sentence under it came out one word per line down a quarter of
+ * the screen. Nothing looked broken. It looked like a chart with a very long
+ * caption.
+ *
+ * So below 18rem the row is two lines: the label takes the full width and the
+ * track drops beneath it with its figure. The scale is untouched -- the same 88
+ * pixels, the same zero at the same offset from the left edge -- so the rows
+ * still read as one column of bars about one rule, and still line up with the
+ * axis at the foot.
+ *
+ * A CONTAINER QUERY AND NOT A BREAKPOINT, because the width that matters is the
+ * one this component was handed and not the one the window has. The same panel
+ * is 188px in the draft rail and near-full-width on the review at the identical
+ * viewport; a `lg:` here would answer the wrong question in both places.
+ */
+// EVERY VARIANT IS SPELLED OUT IN FULL, and it has to be. Tailwind finds the
+// classes it generates by scanning this file as TEXT -- there is no evaluation
+// -- so a `${WIDE}:col-span-1` written against a `const WIDE = "@min-[18rem]"`
+// is not a class it can see. It reads as the two candidates `@min-[18rem]` and
+// nothing, the rule is never emitted, and the layout silently keeps its narrow
+// shape at every width with no error anywhere. Checked with the scanner rather
+// than assumed, because that failure is invisible from the source.
+//
+// `5.5rem` is SPAN. The stacked shape puts the track in a column that would
+// otherwise be free to shrink under it -- `minmax(0,1fr)` means exactly that --
+// and a track quietly narrower than its own bars is the failure this whole
+// component is an argument against. It is a floor, not a width: above it the
+// column still takes the slack, so the figure stays at the right edge.
+const ROW =
+  "grid grid-cols-[minmax(5.5rem,1fr)_3.5rem] items-center gap-x-2 gap-y-1 " +
+  "@min-[18rem]:grid-cols-[minmax(0,1fr)_auto_3.5rem]";
+/** The whole first line when stacked, the first column when not. */
+const SLOT_LABEL = "col-span-2 min-w-0 @min-[18rem]:col-span-1";
+/** Placed explicitly, so a bar sits at the same x in both shapes. */
+const SLOT_TRACK = "col-start-1 @min-[18rem]:col-start-2";
+const SLOT_VALUE = "col-start-2 text-right @min-[18rem]:col-start-3";
+/** Cut the label to its column on one line; let it wrap when it has the width. */
+const CLIP_WIDE = "@min-[18rem]:truncate";
 
 /**
  * What a row says to a pointer, which is the one thing this panel draws and
@@ -226,8 +278,13 @@ function TermBar({
 
   return (
     <li className={ROW} {...follow(() => sayTerm(term, label))}>
-      <span className="min-w-0">
-        <span className="block truncate text-xs text-base-content/70">{label}</span>
+      <span className={SLOT_LABEL}>
+        {/* `truncate` only where truncating is the lesser evil. On one line the
+            label has to fit the column it was given; on two it has the whole
+            width and wrapping is the right answer, so cutting "Your deck can't
+            cast it" to "Your deck can…" there would be throwing away room the
+            layout just handed it. */}
+        <span className={`block text-xs text-base-content/70 ${CLIP_WIDE}`}>{label}</span>
         {/* Printed, not hovered. This used to be `title=` only, so on a phone
             the entire reason the panel exists was unreachable -- and this is a
             review screen people read on a phone. Small and quiet is the right
@@ -239,9 +296,14 @@ function TermBar({
         )}
       </span>
 
-      <Track delta={term.delta} />
+      {/* `flex` so the SVG is not a piece of inline content sitting on a text
+          baseline, which adds a descender's worth of space under every bar and
+          pulls the rows out of step with the axis. */}
+      <span className={`${SLOT_TRACK} flex`}>
+        <Track delta={term.delta} />
+      </span>
 
-      <span className="text-right text-xs tabular-nums text-base-content/70">
+      <span className={`${SLOT_VALUE} text-xs tabular-nums text-base-content/70`}>
         {points(term.delta)}
       </span>
     </li>
@@ -260,9 +322,13 @@ function TermBar({
 function NetBar({ net }: { net: number }) {
   return (
     <div className={`${ROW} border-t border-base-300 pt-1.5`}>
-      <span className="truncate text-xs font-semibold">What your deck did to it</span>
-      <Track delta={net} strong />
-      <span className="text-right text-xs font-semibold tabular-nums">{points(net)}</span>
+      <span className={`${SLOT_LABEL} text-xs font-semibold ${CLIP_WIDE}`}>
+        What your deck did to it
+      </span>
+      <span className={`${SLOT_TRACK} flex`}>
+        <Track delta={net} strong />
+      </span>
+      <span className={`${SLOT_VALUE} text-xs font-semibold tabular-nums`}>{points(net)}</span>
     </div>
   );
 }
@@ -342,7 +408,9 @@ export function ScoreBreakdown({
   const anyTorn = terms.some((t) => Math.abs(t.delta) * 100 > MAX_PP);
 
   return (
-    <div className="flex flex-col gap-1.5">
+    // The box the rows measure themselves against. See `ROW`: the width that
+    // decides whether a row fits on one line is this one, not the window's.
+    <div className="@container flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-base-content/60">Its own win rate</span>
         <span className="tabular-nums text-base-content/70">{pct(base)}</span>
@@ -368,12 +436,11 @@ export function ScoreBreakdown({
           where four points is. Said once, at the foot, because it IS the same
           on every row and the rows are what the panel is for.
 
-          Set in the row grid with the axis in the middle column, so it is drawn
+          Set in the row grid, in the same slot the tracks are, so it is drawn
           in the same box the bars are and every tick lands on the pixel the
-          bars measure it at. */}
+          bars measure it at -- in both shapes of the row. */}
       <div className={ROW}>
-        <span />
-        <div style={{ width: SPAN }}>
+        <div className={SLOT_TRACK} style={{ width: SPAN }}>
           <Plot
             height={18}
             needs={SPAN}
@@ -401,7 +468,6 @@ export function ScoreBreakdown({
             )}
           </Plot>
         </div>
-        <span />
       </div>
 
       {/* WHAT THE TWO COLOURS ARE, which the panel never said. Green and red
