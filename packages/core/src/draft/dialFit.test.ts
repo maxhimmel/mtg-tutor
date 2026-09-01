@@ -7,6 +7,7 @@ import {
   collapseToSharpness,
   curvatureAt,
   dialCurvature,
+  DRAFTER_TAU,
   dialStep,
   drafterFrom,
   drafterFromCurvature,
@@ -14,6 +15,7 @@ import {
   fitSharpness,
   fitTau,
   marginalGain,
+  rebaseCurvature,
   type DialPick,
 } from "./dialFit.js";
 
@@ -362,5 +364,61 @@ describe("a population that is not at the pod", () => {
     const fit = fitTau(shifted(0.15, 150, 400, 401), OFFSET);
     expect(fit.tau).toBeGreaterThan(0.08);
     expect(fit.tau).toBeLessThan(0.28);
+  });
+});
+
+describe("rebaseCurvature", () => {
+  // A set whose drafters sit away from the pod, and a player who is exactly
+  // average for it. Measured against the pod they look unusual; measured
+  // against their own set they look like everybody else, which is the truth.
+  const SET = [1.35, 0.85, 1.1, 0.9, 1.0, 1.0].slice(0, N);
+
+  it("reads an average-for-the-set drafter at one", () => {
+    const picks = picksFrom(SET, 8000, 811, 12, SPREAD);
+    // At the measured tau rather than a wide one: `rare` and `removal` carry no
+    // information, and the prior is what is supposed to hand them back at 1.
+    const rebased = rebaseCurvature(dialCurvature(picks), SET);
+    const fit = dialStep(rebased, DRAFTER_TAU);
+    fit.theta.forEach((t) => expect(Math.abs(t - 1)).toBeLessThan(0.15));
+  });
+
+  it("keeps a drafter's own deviation, rather than flattening everyone", () => {
+    // Half again on `lane` ON TOP of the set's own habits.
+    const lane = DIAL_BUNDLES.findIndex((b) => b.id === "lane");
+    const theirs = SET.map((v, b) => (b === lane ? v + 0.5 : v));
+    const fit = dialStep(
+      rebaseCurvature(dialCurvature(picksFrom(theirs, 8000, 823, 12, SPREAD)), SET),
+      DRAFTER_TAU,
+    );
+
+    expect(fit.theta[lane]).toBeGreaterThan(1.25);
+    fit.theta.forEach((t, b) => {
+      if (b !== lane) expect(Math.abs(t - 1)).toBeLessThan(0.2);
+    });
+  });
+
+  it("leaves the Hessian alone, because a quadratic has one everywhere", () => {
+    const c = dialCurvature(randomPicks(30, 829));
+    expect(rebaseCurvature(c, SET).hessian).toEqual(c.hessian);
+  });
+
+  it("is a no-op against a set that sits at the pod", () => {
+    const c = dialCurvature(randomPicks(30, 831));
+    rebaseCurvature(c, NEUTRAL_DIALS).gradient.forEach((g, b) =>
+      expect(g).toBeCloseTo(c.gradient[b], 12),
+    );
+  });
+
+  it("still adds, so a player in four sets is still a sum of curvatures", () => {
+    const OTHER = [0.8, 1.2, 0.95, 1.05, 1.0, 1.0].slice(0, N);
+    const a = dialCurvature(picksFrom(SET, 600, 841, 12, SPREAD));
+    const b = dialCurvature(picksFrom(OTHER, 600, 853, 12, SPREAD));
+
+    const pooled = addCurvature(rebaseCurvature(a, SET), rebaseCurvature(b, OTHER));
+    const fit = dialStep(pooled, 0.229);
+    // Two average-for-their-set drafts pooled read as one average player, which
+    // against the pod they would not: the two sets pull opposite ways on
+    // `power` and `table` and would not cancel at two drafts.
+    fit.theta.forEach((t) => expect(Math.abs(t - 1)).toBeLessThan(0.2));
   });
 });
