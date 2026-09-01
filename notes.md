@@ -757,6 +757,61 @@ unread (Deferred #2), and what is left open is Ideas #9.
    printed as a direction rather than a value. And the `table`/`lane` pair still
    does not separate, so the panel has one axis there and not two.
 
+   **PHASE 3 (`dial-storage`, `dial-readout`) PUT IT ON A SCREEN, AND THE SCREEN
+   SAYS TWO THINGS.** A finished draft writes its curvature onto its digest --
+   twenty-eight numbers, from rows `draft.pick` has already read, so it costs the
+   write and nothing else. `stats.overview` pools them; `Habits` draws them; and
+   `backfillDials` gives the drafts people have already played theirs, because
+   the readout needs five to ten drafts and forward-only would have made it a
+   promise for a month.
+
+   **Stored at theta = 1 and corrected on read.** The baselines are refittable by
+   design, and a curvature stored already-corrected would freeze whichever
+   vintage of the correction was current the day that draft finished -- eighteen
+   sets' worth of drafts each carrying a different one, with nothing recording
+   which. Rebasing is one subtraction.
+
+   **The fingerprint is the guard.** A gradient is in the units of specific
+   bundles times specific weights, so regrouping the bundles or refitting the
+   yardstick leaves every stored curvature summing, fitting and meaning nothing.
+   Stored beside each one, checked on read, and the drafts it rejects are
+   COUNTED on the screen. Its job is a number going down, not a migration.
+
+   **One yardstick whatever pod dealt.** The pod decides which cards a player was
+   offered, not how they chose between them. Measuring a `sharks3` draft against
+   `sharks3` would put one person's history on two rulers that differ on
+   `valueOpen` -- the same picks reading differently depending on which table
+   they picked off a menu -- and it is not the ruler `DIAL_BASELINES` was fitted
+   in.
+
+   **Two rows on the screen, and `SHOWN_DIALS` in core decides which.** Every
+   name left out has a number behind it: `rare` and `removal` move no pack,
+   `power` cannot be told from `table`, and `table` is measurable but not
+   SEPARABLE from `lane`. Of that pair `lane` is kept, and that one is a
+   judgement rather than a measurement and is labelled as one -- committing early
+   or staying open is a decision a player makes on purpose, where "you take the
+   cards the field takes" is close to a restatement of the grade every pick
+   already gets.
+
+   **No numbers on the screen.** A dial is a multiple of what the field weighs
+   something at, and 1.28 is a figure with no unit a reader can hold. Sharpness
+   has no figure at all: the one-step estimate is biased, so the sign survives
+   the approximation and the value does not, and the type it arrives in carries
+   no number for a screen to print.
+
+   **`PolicyCard` is the type change worth knowing about.** A stored pack is a
+   SNAPSHOT and `turn` and `role` are optional on it. Nothing in the policy reads
+   `turn`, so a snapshot is a fine thing to score -- but saying that in a cast
+   would rot the day a curve feature lands, and `policy.ts` has had one as far as
+   a fitted number twice. Narrowed, that day is a compile error.
+
+   **What is still not done.** The backfill has not been run on either
+   deployment. Nobody has looked at the panel with a real history in it. And
+   `habitsCalled` on `stats_viewed` is the number that decides whether any of
+   this was real: if drafts climb past five and ten across the userbase while it
+   stays at zero, the counts that came out of a simulated drafter did not survive
+   a real one.
+
 4. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
    item. Read that, not this paragraph.**

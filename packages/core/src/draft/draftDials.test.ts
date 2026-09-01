@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ColorCode, EngineCard } from "../model/card.js";
 import { DIAL_BASELINES, DIAL_FINGERPRINT } from "./dials.js";
-import { curvatureOf, dialsForDraft } from "./draftDials.js";
+import { addCurvature } from "./dialFit.js";
+import { DRAFTER_TAU } from "./dialFit.js";
+import { SHOWN_DIALS, curvatureOf, dialsForDraft, drafterReadout } from "./draftDials.js";
 
 // What a stored draft is allowed to be worth later. Two of these are about
 // refusing rather than computing, and those are the ones that matter: a
@@ -88,5 +90,43 @@ describe("curvatureOf", () => {
   it("refuses numbers written against different bundles", () => {
     const stored = { ...dialsForDraft(draft(true))!, fingerprint: "stale" };
     expect(curvatureOf(stored, measured)).toBeUndefined();
+  });
+});
+
+describe("drafterReadout", () => {
+  const draftsOf = (n: number) => {
+    const stored = dialsForDraft(draft(true))!;
+    let pooled = curvatureOf(stored, Object.keys(DIAL_BASELINES)[0])!;
+    for (let i = 1; i < n; i++) {
+      pooled = addCurvature(pooled, curvatureOf(stored, Object.keys(DIAL_BASELINES)[0])!);
+    }
+    return pooled;
+  };
+
+  it("shows two dials, and they are the two that survived the measuring", () => {
+    expect(SHOWN_DIALS).toEqual(["lane", "signal"]);
+    expect(drafterReadout(draftsOf(3), DRAFTER_TAU).dials.map((d) => d.id)).toEqual([
+      "lane",
+      "signal",
+    ]);
+  });
+
+  it("says nothing about a drafter with almost no picks", () => {
+    // Three picks is not a draft and certainly not a history. Everything has to
+    // come back uncalled, or the first person to finish one pack is told
+    // something about themselves.
+    const readout = drafterReadout(draftsOf(1), DRAFTER_TAU);
+    for (const dial of readout.dials) expect(dial.called).toBe(false);
+  });
+
+  it("gives sharpness as a direction, never as a figure", () => {
+    // The stored one-step estimate of it is biased -- 0.24 against a truth of
+    // 0.50 -- so the type must not carry a number somebody could print.
+    const { sharpness } = drafterReadout(draftsOf(3), DRAFTER_TAU);
+    expect(Object.keys(sharpness).sort()).toEqual(["above", "called"]);
+  });
+
+  it("counts the picks that went into it", () => {
+    expect(drafterReadout(draftsOf(4), DRAFTER_TAU).picks).toBe(12);
   });
 });

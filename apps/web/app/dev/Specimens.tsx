@@ -16,6 +16,7 @@ import { PickStrip } from "../glossary/figures/PickStrip";
 import { Braid } from "../challenge/[id]/diff/Braid";
 import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import { GapMark } from "../charts/GapMark";
+import { Habits, type HabitsData } from "../components/Habits";
 import { spokenColors } from "../lib/colorTokens";
 import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
@@ -92,6 +93,55 @@ function Bay({
       {children}
     </div>
   );
+}
+
+// A drafter's readout at the states worth looking at, with the intervals sized
+// off the real runs rather than picked to look tidy: `fit-drafter` puts one dial
+// at about five drafts and the other at about ten, so the middle row -- one
+// called, one not -- is the state most people will actually be in, and it is the
+// one a fixture with both dials firing would never show anybody.
+function habitsFixture(state: "both" | "one" | "quiet" | "newSet"): HabitsData {
+  const dial = (id: "lane" | "signal", value: number, se: number) => ({
+    id,
+    value,
+    se,
+    called: Math.abs(value - 1) > 1.96 * se,
+  });
+
+  switch (state) {
+    case "both":
+      return {
+        drafts: 12,
+        picks: 528,
+        skipped: { unmeasured: 0, stale: 0, newSet: 0 },
+        dials: [dial("lane", 1.31, 0.09), dial("signal", 0.72, 0.11)],
+        sharpness: { above: true, called: true },
+      };
+    case "one":
+      return {
+        drafts: 6,
+        picks: 264,
+        skipped: { unmeasured: 0, stale: 0, newSet: 0 },
+        dials: [dial("lane", 1.28, 0.12), dial("signal", 1.09, 0.16)],
+        sharpness: { above: false, called: false },
+      };
+    case "quiet":
+      return {
+        drafts: 2,
+        picks: 88,
+        skipped: { unmeasured: 0, stale: 0, newSet: 0 },
+        dials: [dial("lane", 1.06, 0.19), dial("signal", 0.94, 0.24)],
+        sharpness: { above: true, called: false },
+      };
+    case "newSet":
+      return {
+        drafts: 5,
+        picks: 220,
+        skipped: { unmeasured: 1, stale: 0, newSet: 5 },
+        dials: [dial("lane", 1.22, 0.13), dial("signal", 0.98, 0.17)],
+        sharpness: { above: false, called: false },
+      };
+  }
 }
 
 // The recessed slot a curve board gives a placard, reproduced rather than
@@ -924,6 +974,40 @@ export const SPECIMENS: Specimen[] = [
         </Bay>
         <Bay label="Unrated card — no margin, so nothing is drawn">
           <GapMark gap={-0.023} margin={undefined} />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "habits",
+    title: "How you draft",
+    note: "The two dials that survived three phases of measuring, at every state the panel has — and at the width a phone gives it",
+    // NUMBERS OFF THE REAL RUNS. `fit-drafter` says one dial clears at about
+    // five drafts and the other at about ten, so the interesting states are the
+    // ones in between: a panel that only ever gets checked with both dials
+    // called is a panel whose empty state nobody has read.
+    //
+    // The narrow bay is the whole point of putting it here. Every row is a mark
+    // and a sentence side by side, and the sentence is the part that wraps -- at
+    // 375px the flex row breaks and the mark ends up alone above its own
+    // caption, which is fine, and is the sort of thing only a bay this width
+    // says out loud.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Both dials clear their margin — twelve drafts">
+          <Habits habits={habitsFixture("both")} />
+        </Bay>
+        <Bay label="Committing shows, signals do not yet — six drafts">
+          <Habits habits={habitsFixture("one")} />
+        </Bay>
+        <Bay label="Nothing clears yet — two drafts, which is what most people have">
+          <Habits habits={habitsFixture("quiet")} />
+        </Bay>
+        <Bay label="Half the history is in sets nobody has measured">
+          <Habits habits={habitsFixture("newSet")} />
+        </Bay>
+        <Bay label="At the narrowest the app gives it" width="w-[375px] shrink-0">
+          <Habits habits={habitsFixture("both")} />
         </Bay>
       </div>
     ),
