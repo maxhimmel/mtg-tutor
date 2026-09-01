@@ -417,6 +417,129 @@ export function drafterFrom(picks: readonly DialPick[], tau: number): DrafterFit
   return relativeTo(fitDials(picks, tau, centre), sharp, sharp.picks);
 }
 
+// ------------------------------------------------------------------------ tau
+//
+// HOW FAR APART REAL DRAFTERS ARE, WHICH IS THE ONE NUMBER THE FIT ASSUMES
+//
+// Everything above shrinks a drafter toward the pod by `tau`, and until now
+// every caller has passed its own and said where it came from -- which is to
+// say nowhere. `tau` is not a smoothing preference: it is the standard
+// deviation of theta across real drafters, and getting it wrong tilts every
+// interval and every draft count the harness reports.
+//
+// It is also measurable off data already on disk. The 17Lands draft datasets
+// are tens of thousands of real drafters, each with their own theta, and
+// `table3` was fitted on exactly that population -- so their mean theta is 1 by
+// construction and what is left to estimate is their SPREAD.
+//
+// NOT BY FITTING EACH DRAFTER AND TAKING THE VARIANCE
+//
+// The obvious estimator is the between-drafter variance of theta-hat minus the
+// mean sampling variance, and it goes wrong here for a reason specific to this
+// model: `rare` and `removal` carry almost no information, so their
+// unpenalised theta-hat is enormous and their sampling variance is enormous,
+// and the estimate is a difference of two large noisy numbers. On the dials
+// that matter it would work; on the ones that do not it would produce a tau
+// dominated by columns nobody can measure.
+//
+// The marginal likelihood has no such problem. Integrating theta out under the
+// prior, a drafter whose picks say nothing about a dial contributes nothing to
+// the estimate of tau along it -- not a large noisy contribution, none -- which
+// is the same property that makes the prior return exactly itself in `dialStep`.
+
+/**
+ * How much better a drafter's picks are explained by allowing theta to vary,
+ * against holding it at the pod, for one `tau`.
+ *
+ * The Laplace marginal of the quadratic, with the constant `logLik` dropped
+ * because it is the same for every tau and cancels out of the search:
+ *
+ *   log m(tau) = logLik + 1/2 g' (I + tau^-2 E)^-1 g - 1/2 log det(E + tau^2 I)
+ *
+ * where I is the observed information -H and E is the identity. The first term
+ * is the evidence for moving, the second is the price of being allowed to.
+ */
+export function marginalGain(curvature: DialCurvature, tau: number): number {
+  const n = curvature.gradient.length;
+  const ridge = 1 / (tau * tau);
+  const information = new Array((n * (n + 1)) / 2);
+  const penalised = new Array((n * (n + 1)) / 2);
+
+  for (let b = 0; b < n; b++) {
+    for (let c = b; c < n; c++) {
+      const at = triangleIndex(n, b, c);
+      const value = -curvature.hessian[at];
+      information[at] = (b === c ? 1 : 0) + tau * tau * value;
+      penalised[at] = value + (b === c ? ridge : 0);
+    }
+  }
+
+  const solved = solveSymmetric(penalised, curvature.gradient, n);
+  let quadratic = 0;
+  for (let b = 0; b < n; b++) quadratic += curvature.gradient[b] * solved[b];
+
+  const L = cholesky(information, n);
+  let logDet = 0;
+  for (let b = 0; b < n; b++) logDet += 2 * Math.log(L[b * n + b]);
+
+  return 0.5 * quadratic - 0.5 * logDet;
+}
+
+export interface TauFit {
+  tau: number;
+  /** Summed marginal gain at the maximum, over the drafters supplied. */
+  gain: number;
+  drafters: number;
+}
+
+/**
+ * The tau that best explains a population of drafters.
+ *
+ * A one-dimensional search, on the log of tau because the quantity is a scale
+ * and a grid in tau spends most of its points on values nobody would use.
+ * Golden section rather than a derivative: the objective is a sum over tens of
+ * thousands of Cholesky factorisations and its derivative is a second one.
+ */
+export function fitTau(
+  curvatures: readonly DialCurvature[],
+  low = 0.01,
+  high = 3,
+  steps = 60,
+): TauFit {
+  const total = (tau: number) => {
+    let sum = 0;
+    for (const c of curvatures) sum += marginalGain(c, tau);
+    return sum;
+  };
+
+  const phi = (Math.sqrt(5) - 1) / 2;
+  let a = Math.log(low);
+  let b = Math.log(high);
+  let c = b - phi * (b - a);
+  let d = a + phi * (b - a);
+  let fc = total(Math.exp(c));
+  let fd = total(Math.exp(d));
+
+  for (let i = 0; i < steps && b - a > 1e-4; i++) {
+    if (fc > fd) {
+      b = d;
+      d = c;
+      fd = fc;
+      c = b - phi * (b - a);
+      fc = total(Math.exp(c));
+    } else {
+      a = c;
+      c = d;
+      fc = fd;
+      d = a + phi * (b - a);
+      fd = total(Math.exp(d));
+    }
+  }
+
+  const tau = Math.exp((a + b) / 2);
+  return { tau, gain: total(tau), drafters: curvatures.length };
+}
+
 // ------------------------------------------------------------ linear algebra
 //
 // Six by six at most, and symmetric positive definite by construction: the

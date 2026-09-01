@@ -12,6 +12,8 @@ import {
   drafterFromCurvature,
   fitDials,
   fitSharpness,
+  fitTau,
+  marginalGain,
   type DialPick,
 } from "./dialFit.js";
 
@@ -273,5 +275,56 @@ describe("the stored path against the iterated one", () => {
 
     expect(stored.sharpness).toBeCloseTo(iterated.sharpness, 1);
     stored.relative.forEach((r, b) => expect(r).toBeCloseTo(iterated.relative[b], 1));
+  });
+});
+
+describe("fitTau", () => {
+  // Drafters drawn from a known spread, on bundles as unequal as real packs
+  // make them -- the case the estimator has to survive is `rare` and `removal`
+  // carrying nothing, where a variance-of-estimates approach would be reading a
+  // difference of two large noisy numbers.
+  const population = (tau: number, count: number, picks: number, seed: number) => {
+    const rng = mulberry32(seed);
+    const normal = () => {
+      const u = Math.max(1e-12, rng());
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+    };
+    return Array.from({ length: count }, (_, i) => {
+      const theta = NEUTRAL_DIALS.map(() => 1 + tau * normal());
+      return dialCurvature(picksFrom(theta, picks, seed + i * 7919, 12, SPREAD));
+    });
+  };
+
+  it("recovers a spread the drafters were drawn from", () => {
+    const fit = fitTau(population(0.3, 250, 400, 101));
+    expect(fit.tau).toBeGreaterThan(0.2);
+    expect(fit.tau).toBeLessThan(0.45);
+  });
+
+  it("tells a tight population from a loose one", () => {
+    const tight = fitTau(population(0.1, 200, 400, 211)).tau;
+    const loose = fitTau(population(0.6, 200, 400, 211)).tau;
+    expect(tight).toBeLessThan(loose);
+  });
+
+  it("hears nothing from a drafter whose picks carry no information", () => {
+    // Every candidate identical: no evidence about theta, so no evidence about
+    // its spread either. A variance-of-estimates approach would take a huge
+    // theta-hat and a huge sampling variance here and difference them.
+    const flat = dialCurvature(
+      Array.from({ length: 42 }, () => ({
+        bundles: Array.from({ length: 10 }, () => new Array(N).fill(0.3)),
+        chosen: 3,
+      })),
+    );
+    for (const tau of [0.1, 0.5, 2]) expect(marginalGain(flat, tau)).toBeCloseTo(0, 12);
+  });
+
+  it("prices a wide prior badly when the drafters really are the pod", () => {
+    const atPod = Array.from({ length: 200 }, (_, i) =>
+      dialCurvature(picksFrom(NEUTRAL_DIALS, 400, 307 + i * 7919, 12, SPREAD)),
+    );
+    const total = (tau: number) => atPod.reduce((sum, c) => sum + marginalGain(c, tau), 0);
+    expect(total(0.05)).toBeGreaterThan(total(1.5));
   });
 });

@@ -255,7 +255,10 @@ export function bundleSpread(packs: readonly (readonly number[])[][]): number[] 
 /** One decision as a draft stores it: what was on offer, and what was taken. */
 export interface DraftRow {
   pack: readonly EngineCard[];
-  picked: EngineCard | undefined;
+  // Null as well as undefined: the 17Lands cache uses null for a row naming a
+  // card the ingested pool does not have, and that must stay "no label" rather
+  // than quietly becoming index 0.
+  picked: EngineCard | undefined | null;
 }
 
 /** What was on offer, in bundle scores, and which one was taken. */
