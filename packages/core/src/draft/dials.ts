@@ -252,6 +252,81 @@ export function bundleSpread(packs: readonly (readonly number[])[][]): number[] 
   return counted === 0 ? totals : totals.map((t) => t / counted);
 }
 
+/**
+ * Where each set's own drafters sit, relative to the pod.
+ *
+ * WHY A SET NEEDS A ZERO OF ITS OWN
+ *
+ * `table3` is one policy fitted across eighteen sets, and no single set is that
+ * compromise. Pool the real 17Lands drafters of each and their dials come back
+ * nowhere near 1: `power` at 0.28 in ktk against 1.33 in woe, `table` at 0.72 in
+ * mh3 against 1.35 in ktk. Across sets those offsets have a spread of 0.28,
+ * 0.14, 0.07 and 0.11 on the four live dials -- against a between-drafter tau of
+ * 0.229. So a player measured against the pod is being told about the set they
+ * drafted at up to the size of what is being read about them.
+ *
+ * And it does not average out of a real history. `fit-set-baselines` builds
+ * players out of real drafters who are average for their set by construction,
+ * holds the baselines out of them, and asks how often they are called different
+ * anyway. Somebody with twenty drafts in ONE format -- which is what this app's
+ * players do, and why `RecentSets` exists -- is called on `power` 9% of the
+ * time, `table` 14%, `lane` 15% and `signal` 16%, against an honest 5%.
+ * Corrected, 4%, 3%, 3% and 9%. Across twenty drafts in DIFFERENT sets the
+ * offsets partly cancel and the gain is small, which is the shape it should
+ * have and is not the case anybody is in.
+ *
+ * FITTED, NOT FROZEN, WHICH IS THE OPPOSITE OF A POD NAME
+ *
+ * `FITTED_POLICIES` is frozen because a stored session replays against its pod
+ * and re-fitting one re-deals every draft that recorded it. Nothing here is dealt
+ * from. These are read when a drafter is MEASURED, so refitting them re-reads
+ * existing drafts rather than stranding them -- a player's dials would move,
+ * which is a thing to tell them about and not a thing to prevent.
+ *
+ * Produced by `pnpm fit-set-baselines --emit`, over every cached drafter of each
+ * set. The held-out halves in the same script are what established the method;
+ * these use all of them.
+ */
+export const DIAL_BASELINES: Record<string, readonly number[]> = {
+  blb: [1.4641, 0.8825, 1.0076, 0.9715, -0.1377, 3.5995],
+  dft: [0.8748, 1.0815, 0.9970, 1.0346, 1.6274, 0.3980],
+  dmu: [1.2879, 1.0296, 0.9540, 0.8654, 1.0865, 1.1827],
+  dsk: [0.8088, 1.0781, 1.0119, 1.1213, 1.1791, 1.9907],
+  ecl: [0.5935, 0.9223, 0.9452, 1.0475, 1.8986, 1.7993],
+  eoe: [0.6396, 1.1040, 1.0559, 1.1183, 0.9532, 1.7862],
+  fdn: [1.2030, 0.8899, 1.0403, 1.0352, -0.2252, 4.2932],
+  ktk: [0.2963, 1.3499, 0.8578, 0.7561, 2.1872, 0.6708],
+  lci: [1.0788, 1.0064, 1.1131, 1.1306, 1.5963, 0.2692],
+  mh3: [0.9276, 0.7195, 0.8934, 0.7720, -0.1821, 3.3756],
+  mkm: [0.7908, 1.1487, 0.9615, 0.9328, 1.5724, -1.8925],
+  mom: [0.8917, 0.9770, 1.0130, 1.0219, 1.1867, 0.7438],
+  neo: [0.8991, 1.1337, 1.1102, 1.1137, 1.6836, 0.7414],
+  otj: [0.7554, 1.0544, 0.9867, 1.0062, 1.2831, -1.1220],
+  snc: [0.8104, 1.0838, 0.9707, 1.0149, 1.6666, -1.1896],
+  sos: [0.9413, 0.8957, 0.9820, 1.0214, 0.4060, 0.5504],
+  tdm: [1.0993, 1.1075, 0.8740, 0.8978, 3.0013, 1.4230],
+  woe: [1.3251, 0.8990, 1.0400, 1.0152, -0.4679, 2.3069],
+};
+
+/**
+ * A set's zero, or nothing if nobody has measured it.
+ *
+ * UNDEFINED RATHER THAN A FALLBACK TO `NEUTRAL_DIALS`, on purpose. A set with no
+ * baseline is not a set that sits at the pod -- it is a set whose offset is
+ * unknown and, on the evidence above, probably large. Handing back ones would
+ * make "we have not measured this format" indistinguishable from "this format is
+ * unremarkable", and the caller would never learn which it had.
+ *
+ * That matters most exactly where this app is most useful. A brand-new set has
+ * no 17Lands data at all, so it has no baseline and cannot have one until the
+ * datasets catch up -- and a drafter's readout there is carrying an unknown
+ * offset. The caller decides what to do about that; it must not be decided here
+ * by a default.
+ */
+export function setBaseline(setCode: string): readonly number[] | undefined {
+  return DIAL_BASELINES[setCode.toLowerCase()];
+}
+
 /** One decision as a draft stores it: what was on offer, and what was taken. */
 export interface DraftRow {
   pack: readonly EngineCard[];
@@ -320,13 +395,18 @@ export function dialPicksFrom(
 }
 
 /**
- * The pod a drafter is measured against, and why it is not a free choice.
+ * The weights a drafter is measured against, and why they are not a free choice.
  *
  * A player's picks are made out of packs a pod passed them, so the comparison
- * that means anything is against the pod that dealt the draft. Comparing a
- * `table3` draft to `sharks3` would price the drafter and the table difference
- * together and report the sum as the person.
+ * that means anything is against the pod that dealt the draft. Measuring a
+ * `table3` draft against `sharks3` would price the drafter and the difference
+ * between the two tiers together, and report the sum as the person.
+ *
+ * NOT called a baseline, though it was for one commit. A set's own zero is a
+ * baseline -- see `setBaseline` -- and it is a vector of DIALS, where this is a
+ * vector of WEIGHTS. Two things one word apart that live one screen apart is how
+ * the wrong one gets passed.
  */
-export function baselineFor(pod: StoredPod): PolicyWeights {
+export function podWeights(pod: StoredPod): PolicyWeights {
   return FITTED_POLICIES[pod];
 }

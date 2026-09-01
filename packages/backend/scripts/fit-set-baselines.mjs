@@ -115,8 +115,14 @@ for (const setCode of setCodes) {
     (draft.index % 2 === 0 ? forFit : forCheck).push(curvature);
   }
 
-  const population = dialStep(poolCurvature(forFit), 1000).theta;
-  fitted.set(setCode, { population, drafters: forFit.length });
+  // Two of them, and the difference is what each is for. `half` is fitted on
+  // the drafters the check does NOT use, so the check is honest. `population`
+  // is fitted on all of them and is what ships -- the split establishes that the
+  // method works, and once it has, throwing away half the data to keep a split
+  // nobody will read again is superstition rather than rigour.
+  const half = dialStep(poolCurvature(forFit), 1000).theta;
+  const population = dialStep(poolCurvature([...forFit, ...forCheck]), 1000).theta;
+  fitted.set(setCode, { half, population, drafters: forFit.length + forCheck.length });
   held.set(setCode, forCheck);
   log(
     `  ${setCode}: ${forFit.length.toLocaleString()} fitted, ` +
@@ -138,7 +144,9 @@ function buildPlayer(draw, codes, k) {
     if (!bucket || bucket.length === 0) return null;
     const curvature = bucket[Math.floor(draw() * bucket.length) % bucket.length];
     raw = addCurvature(raw, curvature);
-    corrected = addCurvature(corrected, rebaseCurvature(curvature, fitted.get(setCode).population));
+    // `half`, never `population`: the check must not see a baseline fitted on
+    // the drafter it is checking.
+    corrected = addCurvature(corrected, rebaseCurvature(curvature, fitted.get(setCode).half));
   }
 
   return { raw, corrected };

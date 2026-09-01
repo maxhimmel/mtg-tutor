@@ -4,6 +4,7 @@ import { BotMemory } from "./bots.js";
 import { FITTED_POLICIES, POLICY_FEATURES, policyFeatures, policyScore } from "./policy.js";
 import {
   BUNDLE_COLUMNS,
+  DIAL_BASELINES,
   DIAL_BUNDLES,
   NEUTRAL_DIALS,
   bundleScores,
@@ -11,6 +12,7 @@ import {
   dialPicksFrom,
   dialledScore,
   dialledWeights,
+  setBaseline,
 } from "./dials.js";
 
 // The one property everything downstream rests on: at theta = 1 the dialled
@@ -222,5 +224,33 @@ describe("bundleSpread", () => {
     // other however the pack is shaped.
     expect(at("removal")).toBeLessThan(at("lane") / 10);
     expect(at("removal")).toBeLessThan(at("table") / 10);
+  });
+});
+
+describe("DIAL_BASELINES", () => {
+  it("carries a vector the right width for every set it names", () => {
+    for (const [code, values] of Object.entries(DIAL_BASELINES)) {
+      expect(values, code).toHaveLength(DIAL_BUNDLES.length);
+    }
+  });
+
+  it("says nothing at all about a set nobody has measured", () => {
+    // Not NEUTRAL_DIALS. An unmeasured set is one whose offset is unknown and,
+    // on the eighteen that are measured, probably large -- so "we have not
+    // measured this" must not arrive looking like "this set is unremarkable".
+    expect(setBaseline("zzz")).toBeUndefined();
+  });
+
+  it("is found by set code however it is cased", () => {
+    expect(setBaseline("FDN")).toEqual(setBaseline("fdn"));
+  });
+
+  it("holds sets whose live dials sit a long way from the pod", () => {
+    // The reason this file exists: if these were all near 1 the correction would
+    // be buying nothing, and a later refit that flattened them should fail here
+    // rather than quietly turn the feature off.
+    const power = DIAL_BUNDLES.findIndex((b) => b.id === "power");
+    const values = Object.values(DIAL_BASELINES).map((v) => v[power]);
+    expect(Math.max(...values) - Math.min(...values)).toBeGreaterThan(0.5);
   });
 });
