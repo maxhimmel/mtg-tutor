@@ -15,6 +15,7 @@ import { ScrollBox } from "../components/ScrollBox";
 import { PickStrip } from "../glossary/figures/PickStrip";
 import { Braid } from "../challenge/[id]/diff/Braid";
 import { ScoreBreakdown } from "../components/ScoreBreakdown";
+import { GapMark } from "../charts/GapMark";
 import { spokenColors } from "../lib/colorTokens";
 import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
@@ -324,6 +325,14 @@ const TERMS: ValueTerm[] = [
 const TERMS_TORN: ValueTerm[] = [
   { label: "off-color", delta: -0.5 },
   { label: "archetype", delta: 0.018 },
+];
+
+// Prideful Parent out of the pick that got photographed: a deck that has barely
+// committed yet, so nothing it does to the card is worth a tenth of a point.
+// The ordinary case, and the one where the labels do all the work.
+const FLAT_TERMS: ValueTerm[] = [
+  { label: "archetype", delta: -0.0008 },
+  { label: "trust", delta: -0.0005 },
 ];
 
 export const SPECIMENS: Specimen[] = [
@@ -825,6 +834,96 @@ export const SPECIMENS: Specimen[] = [
               since: "2026-06-02T18:40:00.000Z",
             }}
           />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "score-breakdown-widths",
+    title: "Score breakdown at every width",
+    note: "188px is the specimen — it is what the 300px coach rail leaves once the panel's padding and the grade column are taken out",
+    // THE BAY THAT SHOULD HAVE EXISTED BEFORE THIS SHIPPED. This component was
+    // imported into this file and never drawn in it, which is the whole of how
+    // a 28px label column reached a live draft: every place it was looked at
+    // was comfortable, and the one place it lives is not.
+    //
+    // 188px is not a phone. It is the DESKTOP rendering -- `DraftBoard`'s
+    // `wide:` grid gives the coach a 300px rail, the panel's padding takes 32
+    // and the grade beside the breakdown takes 80. A component whose narrowest
+    // box is on the widest screen is a component that width bays are the only
+    // way to catch.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-wrap items-start gap-8">
+          <Bay
+            label="188px — the coach rail, where this was unreadable"
+            width="w-[188px] shrink-0"
+          >
+            <ScoreBreakdown base={0.586} total={0.6008} terms={TERMS} />
+          </Bay>
+          <Bay
+            label="288px — the first width the row fits on one line"
+            width="w-[288px] shrink-0"
+          >
+            <ScoreBreakdown base={0.586} total={0.6008} terms={TERMS} />
+          </Bay>
+          <Bay label="Review column — room to spare" width="w-[420px] max-w-full">
+            <ScoreBreakdown base={0.586} total={0.6008} terms={TERMS} />
+          </Bay>
+        </div>
+
+        {/* THE PICK IN THE SCREENSHOT. Both terms are a tenth of a point, so
+            both bars are a pixel and a half against a rule -- which is the
+            fixed scale telling the truth, not failing: this deck did almost
+            nothing to this card, and a per-pick scale would have drawn the same
+            nothing as a full-width bar. What has to be legible here is the
+            LABELS, because they are carrying the entire row. */}
+        <Bay label="188px — the real pick, where every term is near zero" width="w-[188px] shrink-0">
+          <ScoreBreakdown base={0.586} total={0.585} terms={FLAT_TERMS} />
+        </Bay>
+
+        {/* The clamped case, at the width it is hardest to draw in. `off-color`
+            charges a card its entire win rate, so this bar runs off an 8pp
+            track and has to say so with a torn end and a third key entry --
+            which is a legend that gets taller exactly where there is least room
+            for one. */}
+        <Bay label="188px, with a term that runs off the track" width="w-[188px] shrink-0">
+          <ScoreBreakdown base={0.554} total={0.072} terms={TERMS_TORN} />
+        </Bay>
+
+        {/* Both branches that draw no bars at all. Empty is the ordinary answer
+            at P1P1, where commitment is zero and zeroes every colour term. */}
+        <div className="flex flex-wrap items-start gap-8">
+          <Bay label="P1P1 — nothing adjusted it" width="w-[188px] shrink-0">
+            <ScoreBreakdown base={0.586} total={0.586} terms={[]} />
+          </Bay>
+          <Bay label="A pick from before the score kept its working" width="w-[188px] shrink-0">
+            <ScoreBreakdown base={0.586} total={0.586} terms={undefined} />
+          </Bay>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: "gap-mark",
+    title: "The gap, and whether the data can see it",
+    note: "The mark in the verdict's eyebrow, at the two readings it has — and at the sizes that made the first version read as a toggle switch",
+    // THE READING IS BINARY AND THE PICTURE HAS TO BE TOO: the interval reaches
+    // the zero rule or it does not. Both cases side by side is the only way to
+    // check that, because either one alone looks fine.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="A gap the data can see — 2.3pp against a bar of 0.6">
+          <GapMark gap={-0.023} margin={0.006} />
+        </Bay>
+        <Bay label="Inside the margin — 0.3pp against a bar of 1.1">
+          <GapMark gap={-0.003} margin={0.011} />
+        </Bay>
+        <Bay label="Barely clears it — the case the mark exists for">
+          <GapMark gap={-0.012} margin={0.011} />
+        </Bay>
+        <Bay label="Unrated card — no margin, so nothing is drawn">
+          <GapMark gap={-0.023} margin={undefined} />
         </Bay>
       </div>
     ),
