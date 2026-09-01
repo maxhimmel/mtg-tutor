@@ -56,6 +56,7 @@ export * from "./draft/bots.js";
 export * from "./draft/policy.js";
 export * from "./draft/dials.js";
 export * from "./draft/dialFit.js";
+export * from "./draft/draftDials.js";
 export * from "./draft/pack.js";
 export * from "./draft/deck.js";
 export * from "./draft/build.js";

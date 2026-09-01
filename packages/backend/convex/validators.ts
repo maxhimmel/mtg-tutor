@@ -107,6 +107,27 @@ export const packedCards = v.object({
   tableValues: v.optional(v.array(v.union(v.number(), v.null()))),
 });
 
+/**
+ * A finished draft's contribution to its drafter's dials.
+ *
+ * Twenty-eight numbers and the fingerprint saying what they are in the units of.
+ * Kept whole rather than split into columns like `digestPicks`: these are read
+ * together or not at all, and there are twenty-eight of them rather than
+ * forty-two times three.
+ *
+ * `fingerprint` is not decoration. A gradient is in the units of specific
+ * bundles times specific weights, so a change to either leaves every stored
+ * curvature summing and fitting and meaning nothing -- see `DIAL_FINGERPRINT` in
+ * core. A reader throws out the ones that no longer match and says how many.
+ */
+export const storedDials = v.object({
+  gradient: v.array(v.number()),
+  hessian: v.array(v.number()),
+  logLik: v.number(),
+  picks: v.number(),
+  fingerprint: v.string(),
+});
+
 export const engineCard = v.object({
   name: v.string(),
   colors: v.array(colorCode),

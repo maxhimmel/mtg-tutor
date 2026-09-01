@@ -1,9 +1,9 @@
-import type { EngineCard } from "../model/card.js";
 import {
   FITTED_POLICIES,
   POLICY_FEATURES,
   draftProgress,
   policyFeatures,
+  type PolicyCard,
   type PolicyWeights,
 } from "./policy.js";
 import { BotMemory, type StoredPod } from "./bots.js";
@@ -327,13 +327,63 @@ export function setBaseline(setCode: string): readonly number[] | undefined {
   return DIAL_BASELINES[setCode.toLowerCase()];
 }
 
+/**
+ * The pod whose weights a drafter is measured against, whatever pod dealt.
+ *
+ * A YARDSTICK IS NOT A PROPERTY OF THE DRAFT
+ *
+ * The pod decides what wheels, so it decides which cards a player was offered.
+ * It does not decide how they chose between them, and the dials are about the
+ * choosing. Measuring a `sharks3` draft against `sharks3` and a `table3` draft
+ * against `table3` would put one player's history on two rulers -- and the two
+ * tiers differ on `valueOpen`, so the same picks would read differently
+ * depending on which table the person happened to pick from a menu.
+ *
+ * So every draft is measured against this one, and the pod that dealt is left
+ * where it belongs: in what the packs contained.
+ *
+ * It is also what `DIAL_BASELINES` was fitted against, and a baseline in one
+ * ruler's units applied to a curvature in another's is nonsense that would not
+ * look like nonsense.
+ */
+export const DIAL_YARDSTICK: StoredPod = "table3";
+
+/**
+ * A fingerprint of everything a stored curvature's numbers mean.
+ *
+ * A gradient is in the units of specific bundles times specific weights. Change
+ * `POLICY_FEATURES`, regroup `DIAL_BUNDLES`, or refit the yardstick, and every
+ * curvature already written is a vector of numbers in units nothing records --
+ * still six long, still summing, still producing a confident readout, and
+ * measuring something nobody can name. `BOT_FINGERPRINT` exists for the same
+ * hazard one layer down and this is the same idea.
+ *
+ * Stored beside each curvature so a reader can throw out the ones that no longer
+ * mean what they say, and SAY how many it threw out. Its job is a number on a
+ * screen going down, not a migration.
+ */
+export const DIAL_FINGERPRINT = ((): string => {
+  let h = 0x811c9dc5;
+  const eat = (text: string) => {
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+  };
+  eat(POLICY_FEATURES.join(","));
+  for (const bundle of DIAL_BUNDLES) eat(`${bundle.id}:${bundle.features.join("+")}`);
+  eat(DIAL_YARDSTICK);
+  for (const w of FITTED_POLICIES[DIAL_YARDSTICK]) eat(w.toFixed(6));
+  return h.toString(36);
+})();
+
 /** One decision as a draft stores it: what was on offer, and what was taken. */
 export interface DraftRow {
-  pack: readonly EngineCard[];
+  pack: readonly PolicyCard[];
   // Null as well as undefined: the 17Lands cache uses null for a row naming a
   // card the ingested pool does not have, and that must stay "no label" rather
   // than quietly becoming index 0.
-  picked: EngineCard | undefined | null;
+  picked: PolicyCard | undefined | null;
 }
 
 /** What was on offer, in bundle scores, and which one was taken. */
