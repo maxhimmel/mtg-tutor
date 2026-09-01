@@ -6,7 +6,13 @@ import {
   setBaseline,
   type DraftRow,
 } from "./dials.js";
-import { dialCurvature, rebaseCurvature, type DialCurvature } from "./dialFit.js";
+import {
+  dialCurvature,
+  drafterFromCurvature,
+  rebaseCurvature,
+  type DialCurvature,
+} from "./dialFit.js";
+import { DIAL_BUNDLES, type DialId } from "./dials.js";
 
 // What a finished draft carries so a drafter can be read later.
 //
@@ -101,4 +107,84 @@ export function curvatureOf(
     },
     baseline,
   );
+}
+
+
+/**
+ * Which dials a person is shown, and why it is two of six.
+ *
+ * THIS LIST IS THE OUTPUT OF THREE PHASES OF MEASUREMENT, NOT A LAYOUT CHOICE.
+ * Every name left out was left out for a reason with a number behind it.
+ *
+ * `rare` and `removal` move a real fdn pack by 0.029 and 0.011 logits against
+ * `table`'s 4.101, and a simulated drafter dealt at 1.5x or 0.5x on either is
+ * never once called different at any draft count. A dial nothing can move reads
+ * on screen exactly like "you are average at this", and those two would say it
+ * forever.
+ *
+ * `power` cannot be told from `table`: both are raw power, `table` carries five
+ * times the spread and absorbs the variation, and a drafter dealt at 1.5x on
+ * `power` is called 13% of the time after twenty-five drafts. It is also where
+ * the 3-0 drafters differ from the field, which is why the most interesting
+ * thing this readout could have said is not among the things it says.
+ *
+ * `table` is dropped for the opposite reason -- it is measurable and it is not
+ * SEPARABLE. At fifteen drafts a `lane` x1.5 drafter lights up `lane` at 100%
+ * and `table` at 92%; a `table` x1.5 drafter lights up `table` at 90% and `lane`
+ * at 95%, and the confusion sharpens with more data rather than washing out,
+ * which is what says it is real rather than noisy. Two rows there would be one
+ * finding printed twice, and a reader would take the second as corroboration of
+ * the first.
+ *
+ * Of the pair, `lane` is the one kept, and that is a judgement rather than a
+ * measurement. It is the one a Limited player already has words for and can do
+ * something about -- committing early or staying open is a decision somebody
+ * makes on purpose. "You take the cards the field takes" is harder to say and
+ * close to a restatement of the grade the app already gives on every pick.
+ */
+export const SHOWN_DIALS: readonly DialId[] = ["lane", "signal"];
+
+/** One dial as a reader gets it: where they sit, and how sure that is. */
+export interface ShownDial {
+  id: DialId;
+  /** Relative to the drafter's own sharpness, so 1 is "like the field". */
+  value: number;
+  se: number;
+  /** Whether the interval clears 1 -- the only thing that licences a sentence. */
+  called: boolean;
+}
+
+export interface DrafterReadout {
+  dials: ShownDial[];
+  /**
+   * How consistently they pick. A DIRECTION and not a value: the one-step
+   * estimate off stored curvature is biased -- 0.24 against a truth of 0.50 on a
+   * drafter who is half as decisive -- so `above` is trustworthy and the number
+   * beside it is not, and nothing should print it as a figure.
+   */
+  sharpness: { above: boolean; called: boolean };
+  picks: number;
+}
+
+/** A pooled curvature as the two sentences it can support, and no more. */
+export function drafterReadout(curvature: DialCurvature, tau: number): DrafterReadout {
+  const fit = drafterFromCurvature(curvature, tau);
+  const clears = (value: number, se: number) => Math.abs(value - 1) > 1.96 * se;
+
+  return {
+    dials: SHOWN_DIALS.map((id) => {
+      const at = DIAL_BUNDLES.findIndex((b) => b.id === id);
+      return {
+        id,
+        value: fit.relative[at],
+        se: fit.relativeSe[at],
+        called: clears(fit.relative[at], fit.relativeSe[at]),
+      };
+    }),
+    sharpness: {
+      above: fit.sharpness > 1,
+      called: clears(fit.sharpness, fit.sharpnessSe),
+    },
+    picks: fit.picks,
+  };
 }
