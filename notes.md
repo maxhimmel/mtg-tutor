@@ -234,7 +234,9 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
      neither invented yet. It carries a bias that must be stated beside any
      trend drawn from it: the ranking deals the widest gaps first, so the
      questions get HARDER as history grows, which works against showing
-     improvement.
+     improvement. **`gap` is on every answer written from 1 Sep 2026**, unread,
+     so that bias can be corrected for rather than only stated; rows before
+     that date carry none and there is no honest number to backfill one with.
    - **No rest interval, on purpose.** Nothing measured derives one, so
      `rankMisses` sorts least-recently-asked first instead. A retention curve
      is what would earn a number here.
@@ -765,6 +767,20 @@ to the data work.
     than named fields, so the class fails rather than the instance. When a pipeline
     both produces and consumes a shape, test the last hop before storage, not the
     first.
+
+    **The same shape the other way up** (2026-09-01, `pickAnswers`). Trap #5 is
+    a test pointed one function upstream of the hole. This is one pointed
+    downstream of it, at a fold whose inputs a test can invent: `missProgress`
+    was proved in core over hand-built rows, including two `fixed: true`
+    attempts of one question -- which the store could not write, because the
+    mutation refused any row naming the card the last one named. So a green
+    assertion of `heldOn: 1` sat directly on a panel whose `heldOn` could not
+    leave zero, and the layer with the defect had no tests at all. **When a
+    fold's inputs come out of a store, at least one test has to build them
+    through the store.** The events knew, for what it is worth:
+    `drill_answered` carries the tier and the outcome, so PostHog could see a
+    fixed question answered `stood` while the app's own panel said it had never
+    happened.
 6.  **A comparison drawn from one side of itself agrees by construction.** The
     results screen sets your forty beside the one `suggestDeck` would have built,
     and for the whole life of that screen the suggestion was handed the MAINDECK
