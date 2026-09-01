@@ -22,6 +22,7 @@ import {
   packedCards,
   pickDefense,
   reviewVerdict,
+  storedDials,
   storedPickScore,
 } from "./validators.js";
 
@@ -425,6 +426,15 @@ export default defineSchema({
     sessionId: v.id("draftSessions"),
     picks: digestPicks,
     mistakes: v.array(digestMistake),
+    // What this draft says about how its drafter picks, as the curvature of the
+    // dial likelihood at the pod -- see core's `StoredDials`.
+    //
+    // OPTIONAL, AND FOR TWO REASONS THAT DO NOT EXPIRE TOGETHER. Every digest
+    // written before this field existed has none, and a schema push validates
+    // every stored document. And a draft on a pool with no pick order, or one
+    // with no decision in it, legitimately produces nothing -- `dialsForDraft`
+    // refuses rather than degrades, and absent is how that refusal is recorded.
+    dials: v.optional(storedDials),
   }).index("by_session", ["sessionId"]),
 
   // One person daring another to draft the same packs, and the two drafts that

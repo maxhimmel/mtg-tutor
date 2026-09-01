@@ -1,4 +1,4 @@
-import type { EngineCard } from "../model/card.js";
+import type { CardRole, EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
 import type { BotMemory, PodPolicy, StoredPod } from "./bots.js";
 
@@ -534,6 +534,29 @@ export const packOpenness = (packSize: number) =>
   Math.min(1, Math.max(0, packSize / MAX_PACK));
 
 /**
+ * The half of a card a policy reads, which is narrower than an EngineCard.
+ *
+ * WHY THIS IS NOT JUST `EngineCard`
+ *
+ * A stored pick's `pack` is a SNAPSHOT, and `turn` and `role` are optional on it
+ * -- rows written before those fields existed have neither, and a schema push
+ * validates every document ever stored. Nothing here reads `turn` at all and
+ * `role` feeds one bundle, so a snapshot is a perfectly good thing to score.
+ *
+ * Spelling that out in the type rather than in a cast is the point. `policy.ts`
+ * has twice been on the edge of shipping a curve feature -- `cheapness` and
+ * `turnFour` both got as far as a fitted number -- and the day one lands, a cast
+ * saying "this never reads turn" would start reading undefined out of every
+ * historical snapshot, silently, in a player's own history. With the type
+ * narrowed, that day is a compile error and somebody has to decide what a
+ * snapshot without a turn means.
+ */
+export type PolicyCard = Omit<EngineCard, "turn" | "role"> & {
+  turn?: number;
+  role?: CardRole;
+};
+
+/**
  * The feature row for one candidate card.
  *
  * Written into a caller-supplied array so scoring a pack does not allocate 14
@@ -541,7 +564,7 @@ export const packOpenness = (packSize: number) =>
  * draft, and a draft replays inside a Convex query.
  */
 export function policyFeatures(
-  card: EngineCard,
+  card: PolicyCard,
   memory: BotMemory,
   progress: number,
   packSize: number,
@@ -614,7 +637,7 @@ const SCRATCH: number[] = new Array(POLICY_FEATURES.length);
 
 /** The fitted score for one card: the dot product, and nothing else. */
 export function policyScore(
-  card: EngineCard,
+  card: PolicyCard,
   memory: BotMemory,
   progress: number,
   weights: PolicyWeights,

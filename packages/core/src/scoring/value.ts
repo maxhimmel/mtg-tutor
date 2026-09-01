@@ -69,7 +69,11 @@ export function observedRarityBaselines(cards: readonly ValueInputs[]): Map<Rari
 // Resolved once at ingest and read from the card ever after. There is no second
 // path: the formula's inputs are on CardText now, so an EngineCard cannot be
 // scored any other way.
-export function cardValue(card: EngineCard): number {
+// Narrower than `EngineCard` because that is all it reads, and because its
+// callers include the policy, which scores stored pack SNAPSHOTS -- see
+// `PolicyCard`. Widening this back would put `turn` and `role` into the
+// requirements of every scorer that only wants a number.
+export function cardValue(card: Pick<EngineCard, "value">): number {
   return card.value;
 }
 
