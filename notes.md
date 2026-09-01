@@ -582,7 +582,74 @@ an answer written down at the time — the only comparison this app can draw wit
 no set-to-set variance in it. That is also why the review's rows are stored and
 unread (Deferred #2), and what is left open is Ideas #9.
 
-3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
+3. **`drafter-fit`** — measuring ONE drafter against the pod that dealt to
+   them. **Phase 0 ran 2026-09-01 and it answered every question it was built
+   to ask, including two that say no.** Branch `drafter-fit`, phase branch
+   `dial-recovery`. `pnpm fit-drafter` is the harness and it needs no
+   deployment.
+
+   The model is the shipped policy with one multiplier per BUNDLE of its
+   columns, not ten free weights: a person brings ~42 picks a draft against the
+   571,996 the pods were fitted on, and `value`/`valueOpen` mean nothing apart.
+   At theta = 1 the dialled score IS `policyScore`, asserted per pod. Everything
+   below was measured on simulated drafters whose dials were written down first,
+   because a per-drafter fit always returns six numbers and a real player's
+   truth is written nowhere — a broken estimator would produce a confident,
+   readable, unfalsifiable panel.
+
+   **Four dials, not six.** Mean within-pack spread of each bundle's
+   contribution over real fdn packs, in logit units: `table` 4.101, `lane`
+   0.938, `power` 0.793, `signal` 0.416, `rare` 0.029, `removal` 0.011. A
+   drafter dealt at 1.5x or 0.5x on `rare` or `removal` is never once called
+   different, at any draft count — as it must be, since those bundles move no
+   pack. A dial nothing can move reads on screen exactly like "you are average
+   at this", which is why this is measured before anything is drawn.
+
+   **Two of the four are not separable from each other.** At 15 drafts a
+   `lane` x1.5 drafter lights up `lane` at 100% and `table` at 92%; a `table`
+   x1.5 drafter lights up `table` at 90% and `lane` at 95%. The moved dial is
+   always at or above the other, and not by enough to name. So the panel cannot
+   currently make one claim about a lane and a separate claim about what the
+   table wants, and the honest readout is three things: that pair as one axis,
+   `signal`, and sharpness.
+
+   **`power` is not measurable beside `table` at all** — 12-13% called at 15
+   drafts against a 1.5x truth. Which follows: both are raw-power measures,
+   `table` carries five times the spread, and it absorbs the variation.
+
+   **How many drafts, measured rather than guessed.** At 80% detection of a
+   1.5x/0.5x difference: `lane` 3-5 drafts, `signal` 10, `table` 10, `power`
+   never. False positives on the pod itself run 0-2% against a nominal 5%, so
+   the shrinkage is conservative.
+
+   **The shark axis is not sayable, and that was the best thing this could have
+   said.** A drafter playing `sharks3` against `table3` comes back at 1.15 on
+   `power` with 5% called, at 15 drafts. `FITTED_POLICIES` records that the two
+   tiers differ on essentially one coefficient — `valueOpen` 17.17 against 20.82
+   — and one coefficient inside the bundle with the least spread is below what
+   forty-two picks a draft can see. "Here is where you sit against a drafter who
+   goes 3-0" should not be promised.
+
+   **The twenty-seven-numbers storage works near the pod and fails away from
+   it.** A draft's whole contribution is its gradient and Hessian at theta = 1,
+   which add exactly, so a new draft updates a drafter without re-reading an old
+   one — and sharpness falls out of the same numbers, being the row sum of the
+   gradient and the full sum of the Hessian. Against the iterated fit the
+   one-step relative dials differ by a median of 0.0012 and a worst of 0.0125 on
+   a drafter at the pod. On one who is HALF as decisive, the worst is 3.96 and
+   the fitted sharpness comes back at 0.24 against a truth of 0.50. A beginner
+   picking noisily is exactly that drafter, so before this ships either the
+   sharpness is printed as a direction rather than a number, or a second pass
+   over the rows is paid for. The relative dials stay safe throughout — false
+   positives 0-7% — so what is at risk is the value, not the verdict.
+
+   **What is not done.** `tau` is still a command-line argument. It is a claim
+   about how far real drafters sit from the field, and it is measurable off the
+   17Lands drafts already cached in `datasets/`: fit every drafter, subtract the
+   mean sampling variance from the between-drafter variance. Every number above
+   was produced at tau 0.35 and moves with it.
+
+4. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
    item. Read that, not this paragraph.**
 
@@ -604,7 +671,7 @@ unread (Deferred #2), and what is left open is Ideas #9.
      it proxies having lost the game before — trap #10 in a column that looks
      like a clean binary.
 
-4. **Follow-ups to token metrics** (spec:
+5. **Follow-ups to token metrics** (spec:
    `.omc/specs/deep-dive-ai-token-usage-benchmarks.md`). Deliberately left out of
    the first pass, each for its own reason:
    - **Static token assertions in vitest, no API calls.** Input tokens,
@@ -670,7 +737,7 @@ unread (Deferred #2), and what is left open is Ideas #9.
      citation density and breadth hold. Regenerate the baseline first, change
      the prompt second, compare third.
 
-5. **`ui-regression-harness`** — the class of defect the two-column rail
+6. **`ui-regression-harness`** — the class of defect the two-column rail
    produced twice in one afternoon, and the reason no test suite saw either.
 
    Both were geometry. The rail overflowed its own track by 324px because an
@@ -1248,6 +1315,26 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     first real run. The metric answers "how many does the floor withhold", and no
     size of that number answers "is the floor in the right place". Worth having;
     not worth waiting for.
+
+24. **A prior that shrinks every parameter evenly, over parameters whose data
+    is wildly uneven, invents differences that are not there** (2026-09-01).
+    `fit-drafter` dealt a simulated drafter who is uniformly TWICE as decisive
+    as the pod -- identical preferences, sharper picks -- and the six-dial fit
+    called them different from the field on `table`, `lane` and `signal` at
+    100%. Three claims that this person weighs something more than the field,
+    about somebody who weighs nothing differently at all.
+
+    The shrinkage was not too strong. It was EVEN. The bundles move a real fdn
+    pack by 4.10, 0.94, 0.79, 0.42, 0.029 and 0.011 logits, so one pull of equal
+    force leaves the well-measured bundles near the truth and the badly-measured
+    ones at the prior -- and the SPREAD between them then reads as an opinion.
+    Dividing afterwards by a separately fitted overall scale does not undo it,
+    because the parameters were never scaled together.
+
+    The fix is to fit the shared scale FIRST and centre the prior there. False
+    positives on that drafter went from 100% on three dials to 0-7%. The general
+    form: whenever a prior is centred at a point the data may be uniformly
+    displaced from, estimate the displacement before shrinking toward it.
 
 # Deferred trade-offs (revisit when the premise changes):
 
