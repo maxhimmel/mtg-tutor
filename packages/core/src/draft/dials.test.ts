@@ -8,6 +8,7 @@ import {
   NEUTRAL_DIALS,
   bundleScores,
   bundleSpread,
+  dialPicksFrom,
   dialledScore,
 } from "./dials.js";
 
@@ -106,6 +107,52 @@ describe("a dial moves only its own bundle", () => {
       bundles[lane],
       12,
     );
+  });
+});
+
+describe("dialPicksFrom", () => {
+  const weights = FITTED_POLICIES.table3;
+  const signal = DIAL_BUNDLES.findIndex((b) => b.id === "signal");
+  const rows = () => {
+    const first = pack();
+    const second = pack().map((c) => ({ ...c, name: `${c.name} II` }));
+    return [
+      { pack: first, picked: first[0] },
+      { pack: second, picked: second[1] },
+    ];
+  };
+
+  it("scores a pack BEFORE recording it as seen", () => {
+    // Nothing has flowed at the first pick, so `openness` is zero for every card
+    // on offer. Call `see` a line early and the first pack becomes its own
+    // signal -- the fit then learns "take whatever colour this pack is heavy
+    // in", which looks like signal-reading in every aggregate.
+    const [first] = dialPicksFrom(rows(), weights);
+    for (const card of first.bundles) expect(card[signal]).toBe(0);
+  });
+
+  it("has something to say about openness by the second pick", () => {
+    const [, second] = dialPicksFrom(rows(), weights);
+    expect(second.bundles.some((card) => card[signal] !== 0)).toBe(true);
+  });
+
+  it("records which card was taken, by position in the pack", () => {
+    const picks = dialPicksFrom(rows(), weights);
+    expect(picks.map((p) => p.chosen)).toEqual([0, 1]);
+  });
+
+  it("skips a pick whose card is not in its own pack rather than taking index 0", () => {
+    const cards = pack();
+    const picks = dialPicksFrom(
+      [{ pack: cards, picked: card("Not In This Pack", ["W"], 0.5) }],
+      weights,
+    );
+    expect(picks).toEqual([]);
+  });
+
+  it("keeps the dregs, because the pod it is measured against was fitted on them", () => {
+    const cards = pack().slice(0, 2);
+    expect(dialPicksFrom([{ pack: cards, picked: cards[0] }], weights)).toHaveLength(1);
   });
 });
 

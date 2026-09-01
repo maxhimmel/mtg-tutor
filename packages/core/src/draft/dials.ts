@@ -1,5 +1,12 @@
-import { FITTED_POLICIES, POLICY_FEATURES, type PolicyWeights } from "./policy.js";
-import type { StoredPod } from "./bots.js";
+import type { EngineCard } from "../model/card.js";
+import {
+  FITTED_POLICIES,
+  POLICY_FEATURES,
+  draftProgress,
+  policyFeatures,
+  type PolicyWeights,
+} from "./policy.js";
+import { BotMemory, type StoredPod } from "./bots.js";
 
 // What ONE drafter does differently from the table, in as few numbers as the
 // data can carry.
@@ -216,6 +223,70 @@ export function bundleSpread(packs: readonly (readonly number[])[][]): number[] 
   }
 
   return counted === 0 ? totals : totals.map((t) => t / counted);
+}
+
+/** One decision as a draft stores it: what was on offer, and what was taken. */
+export interface DraftRow {
+  pack: readonly EngineCard[];
+  picked: EngineCard | undefined;
+}
+
+/** What was on offer, in bundle scores, and which one was taken. */
+export interface DialPick {
+  bundles: readonly (readonly number[])[];
+  chosen: number;
+}
+
+/**
+ * A draft's rows turned into the observations the fit consumes.
+ *
+ * ONE COPY, FOR THE REASON `BotMemory` IS ONE COPY.
+ *
+ * Three callers want this: a harness dealing simulated drafters, a script
+ * reading `draftPicks` off a deployment, and eventually a query. The 17Lands fit
+ * has its own walk of the same shape in `fit-bot-policy`, which is allowed to be
+ * separate because it reads a different row format -- but a second copy of the
+ * MEMORY ORDER would not be. `openness` must not see the pack the features were
+ * computed against, or the fit learns "take whatever colour this pack is heavy
+ * in" and calls it signal-reading; that ordering is a one-line mistake with no
+ * symptom, so it lives here and nowhere else.
+ *
+ * NO DECISION-PICK FLOOR, DELIBERATELY, AND IT IS NOT THE SAME QUESTION
+ *
+ * `REVIEW.decisionPickMinCards` keeps the dregs out of the review quiz and the
+ * misses drill, because taking the last playable off a three-card pack is not a
+ * decision somebody should be shown as a miss. This is a different use: the pod
+ * these dials are measured against was fitted over every pick with two or more
+ * cards on offer, so filtering the drafter's picks and not the population's
+ * would move theta by the difference between two samples rather than by
+ * anything about the drafter.
+ */
+export function dialPicksFrom(
+  rows: readonly DraftRow[],
+  weights: PolicyWeights,
+): DialPick[] {
+  const memory = new BotMemory();
+  const picks: DialPick[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const { pack, picked } = rows[i];
+    const chosen = picked ? pack.findIndex((c) => c.name === picked.name) : -1;
+
+    if (chosen >= 0 && pack.length >= 2) {
+      const progress = draftProgress(i, rows.length);
+      picks.push({
+        bundles: pack.map((card) =>
+          bundleScores(policyFeatures(card, memory, progress, pack.length), weights),
+        ),
+        chosen,
+      });
+    }
+
+    memory.see(pack);
+    if (picked) memory.take(picked);
+  }
+
+  return picks;
 }
 
 /**

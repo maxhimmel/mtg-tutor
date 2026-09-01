@@ -41,13 +41,9 @@
 // prior's own width as the interval. "We could not tell" arrives looking like
 // what it is, rather than as a confident zero.
 
-import { DIAL_BUNDLES, NEUTRAL_DIALS } from "./dials.js";
+import { DIAL_BUNDLES, NEUTRAL_DIALS, type DialPick } from "./dials.js";
 
-/** One decision: what was on offer, in bundle scores, and which one was taken. */
-export interface DialPick {
-  bundles: readonly (readonly number[])[];
-  chosen: number;
-}
+export type { DialPick };
 
 /**
  * The log-likelihood and its two derivatives at one point.
