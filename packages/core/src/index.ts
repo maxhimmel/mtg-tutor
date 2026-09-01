@@ -54,6 +54,7 @@ export * from "./draft/diff.js";
 export * from "./draft/summary.js";
 export * from "./draft/bots.js";
 export * from "./draft/policy.js";
+export * from "./draft/dials.js";
 export * from "./draft/pack.js";
 export * from "./draft/deck.js";
 export * from "./draft/build.js";
