@@ -328,3 +328,39 @@ describe("fitTau", () => {
     expect(total(0.05)).toBeGreaterThan(total(1.5));
   });
 });
+
+describe("a population that is not at the pod", () => {
+  // What the per-set tables turned up: the average drafter in one set sits well
+  // away from `table3`, and `power` runs 0.30 in ktk against 1.46 in blb. A tau
+  // measured with the prior at 1 would report that offset as spread.
+  const OFFSET = [1.4, 1.4, 1.4, 1.4, 1.4, 1.4].slice(0, N);
+
+  const shifted = (tau: number, count: number, picks: number, seed: number) => {
+    const rng = mulberry32(seed);
+    const normal = () => {
+      const u = Math.max(1e-12, rng());
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+    };
+    return Array.from({ length: count }, (_, i) =>
+      dialCurvature(
+        picksFrom(
+          OFFSET.map((o) => o + tau * normal()),
+          picks,
+          seed + i * 7919,
+          12,
+          SPREAD,
+        ),
+      ),
+    );
+  };
+
+  it("reports the offset as spread when the prior sits at the pod", () => {
+    expect(fitTau(shifted(0.15, 150, 400, 401)).tau).toBeGreaterThan(0.3);
+  });
+
+  it("and recovers the real spread once the prior is centred on the population", () => {
+    const fit = fitTau(shifted(0.15, 150, 400, 401), OFFSET);
+    expect(fit.tau).toBeGreaterThan(0.08);
+    expect(fit.tau).toBeLessThan(0.28);
+  });
+});

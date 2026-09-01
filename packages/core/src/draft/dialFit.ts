@@ -459,7 +459,11 @@ export function drafterFrom(picks: readonly DialPick[], tau: number): DrafterFit
  * where I is the observed information -H and E is the identity. The first term
  * is the evidence for moving, the second is the price of being allowed to.
  */
-export function marginalGain(curvature: DialCurvature, tau: number): number {
+export function marginalGain(
+  curvature: DialCurvature,
+  tau: number,
+  centre: readonly number[] = NEUTRAL_DIALS,
+): number {
   const n = curvature.gradient.length;
   const ridge = 1 / (tau * tau);
   const information = new Array((n * (n + 1)) / 2);
@@ -474,9 +478,22 @@ export function marginalGain(curvature: DialCurvature, tau: number): number {
     }
   }
 
-  const solved = solveSymmetric(penalised, curvature.gradient, n);
+  // The gradient as seen FROM the prior's centre rather than from the pod. The
+  // curvature is still the one stored at theta = 1 -- only the point the spread
+  // is measured around moves, and shifting a quadratic's expansion point is
+  // exactly this subtraction.
+  const offset = curvature.gradient.map((g, b) => {
+    let shifted = g;
+    for (let c = 0; c < n; c++) {
+      const at = b <= c ? triangleIndex(n, b, c) : triangleIndex(n, c, b);
+      shifted -= -curvature.hessian[at] * (centre[c] - 1);
+    }
+    return shifted;
+  });
+
+  const solved = solveSymmetric(penalised, offset, n);
   let quadratic = 0;
-  for (let b = 0; b < n; b++) quadratic += curvature.gradient[b] * solved[b];
+  for (let b = 0; b < n; b++) quadratic += offset[b] * solved[b];
 
   const L = cholesky(information, n);
   let logDet = 0;
@@ -502,15 +519,43 @@ export interface TauFit {
  */
 export function fitTau(
   curvatures: readonly DialCurvature[],
+  centre: readonly number[] = NEUTRAL_DIALS,
+  low = 0.01,
+  high = 3,
+  steps = 60,
+): TauFit {
+  return fitTauGrouped([{ curvatures, centre }], low, high, steps);
+}
+
+/**
+ * One tau over several populations that do not share a centre.
+ *
+ * WHICH IS EVERY REAL POPULATION, AND THE MEASUREMENT SAID SO
+ *
+ * The average drafter in one set sits well away from `table3` -- `power` pools
+ * to 0.30 in ktk and 1.46 in blb, against a tau of about a quarter -- because
+ * `table3` is a compromise across eighteen sets and no single set is the
+ * compromise. Fitted with the prior at the pod, each set's own offset is
+ * counted as spread, and the answer comes back inflated by an amount the same
+ * size as the thing being measured.
+ *
+ * Trap #24 again, one level up: shrink toward the wrong centre and the distance
+ * to it is reported as a property of the population.
+ */
+export function fitTauGrouped(
+  groups: readonly { curvatures: readonly DialCurvature[]; centre: readonly number[] }[],
   low = 0.01,
   high = 3,
   steps = 60,
 ): TauFit {
   const total = (tau: number) => {
     let sum = 0;
-    for (const c of curvatures) sum += marginalGain(c, tau);
+    for (const group of groups) {
+      for (const c of group.curvatures) sum += marginalGain(c, tau, group.centre);
+    }
     return sum;
   };
+  const drafters = groups.reduce((n, g) => n + g.curvatures.length, 0);
 
   const phi = (Math.sqrt(5) - 1) / 2;
   let a = Math.log(low);
@@ -537,7 +582,7 @@ export function fitTau(
   }
 
   const tau = Math.exp((a + b) / 2);
-  return { tau, gain: total(tau), drafters: curvatures.length };
+  return { tau, gain: total(tau), drafters };
 }
 
 // ------------------------------------------------------------ linear algebra

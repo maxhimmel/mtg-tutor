@@ -43,6 +43,7 @@ import {
   dialStep,
   drafterFromCurvature,
   fitTau,
+  fitTauGrouped,
   marginalGain,
   poolCurvature,
 } from "@mtg-tutor/core";
@@ -84,10 +85,13 @@ const num = (n, places = 3) => (n < 0 ? "" : " ") + n.toFixed(places);
 const perSet = [];
 const everyone = [];
 const trophies = [];
+const groups = [];
+const trophyGroups = [];
 
 for (const setCode of setCodes) {
   const cache = await draftPicks({ client, api, setCode, format, log });
   const curvatures = [];
+  const trophyBefore = trophies.length;
   let kept = 0;
 
   for (const draft of cache.drafts) {
@@ -111,7 +115,18 @@ for (const setCode of setCodes) {
   // Effectively unshrunk: over this many picks the prior is a rounding error,
   // and this is the line that says whether the walk agrees with the fit.
   const population = dialStep(pooled, 1000);
-  const fit = fitTau(curvatures);
+  // Both, because the difference between them IS the set effect. Centred at the
+  // pod, a set's own offset from `table3` is counted as spread between its
+  // drafters; centred on the set's own population, what is left is how far
+  // drafters in that set sit from EACH OTHER.
+  const atPod = fitTau(curvatures);
+  const atSet = fitTau(curvatures, population.theta);
+
+  groups.push({ curvatures, centre: population.theta });
+  const setTrophies = trophies.slice(trophyBefore);
+  if (setTrophies.length > 0) {
+    trophyGroups.push({ curvatures: setTrophies, centre: population.theta });
+  }
 
   perSet.push({
     setCode,
@@ -120,12 +135,14 @@ for (const setCode of setCodes) {
     picks: pooled.picks,
     population: population.theta,
     populationSe: population.se,
-    tau: fit.tau,
+    tauAtPod: atPod.tau,
+    tau: atSet.tau,
   });
 
   log(
     `  ${setCode}: ${curvatures.length.toLocaleString()} drafters, ` +
-      `${pooled.picks.toLocaleString()} picks, tau ${fit.tau.toFixed(3)}`,
+      `${pooled.picks.toLocaleString()} picks, tau ${atSet.tau.toFixed(3)} ` +
+      `(${atPod.tau.toFixed(3)} against the pod)`,
   );
 }
 
@@ -161,23 +178,50 @@ console.log("");
 console.log("HOW FAR APART DRAFTERS ARE");
 console.log("tau maximising the marginal likelihood over each population.");
 console.log("");
-console.log(`  ${pad("population", 20)} ${pad("drafters", 10)} tau`);
+console.log("the SET column is centred on that set's own population; the POD");
+console.log("column is centred on table3. the gap between them is the set effect");
+console.log("being counted as spread between drafters.");
+console.log("");
+console.log(`  ${pad("population", 20)} ${pad("drafters", 10)} ${pad("set", 8)} pod`);
 for (const s of perSet) {
-  console.log(`  ${pad(s.setCode, 20)} ${pad(s.drafters.toLocaleString(), 10)} ${s.tau.toFixed(3)}`);
+  console.log(
+    `  ${pad(s.setCode, 20)} ${pad(s.drafters.toLocaleString(), 10)} ` +
+      `${pad(s.tau.toFixed(3), 8)} ${s.tauAtPod.toFixed(3)}`,
+  );
 }
 
-const all = fitTau(everyone);
-const trophy = trophies.length > 0 ? fitTau(trophies) : null;
+const all = fitTauGrouped(groups);
+const allAtPod = fitTau(everyone);
+const trophy = trophyGroups.length > 0 ? fitTauGrouped(trophyGroups) : null;
 console.log("");
 console.log(
-  `  ${pad("every drafter", 20)} ${pad(all.drafters.toLocaleString(), 10)} ${all.tau.toFixed(3)}`,
+  `  ${pad("every drafter", 20)} ${pad(all.drafters.toLocaleString(), 10)} ` +
+    `${pad(all.tau.toFixed(3), 8)} ${allAtPod.tau.toFixed(3)}`,
 );
 if (trophy) {
   console.log(
     `  ${pad("3-0 drafters", 20)} ${pad(trophy.drafters.toLocaleString(), 10)} ` +
-      trophy.tau.toFixed(3),
+      `${trophy.tau.toFixed(3)}`,
   );
 }
+
+// How far the sets are from each other, in the units tau is in. If this is the
+// same size as tau, a player's dials are half a fact about the set they drafted
+// -- and pooling their drafts across sets does not average it away, because
+// three drafts is three sets rather than a sample of eighteen.
+console.log("");
+console.log("HOW FAR APART THE SETS ARE");
+console.log("sd across sets of the pooled population theta, beside tau. a set");
+console.log("effect the size of tau is a set effect the panel cannot ignore.");
+console.log("");
+console.log(`  ${pad("", 10)} ${ids.map((i) => pad(i, 8)).join(" ")}`);
+const setSd = ids.map((_, b) => {
+  const values = perSet.map((s) => s.population[b]);
+  const mean = values.reduce((a, v) => a + v, 0) / values.length;
+  return Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / values.length);
+});
+console.log(`  ${pad("set sd", 10)} ${setSd.map((v) => pad(num(v, 2), 8)).join(" ")}`);
+console.log(`  ${pad("tau", 10)} ${ids.map(() => pad(num(all.tau, 2), 8)).join(" ")}`);
 
 // The shape of the objective around the answer, because a flat maximum is a tau
 // that was not really measured and the point estimate would not say so.
@@ -185,9 +229,14 @@ console.log("");
 console.log("AND HOW SHARPLY, over every drafter -- a flat curve here is a tau");
 console.log("that the data did not really choose.");
 console.log("");
-const best = everyone.reduce((sum, c) => sum + marginalGain(c, all.tau), 0);
+const gainAt = (tau) =>
+  groups.reduce(
+    (sum, g) => sum + g.curvatures.reduce((s2, c) => s2 + marginalGain(c, tau, g.centre), 0),
+    0,
+  );
+const best = gainAt(all.tau);
 for (const tau of [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.6, 1.0]) {
-  const gain = everyone.reduce((sum, c) => sum + marginalGain(c, tau), 0);
+  const gain = gainAt(tau);
   const loss = best - gain;
   console.log(`  tau ${pad(tau.toFixed(2), 6)} ${pad((-loss).toFixed(0), 10)} below the best`);
 }
@@ -225,7 +274,13 @@ if (jsonOut) {
         format,
         perMille,
         perSet,
-        all: { tau: all.tau, drafters: all.drafters, population: populationAll.theta },
+        all: {
+          tau: all.tau,
+          tauAtPod: allAtPod.tau,
+          drafters: all.drafters,
+          population: populationAll.theta,
+        },
+        setSd,
         trophy: trophy ? { tau: trophy.tau, drafters: trophy.drafters } : null,
       },
       null,
