@@ -10,6 +10,7 @@ import {
   bundleSpread,
   dialPicksFrom,
   dialledScore,
+  dialledWeights,
 } from "./dials.js";
 
 // The one property everything downstream rests on: at theta = 1 the dialled
@@ -107,6 +108,38 @@ describe("a dial moves only its own bundle", () => {
       bundles[lane],
       12,
     );
+  });
+});
+
+describe("dialledWeights", () => {
+  it("is the same drafter, so the engine's own scorer can deal one", () => {
+    const weights = FITTED_POLICIES.table3;
+    const theta = [1.4, 0.8, 1.6, 0.5, 1.1, 0.9];
+    const cards = pack();
+    const memory = memoryAfter([cards[0], cards[1]], [cards]);
+    const dialled = dialledWeights(theta, weights);
+
+    for (const c of cards) {
+      const f = policyFeatures(c, memory, 0.55, cards.length);
+      expect(policyScore(c, memory, 0.55, dialled, cards.length)).toBeCloseTo(
+        dialledScore(bundleScores(f, weights), theta),
+        12,
+      );
+    }
+  });
+
+  it("leaves a seven-long pod seven long, rather than growing it to ten", () => {
+    // `policyScore` iterates the weights, so a vector that grew would start
+    // reading columns the pod was never fitted with.
+    expect(dialledWeights([2, 2, 2, 2, 2, 2], FITTED_POLICIES.table)).toHaveLength(
+      FITTED_POLICIES.table.length,
+    );
+  });
+
+  it("at theta = 1 changes nothing", () => {
+    expect(dialledWeights(NEUTRAL_DIALS, FITTED_POLICIES.table3)).toEqual([
+      ...FITTED_POLICIES.table3,
+    ]);
   });
 });
 
