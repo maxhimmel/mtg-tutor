@@ -142,11 +142,22 @@ export function curvatureOf(
  * makes on purpose. "You take the cards the field takes" is harder to say and
  * close to a restatement of the grade the app already gives on every pick.
  */
-export const SHOWN_DIALS: readonly DialId[] = ["lane", "signal"];
+export const SHOWN_DIALS = ["lane", "signal"] as const satisfies readonly DialId[];
+
+/**
+ * The dials a surface actually has to write words for.
+ *
+ * A tuple rather than `DialId[]`, so a screen's copy can be keyed on exactly
+ * this and adding a name above is a compile error everywhere that has to say
+ * something about it. The alternative is a screen that renders a new dial with
+ * no sentence, or with an empty one, which is how a measurement reaches a person
+ * as blank space.
+ */
+export type ShownDialId = (typeof SHOWN_DIALS)[number];
 
 /** One dial as a reader gets it: where they sit, and how sure that is. */
 export interface ShownDial {
-  id: DialId;
+  id: ShownDialId;
   /** Relative to the drafter's own sharpness, so 1 is "like the field". */
   value: number;
   se: number;

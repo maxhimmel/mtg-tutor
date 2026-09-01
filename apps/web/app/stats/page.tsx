@@ -6,6 +6,7 @@ import { Authenticated, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
 import { PageShell } from "../components/PageShell";
+import { Habits } from "../components/Habits";
 import { Panel } from "../components/Panel";
 import { SetIcon } from "../components/SetIcon";
 import { SignedOut } from "../components/SignedOut";
@@ -76,6 +77,10 @@ function Overview() {
       asked: progress?.asked,
       askedAgain: progress?.askedAgain,
       tookBack: progress?.tookBack,
+      habitsDrafts: data.habits?.drafts,
+      habitsCalled: data.habits?.dials.filter((d) => d.called).length,
+      habitsSharp: data.habits?.sharpness.called,
+      habitsNewSet: data.habits?.skipped.newSet,
     });
   }, [data, progress]);
 
@@ -157,6 +162,11 @@ function Overview() {
       )}
 
       <Lately recent={data.recent} icons={icons} />
+      {/* Above the drill's progress and below the run of drafts, which is the
+          order of what the page can say about a person: what you did, what you
+          keep doing, and what the drill has taught. This is the only panel that
+          describes a HABIT rather than a standing or a direction. */}
+      <Habits habits={data.habits} />
       {progress && <ProgressPanel progress={progress} />}
       <Breakdowns data={data} />
       <Mistakes data={data} icons={icons} />

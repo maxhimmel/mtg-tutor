@@ -63,9 +63,21 @@ export function GapMark({
   gap,
   /** Half-width of the error bar, in rate units. Undefined where unrated. */
   margin,
+  /**
+   * How to say the quantity out loud, for the accessible name.
+   *
+   * `points` by default, which is what every caller here means: a difference of
+   * two rates. It is a prop because the drafter dials are the same PICTURE of a
+   * different quantity -- a multiple of what the field weighs something at,
+   * where "−2.3pp" would be a units error read aloud to exactly the readers who
+   * cannot see the mark. The geometry and the reading are identical and only
+   * the words change, which is why this is a prop rather than a second mark.
+   */
+  describe = points,
 }: {
   gap: number;
   margin: number | undefined;
+  describe?: (value: number) => string;
 }) {
   if (margin == null) return null;
 
@@ -86,8 +98,8 @@ export function GapMark({
       role="img"
       aria-label={
         clears
-          ? `${points(gap)}, against a margin of ${points(margin).slice(1)} — a gap the data can see.`
-          : `${points(gap)}, inside a margin of ${points(margin).slice(1)} — too small for the data to call.`
+          ? `${describe(gap)}, against a margin of ${describe(margin).slice(1)} — a gap the data can see.`
+          : `${describe(gap)}, inside a margin of ${describe(margin).slice(1)} — too small for the data to call.`
       }
     >
       {/* The interval first, so the zero rule paints over it: the rule is the
