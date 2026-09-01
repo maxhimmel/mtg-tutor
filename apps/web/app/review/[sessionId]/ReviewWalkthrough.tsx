@@ -96,6 +96,9 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
       answered: name,
       rawBestName: pick.bestName,
       contextBestName: pick.contextBestName,
+      // Subtracted by `review.load`, so this surface and the drill cannot
+      // disagree about what a gap is. Nothing reads it yet; see schema.ts.
+      gap: pick.gap,
       attemptId: `${visitId}:${pickIndex}`,
     }).catch((error: unknown) => {
       answerUnrecorded({ asked: "review", reason: String(error) });

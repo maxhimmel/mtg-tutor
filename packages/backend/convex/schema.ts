@@ -588,23 +588,41 @@ export default defineSchema({
     // a win rate must not silently re-decide an answer somebody already gave.
     rawBestName: v.string(),
     contextBestName: v.string(),
-    // Which sitting this answer came from. It is the only thing separating a
-    // retry from the same pack coming round again -- see the note above.
+    // The gap the pick was docked by, in win-rate points, off the same score.
     //
-    // OPTIONAL, and not optional to a writer: `pickAnswers.record` requires it
-    // and every client sends one. Absence means one thing only, a row written on
-    // 31 Aug 2026 in the day before the column existed.
+    // NOTHING READS IT YET, and it is here because it cannot be added later.
+    // notes.md Ideas #9 defers the clean measure -- a question's FIRST answer
+    // over time -- and names the bias it will carry: `rankMisses` deals the
+    // widest gaps first, so the questions somebody meets for the first time get
+    // narrower, and therefore harder, the longer they play. A trend that cannot
+    // see the gap can only caveat that; one that can, corrects for it.
     //
-    // It reads correctly rather than merely tolerably. A legacy row's absent id
-    // can never equal an incoming one, so it never blocks a write -- which is
-    // right: those rows are history, and history is not a duplicate of something
-    // being answered now.
-    //
-    // The alternative was requiring it and clearing the table, and that is where
-    // this arrived from: a required column cannot be pushed while a row without
-    // it exists, and the mutation that would delete the row ships in the same
-    // push. Widening is not a concession here; it is the more truthful schema.
+    // Not recoverable after the fact at any sensible price. `stats.progress`
+    // reads one index and no session, and recovering this would mean a digest
+    // read per answer to fetch a number the writer had in its hand.
+    gap: v.optional(v.number()),
+    // Which sitting this answer came from. See the note above: it is the only
+    // thing separating a retry from the same pack coming round again.
     attemptId: v.optional(v.string()),
+    //
+    // BOTH OPTIONAL, and neither is optional to a writer -- `pickAnswers.record`
+    // requires them and every client sends them. Absence means one thing only:
+    // a row written on 31 Aug 2026, in the day before either column existed.
+    // The same distinction `pickedContextValue` keeps two files over, for the
+    // same reason: a fabricated zero would be indistinguishable from a pick that
+    // really was graded against itself, and there is no honest value to
+    // backfill a gap with once the attempt is over.
+    //
+    // It reads correctly rather than merely tolerably. A legacy row's absent
+    // `attemptId` can never equal an incoming one, so it never blocks a write --
+    // which is right: those rows are history, and history is never a duplicate
+    // of something being answered now.
+    //
+    // The alternative was requiring both and clearing the table, and that is
+    // where this arrived from: a required column cannot be pushed while a row
+    // without it exists, and the mutation that would delete the row ships in the
+    // same push. Widening is not a concession here; it is the more truthful
+    // schema.
     at: v.string(),
   })
     // One pick's answers, oldest first, which is the repeat itself.

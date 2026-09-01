@@ -39,6 +39,12 @@ export const record = mutation({
     // and answered, and the row a re-ingest may since have re-scored is not it.
     rawBestName: v.string(),
     contextBestName: v.string(),
+    // The gap the pick was docked by, in the digest's units:
+    // `contextBestValue - (pickedContextValue ?? pickedValue)`. Both surfaces
+    // must send the same quantity or a trend over the column is two scales in
+    // one column -- the drill passes `question.gap` straight through, and the
+    // review computes it off the two values `review.load` already carries.
+    gap: v.number(),
     // Which sitting this is, minted by the client: one id per question per run.
     // See schema.ts for why a row cannot work this out for itself.
     attemptId: v.string(),
@@ -93,6 +99,7 @@ export const record = mutation({
       answered: args.answered,
       rawBestName: args.rawBestName,
       contextBestName: args.contextBestName,
+      gap: args.gap,
       attemptId: args.attemptId,
       at: new Date().toISOString(),
     });

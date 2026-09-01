@@ -187,6 +187,15 @@ export const load = query({
           // ScoreBreakdown, which draws the two differently.
           pickedValue: rec.score.pickedValue,
           pickedContextValue: rec.score.pickedContextValue,
+          // The gap, subtracted HERE and not in either client. score.ts is
+          // explicit that `contextBestValue - pickedContextValue` is the only
+          // pair that is a gap and that quoting any other mixes two scales, so
+          // the arithmetic lives once beside the values rather than twice in
+          // two clients that must not drift. Both quiz surfaces send it to
+          // `pickAnswers.record`, where it has to be the same quantity the
+          // drill sends off the digest or the column is two scales in one
+          // column. Free: the document is already paid for.
+          gap: rec.score.contextBestValue - rec.score.pickedContextValue,
           terms: row.score.terms,
           // What the player said for this pick BEFORE anything was revealed.
           // Absent on a pick made through the passive flow, which is not a gap
@@ -370,6 +379,9 @@ export const verdictContext = internalQuery({
     // against a deck the player had already stopped building.
     const bench = normalizeBench(session.sideboard ?? []);
     const { maindeck, sideboard } = splitPool(row.poolBefore, bench, args.pickIndex);
+    // Named once and spent twice below, so the one pair score.ts calls a gap is
+    // not spelled out twice in one file.
+    const gap = record.score.contextBestValue - record.score.pickedContextValue;
 
     return {
       cached: existing?.verdict,
@@ -388,6 +400,7 @@ export const verdictContext = internalQuery({
           bestName: record.score.rawBest.name,
           contextBestName: record.score.contextBest.name,
           score: record.score.score,
+          gap,
           isBest: record.score.isBest,
           onColor: record.score.onColor,
         },
@@ -407,7 +420,7 @@ export const verdictContext = internalQuery({
           : marginVerdict({
               betterName: record.score.contextBest.name,
               pickedName: record.picked.name,
-              gap: record.score.contextBestValue - record.score.pickedContextValue,
+              gap,
               margin: gapMargin(record.score.contextBest, record.picked),
               indistinguishable: record.score.indistinguishable,
             }),

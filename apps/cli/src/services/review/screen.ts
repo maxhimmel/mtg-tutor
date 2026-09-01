@@ -79,6 +79,7 @@ export async function runReview(
         answered: guess.name,
         rawBestName: pick.bestName,
         contextBestName: pick.contextBestName,
+        gap: pick.gap,
         attemptId: `${visitId}:${pick.pickIndex}`,
       });
     }

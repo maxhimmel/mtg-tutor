@@ -229,7 +229,8 @@ export function MissesDrill() {
     const result = gradeMiss(question, card.name);
     setAnswers((prev) => new Map(prev).set(key(question), card.name));
     // Both of the pick's own answers go with it, so the row can be graded later
-    // by either surface's rule rather than by whichever one wrote it.
+    // by either surface's rule rather than by whichever one wrote it. The gap
+    // rides along unread, for the reason given in schema.ts.
     void record({
       sessionId: question.sessionId,
       pickIndex: question.pickIndex,
@@ -237,6 +238,7 @@ export function MissesDrill() {
       answered: card.name,
       rawBestName: question.rawBestName,
       contextBestName: question.gradedName,
+      gap: question.gap,
       // One id per question per hand, so two clicks land on one row and two
       // sittings never do.
       attemptId: `${runId.current}:${key(question)}`,
@@ -248,6 +250,7 @@ export function MissesDrill() {
       outcome: result.outcome,
       tier: question.tier,
       tookRawBest: result.tookRawBest,
+      gap: question.gap,
       ageDays: ageInDays(question.draftedAt),
       setCode: question.setCode,
       index: step,

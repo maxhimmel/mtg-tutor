@@ -133,6 +133,7 @@ async function play(
       answered: guess.name,
       rawBestName: question.rawBestName,
       contextBestName: question.gradedName,
+      gap: question.gap,
       attemptId: `${runId}:${question.sessionId}:${question.pickIndex}`,
     });
     p.note(reveal(question, result, guess.name), head(question, result));

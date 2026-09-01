@@ -55,6 +55,7 @@ describe("pickAnswers.record", () => {
       answered: "Beta",
       rawBestName: "Gamma",
       contextBestName: "Beta",
+      gap: 0.05,
     };
 
     await as(t, "alice").mutation(api.pickAnswers.record, { ...answer, attemptId: "run-1:0" });
@@ -75,6 +76,7 @@ describe("pickAnswers.record", () => {
       answered: "Beta",
       rawBestName: "Gamma",
       contextBestName: "Beta",
+      gap: 0.05,
       attemptId: "run-1:0",
     };
 
@@ -97,6 +99,7 @@ describe("pickAnswers.record", () => {
       answered: "Beta",
       rawBestName: "Gamma",
       contextBestName: "Beta",
+      gap: 0.05,
       attemptId: "sitting:0",
     };
 
@@ -132,6 +135,7 @@ describe("pickAnswers.record", () => {
       answered: "Beta",
       rawBestName: "Gamma",
       contextBestName: "Beta",
+      gap: 0.05,
       attemptId: "run-1:0",
     });
 
@@ -150,6 +154,7 @@ describe("pickAnswers.record", () => {
         answered: "Beta",
         rawBestName: "Gamma",
         contextBestName: "Beta",
+        gap: 0.05,
         attemptId: "run-1:4",
       }),
     ).rejects.toThrow(/no pick at index 4/);
@@ -169,6 +174,7 @@ describe("pickAnswers.record", () => {
         answered: "Beta",
         rawBestName: "Gamma",
         contextBestName: "Beta",
+        gap: 0.05,
         attemptId: "run-1:0",
       }),
     ).rejects.toThrow();
@@ -207,6 +213,7 @@ describe("stats.progress", () => {
         answered,
         rawBestName: "Zeta",
         contextBestName: right,
+        gap: 0.05,
         attemptId: `${run}:${pickIndex}`,
       });
     }
@@ -251,6 +258,7 @@ describe("stats.progress", () => {
       answered: "Alpha",
       rawBestName: "Alpha",
       contextBestName: "Alpha",
+      gap: 0,
       attemptId: "visit-1:0",
     });
 
@@ -273,6 +281,7 @@ describe("stats.progress", () => {
       answered: "Alpha",
       rawBestName: "Alpha",
       contextBestName: "Alpha",
+      gap: 0,
       attemptId: "run-1:0",
     });
 
