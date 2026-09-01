@@ -57,6 +57,7 @@ import { fileURLToPath } from "node:url";
 import {
   BotMemory,
   DIAL_BUNDLES,
+  DRAFTER_TAU,
   DraftEngine,
   FITTED_POLICIES,
   NEUTRAL_DIALS,
@@ -89,11 +90,10 @@ const format = flag("format", "TradDraft");
 const pod = flag("pod", "table3");
 const drafters = Number(flag("drafters", 100));
 const draftCounts = flag("drafts", "1,3,5,10").split(",").map(Number);
-// The prior width. NOT measured yet -- it is a claim about how far real drafters
-// sit from the field, which needs a pass over the 17Lands drafts. Until then it
-// is stated on the command line and printed above every number it shaped, so no
-// reading here can be mistaken for one that did not depend on it.
-const tau = Number(flag("tau", 0.35));
+// The prior width, measured. `DRAFTER_TAU` is 0.229 over 370,325 real drafters
+// -- see its docblock and `pnpm measure-tau`. Still a flag, because every number
+// this prints moves with it and a reader should be able to see how much.
+const tau = Number(flag("tau", DRAFTER_TAU));
 const seed0 = Number(flag("seed", 1));
 const jsonOut = flag("json");
 const log = (...a) => console.error(...a);

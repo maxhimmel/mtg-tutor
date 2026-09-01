@@ -40,10 +40,43 @@
 // curvature, so the posterior hands back exactly the prior: theta = 1, with the
 // prior's own width as the interval. "We could not tell" arrives looking like
 // what it is, rather than as a confident zero.
+//
+// IT IS MEASURED NOW. See DRAFTER_TAU below.
 
 import { DIAL_BUNDLES, NEUTRAL_DIALS, type DialPick } from "./dials.js";
 
 export type { DialPick };
+
+/**
+ * How far apart real drafters are, and where the number came from.
+ *
+ * 0.229, maximising the marginal likelihood over 370,325 real 17Lands drafters
+ * across all eighteen cached sets, 15.2M picks, each set's population centred on
+ * its own pooled theta. `pnpm measure-tau` is the run.
+ *
+ * The maximum is sharp rather than nominal -- the summed marginal is 2,741
+ * below its best at tau 0.20 and 13,748 below at 0.30, so this is a number the
+ * data chose rather than one it tolerated.
+ *
+ * WHAT IT IS NOT
+ *
+ * It is not one number for every population. Per set it runs 0.151 (ktk) to
+ * 0.362 (mh3), and that spread is not noise: mh3 is a Modern Horizons format
+ * and drafters really do disagree with each other more in it. A per-set tau is
+ * available and deliberately not used yet -- the pooled one is what a player
+ * drafting a set nobody has measured has to be shrunk by, which is the same
+ * argument `fit-bot-policy` makes for one global policy instead of eighteen.
+ *
+ * Drafters who go 3-0 come in at 0.211 against the field's 0.229: slightly more
+ * alike than everybody else, which is the third time this data has said the same
+ * thing -- see the top-1 note under FITTED_POLICIES.
+ *
+ * AND IT IS MEASURED IN A ROOM THIS APP DOES NOT HAVE. These drafters sat at
+ * tables of humans; the app's players sit at tables of pods, whose wheel differs
+ * from a real one by 0.27-0.41 in `bench-packs`. `openness` is computed over
+ * packs somebody else passed, so this is carried across that gap.
+ */
+export const DRAFTER_TAU = 0.229;
 
 /**
  * The log-likelihood and its two derivatives at one point.
