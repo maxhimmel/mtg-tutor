@@ -175,6 +175,41 @@ const AXIS_SHARED = {
 } as const;
 
 /**
+ * How much of a 10px tick label sits either side of its own anchor point.
+ *
+ * A tick within this of the end of the range has half its label hanging outside
+ * the SVG, where the browser clips it without a word -- so the anchor turns
+ * inward instead. See `edgeAnchor`.
+ */
+const HALF_TICK_LABEL = 10;
+
+/**
+ * Which way a tick label reads, so that a tick ON the end of the scale is still
+ * on the page.
+ *
+ * AN AXIS THAT CANNOT PRINT ITS OWN ENDS IS THE FAILURE THIS APP KEEPS HAVING.
+ * `midpoint` centres every label on its tick, which is right in the middle of a
+ * chart and quietly wrong at the edges: the outermost tick is at x=0 or x=width,
+ * so half its digits are outside the viewport and the outermost SVG clips them.
+ * The reader is left with "−" and "8" cut in half, or nothing.
+ *
+ * That matters more than it sounds, because the house rule is SAY THE DOMAIN --
+ * both ends of the scale, in the drawing -- and the only tick that can say an
+ * end is the one sitting on it. An axis that has to keep its ticks away from the
+ * edge to stay legible is an axis that structurally cannot state its own range.
+ *
+ * So it turns inward: the first tick reads left-to-right from the end, the last
+ * reads right-to-left into it, everything between stays centred. Applied by
+ * PIXEL POSITION rather than by index, so a chart whose ticks all land well
+ * inside is unaffected and nothing that looks right today moves.
+ */
+function edgeAnchor(x: number, from: number, to: number): "start" | "middle" | "end" {
+  if (x <= from + HALF_TICK_LABEL) return "start";
+  if (x >= to - HALF_TICK_LABEL) return "end";
+  return "middle";
+}
+
+/**
  * A horizontal scale, drawn.
  *
  * Thin on purpose: it exists so that every axis in the app has the same tick
@@ -183,26 +218,48 @@ const AXIS_SHARED = {
  * omission. `numTicks` is approximate by d3's design -- it picks round numbers
  * near the count you ask for, which is the behaviour you want and the reason
  * hand-rolled axes in this app ended up with ticks at 0.47 and 0.72.
+ *
+ * `values` IS THE ESCAPE HATCH FOR WHEN ROUND NUMBERS ARE THE WRONG ONES, and
+ * the score breakdown is the case that earned it. Its track runs to ±8pp;
+ * `d3.ticks(-8, 8, 5)` returns −5, 0, 5 and asking for one more returns nine
+ * ticks at every even number. So the axis under an eight-point track said FIVE,
+ * and a reader measuring a bar against the last label it could see read every
+ * magnitude on the panel about 60% too large. d3 is right that round numbers
+ * are usually better; it has no way to know that here the ends of the domain
+ * ARE the fact being stated.
  */
 export function ValueAxisBottom({
   scale,
   top,
   numTicks = 4,
+  values,
   format,
 }: {
   scale: AxisScale;
   top: number;
   numTicks?: number;
+  /** Exact ticks, where the ends of the domain are the point. */
+  values?: number[];
   format?: (v: number) => string;
 }) {
+  const range = scale.range();
+  const from = Number(range[0]);
+  const to = Number(range[range.length - 1]);
+  const at = scale as (v: unknown) => number | undefined;
+
   return (
     <AxisBottom
       {...AXIS_SHARED}
       scale={scale}
       top={top}
       numTicks={numTicks}
+      tickValues={values}
       tickFormat={format ? (v) => format(Number(v)) : undefined}
-      tickLabelProps={() => ({ ...TICK_TEXT, textAnchor: "middle", dy: "0.25em" })}
+      tickLabelProps={(v) => ({
+        ...TICK_TEXT,
+        textAnchor: edgeAnchor(Number(at(v)), from, to),
+        dy: "0.25em",
+      })}
     />
   );
 }
