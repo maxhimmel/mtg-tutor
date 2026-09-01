@@ -11,6 +11,7 @@ import {
   tally,
   type MissResult,
 } from "@mtg-tutor/core";
+import { recordAnswer } from "../../core/answers.js";
 import { pickCard } from "../../core/ui/cardPicker.js";
 import { curveLine, renderManaCost } from "../../core/ui/format.js";
 import { spinner } from "../../core/ui/spinner.js";
@@ -23,10 +24,14 @@ import { spinner } from "../../core/ui/spinner.js";
 // it stood goes above it, because the question is which card served THAT deck
 // and not which card is strongest.
 //
-// The one thing the CLI cannot do here is report. A run writes nothing, so
-// there is no mutation for a capture to ride on and no drill event is sent from
-// this side; the web's numbers are the whole measurement. Stated rather than
-// quietly true -- it is the same gap the CLI's review quiz already has.
+// What each answer WAS is now written down here too, through `recordAnswer`,
+// so a run played in a terminal is not invisible to anything measuring whether
+// the same pack gets taken differently the second time.
+//
+// The drill EVENTS are still web-only, and that gap is unchanged: there is no
+// PostHog in this process, so `drill_started` / `drill_answered` /
+// `drill_finished` are sent from the browser alone and the web's numbers remain
+// the whole of how often these get played. Stated rather than quietly true.
 
 type Run = Awaited<ReturnType<typeof deal>>;
 type Question = Run["questions"][number];
@@ -39,6 +44,17 @@ const points = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixe
 const ageInDays = (iso: string) =>
   Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Read off the string rather than through Date, which takes a bare ISO date as
+// UTC midnight and renders the day before for anyone west of Greenwich.
+function stamp(iso: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!parts) return "";
+  const [, , month, day] = parts;
+  return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+}
+
 export async function runMisses(convex: ConvexHttpClient): Promise<void> {
   p.intro(pc.bgCyan(pc.black(" Take the pick back ")));
 
@@ -47,9 +63,19 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
     const spin = spinner();
     spin.start("Finding the ones you got wrong");
     const run = await deal(convex, skip);
+    // Which hand this is, so every answer out of it names the same sitting --
+    // the only thing separating a resent mutation from the same pack coming
+    // round again months later. See pickAnswers.record.
+    const runId = crypto.randomUUID();
+    // How many come round again, and never which -- the same rule the web's
+    // table screen keeps. You remember taking a card back better than you
+    // remember the pack, so naming them would answer them before they are
+    // asked, which is what `blind` below is protecting.
+    const repeats = run.questions.filter((q) => q.tier !== "unasked").length;
     spin.stop(
       run.questions.length > 0
-        ? `${run.questions.length} pack${run.questions.length === 1 ? "" : "s"} to take again`
+        ? `${run.questions.length} pack${run.questions.length === 1 ? "" : "s"} to take again` +
+            (repeats === 0 ? "" : pc.dim(` · ${repeats} you have answered before`))
         : "",
     );
 
@@ -58,7 +84,7 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
       return;
     }
 
-    const results = await play(run);
+    const results = await play(convex, run, runId);
     if (!results) {
       p.cancel("Left mid-run. Nothing is recorded either way.");
       return;
@@ -78,7 +104,11 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
 }
 
 /** Null when the player walked away, which is not a score of zero. */
-async function play(run: Run): Promise<MissResult[] | null> {
+async function play(
+  convex: ConvexHttpClient,
+  run: Run,
+  runId: string,
+): Promise<MissResult[] | null> {
   const results: MissResult[] = [];
 
   for (const [i, question] of run.questions.entries()) {
@@ -95,6 +125,17 @@ async function play(run: Run): Promise<MissResult[] | null> {
 
     const result = gradeMiss(question, guess.name);
     results.push(result);
+    // Before the reveal, which is when the answer is still only theirs.
+    await recordAnswer(convex, {
+      sessionId: question.sessionId,
+      pickIndex: question.pickIndex,
+      asked: "misses",
+      answered: guess.name,
+      rawBestName: question.rawBestName,
+      contextBestName: question.gradedName,
+      gap: question.gap,
+      attemptId: `${runId}:${question.sessionId}:${question.pickIndex}`,
+    });
     p.note(reveal(question, result, guess.name), head(question, result));
   }
 
@@ -164,6 +205,25 @@ function reveal(question: Question, result: MissResult, guess: string): string {
       pc.dim(
         `${guess} is the strongest card in the pack on raw win rate. This is the gap\n` +
           "between the best card and the best card for you.",
+      ),
+    );
+  }
+  // The last time this same pack came round, and only after answering. Its own
+  // wording rather than the web component's, the way every other line on this
+  // screen is -- and "this time" rather than "for the first time", because
+  // `askedBefore` is the latest answer and not the whole history.
+  if (question.askedBefore) {
+    const when = stamp(question.askedBefore.at);
+    lines.push("");
+    lines.push(
+      pc.dim(
+        question.askedBefore.fixed
+          ? result.correct
+            ? `You had this one right on ${when} as well.`
+            : `You had this one right on ${when}, and let it go this time.`
+          : result.correct
+            ? `You missed this one on ${when} too — this time you took it back.`
+            : `You missed this one on ${when} as well.`,
       ),
     );
   }

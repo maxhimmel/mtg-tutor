@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Id } from "@mtg-tutor/backend/dataModel";
 import { REVIEW, isCorrectGuess, isDecisionPick } from "@mtg-tutor/core";
@@ -14,6 +14,7 @@ import { ColorPips } from "../../components/ColorPips";
 import { Panel } from "../../components/Panel";
 import { SetIcon } from "../../components/SetIcon";
 import { pct } from "../../lib/format";
+import { answerUnrecorded } from "../../lib/analytics";
 import { PickReveal } from "../PickReveal";
 import { useLines } from "../useLines";
 import { PickMarksKey } from "../../components/PickMarks";
@@ -32,13 +33,21 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
 
   const [quiz, setQuiz] = useState(true);
   const [step, setStep] = useState(0);
-  // pickIndex -> the card name guessed. Session-only: the CLI shows a score and
-  // forgets it, and persisting judgment over time is its own feature.
+  // Which sitting these guesses came from. A reopened review starts the quiz
+  // over, so it is a new visit and its answers are new rows -- which is right,
+  // and is a thing the store cannot work out from the cards. See
+  // pickAnswers.record.
+  const [visitId] = useState(() => crypto.randomUUID());
+  // pickIndex -> the card name guessed. Still session state, because this map
+  // is what the screen renders from and a reopened review starts over; the
+  // guesses themselves now also go to `pickAnswers.record`, where a run of them
+  // over months is the only thing that can say a read got better.
   const [guesses, setGuesses] = useState<ReadonlyMap<number, string>>(new Map());
 
   const picks = draft?.picks;
   const { get, request, refused } = useVerdicts(id, picks);
   const lines = useLines(id);
+  const record = useMutation(api.pickAnswers.record);
 
   // The verdicts and the two frames can all be refused by the same thing, and
   // the first of them to hear about it is whichever mounted first -- so they
@@ -62,6 +71,39 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
   const guess = current ? guesses.get(current.pickIndex) : undefined;
   const answered = !quiz || guess != null;
   const finished = picks != null && step >= decisions.length;
+
+  // A guess, kept on screen and written down.
+  //
+  // THE TWO NAMES SENT ARE THE PICK'S OWN, and this screen does not grade by
+  // them: `correct` below prefers the coach's `contextBestName` off the verdict
+  // where there is one, because that is the answer the reveal argues. The
+  // verdict has not arrived yet at the moment of the guess -- it is only
+  // requested once the pick is answered -- so a row that waited for it would be
+  // a row that never gets written when somebody guesses and leaves.
+  //
+  // The consequence is stated rather than smoothed over: a stored review
+  // attempt is graded against the score that judged the pick, so on a pick
+  // where the coach named a different card it can read differently from what
+  // the player was told on screen. That is why `asked` is on the row, and why
+  // anything counting these leads with the drill, whose question and answer
+  // come from the same stored score.
+  function guessed(pickIndex: number, pick: ReviewPick, name: string) {
+    setGuesses((prev) => new Map(prev).set(pickIndex, name));
+    void record({
+      sessionId: id,
+      pickIndex,
+      asked: "review",
+      answered: name,
+      rawBestName: pick.bestName,
+      contextBestName: pick.contextBestName,
+      // Subtracted by `review.load`, so this surface and the drill cannot
+      // disagree about what a gap is. Nothing reads it yet; see schema.ts.
+      gap: pick.gap,
+      attemptId: `${visitId}:${pickIndex}`,
+    }).catch((error: unknown) => {
+      answerUnrecorded({ asked: "review", reason: String(error) });
+    });
+  }
 
   // The forced picks taken since the previous decision -- not worth a step, but
   // still part of what happened. On the last step this runs to the end of the
@@ -318,9 +360,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
                         showStats={false}
                         label={`Guess ${card.name}`}
                         onPick={(picked) =>
-                          setGuesses((prev) =>
-                            new Map(prev).set(current.pickIndex, picked.name),
-                          )
+                          guessed(current.pickIndex, current, picked.name)
                         }
                       />
                     ))}

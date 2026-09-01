@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { harness } from "./convexHarness.js";
 import { api } from "../convex/_generated/api.js";
+import type { Id } from "../convex/_generated/dataModel.js";
 
 /**
  * What `drills/misses.deal` chooses, and what it refuses.
@@ -332,5 +333,121 @@ describe("drills/misses.deal", () => {
 
     expect(run).toMatchObject({ drafts: 0, candidates: 0 });
     expect(run.questions).toHaveLength(0);
+  });
+});
+
+/**
+ * What the run remembers, which is the half core cannot test.
+ *
+ * `rankMisses` is proved in core against candidates whose history is handed to
+ * it. Everything between a stored answer and one of those candidates lives
+ * here: the index it is read from, the key it is found by, and which of a
+ * question's answers wins. A key that did not match would leave every candidate
+ * looking unasked, the ordering would be the old gap-only rule, and every test
+ * in core would still be green.
+ *
+ * The rows are written by hand so their dates can be stated. What the write
+ * itself does with a repeat is pickAnswers.test.ts.
+ */
+describe("drills/misses.deal — what it remembers", () => {
+  async function answered(
+    t: ReturnType<typeof harness>,
+    sessionId: Id<"draftSessions">,
+    pickIndex: number,
+    at: string,
+    answer: { answered: string; contextBestName: string; asked?: "misses" | "review" },
+  ) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("pickAnswers", {
+        userId: token("alice"),
+        sessionId,
+        pickIndex,
+        asked: answer.asked ?? "misses",
+        answered: answer.answered,
+        rawBestName: "Zeta",
+        contextBestName: answer.contextBestName,
+        gap: 0.05,
+        attemptId: `${at}:${pickIndex}`,
+        at,
+      });
+    });
+  }
+
+  /** Two misses in one draft: the wider gap at pick 1, the narrower at pick 2. */
+  const two = async (t: ReturnType<typeof harness>) => {
+    await withText(t);
+    return await draft(t, "alice", "2026-08-01", [
+      { pickNo: 1, took: "Alpha", graded: "Beta", gap: 0.05 },
+      { pickNo: 2, took: "Beta", graded: "Gamma", gap: 0.02 },
+    ]);
+  };
+
+  it("deals what has never been answered ahead of what has, whatever the gap", async () => {
+    const t = harness();
+    const sessionId = await two(t);
+    await answered(t, sessionId, 0, "2026-08-05", {
+      answered: "Beta",
+      contextBestName: "Beta",
+    });
+
+    const run = await as(t, "alice").query(api.drills.misses.deal, {});
+
+    expect(run.questions.map((q) => q.gradedName)).toEqual(["Gamma", "Beta"]);
+    expect(run.questions.map((q) => q.tier)).toEqual(["unasked", "fixed"]);
+  });
+
+  // Graded by THIS drill's rule and not the review's: `fixed` means they took
+  // the card the pick was docked for, and the raw best is not an answer here.
+  it("says how it went the last time, on the question", async () => {
+    const t = harness();
+    const sessionId = await two(t);
+    await answered(t, sessionId, 0, "2026-08-05", {
+      answered: "Zeta",
+      contextBestName: "Beta",
+    });
+
+    const run = await as(t, "alice").query(api.drills.misses.deal, {});
+    const beta = run.questions.find((q) => q.gradedName === "Beta");
+
+    expect(beta).toMatchObject({ tier: "unfixed", askedBefore: { at: "2026-08-05", fixed: false } });
+  });
+
+  // THE REGRESSION. Both are fixed, so the tier cannot separate them and the
+  // date has to -- and the date only moves if a repeat was written down. While
+  // the store refused a second row naming the same card, this question's `at`
+  // was frozen at the first answer and it led its own tier forever.
+  it("reads the newest answer, so answering again moves a question down its tier", async () => {
+    const t = harness();
+    const sessionId = await two(t);
+    await answered(t, sessionId, 0, "2026-08-01", { answered: "Beta", contextBestName: "Beta" });
+    await answered(t, sessionId, 1, "2026-08-10", { answered: "Gamma", contextBestName: "Gamma" });
+
+    const first = await as(t, "alice").query(api.drills.misses.deal, {});
+    expect(first.questions.map((q) => q.gradedName)).toEqual(["Beta", "Gamma"]);
+
+    await answered(t, sessionId, 0, "2026-08-20", { answered: "Beta", contextBestName: "Beta" });
+
+    const second = await as(t, "alice").query(api.drills.misses.deal, {});
+    expect(second.questions.map((q) => q.gradedName)).toEqual(["Gamma", "Beta"]);
+    expect(second.questions[1].askedBefore).toMatchObject({ at: "2026-08-20", fixed: true });
+  });
+
+  // The review reveals the answer to every decision pick it walks past, so
+  // treating a guess made there as history would retire the questions this
+  // drill exists to re-ask.
+  it("does not count a review guess as having been asked", async () => {
+    const t = harness();
+    const sessionId = await two(t);
+    await answered(t, sessionId, 0, "2026-08-05", {
+      answered: "Beta",
+      contextBestName: "Beta",
+      asked: "review",
+    });
+
+    const run = await as(t, "alice").query(api.drills.misses.deal, {});
+
+    expect(run.questions.map((q) => q.tier)).toEqual(["unasked", "unasked"]);
+    // And so the gap is still what orders them.
+    expect(run.questions.map((q) => q.gradedName)).toEqual(["Beta", "Gamma"]);
   });
 });

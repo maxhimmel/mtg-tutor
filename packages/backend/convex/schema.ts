@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
+  answerSurface,
   benchEntry,
   cardContext,
   cardStats,
@@ -521,6 +522,122 @@ export default defineSchema({
     phase: v.union(v.literal("open"), v.literal("close")),
     text: v.string(),
   }).index("by_session_and_phase", ["sessionId", "phase"]),
+
+  // Every answer the player has given to a question about a pick they had
+  // already made, kept so that two of them can be set beside each other.
+  //
+  // WHY IT EXISTS. Three surfaces ask a question with a known right answer --
+  // the review walkthrough's quiz, the misses drill, the archetype quiz -- and
+  // until this table not one of them wrote the answer down. So the question
+  // somebody actually opens this app with, am I getting better, had nothing
+  // behind it at all: `stats.overview` was left averaging `overallScore` over
+  // drafts of different sets, and its own comment concedes the problem, that a
+  // standing cannot show a direction.
+  //
+  // A run of draft scores cannot be turned into one either. Each is a different
+  // set, different packs and a different pod, and notes.md trap #3 is that most
+  // of the gaps a pick is graded on are smaller than the error bars on the win
+  // rates they came from. The drill is the one place that is not true: it deals
+  // back a pack that was already dealt, out of a pool that was already drafted,
+  // against an answer written down at the time. The same question asked twice
+  // is the only comparison this app can draw with no set-to-set variance in it.
+  //
+  // ONE ROW PER ATTEMPT, and never patched. The second answer to a pick IS the
+  // measurement, so a table keeping only the latest could say how someone is
+  // doing and never how they are doing NOW against then.
+  //
+  // WHICH IS WHY THE ATTEMPT IS NAMED. A row cannot say on its own whether it
+  // is a repeat or a retry: the two look identical, because the most ordinary
+  // way to be asked a pack twice is to answer it the same way twice. The first
+  // draft of this table inferred it from the card and got it exactly backwards
+  // -- refusing a second row whenever it named the card the first one did,
+  // which is every held answer there will ever be. `heldOn` could not be
+  // reached, standing by a wrong call twice was dropped, and the fixed tier
+  // re-dealt one pack ahead of its own tier forever because `at` never moved.
+  //
+  // So the client says which sitting an answer came from. One id per question
+  // per run: a double-click collapses into one row, and the same pack a month
+  // later is a different id and a different row, which is the event worth
+  // counting.
+  //
+  // WHAT IS DELIBERATELY NOT HERE is the archetype quiz. Its question is a card
+  // and two decks derived from a set's statistics: a different identity, with
+  // no pick behind it and no history of the player's in it, so being asked
+  // again corrects no error of theirs. Taking it would mean a second identity
+  // shape on this row or a second table, and neither is worth guessing at
+  // before the pick half has been played twice.
+  pickAnswers: defineTable({
+    // On the row rather than reached through the session, because the reader
+    // this table exists for asks across every session at once. Joining for it
+    // would be a ~2KB session read per answer to recover a string the caller
+    // already had in hand.
+    userId: v.string(),
+    sessionId: v.id("draftSessions"),
+    pickIndex: v.number(),
+    asked: answerSurface,
+    /** The card they took this time. */
+    answered: v.string(),
+    // Both of the pick's stored answers, copied off its own score at the moment
+    // of the attempt -- and not a correctness flag, which is the call worth
+    // explaining.
+    //
+    // The two surfaces grade by different rules and both rules are computable
+    // from these two names, so storing a verdict would bake one of them into
+    // rows that outlive it. It also keeps an old attempt honest: the score that
+    // judged the pick is what the player was shown, and a re-ingest that moves
+    // a win rate must not silently re-decide an answer somebody already gave.
+    rawBestName: v.string(),
+    contextBestName: v.string(),
+    // The gap the pick was docked by, in win-rate points, off the same score.
+    //
+    // NOTHING READS IT YET, and it is here because it cannot be added later.
+    // notes.md Ideas #9 defers the clean measure -- a question's FIRST answer
+    // over time -- and names the bias it will carry: `rankMisses` deals the
+    // widest gaps first, so the questions somebody meets for the first time get
+    // narrower, and therefore harder, the longer they play. A trend that cannot
+    // see the gap can only caveat that; one that can, corrects for it.
+    //
+    // Not recoverable after the fact at any sensible price. `stats.progress`
+    // reads one index and no session, and recovering this would mean a digest
+    // read per answer to fetch a number the writer had in its hand.
+    gap: v.optional(v.number()),
+    // Which sitting this answer came from. See the note above: it is the only
+    // thing separating a retry from the same pack coming round again.
+    attemptId: v.optional(v.string()),
+    //
+    // BOTH OPTIONAL, and neither is optional to a writer -- `pickAnswers.record`
+    // requires them and every client sends them. Absence means one thing only:
+    // a row written on 31 Aug 2026, in the day before either column existed.
+    // The same distinction `pickedContextValue` keeps two files over, for the
+    // same reason: a fabricated zero would be indistinguishable from a pick that
+    // really was graded against itself, and there is no honest value to
+    // backfill a gap with once the attempt is over.
+    //
+    // It reads correctly rather than merely tolerably. A legacy row's absent
+    // `attemptId` can never equal an incoming one, so it never blocks a write --
+    // which is right: those rows are history, and history is never a duplicate
+    // of something being answered now.
+    //
+    // The alternative was requiring both and clearing the table, and that is
+    // where this arrived from: a required column cannot be pushed while a row
+    // without it exists, and the mutation that would delete the row ships in the
+    // same push. Widening is not a concession here; it is the more truthful
+    // schema.
+    at: v.string(),
+  })
+    // One pick's answers, oldest first, which is the repeat itself.
+    .index("by_user_and_pick", ["userId", "sessionId", "pickIndex"])
+    // Every answer one surface has taken from one person, which is what the
+    // misses drill folds into "have I been asked this, and did I fix it".
+    //
+    // A scan rather than a lookup per candidate, and the arithmetic is why: a
+    // run considers up to DRILLS.draftWindow x DIGEST_MISTAKES candidates, so
+    // asking by_user_and_pick about each would be 250 indexed reads to answer a
+    // question about at most ten answers per run ever played. This grows with
+    // runs played and nothing else. If it ever stops being small the fix is a
+    // rollup and not a narrower index -- the fold genuinely wants every row,
+    // because a pick fixed a year ago is still fixed.
+    .index("by_user_and_asked", ["userId", "asked"]),
 
   // Someone asking to be let in, from the signed-out page. Written by a public
   // mutation -- it has to be, the caller has no account and cannot get one

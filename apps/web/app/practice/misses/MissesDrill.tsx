@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import type { Card, DisplayCard } from "@mtg-tutor/core";
 import { useCardHoverFactory } from "../../components/CardPreview";
-import { byCurve, gradeMiss, scoreMissRun, tally, type MissResult } from "@mtg-tutor/core";
+import {
+  byCurve,
+  gradeMiss,
+  scoreMissRun,
+  tally,
+  type MissResult,
+  type MissTier,
+} from "@mtg-tutor/core";
 import { CardPlacardList } from "../../components/CardPlacard";
 import { CardFace, CardTile } from "../../components/CardTile";
 import { ColorTally } from "../../components/ColorPips";
@@ -25,7 +32,12 @@ import {
 } from "../../components/PickMarks";
 import { SetIcon } from "../../components/SetIcon";
 import { points } from "../../lib/format";
-import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics";
+import {
+  answerUnrecorded,
+  drillAnswered,
+  drillFinished,
+  drillStarted,
+} from "../../lib/analytics";
 
 // The misses drill, played.
 //
@@ -43,10 +55,18 @@ import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics"
 // gold ring is the same "card you are holding" the draft board lights a
 // selection with.
 //
-// NOTHING PERSISTS. A run is state in this component and is gone on reload --
-// see convex/drills/misses.ts for why that is the design rather than a stage of
-// it. `skip` is how a second run avoids repeating the first, and it resets with
-// the page for the same reason.
+// THE RUN DOES NOT PERSIST AND THE ANSWERS NOW DO, which is a smaller
+// distinction than it sounds and worth keeping straight. Where you are in a run
+// is state in this component and is gone on reload; `skip` is how a second run
+// avoids repeating the first, and it resets with the page for the same reason.
+// What each answer WAS goes to `pickAnswers.record`, because the same pack
+// coming back around months later and being taken differently is the only
+// evidence of improvement this app can gather that is not confounded by having
+// drafted a different set -- see schema.ts.
+//
+// The write is fire-and-forget and a rejection is reported rather than shown. A
+// reveal that waited on a round trip would be a worse drill than one that
+// forgot, and nothing on this screen reads the table back.
 
 type Run = NonNullable<ReturnType<typeof useDeal>>;
 type Question = Run["questions"][number];
@@ -141,6 +161,7 @@ export function MissesDrill() {
   const live = useDeal(skip);
   const [run, setRun] = useState<Run>();
   const sets = useQuery(api.sets.list);
+  const record = useMutation(api.pickAnswers.record);
 
   const questions = useMemo(() => run?.questions ?? [], [run]);
   const current = questions[step];
@@ -166,16 +187,31 @@ export function MissesDrill() {
   // Freezing the hand and counting it are the same moment, so they are one
   // effect: whatever is reported as served is exactly what gets played.
   const dealtFor = useRef<number | null>(null);
+  // Which hand this is, minted the moment the hand is frozen so that every
+  // answer out of it carries the same sitting. It is what lets the store tell a
+  // resent mutation from the same pack coming round again in October -- see
+  // pickAnswers.record, which cannot work that out from the card.
+  const runId = useRef("");
   useEffect(() => {
     if (!live || dealtFor.current === skip) return;
     dealtFor.current = skip;
+    runId.current = crypto.randomUUID();
     setRun(live);
+    // Counted over what was actually SERVED rather than over the candidates
+    // ranked, which are not the same list -- a candidate can be read and then
+    // refused. What the run was made of is the only thing that can say whether
+    // ranking by history ever fires.
+    const tiers = tally(live.questions, (q) => [q.tier]);
+    const of = (tier: MissTier) => tiers.find(([t]) => t === tier)?.[1] ?? 0;
     drillStarted({
       drill: "misses",
       served: live.questions.length,
       drafts: live.drafts,
       candidates: live.candidates,
       unavailable: live.unavailable,
+      unasked: of("unasked"),
+      unfixed: of("unfixed"),
+      fixed: of("fixed"),
       skip,
     });
   }, [live, skip]);
@@ -192,9 +228,27 @@ export function MissesDrill() {
   function answer(question: Question, card: Card) {
     const result = gradeMiss(question, card.name);
     setAnswers((prev) => new Map(prev).set(key(question), card.name));
+    // Both of the pick's own answers go with it, so the row can be graded later
+    // by either surface's rule rather than by whichever one wrote it. The gap
+    // rides along unread, for the reason given in schema.ts.
+    void record({
+      sessionId: question.sessionId,
+      pickIndex: question.pickIndex,
+      asked: "misses",
+      answered: card.name,
+      rawBestName: question.rawBestName,
+      contextBestName: question.gradedName,
+      gap: question.gap,
+      // One id per question per hand, so two clicks land on one row and two
+      // sittings never do.
+      attemptId: `${runId.current}:${key(question)}`,
+    }).catch((error: unknown) => {
+      answerUnrecorded({ asked: "misses", reason: String(error) });
+    });
     drillAnswered({
       drill: "misses",
       outcome: result.outcome,
+      tier: question.tier,
       tookRawBest: result.tookRawBest,
       gap: question.gap,
       ageDays: ageInDays(question.draftedAt),
@@ -420,6 +474,19 @@ function Table({
     (days, q) => Math.max(days, ageInDays(q.draftedAt)),
     0,
   );
+  // HOW MANY, AND NEVER WHICH. A run leads with what you have never answered,
+  // so once it starts reaching back for repeats the screen has to say so --
+  // "the packs you got wrong" is the wrong sentence for a pack you already took
+  // back, and being asked one without being told is the drill quietly changing
+  // what it is.
+  //
+  // Naming them would leak the answer. You remember taking a card back far
+  // better than you remember the pack, so a stack with three cards marked
+  // "seen before" is three questions answered before they are asked -- which is
+  // the same blindness `pickCard`'s `blind` option and the face-down card are
+  // both protecting. A count over the whole run tells you what kind of run this
+  // is and tells you nothing about any one pack in it.
+  const again = questions.filter((q) => q.tier !== "unasked").length;
 
   return (
     <section className="grid items-center gap-10 py-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
@@ -441,7 +508,15 @@ function Table({
             ["From", `${codes.length} ${codes.length === 1 ? "set" : "sets"} — ${codes
               .map((c) => c.toUpperCase())
               .join(", ")}`],
-            ["Order", "worst first"],
+            ["Order", again === 0 ? "worst first" : "the ones you have not answered, worst first"],
+            ...(again === 0
+              ? []
+              : [
+                  [
+                    "Come round again",
+                    `${again} of ${questions.length}`,
+                  ] as [string, string],
+                ]),
           ].map(([term, value]) => (
             <div key={term}>
               <dt className="eyebrow">{term}</dt>
@@ -454,7 +529,9 @@ function Table({
           <button type="button" className="btn btn-primary" onClick={onBegin}>
             Deal the first pack
           </button>
-          <span className="text-sm text-base-content/50">Nothing is saved either way.</span>
+          <span className="text-sm text-base-content/50">
+            Your answers are kept — the ones you fix stop being dealt first.
+          </span>
         </div>
 
         {run.unavailable > 0 && (
@@ -671,8 +748,49 @@ function Reveal({
           </>
         )}
       </p>
+
+      {/* WHAT HAPPENED THE LAST TIME THIS CAME ROUND, and only after answering.
+          Two clauses, both plain: what you did then, what you did now. This is
+          the only place in the app where a person is told something about
+          themselves that spans two sittings, and it is worth more here than in
+          any tally -- the pack is on the screen and the card is in front of
+          them.
+
+          Not a claim about improvement. A pick taken back a second time may be
+          a better read or may be remembering the reveal, and the panel on
+          /stats says so where the numbers are added up; a line under one pack
+          should say what happened and stop. */}
+      {question.askedBefore && (
+        <p className="max-w-prose border-t border-base-300 pt-3 text-sm leading-relaxed text-base-content/55">
+          {lastTime(stamp(question.askedBefore.at), question.askedBefore.fixed, result.correct)}
+        </p>
+      )}
     </div>
   );
+}
+
+/**
+ * The two sittings in one sentence.
+ *
+ * Four cases and four sentences rather than clauses assembled out of a
+ * condition, because the assembled version said "You found it on 12 Aug too,
+ * and again just now" -- which is the outcome line above repeated, with a date
+ * bolted on. Written out, each one only says the half the reader does not
+ * already have on screen.
+ *
+ * "This time you took it back" and never "for the first time": `askedBefore` is
+ * the LAST answer and not the whole history, so a pick fixed in June, missed in
+ * July and fixed now would be told something false.
+ */
+function lastTime(when: string, hadIt: boolean, has: boolean): string {
+  if (hadIt) {
+    return has
+      ? `You had this one right on ${when} as well.`
+      : `You had this one right on ${when}, and let it go this time.`;
+  }
+  return has
+    ? `You missed this one on ${when} too — this time you took it back.`
+    : `You missed this one on ${when} as well.`;
 }
 
 /**

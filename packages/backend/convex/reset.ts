@@ -40,6 +40,11 @@ const WIPES = [
   "draftPicks",
   "reviewVerdicts",
   "reviewFrames",
+  // Answers go with the drafts, unlike `feedback` above. An answer is about a
+  // pick in a session that is about to stop existing, so the drill can never
+  // re-ask it and `stats.progress` -- which reads that table and nothing else --
+  // would go on counting a question nobody can be dealt.
+  "pickAnswers",
   "challenges",
   "draftSessions",
 ] as const;

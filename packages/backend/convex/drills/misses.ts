@@ -4,7 +4,9 @@ import {
   REVIEW,
   cardsLeftAtMiss,
   isDecisionPick,
+  missFixed,
   missGap,
+  missTier,
   normalizeBench,
   normalizeName,
   pickIndexOfMiss,
@@ -12,11 +14,12 @@ import {
   splitPool,
 } from "@mtg-tutor/core";
 import type { Doc } from "../_generated/dataModel.js";
+import type { QueryCtx } from "../_generated/server.js";
 import { query } from "../_generated/server.js";
 import { cardTextFor } from "../cardText.js";
 import { digestFor } from "../draftDigests.js";
 import { storedPick, toRecordedPick } from "../draftPicks.js";
-import { ownSessions } from "../sessions.js";
+import { ownSessions, requireUserId } from "../sessions.js";
 
 // The misses drill, dealt.
 //
@@ -33,13 +36,17 @@ import { ownSessions } from "../sessions.js";
 // and filtering after would cost roughly forty times as much to reach the same
 // ten.
 //
-// WHAT THIS DELIBERATELY DOES NOT DO IS REMEMBER. Nothing records that a run
-// happened, so two runs in a row deal the same questions -- `skip` is what a
-// client uses to page past them. That is the whole of the bet: whether being
-// dealt your worst picks again is worth anything is a question about people,
-// and it gets answered by the `drill_*` events rather than by a table built
-// before the answer is in. Persisting attempts (notes.md, Deferred #2) is the
-// follow-on if it is.
+// AND IT REMEMBERS. Every answer goes to `pickAnswers.record`, because the same
+// pack coming back around and being taken differently is the only evidence of
+// improvement this app can gather that is not confounded by having drafted a
+// different set -- and the ranking reads those rows back, so a run leads with
+// the questions you have never answered, then the ones you got wrong again, and
+// only then the ones you took back. The order is `rankMisses` in core and the
+// argument for it is there.
+//
+// `skip` survives all of that and still means what it meant: it is how a client
+// pages to the NEXT ten inside one sitting, which no amount of history answers,
+// and it still resets with the page.
 
 /**
  * How many rows a run may read before it gives up on filling itself.
@@ -55,7 +62,40 @@ const READ_BUDGET = 2;
 type Candidate = Doc<"draftDigests">["mistakes"][number] & {
   session: Doc<"draftSessions">;
   pickIndex: number;
+  asked?: { at: string; fixed: boolean };
 };
+
+/**
+ * How every question this drill has ever asked went, latest answer only.
+ *
+ * Keyed on the same `(sessionId, pickIndex)` the questions are, so a candidate
+ * finds its own history in one lookup. Rows come back in insertion order within
+ * the index's equality prefix, so writing each one over the last leaves the
+ * newest standing, which is the only one the ranking reads.
+ *
+ * GRADED HERE RATHER THAN STORED, and strictly, which is this drill's rule and
+ * not the review's: `fixed` means they took the card the pick was docked for.
+ * The row keeps both of the pick's answers precisely so the two surfaces can
+ * grade the same attempt their own way -- see schema.ts. Only this surface's
+ * own answers are read, because the review reveals the answer to every decision
+ * pick it walks past, and treating that as history would retire the questions
+ * this drill exists to re-ask.
+ */
+async function askedBefore(ctx: QueryCtx, userId: string) {
+  const answers = await ctx.db
+    .query("pickAnswers")
+    .withIndex("by_user_and_asked", (q) => q.eq("userId", userId).eq("asked", "misses"))
+    .collect();
+
+  const history = new Map<string, { at: string; fixed: boolean }>();
+  for (const answer of answers) {
+    history.set(`${answer.sessionId}:${answer.pickIndex}`, {
+      at: answer.at,
+      fixed: missFixed(answer),
+    });
+  }
+  return history;
+}
 
 /**
  * A run of questions, worst first.
@@ -83,6 +123,7 @@ export const deal = query({
     const drafts = (await ownSessions(ctx, DRILLS.draftWindow)).filter(
       (s) => s.status === "complete",
     );
+    const history = await askedBefore(ctx, await requireUserId(ctx));
 
     const candidates: Candidate[] = [];
     for (const session of drafts) {
@@ -99,7 +140,13 @@ export const deal = query({
         if (!isDecisionPick(cardsLeftAtMiss(digest.picks, miss), REVIEW.decisionPickMinCards)) {
           continue;
         }
-        candidates.push({ ...miss, session, pickIndex });
+        candidates.push({
+          ...miss,
+          session,
+          pickIndex,
+          // Absent means never asked, which is what puts it in the first tier.
+          asked: history.get(`${session._id}:${pickIndex}`),
+        });
       }
     }
 
@@ -222,6 +269,21 @@ export const deal = query({
         gradedName: row.score.contextBestName,
         rawBestName: row.score.rawBestName,
         gap: missGap(candidate),
+        // Which pile this came out of, so the client can say what a run was
+        // made of and what each answer to it was an answer TO. Without it
+        // `drill_answered` cannot tell taking a pick back for the first time
+        // apart from holding onto one already taken back, and the second is the
+        // only evidence that any of this sticks.
+        tier: missTier(candidate),
+        // The last time this same question was put to them, and how it went.
+        //
+        // On the wire before it is earned, the way `tookName` already is: the
+        // pack screen renders neither, and the drill's blindness is a property
+        // of what is DRAWN rather than of what is loaded. What it buys is the
+        // one sentence in this app that can say "you had this one right in
+        // June" -- the whole point of keeping the rows, said at the moment it
+        // means something rather than only in a tally on another screen.
+        askedBefore: candidate.asked,
         scoreThen: row.score.score,
         gradeThen: row.score.grade,
       });

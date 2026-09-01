@@ -71,58 +71,6 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
-9.  **The chart library shipped 2026-08-29. What is left is one measurement
-    and one palette that cannot be fixed.** Every graphic was audited, sixteen
-    defects fixed, then the whole set rebuilt on visx behind `app/charts/`. The
-    working is in the git history and the rules are CLAUDE.md's "A graphic
-    states its scale"; neither belongs here. What stays open:
-
-    - **WUBRG IS NOT A LEGAL CATEGORICAL PALETTE ON THIS GROUND, AT ANY MIX.**
-      `cardFrame`'s rings are Arena's and cannot move. Measured against
-      base-100: raw, green against red is 4.8 apart under deuteranopia; mixed
-      55% toward base-content the way the braid's cords are, 2.5 — and the
-      normal-vision floor falls from 14.4 to 8.0, so green and black are hard
-      to separate with full colour vision. Sweeping the ratio finds nothing
-      that passes; at 100% mono-black loses its 3:1 against the panel. The mix
-      is therefore a real trade and not a bug. **The permanent consequence is
-      that a Magic colour is never the only channel** — `manaMark` returns a
-      fill and its pips together so a chart cannot take one without the other.
-      Do not re-open this by proposing a nicer five-colour palette.
-    - **The `needs`/`instead` swap is a state a reader lands in and nothing
-      counts it.** Every chart states the width below which its drawing stops
-      being true. Those widths are now mostly DERIVED — the grade ruler's from
-      its tightest pair of letter centres, the pick strip's from `MARK.dot` —
-      but the braid's 606px is still a judgement, and if it is wrong the
-      symptom is a phone user who never sees the rope and nobody knowing. The
-      capture belongs in `Plot`, one event for every chart in the app, not in
-      any caller. Deliberately unbuilt: an event whose whole question is "how
-      often" is worth designing once.
-    - **`CardStats` draws a point and a band, not a distribution.** The card
-      carries `rarityBaseline` and its own sample, so the win rate has a
-      reference point with no new query — but a real spread (quartiles, a
-      density strip) needs something the set document does not store.
-    - **The glossary figures reflow on Tailwind's `sm:`**, a viewport query,
-      so their `/dev` bays catch an overflow at a phone's width and cannot show
-      the stacked form — the window itself has to be narrowed. Making them
-      container-driven is a real change to all three.
-    - **`PickMarksKey` is a hand-rolled `<dl>` that mirrors `Key`** and was
-      deliberately not ported: its `dt` is painted in the mark's own tone, and
-      that coloured label is half the encoding it explains, where `Key`'s label
-      is fixed ink. Porting it needs `Key` to take a `ReactNode` label first.
-
-    Two things ruled out and worth not re-deriving. **A legend is not a rule
-    that applies to every chart**: it is for telling marks apart, so a chart of
-    one series gets none, and what earns one is marks a reader cannot separate
-    -- the card-stats scale draws its dot and its margin band at the same spot
-    and names those two, while its reference rule has clear space and takes a
-    direct label instead. Naming all three cost four lines under a chart 36px
-    tall, and putting them in two columns only halved the width they wrapped in.
-
-    And **a letter is not a second channel for a Magic colour.** It was the
-    first answer and it is wrong twice — a bare letter is a mark that appears
-    nowhere else in the game, and a gold card has no single letter, so exactly
-    the bands whose ring is a gradient got nothing. Pips have neither problem and a two-colour mark prints both.
-
 # Ideas:
 
 1. **What is left of this is the DECK-TYPE quiz, and it is one derivation away.**
@@ -278,28 +226,26 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 - And then we could leverage the challenge diff views for this daily challenge.
 - And see the best drafts/decks people made, most popular archetype - biggest/most common mistakes.
 
-9. One thing this app feels like it's desperately missing is some kinda progression/indication that the user is learning and improving. Something kinda like, "I was there, but now I'm here!"
+9. **Shipped as `asked-again` 2026-08-31. Three things stayed open.**
 
+   - **The headline is confounded by memory** — the first answer came with a
+     reveal naming the card — and the clean measure is a question's FIRST
+     answer over time. That needs a bucketing rule and two buckets of history,
+     neither invented yet. It carries a bias that must be stated beside any
+     trend drawn from it: the ranking deals the widest gaps first, so the
+     questions get HARDER as history grows, which works against showing
+     improvement. **`gap` is on every answer written from 1 Sep 2026**, unread,
+     so that bias can be corrected for rather than only stated; rows before
+     that date carry none and there is no honest number to backfill one with.
+   - **No rest interval, on purpose.** Nothing measured derives one, so
+     `rankMisses` sorts least-recently-asked first instead. A retention curve
+     is what would earn a number here.
+   - **The archetype quiz writes nothing.** Its question is a card and two
+     decks out of a set's statistics — no pick behind it, so being asked again
+     corrects no error of yours. Taking it costs a second identity shape on the
+     row or a second table.
 10. --
-11. **The coach cannot see what a Map is either** (2026-08-15, fell out of
-    shipping the token feature). Decision #9 is that every card written into a
-    prompt carries its rules text, because a type line cannot say whether a card
-    kills something and a model asked to judge from the name answers from the
-    name. "Create a Map token" is exactly that failure one level down: the coach
-    is handed a card whose text names a thing it has never been told the rules
-    of, and Map, Junk, Blood, Clue and Incubator are all set-specific enough
-    that recall is the worst place to get them from.
-
-    The data is now stored, which is the whole reason this is worth writing
-    down: `setCardText.tokens` carries a name and a type line per token, and the
-    token's own rules text is the one thing it does NOT carry — that lives only
-    in the picture. So this is not free. It is either a fourth Scryfall field to
-    ingest (`oracle_text` off the token sheet, which the crawl already fetches
-    and throws away) or nothing.
-
-    Price it before building it: roadmap #4 measured rules text at +947 input
-    tokens per coached pick, and a token's text on the ~6 cards a pick shows is
-    the same shape of cost for a much rarer payoff.
+11. --
 
 12. **A static page for what `detectRole` calls things** (2026-08-14). The
     classifier is a handful of regexes over rules text, and since it moved to
@@ -377,13 +323,13 @@ Out-of-scope for the Draft Review MVP, noted so we don't lose them:
    quiz outcomes today — `reviewVerdicts` stores the coach's verdict, not your
    guess.
 
-   **Now has a second customer and a gate.** The misses drill (Ideas #6) grades
-   a retry against the pick's own stored answer and forgets it, which is why it
-   needed no schema — but "you fixed six of ten today" is the sentence this item
-   would turn into "and four of those you had missed twice before". Both surfaces
-   want the same row: which question, what was answered, when. Deliberately not
-   built ahead of the drill's own numbers, because a table designed before anyone
-   has played twice is a guess about what to store.
+   **The row exists and this half does not read it** (2026-08-31,
+   `asked-again`). Both quiz surfaces write to `pickAnswers`; `stats.progress`
+   reads the drill's rows only. What is left is a design question rather than a
+   schema one: a review guess is graded leniently against a card the coach may
+   name after the fact, and every review is a different draft of a different
+   set, so what a trend over quiz outcomes may CLAIM is unanswered. The data
+   accumulates from today either way.
 
 # Still open from shipped work:
 
@@ -622,6 +568,20 @@ it is derived from what the field DID, so grading a person against it is marking
 them against the crowd rather than against what wins — the circularity
 `trophyPickRate` is kept out of the scorer for.
 
+`asked-again` shipped 2026-08-31. Three surfaces asked a question with a known
+right answer and none wrote the answer down, so `/stats` was averaging
+`overallScore` across drafts of different sets to reach for "am I getting
+better".
+
+**The one thing here worth not re-deriving is why the readout is built on the
+drill.** A run of draft scores cannot be made into a direction: each is a
+different set, different packs and a different pod, and trap #3 is that most of
+the gaps a pick is graded on are smaller than the error bars on the win rates
+they came from. The drill asks the same pack twice out of the same pool against
+an answer written down at the time — the only comparison this app can draw with
+no set-to-set variance in it. That is also why the review's rows are stored and
+unread (Deferred #2), and what is left open is Ideas #9.
+
 3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
    item. Read that, not this paragraph.**
@@ -788,6 +748,12 @@ to the data work.
     noticed the change they existed to catch — every ALSA value sat at the nudge's
     pivot or past its clamp. Perturb the thing under test and watch the guard go
     red before trusting it.
+
+    **A third instance, in a sort comparator** (2026-08-31, `rankMisses`): a
+    `?? ""` on the second key sorted ahead of every real date and so did the
+    first key's job unaided, and flattening the first key left the expected
+    order standing. A default value in a comparator is a silent tie-break, so
+    perturb EACH key, not the function.
 5.  **A test one function upstream of the hole also reads as coverage, and this
     one passes.** Trap #4 is a test that cannot go red. This is a test that is
     correct, goes red properly, and is pointed at the wrong function. `layout` and
@@ -801,6 +767,20 @@ to the data work.
     than named fields, so the class fails rather than the instance. When a pipeline
     both produces and consumes a shape, test the last hop before storage, not the
     first.
+
+    **The same shape the other way up** (2026-09-01, `pickAnswers`). Trap #5 is
+    a test pointed one function upstream of the hole. This is one pointed
+    downstream of it, at a fold whose inputs a test can invent: `missProgress`
+    was proved in core over hand-built rows, including two `fixed: true`
+    attempts of one question -- which the store could not write, because the
+    mutation refused any row naming the card the last one named. So a green
+    assertion of `heldOn: 1` sat directly on a panel whose `heldOn` could not
+    leave zero, and the layer with the defect had no tests at all. **When a
+    fold's inputs come out of a store, at least one test has to build them
+    through the store.** The events knew, for what it is worth:
+    `drill_answered` carries the tier and the outcome, so PostHog could see a
+    fixed question answered `stood` while the app's own panel said it had never
+    happened.
 6.  **A comparison drawn from one side of itself agrees by construction.** The
     results screen sets your forty beside the one `suggestDeck` would have built,
     and for the whole life of that screen the suggestion was handed the MAINDECK
@@ -1056,24 +1036,24 @@ to the data work.
 contextFor }` -- because `packScoringContext` also wants `needs` and the
     harness did not care about needs.
 
-                            So when the colour rule moved (decision #23), the app changed and the
-                            instrument did not. It went on reporting the old rule's numbers, correctly,
-                            with the right imports at the top of the file, and nothing anywhere could
-                            have said so. It now calls `packScoringContext` like the mutation does.
+                                    So when the colour rule moved (decision #23), the app changed and the
+                                    instrument did not. It went on reporting the old rule's numbers, correctly,
+                                    with the right imports at the top of the file, and nothing anywhere could
+                                    have said so. It now calls `packScoringContext` like the mutation does.
 
-                            **The second half is worse and is the general form.** The same file printed
-                            "the colour terms charged it 0.34pp" under its table, from a filter naming
-                            `splash` and `archetype`. That filter was written before the off-colour term
-                            existed and nobody widened it -- so the number under a table measuring the
-                            off-colour term **excluded the off-colour term**. It read as a healthy small
-                            charge and it was a subtotal of the two terms that were not the subject. The
-                            true figure was 1.28pp, which is still far too small, which is the finding
-                            the instrument was built to surface and had been hiding for four days.
+                                    **The second half is worse and is the general form.** The same file printed
+                                    "the colour terms charged it 0.34pp" under its table, from a filter naming
+                                    `splash` and `archetype`. That filter was written before the off-colour term
+                                    existed and nobody widened it -- so the number under a table measuring the
+                                    off-colour term **excluded the off-colour term**. It read as a healthy small
+                                    charge and it was a subtotal of the two terms that were not the subject. The
+                                    true figure was 1.28pp, which is still far too small, which is the finding
+                                    the instrument was built to surface and had been hiding for four days.
 
-                            The rule: **a harness must not enumerate what it sums.** Sum everything and
-                            exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
-                            the total by default rather than by somebody remembering. An allowlist in an
-                            instrument is a silent undercount waiting for the next field.
+                                    The rule: **a harness must not enumerate what it sums.** Sum everything and
+                                    exclude by name, as it now does (`t.label !== "trust"`), so a new term joins
+                                    the total by default rather than by somebody remembering. An allowlist in an
+                                    instrument is a silent undercount waiting for the next field.
 
 15. **A default that is only correct for history will be silently wrong for
     everything current** (2026-08-21, `forkImpact`). `walk` built its engine as

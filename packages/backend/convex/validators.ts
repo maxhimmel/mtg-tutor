@@ -600,3 +600,18 @@ export const feedbackAnchor = v.object({
   setCode: v.optional(v.string()),
   format: v.optional(v.string()),
 });
+
+// Where a question about a pick already made was put to the player.
+//
+// Two surfaces ask the same question about the same `(sessionId, pickIndex)` --
+// which card was the better pick here -- and they grade it differently on
+// purpose. The review quiz accepts either the raw-power best or the context
+// best, because a walkthrough steps through a whole draft and the lesson lives
+// in the gap between those two answers; the misses drill accepts only the card
+// the pick was docked for, because every question in it was selected for
+// missing exactly that card. The argument is in core's drills/misses.ts.
+//
+// So the surface is stored rather than inferred from what else is on the row. A
+// tally that pooled the two would be two grading rules under one number, with
+// nothing saying which one produced any given attempt.
+export const answerSurface = v.union(v.literal("review"), v.literal("misses"));

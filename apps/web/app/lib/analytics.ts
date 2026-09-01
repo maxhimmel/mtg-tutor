@@ -5,6 +5,7 @@ import type {
   Confidence,
   DrillId,
   MissOutcome,
+  MissTier,
 } from "@mtg-tutor/core";
 import type { Doc } from "@mtg-tutor/backend/dataModel";
 
@@ -862,6 +863,20 @@ export function statsViewed(p: {
   forced: number;
   /** The window clipped their history, so the averages are of a subset. */
   truncated: boolean;
+  /**
+   * What the progress panel had to say, if its own query had answered by the
+   * time this fired. Absent means it had not, which is a third thing from zero.
+   *
+   * The panel is the one part of this page that claims a DIRECTION rather than a
+   * standing, and it has three states nothing else can distinguish: never played
+   * the drill, played it and never been dealt a repeat, and a real
+   * `tookBack`/`askedAgain`. If almost every view is the second, the ranking is
+   * dealing repeats too rarely to teach anybody anything and the panel is a
+   * promissory note.
+   */
+  asked?: number;
+  askedAgain?: number;
+  tookBack?: number;
 }): void {
   if (!on()) return;
   posthog.capture("stats_viewed", p);
@@ -1150,11 +1165,14 @@ export function settingsOpened(p: { from: "menu" | "link" }): void {
  * A property splits on demand; two event names never rejoin.
  *
  * Why the browser owns all three, when a draft's lifecycle is captured on the
- * server: a drill run writes nothing. There is no mutation to hang a capture
- * off, deliberately -- see convex/drills/misses.ts, which explains why the
- * feature is a query and a bet rather than a table. The cost of that is real
- * and worth stating: a run taken in the CLI is invisible here, exactly as the
- * CLI's review quiz already is.
+ * server: there is no PostHog in the CLI process and never has been. A run does
+ * now write -- `pickAnswers.record`, from both clients -- but that mutation is
+ * the wrong place to hang these off anyway, since it fires once per ANSWER and
+ * says nothing about a run being opened or abandoned.
+ *
+ * So the cost is unchanged and still worth stating: a run taken in the CLI is
+ * invisible here, exactly as the CLI's review quiz is. What the CLI is no
+ * longer invisible to is the measurement those runs are for.
  */
 export function drillStarted(p: {
   drill: DrillId;
@@ -1177,6 +1195,25 @@ export function drillStarted(p: {
    * that -- a drill that reads as boring might just be a set that is thin.
    */
   separable?: number;
+  /**
+   * What the run was made of, in the drill's own three piles. Misses drill only.
+   *
+   * The names are `MissTier`'s, deliberately, so there is one vocabulary for
+   * this rather than a second set of words that means the same thing. `fixed`
+   * here is a question taken back in some EARLIER run, where `drill_finished`'s
+   * `fixed` is one taken back in this one -- different events, and both are
+   * saying what their own drill means by the word.
+   *
+   * This is the only thing that can say whether ranking by history did anything.
+   * A run that is all `unasked` for everybody means the ordering has never
+   * fired, and a run that is mostly `fixed` means somebody has run out of
+   * mistakes and is being asked to hold onto old answers -- which is a fine
+   * thing for the drill to be doing and a terrible thing for it to be doing
+   * silently, since the reveal is worded for a pick you got wrong.
+   */
+  unasked?: number;
+  unfixed?: number;
+  fixed?: number;
   /** Which page of the ranked list -- 0 is the first run of a sitting. */
   skip: number;
 }): void {
@@ -1200,6 +1237,16 @@ export function drillStarted(p: {
  */
 export function drillAnswered(p: {
   drill: DrillId;
+  /**
+   * Which pile the question came out of. Misses drill only.
+   *
+   * `outcome` alone cannot separate the two things this drill does. Taking back
+   * a pick you have never answered is the drill working once; taking back one
+   * you already took back a month ago is the drill having taught something that
+   * stayed taught, and a `fixed` tier answered `stood` is the clearest evidence
+   * available that it did not.
+   */
+  tier?: MissTier;
   /**
    * How it went, in whichever drill's vocabulary.
    *
@@ -1295,4 +1342,30 @@ export function drillFinished(p: {
 }): void {
   if (!on()) return;
   posthog.capture("drill_finished", p);
+}
+
+/**
+ * An answer the app failed to write down.
+ *
+ * The only event here that fires on a path nobody is standing on, and it earns
+ * its place for exactly that reason. `pickAnswers` is written without being
+ * awaited, so a rejection changes nothing on screen: the reveal comes up, the
+ * run finishes, and the row is simply not there. What that costs is not a
+ * feature but a measurement -- a progression readout over a store that quietly
+ * drops rows reports improvement that is really attrition, and there is nothing
+ * downstream to catch it.
+ *
+ * READ AS A RATE FOR THE DRILL and as a raw count for the review. Every drill
+ * answer already mints `drill_answered`, which is the denominator; the review
+ * walkthrough has no per-guess event and is not getting one to serve this, since
+ * an event name is permanent and a whole new family for a screen with none is a
+ * lot to spend on a divisor. A nonzero count there is the finding on its own.
+ */
+export function answerUnrecorded(p: {
+  asked: "review" | "misses";
+  /** The rejection, as the client saw it. */
+  reason: string;
+}): void {
+  if (!on()) return;
+  posthog.capture("answer_unrecorded", p);
 }

@@ -43,6 +43,7 @@ describe("buildReviewContext", () => {
     bestName: best.name,
     contextBestName: fit.name,
     score: 72,
+    gap: 0.04,
     isBest: false,
     onColor: true,
   };

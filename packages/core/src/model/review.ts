@@ -39,6 +39,16 @@ export interface StoredPick {
    */
   contextBestName: string;
   score: number;
+  /**
+   * How far short the pick fell, in win-rate points, and zero when it did not.
+   *
+   * Subtracted by `review.load` off the score that graded the pick, because
+   * `contextBestValue - pickedContextValue` is the only pair score.ts calls a
+   * gap and a client doing its own subtraction is a second authority over the
+   * units. The quiz sends it with every stored answer so that a column over
+   * both surfaces is one scale -- see `pickAnswers` in schema.ts.
+   */
+  gap: number;
   isBest: boolean;
   onColor: boolean;
   /**
