@@ -168,6 +168,33 @@ export const emptyCurvature = (n: number): DialCurvature => ({
   hessian: new Array((n * (n + 1)) / 2).fill(0),
 });
 
+/**
+ * The same picks as ONE dial, read straight off the stored curvature.
+ *
+ * The collapsed feature is the sum of the bundle scores, and at theta = 1 both
+ * models put the same probability on every card -- so the one-dimensional
+ * gradient is the row sum of this gradient and its Hessian is the full sum of
+ * this Hessian. No rows are needed, which is what keeps the whole readout inside
+ * the twenty-seven numbers a draft is stored as.
+ */
+export function collapseCurvature(curvature: DialCurvature): DialCurvature {
+  const n = curvature.gradient.length;
+  let hessian = 0;
+  for (let b = 0; b < n; b++) {
+    for (let c = b; c < n; c++) {
+      // Off-diagonals twice: the stored triangle is half of a symmetric matrix
+      // and the variance of a sum wants both halves.
+      hessian += curvature.hessian[triangleIndex(n, b, c)] * (b === c ? 1 : 2);
+    }
+  }
+  return {
+    picks: curvature.picks,
+    logLik: curvature.logLik,
+    gradient: [curvature.gradient.reduce((a, b) => a + b, 0)],
+    hessian: [hessian],
+  };
+}
+
 /** What the fit says, and how much of it is worth saying. */
 export interface DialEstimate {
   theta: number[];
@@ -189,7 +216,11 @@ export interface DialEstimate {
  * against six hundred rows -- is a measurement rather than a hope, and
  * `fit-drafter --step` is where it gets made.
  */
-export function dialStep(curvature: DialCurvature, tau: number): DialEstimate {
+export function dialStep(
+  curvature: DialCurvature,
+  tau: number,
+  centre: readonly number[] = NEUTRAL_DIALS,
+): DialEstimate {
   const n = curvature.gradient.length;
   const precision = new Array((n * (n + 1)) / 2);
   const ridge = 1 / (tau * tau);
@@ -200,11 +231,15 @@ export function dialStep(curvature: DialCurvature, tau: number): DialEstimate {
     }
   }
 
-  const step = solveSymmetric(precision, curvature.gradient, n);
+  // The prior pulls toward `centre`, which is not always 1 -- see `fitDrafter`.
+  // At theta = 1 that contributes (centre - 1)/tau^2 to the gradient, and the
+  // stored curvature is unchanged by where the prior sits.
+  const gradient = curvature.gradient.map((g, b) => g + (centre[b] - 1) * ridge);
+  const step = solveSymmetric(precision, gradient, n);
   const variance = invertSymmetric(precision, n);
 
   return {
-    theta: step.map((d, b) => NEUTRAL_DIALS[b] + d),
+    theta: step.map((d) => 1 + d),
     se: Array.from({ length: n }, (_, b) => Math.sqrt(Math.max(0, variance[triangleIndex(n, b, b)]))),
     picks: curvature.picks,
     logLik: curvature.logLik,
@@ -222,16 +257,17 @@ export function dialStep(curvature: DialCurvature, tau: number): DialEstimate {
 export function fitDials(
   picks: readonly DialPick[],
   tau: number,
+  centre: readonly number[] = NEUTRAL_DIALS,
   steps = 12,
 ): DialEstimate {
   const n = DIAL_BUNDLES.length;
-  let theta = [...NEUTRAL_DIALS];
+  let theta = [...centre];
 
   for (let step = 0; step < steps; step++) {
     const curvature = curvatureAt(picks, theta);
     const precision = new Array((n * (n + 1)) / 2);
     const ridge = 1 / (tau * tau);
-    const gradient = curvature.gradient.map((g, b) => g - (theta[b] - NEUTRAL_DIALS[b]) * ridge);
+    const gradient = curvature.gradient.map((g, b) => g - (theta[b] - centre[b]) * ridge);
     for (let b = 0; b < n; b++) {
       for (let c = b; c < n; c++) {
         const at = triangleIndex(n, b, c);
@@ -310,6 +346,75 @@ export function fitSharpness(picks: readonly DialPick[], tau: number, steps = 12
     picks: final.picks,
     logLik: final.logLik,
   };
+}
+
+/**
+ * What a drafter is, in the two stages the measurement forces.
+ *
+ * ONE PRIOR CENTRED AT ONE IS WRONG, AND THE HARNESS IS WHAT SAID SO
+ *
+ * Shrinking every dial toward 1 assumes a drafter's consistency is the pod's.
+ * `fit-drafter` dealt one who is uniformly TWICE as decisive -- the same
+ * preferences, sharper -- and the six dials came back at 1.32, 1.45, 1.43, 1.41,
+ * 1.08 and 1.01, with `table`, `lane` and `signal` called different from the pod
+ * at 100%. Three separate claims that this person weighs something more than the
+ * field, about somebody who weighs nothing differently at all.
+ *
+ * The cause is not the shrinkage being too strong, it is the shrinkage being
+ * EVEN. The prior pulls every dial toward 1 with the same force while their
+ * curvatures differ by two orders of magnitude, so a bundle the packs argue
+ * about lands near the truth and one they do not stays at 1 -- and dividing the
+ * six by a separately fitted sharpness afterwards does not undo it, because they
+ * were never scaled together in the first place.
+ *
+ * So sharpness is fitted first and the dials are shrunk toward THAT. The
+ * question each dial then answers is the one worth asking -- what does this
+ * person weigh, relative to themselves -- and a drafter who is merely decisive
+ * comes back at one across the board, which is the truth about them.
+ */
+export interface DrafterFit {
+  /** How consistently they pick, against the pod's 1. */
+  sharpness: number;
+  sharpnessSe: number;
+  /** The dials as fitted, on the pod's own scale. */
+  theta: number[];
+  se: number[];
+  /** What they weigh relative to themselves, which is what a reader wants. */
+  relative: number[];
+  relativeSe: number[];
+  picks: number;
+}
+
+const relativeTo = (fit: DialEstimate, sharp: DialEstimate, picks: number): DrafterFit => {
+  const sharpness = sharp.theta[0];
+  // The interval on a ratio, ignoring the covariance between the two fits. Fine
+  // while sharpness is the better-determined of the two by an order of
+  // magnitude -- one parameter against six on the same picks -- and something
+  // the recovery run has to keep checking rather than assume.
+  const scale = Math.abs(sharpness) < 1e-6 ? 1 : Math.abs(sharpness);
+  return {
+    sharpness,
+    sharpnessSe: sharp.se[0],
+    theta: fit.theta,
+    se: fit.se,
+    relative: fit.theta.map((t) => t / (sharpness || 1)),
+    relativeSe: fit.se.map((s) => s / scale),
+    picks,
+  };
+};
+
+/** The whole readout from a drafter's stored curvature, and nothing else. */
+export function drafterFromCurvature(curvature: DialCurvature, tau: number): DrafterFit {
+  const sharp = dialStep(collapseCurvature(curvature), tau);
+  const centre = curvature.gradient.map(() => sharp.theta[0]);
+  return relativeTo(dialStep(curvature, tau, centre), sharp, curvature.picks);
+}
+
+/** The same thing iterated off the rows, which is what the stored path is checked against. */
+export function drafterFrom(picks: readonly DialPick[], tau: number): DrafterFit {
+  const sharp = fitSharpness(picks, tau);
+  const centre = DIAL_BUNDLES.map(() => sharp.theta[0]);
+  return relativeTo(fitDials(picks, tau, centre), sharp, sharp.picks);
 }
 
 // ------------------------------------------------------------ linear algebra

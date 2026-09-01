@@ -3,9 +3,13 @@ import { mulberry32 } from "../util/rng.js";
 import { DIAL_BUNDLES, NEUTRAL_DIALS } from "./dials.js";
 import {
   addCurvature,
+  collapseCurvature,
+  collapseToSharpness,
   curvatureAt,
   dialCurvature,
   dialStep,
+  drafterFrom,
+  drafterFromCurvature,
   fitDials,
   fitSharpness,
   type DialPick,
@@ -31,12 +35,27 @@ function randomPicks(count: number, seed = 7, size = 12): DialPick[] {
   }));
 }
 
+// How far apart the bundles are in how much they move a pack, measured off real
+// fdn packs by `fit-drafter`: table 4.10, lane 0.94, power 0.79, signal 0.42,
+// rare 0.029, removal 0.011. Two orders of magnitude between the ends, and that
+// gap is not decoration -- an even prior shrinks a wide bundle and a narrow one
+// by wildly different amounts, which is the whole reason the fit has two stages.
+// Synthetic picks with equal spreads cannot reproduce it, and a test built on
+// those would report the pathology as fixed while it was merely invisible.
+const SPREAD = [0.79, 4.1, 0.94, 0.42, 0.029, 0.011].slice(0, N);
+
 /** Deals picks FROM a known theta, so a fit has something true to recover. */
-function picksFrom(theta: readonly number[], count: number, seed = 11, size = 12): DialPick[] {
+function picksFrom(
+  theta: readonly number[],
+  count: number,
+  seed = 11,
+  size = 12,
+  spread: readonly number[] = new Array(N).fill(1),
+): DialPick[] {
   const rng = mulberry32(seed);
   return Array.from({ length: count }, () => {
     const bundles = Array.from({ length: size }, () =>
-      Array.from({ length: N }, () => (rng() - 0.5) * 2),
+      Array.from({ length: N }, (_, b) => (rng() - 0.5) * 2 * spread[b]),
     );
     const scores = bundles.map((card) => card.reduce((u, s, b) => u + theta[b] * s, 0));
     const max = Math.max(...scores);
@@ -201,5 +220,58 @@ describe("sharpness", () => {
     );
     expect(fitSharpness(half, 5).theta[0]).toBeCloseTo(0.5, 1);
     fitDials(half, 5).theta.forEach((t) => expect(t).toBeCloseTo(0.5, 1));
+  });
+});
+
+describe("collapseCurvature", () => {
+  it("is what the collapsed picks would have given, off the stored numbers alone", () => {
+    const picks = randomPicks(50, 61);
+    const fromStored = collapseCurvature(dialCurvature(picks));
+    const fromRows = curvatureAt(collapseToSharpness(picks), [1]);
+
+    expect(fromStored.gradient[0]).toBeCloseTo(fromRows.gradient[0], 9);
+    expect(fromStored.hessian[0]).toBeCloseTo(fromRows.hessian[0], 9);
+    expect(fromStored.logLik).toBeCloseTo(fromRows.logLik, 9);
+  });
+});
+
+describe("a drafter who is only more decisive", () => {
+  // The failure the two-stage fit exists for: every dial doubled is one person
+  // picking more sharply, not six preferences that all grew.
+  // A real drafter's worth of picks -- fifteen drafts -- on bundles as unequal
+  // as real packs make them. Both halves matter: at synthetic scale the prior
+  // stops mattering and the pathology vanishes on its own.
+  const picks = picksFrom(NEUTRAL_DIALS.map(() => 2), 630, 67, 12, SPREAD);
+
+  it("comes back at one across the board, relative to themselves", () => {
+    const fit = drafterFrom(picks, 0.35);
+    fit.relative.forEach((r) => expect(Math.abs(r - 1)).toBeLessThan(0.25));
+  });
+
+  it("has its sharpness in the sharpness, where a reader can see it", () => {
+    expect(drafterFrom(picks, 0.35).sharpness).toBeGreaterThan(1.5);
+  });
+
+  it("would have been called different on several dials by an even prior", () => {
+    // Kept as the contrast, so the reason for two stages cannot quietly rot: a
+    // prior centred at 1 shrinks a decisive drafter unevenly, and the dials it
+    // leaves furthest from 1 are the ones the packs argue about most.
+    const even = fitDials(picks, 0.35);
+    expect(Math.max(...even.theta) - Math.min(...even.theta)).toBeGreaterThan(0.3);
+    // And the dials furthest from 1 are the ones the packs argue about most.
+    expect(even.theta[SPREAD.indexOf(Math.max(...SPREAD))]).toBeGreaterThan(
+      even.theta[SPREAD.indexOf(Math.min(...SPREAD))],
+    );
+  });
+});
+
+describe("the stored path against the iterated one", () => {
+  it("agrees on a drafter near the pod", () => {
+    const picks = picksFrom([1.2, 0.9, 1.1, 0.95, 1.0, 1.0].slice(0, N), 4000, 71);
+    const stored = drafterFromCurvature(dialCurvature(picks), 0.35);
+    const iterated = drafterFrom(picks, 0.35);
+
+    expect(stored.sharpness).toBeCloseTo(iterated.sharpness, 1);
+    stored.relative.forEach((r, b) => expect(r).toBeCloseTo(iterated.relative[b], 1));
   });
 });
