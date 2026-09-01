@@ -31,6 +31,7 @@ export async function recordAnswer(
     answered: string;
     rawBestName: string;
     contextBestName: string;
+    attemptId: string;
   },
 ): Promise<void> {
   try {

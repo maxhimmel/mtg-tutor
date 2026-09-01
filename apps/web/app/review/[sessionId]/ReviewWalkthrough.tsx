@@ -33,6 +33,11 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
 
   const [quiz, setQuiz] = useState(true);
   const [step, setStep] = useState(0);
+  // Which sitting these guesses came from. A reopened review starts the quiz
+  // over, so it is a new visit and its answers are new rows -- which is right,
+  // and is a thing the store cannot work out from the cards. See
+  // pickAnswers.record.
+  const [visitId] = useState(() => crypto.randomUUID());
   // pickIndex -> the card name guessed. Still session state, because this map
   // is what the screen renders from and a reopened review starts over; the
   // guesses themselves now also go to `pickAnswers.record`, where a run of them
@@ -91,6 +96,7 @@ export function ReviewWalkthrough({ sessionId }: { sessionId: string }) {
       answered: name,
       rawBestName: pick.bestName,
       contextBestName: pick.contextBestName,
+      attemptId: `${visitId}:${pickIndex}`,
     }).catch((error: unknown) => {
       answerUnrecorded({ asked: "review", reason: String(error) });
     });

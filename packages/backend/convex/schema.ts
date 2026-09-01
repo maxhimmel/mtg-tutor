@@ -544,10 +544,21 @@ export default defineSchema({
   //
   // ONE ROW PER ATTEMPT, and never patched. The second answer to a pick IS the
   // measurement, so a table keeping only the latest could say how someone is
-  // doing and never how they are doing NOW against then. Neither surface can
-  // answer a question twice within a run -- both replace the pack with its
-  // reveal on the first click -- so a second row for one pick and one surface
-  // means the question came back around, which is the event worth counting.
+  // doing and never how they are doing NOW against then.
+  //
+  // WHICH IS WHY THE ATTEMPT IS NAMED. A row cannot say on its own whether it
+  // is a repeat or a retry: the two look identical, because the most ordinary
+  // way to be asked a pack twice is to answer it the same way twice. The first
+  // draft of this table inferred it from the card and got it exactly backwards
+  // -- refusing a second row whenever it named the card the first one did,
+  // which is every held answer there will ever be. `heldOn` could not be
+  // reached, standing by a wrong call twice was dropped, and the fixed tier
+  // re-dealt one pack ahead of its own tier forever because `at` never moved.
+  //
+  // So the client says which sitting an answer came from. One id per question
+  // per run: a double-click collapses into one row, and the same pack a month
+  // later is a different id and a different row, which is the event worth
+  // counting.
   //
   // WHAT IS DELIBERATELY NOT HERE is the archetype quiz. Its question is a card
   // and two decks derived from a set's statistics: a different identity, with
@@ -577,6 +588,23 @@ export default defineSchema({
     // a win rate must not silently re-decide an answer somebody already gave.
     rawBestName: v.string(),
     contextBestName: v.string(),
+    // Which sitting this answer came from. It is the only thing separating a
+    // retry from the same pack coming round again -- see the note above.
+    //
+    // OPTIONAL, and not optional to a writer: `pickAnswers.record` requires it
+    // and every client sends one. Absence means one thing only, a row written on
+    // 31 Aug 2026 in the day before the column existed.
+    //
+    // It reads correctly rather than merely tolerably. A legacy row's absent id
+    // can never equal an incoming one, so it never blocks a write -- which is
+    // right: those rows are history, and history is not a duplicate of something
+    // being answered now.
+    //
+    // The alternative was requiring it and clearing the table, and that is where
+    // this arrived from: a required column cannot be pushed while a row without
+    // it exists, and the mutation that would delete the row ships in the same
+    // push. Widening is not a concession here; it is the more truthful schema.
+    attemptId: v.optional(v.string()),
     at: v.string(),
   })
     // One pick's answers, oldest first, which is the repeat itself.

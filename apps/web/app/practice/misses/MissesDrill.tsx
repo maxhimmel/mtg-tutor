@@ -187,9 +187,15 @@ export function MissesDrill() {
   // Freezing the hand and counting it are the same moment, so they are one
   // effect: whatever is reported as served is exactly what gets played.
   const dealtFor = useRef<number | null>(null);
+  // Which hand this is, minted the moment the hand is frozen so that every
+  // answer out of it carries the same sitting. It is what lets the store tell a
+  // resent mutation from the same pack coming round again in October -- see
+  // pickAnswers.record, which cannot work that out from the card.
+  const runId = useRef("");
   useEffect(() => {
     if (!live || dealtFor.current === skip) return;
     dealtFor.current = skip;
+    runId.current = crypto.randomUUID();
     setRun(live);
     // Counted over what was actually SERVED rather than over the candidates
     // ranked, which are not the same list -- a candidate can be read and then
@@ -231,6 +237,9 @@ export function MissesDrill() {
       answered: card.name,
       rawBestName: question.rawBestName,
       contextBestName: question.gradedName,
+      // One id per question per hand, so two clicks land on one row and two
+      // sittings never do.
+      attemptId: `${runId.current}:${key(question)}`,
     }).catch((error: unknown) => {
       answerUnrecorded({ asked: "misses", reason: String(error) });
     });
@@ -239,7 +248,6 @@ export function MissesDrill() {
       outcome: result.outcome,
       tier: question.tier,
       tookRawBest: result.tookRawBest,
-      gap: question.gap,
       ageDays: ageInDays(question.draftedAt),
       setCode: question.setCode,
       index: step,

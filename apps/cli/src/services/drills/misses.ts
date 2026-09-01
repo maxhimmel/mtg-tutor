@@ -63,6 +63,10 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
     const spin = spinner();
     spin.start("Finding the ones you got wrong");
     const run = await deal(convex, skip);
+    // Which hand this is, so every answer out of it names the same sitting --
+    // the only thing separating a resent mutation from the same pack coming
+    // round again months later. See pickAnswers.record.
+    const runId = crypto.randomUUID();
     // How many come round again, and never which -- the same rule the web's
     // table screen keeps. You remember taking a card back better than you
     // remember the pack, so naming them would answer them before they are
@@ -80,7 +84,7 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
       return;
     }
 
-    const results = await play(convex, run);
+    const results = await play(convex, run, runId);
     if (!results) {
       p.cancel("Left mid-run. Nothing is recorded either way.");
       return;
@@ -100,7 +104,11 @@ export async function runMisses(convex: ConvexHttpClient): Promise<void> {
 }
 
 /** Null when the player walked away, which is not a score of zero. */
-async function play(convex: ConvexHttpClient, run: Run): Promise<MissResult[] | null> {
+async function play(
+  convex: ConvexHttpClient,
+  run: Run,
+  runId: string,
+): Promise<MissResult[] | null> {
   const results: MissResult[] = [];
 
   for (const [i, question] of run.questions.entries()) {
@@ -125,6 +133,7 @@ async function play(convex: ConvexHttpClient, run: Run): Promise<MissResult[] | 
       answered: guess.name,
       rawBestName: question.rawBestName,
       contextBestName: question.gradedName,
+      attemptId: `${runId}:${question.sessionId}:${question.pickIndex}`,
     });
     p.note(reveal(question, result, guess.name), head(question, result));
   }

@@ -29,6 +29,10 @@ export async function runReview(
 
   const sessionId = draft.id as Id<"draftSessions">;
   const finalPool = draft.picks.map((pk) => pk.picked);
+  // Which sitting these guesses came from. Re-reviewing the same draft is a new
+  // walk through it and its answers are new rows; see pickAnswers.record, which
+  // cannot tell that from the cards.
+  const visitId = crypto.randomUUID();
 
   if (opts.mode === "breakdown") {
     await runBreakdown(convex, sessionId, draft, finalPool);
@@ -75,6 +79,7 @@ export async function runReview(
         answered: guess.name,
         rawBestName: pick.bestName,
         contextBestName: pick.contextBestName,
+        attemptId: `${visitId}:${pick.pickIndex}`,
       });
     }
 
