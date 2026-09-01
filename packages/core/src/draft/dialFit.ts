@@ -40,10 +40,43 @@
 // curvature, so the posterior hands back exactly the prior: theta = 1, with the
 // prior's own width as the interval. "We could not tell" arrives looking like
 // what it is, rather than as a confident zero.
+//
+// IT IS MEASURED NOW. See DRAFTER_TAU below.
 
 import { DIAL_BUNDLES, NEUTRAL_DIALS, type DialPick } from "./dials.js";
 
 export type { DialPick };
+
+/**
+ * How far apart real drafters are, and where the number came from.
+ *
+ * 0.229, maximising the marginal likelihood over 370,325 real 17Lands drafters
+ * across all eighteen cached sets, 15.2M picks, each set's population centred on
+ * its own pooled theta. `pnpm measure-tau` is the run.
+ *
+ * The maximum is sharp rather than nominal -- the summed marginal is 2,741
+ * below its best at tau 0.20 and 13,748 below at 0.30, so this is a number the
+ * data chose rather than one it tolerated.
+ *
+ * WHAT IT IS NOT
+ *
+ * It is not one number for every population. Per set it runs 0.151 (ktk) to
+ * 0.362 (mh3), and that spread is not noise: mh3 is a Modern Horizons format
+ * and drafters really do disagree with each other more in it. A per-set tau is
+ * available and deliberately not used yet -- the pooled one is what a player
+ * drafting a set nobody has measured has to be shrunk by, which is the same
+ * argument `fit-bot-policy` makes for one global policy instead of eighteen.
+ *
+ * Drafters who go 3-0 come in at 0.211 against the field's 0.229: slightly more
+ * alike than everybody else, which is the third time this data has said the same
+ * thing -- see the top-1 note under FITTED_POLICIES.
+ *
+ * AND IT IS MEASURED IN A ROOM THIS APP DOES NOT HAVE. These drafters sat at
+ * tables of humans; the app's players sit at tables of pods, whose wheel differs
+ * from a real one by 0.27-0.41 in `bench-packs`. `openness` is computed over
+ * packs somebody else passed, so this is carried across that gap.
+ */
+export const DRAFTER_TAU = 0.229;
 
 /**
  * The log-likelihood and its two derivatives at one point.
@@ -415,6 +448,174 @@ export function drafterFrom(picks: readonly DialPick[], tau: number): DrafterFit
   const sharp = fitSharpness(picks, tau);
   const centre = DIAL_BUNDLES.map(() => sharp.theta[0]);
   return relativeTo(fitDials(picks, tau, centre), sharp, sharp.picks);
+}
+
+// ------------------------------------------------------------------------ tau
+//
+// HOW FAR APART REAL DRAFTERS ARE, WHICH IS THE ONE NUMBER THE FIT ASSUMES
+//
+// Everything above shrinks a drafter toward the pod by `tau`, and until now
+// every caller has passed its own and said where it came from -- which is to
+// say nowhere. `tau` is not a smoothing preference: it is the standard
+// deviation of theta across real drafters, and getting it wrong tilts every
+// interval and every draft count the harness reports.
+//
+// It is also measurable off data already on disk. The 17Lands draft datasets
+// are tens of thousands of real drafters, each with their own theta, and
+// `table3` was fitted on exactly that population -- so their mean theta is 1 by
+// construction and what is left to estimate is their SPREAD.
+//
+// NOT BY FITTING EACH DRAFTER AND TAKING THE VARIANCE
+//
+// The obvious estimator is the between-drafter variance of theta-hat minus the
+// mean sampling variance, and it goes wrong here for a reason specific to this
+// model: `rare` and `removal` carry almost no information, so their
+// unpenalised theta-hat is enormous and their sampling variance is enormous,
+// and the estimate is a difference of two large noisy numbers. On the dials
+// that matter it would work; on the ones that do not it would produce a tau
+// dominated by columns nobody can measure.
+//
+// The marginal likelihood has no such problem. Integrating theta out under the
+// prior, a drafter whose picks say nothing about a dial contributes nothing to
+// the estimate of tau along it -- not a large noisy contribution, none -- which
+// is the same property that makes the prior return exactly itself in `dialStep`.
+
+/**
+ * How much better a drafter's picks are explained by allowing theta to vary,
+ * against holding it at the pod, for one `tau`.
+ *
+ * The Laplace marginal of the quadratic, with the constant `logLik` dropped
+ * because it is the same for every tau and cancels out of the search:
+ *
+ *   log m(tau) = logLik + 1/2 g' (I + tau^-2 E)^-1 g - 1/2 log det(E + tau^2 I)
+ *
+ * where I is the observed information -H and E is the identity. The first term
+ * is the evidence for moving, the second is the price of being allowed to.
+ */
+export function marginalGain(
+  curvature: DialCurvature,
+  tau: number,
+  centre: readonly number[] = NEUTRAL_DIALS,
+): number {
+  const n = curvature.gradient.length;
+  const ridge = 1 / (tau * tau);
+  const information = new Array((n * (n + 1)) / 2);
+  const penalised = new Array((n * (n + 1)) / 2);
+
+  for (let b = 0; b < n; b++) {
+    for (let c = b; c < n; c++) {
+      const at = triangleIndex(n, b, c);
+      const value = -curvature.hessian[at];
+      information[at] = (b === c ? 1 : 0) + tau * tau * value;
+      penalised[at] = value + (b === c ? ridge : 0);
+    }
+  }
+
+  // The gradient as seen FROM the prior's centre rather than from the pod. The
+  // curvature is still the one stored at theta = 1 -- only the point the spread
+  // is measured around moves, and shifting a quadratic's expansion point is
+  // exactly this subtraction.
+  const offset = curvature.gradient.map((g, b) => {
+    let shifted = g;
+    for (let c = 0; c < n; c++) {
+      const at = b <= c ? triangleIndex(n, b, c) : triangleIndex(n, c, b);
+      shifted -= -curvature.hessian[at] * (centre[c] - 1);
+    }
+    return shifted;
+  });
+
+  const solved = solveSymmetric(penalised, offset, n);
+  let quadratic = 0;
+  for (let b = 0; b < n; b++) quadratic += offset[b] * solved[b];
+
+  const L = cholesky(information, n);
+  let logDet = 0;
+  for (let b = 0; b < n; b++) logDet += 2 * Math.log(L[b * n + b]);
+
+  return 0.5 * quadratic - 0.5 * logDet;
+}
+
+export interface TauFit {
+  tau: number;
+  /** Summed marginal gain at the maximum, over the drafters supplied. */
+  gain: number;
+  drafters: number;
+}
+
+/**
+ * The tau that best explains a population of drafters.
+ *
+ * A one-dimensional search, on the log of tau because the quantity is a scale
+ * and a grid in tau spends most of its points on values nobody would use.
+ * Golden section rather than a derivative: the objective is a sum over tens of
+ * thousands of Cholesky factorisations and its derivative is a second one.
+ */
+export function fitTau(
+  curvatures: readonly DialCurvature[],
+  centre: readonly number[] = NEUTRAL_DIALS,
+  low = 0.01,
+  high = 3,
+  steps = 60,
+): TauFit {
+  return fitTauGrouped([{ curvatures, centre }], low, high, steps);
+}
+
+/**
+ * One tau over several populations that do not share a centre.
+ *
+ * WHICH IS EVERY REAL POPULATION, AND THE MEASUREMENT SAID SO
+ *
+ * The average drafter in one set sits well away from `table3` -- `power` pools
+ * to 0.30 in ktk and 1.46 in blb, against a tau of about a quarter -- because
+ * `table3` is a compromise across eighteen sets and no single set is the
+ * compromise. Fitted with the prior at the pod, each set's own offset is
+ * counted as spread, and the answer comes back inflated by an amount the same
+ * size as the thing being measured.
+ *
+ * Trap #24 again, one level up: shrink toward the wrong centre and the distance
+ * to it is reported as a property of the population.
+ */
+export function fitTauGrouped(
+  groups: readonly { curvatures: readonly DialCurvature[]; centre: readonly number[] }[],
+  low = 0.01,
+  high = 3,
+  steps = 60,
+): TauFit {
+  const total = (tau: number) => {
+    let sum = 0;
+    for (const group of groups) {
+      for (const c of group.curvatures) sum += marginalGain(c, tau, group.centre);
+    }
+    return sum;
+  };
+  const drafters = groups.reduce((n, g) => n + g.curvatures.length, 0);
+
+  const phi = (Math.sqrt(5) - 1) / 2;
+  let a = Math.log(low);
+  let b = Math.log(high);
+  let c = b - phi * (b - a);
+  let d = a + phi * (b - a);
+  let fc = total(Math.exp(c));
+  let fd = total(Math.exp(d));
+
+  for (let i = 0; i < steps && b - a > 1e-4; i++) {
+    if (fc > fd) {
+      b = d;
+      d = c;
+      fd = fc;
+      c = b - phi * (b - a);
+      fc = total(Math.exp(c));
+    } else {
+      a = c;
+      c = d;
+      fc = fd;
+      d = a + phi * (b - a);
+      fd = total(Math.exp(d));
+    }
+  }
+
+  const tau = Math.exp((a + b) / 2);
+  return { tau, gain: total(tau), drafters };
 }
 
 // ------------------------------------------------------------ linear algebra

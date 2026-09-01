@@ -44,6 +44,7 @@
     "fit-drafter": "node scripts/fit-drafter.mjs",
     "ingest-sets": "node scripts/ingest-sets.mjs",
     "llm": "node scripts/llm-provider.mjs",
+    "measure-tau": "node scripts/measure-tau.mjs",
     "new-set": "node scripts/new-set.mjs",
     "redeal": "node scripts/redeal.mjs",
     "refresh-mechanics": "node scripts/refresh-mechanics.mjs",

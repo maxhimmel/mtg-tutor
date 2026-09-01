@@ -649,6 +649,60 @@ unread (Deferred #2), and what is left open is Ideas #9.
    mean sampling variance from the between-drafter variance. Every number above
    was produced at tau 0.35 and moves with it.
 
+   **PHASE 1 (`dial-tau`) MEASURED `tau`, AND IT IS 0.229.** Over 370,325 real
+   17Lands drafters across all eighteen cached sets, 15.2M picks, maximising the
+   marginal likelihood with each set's prior centred on its own pooled theta.
+   The maximum is sharp: 2,741 below best at 0.20 and 13,748 below at 0.30.
+   `DRAFTER_TAU` in core carries it and `pnpm measure-tau` is the run.
+
+   Not one number everywhere. Per set it runs 0.151 (ktk) to 0.362 (mh3), and
+   mh3 being the outlier is the estimator noticing that drafters disagree with
+   each other more in a Modern Horizons format. Drafters who go 3-0 come in at
+   0.211 against the field's 0.229 -- slightly more alike than everybody else,
+   the third time this data has said that about them.
+
+   **The row walk is confirmed against real drafters.** `table3` is the optimum
+   of the ten-weight problem on this population, which makes theta = 1 a
+   stationary point of the dialled one -- so the pooled theta over all 370,325
+   has to come back at 1, and it does: power 0.97, table 1.01, lane 1.00, signal
+   1.00, rare 1.00, removal 1.09, every interval under 0.04. Per set it is
+   nowhere near 1, which is set heterogeneity cancelling in the pool exactly as
+   it should. `fit-drafter` checks the estimator against simulated drafters;
+   this checks the walk against real ones, and between them there is no part of
+   this that has only been checked against itself.
+
+   **THE SET IS AS BIG AS THE PLAYER, AND THIS IS THE OPEN PROBLEM.** Standard
+   deviation across sets of the pooled population theta, against tau 0.23:
+   power 0.28, table 0.14, lane 0.07, signal 0.11 (rare 0.91 and removal 1.60,
+   which are dead anyway). So a player measured against global `table3` carries
+   a set offset worth a third to all of the signal being read -- and pooling
+   their drafts does not average it away, because three drafts is three sets
+   rather than a sample of eighteen. The fix is small and not yet built: measure
+   a player against their SET's population, which is six numbers per set and
+   already computed by `measure-tau --json`. Until it exists, no dial should be
+   shown for a player who has drafted fewer than several different sets.
+
+   **The draft counts, redone at the measured tau, are worse than Phase 0's.**
+   0.229 is tighter than the 0.35 Phase 0 guessed, so more is shrunk away. At
+   80% detection of a 1.5x/0.5x difference: `lane` 5 drafts, `table` 10,
+   `signal` 10, `power` never (15% at twenty-five drafts). False positives on
+   the pod itself stay 0-2% throughout. A `sharks3` drafter is called on
+   `power` 2% of the time after TWENTY-FIVE drafts, so that answer did not
+   change and will not.
+
+   **And the collinearity gets worse with data rather than better**, which is
+   what says it is real. A `table` x0.5 drafter lights up `lane` at 98% by ten
+   drafts and 100% by fifteen; a `lane` x1.5 drafter lights up `table` at 100%
+   by twenty-five. Noise would wash out; this sharpens.
+
+   **So what is actually sayable, today, is two things and a caveat.** One axis
+   covering `table` and `lane` together at five to ten drafts, `signal` at ten,
+   and sharpness -- as a direction rather than a value, because the stored
+   one-step estimate of it is biased (0.24 against a truth of 0.50 on a drafter
+   who is half as decisive). That is a much smaller feature than the one this
+   entry opened with, and the whole point of the two phases was to find that out
+   before a screen did.
+
 4. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
    item. Read that, not this paragraph.**
@@ -1335,6 +1389,18 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     positives on that drafter went from 100% on three dials to 0-7%. The general
     form: whenever a prior is centred at a point the data may be uniformly
     displaced from, estimate the displacement before shrinking toward it.
+
+    **The same mistake was then made again, one level up, in the same phase**
+    (2026-09-01). `measure-tau` fitted the spread of real drafters with the
+    prior at `table3` -- and `table3` is a compromise across eighteen sets that
+    no single set is, so pooled `power` sits at 0.30 in ktk and 1.46 in blb.
+    Each set's own offset was being counted as spread BETWEEN its drafters:
+    0.241 against 0.229 pooled, and 0.246 against 0.151 on ktk alone. Centring
+    each set's prior on its own population fixes it, and `fitTauGrouped` is
+    that.
+
+    Twice, by two different routes, in one phase. The tell both times was a
+    number that stayed suspiciously large where the data was thinnest.
 
 # Deferred trade-offs (revisit when the premise changes):
 
