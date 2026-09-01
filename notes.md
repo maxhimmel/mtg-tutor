@@ -703,6 +703,60 @@ unread (Deferred #2), and what is left open is Ideas #9.
    entry opened with, and the whole point of the two phases was to find that out
    before a screen did.
 
+   **PHASE 2 (`dial-set-baseline`) GAVE EACH SET ITS OWN ZERO, AND IT WAS THE
+   piece the whole idea rested on.** `DIAL_BASELINES` in core carries eighteen
+   vectors, fitted by `pnpm fit-set-baselines --emit` over every cached drafter
+   of each set; `rebaseCurvature` applies one.
+
+   **The correction is additive, and that is forced rather than chosen.** The
+   stored curvature is a quadratic expanded at theta = 1, and moving a
+   quadratic's expansion point is exactly one subtraction of the Hessian times
+   the offset. A multiplicative rebase would need the curvature re-evaluated at
+   the baseline, which needs the pick rows back -- and the whole storage design
+   is that it does not. Corrected curvatures still ADD, so a player with drafts
+   in four sets is still twenty-seven numbers plus twenty-seven, and nothing at
+   read time has to remember which set each came from.
+
+   **The held-out check builds a player whose truth is known out of real
+   drafters.** k real 17Lands drafters, each from a different set, pooled as
+   though they were one person's k drafts. Every one is average for their set by
+   construction, so a correct estimator should call them different about 5% of
+   the time and anything above that is the set showing through as the person.
+   Baselines fitted on alternating drafts and the players built from the others,
+   because a baseline measured on the drafters it was fitted to removes their
+   average by construction -- trap #6, which this would otherwise have walked
+   straight into and reported as a triumph.
+
+           twenty drafts, ALL IN ONE SET      power  table   lane  signal
+             measured against the pod            9%    14%    15%     16%
+             measured against the set            4%     3%     3%      9%
+
+   Across twenty drafts in DIFFERENT sets the offsets partly cancel and the gain
+   is small -- 5/4/4/9 against 4/3/3/8. That is the shape it should have and it
+   is not the case anybody is in: this app's players replay one format, which is
+   what `RecentSets` exists for.
+
+   **`signal` stays at 9% after correction and the reason is worth knowing.** A
+   player built from k real drafters is not exactly average -- they are the mean
+   of k draws from a population with spread tau, so their true offset is about
+   tau/sqrt(k), which at twenty drafts is 0.05 and is genuinely detectable. Part
+   of that residual is the check working rather than failing.
+
+   **`setBaseline` returns undefined for an unmeasured set rather than ones.** A
+   set with no baseline is not a set that sits at the pod; it is one whose offset
+   is unknown and, on the eighteen measured, probably large. A default would make
+   "we have not measured this format" indistinguishable from "this format is
+   unremarkable" at precisely the place this app is most useful, since a
+   brand-new set has no 17Lands data and cannot have a baseline until the
+   datasets catch up. What a surface does about that is still open and is the
+   first thing the next phase has to answer.
+
+   **What is left before any of this reaches a screen.** The curvature is not
+   written anywhere yet -- `draft.pick`'s completion branch is where it would go,
+   beside the digest, since those rows are already in hand. Sharpness is still
+   printed as a direction rather than a value. And the `table`/`lane` pair still
+   does not separate, so the panel has one axis there and not two.
+
 4. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
    item. Read that, not this paragraph.**

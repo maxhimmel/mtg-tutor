@@ -450,6 +450,58 @@ export function drafterFrom(picks: readonly DialPick[], tau: number): DrafterFit
   return relativeTo(fitDials(picks, tau, centre), sharp, sharp.picks);
 }
 
+/**
+ * A draft's curvature, re-expressed against its own set's population.
+ *
+ * WHY A SET NEEDS ITS OWN ZERO
+ *
+ * `table3` is a compromise across eighteen sets and no single set is the
+ * compromise. `measure-tau` pools the real drafters of each set and finds their
+ * theta nowhere near 1: `power` at 0.30 in ktk and 1.46 in blb, `table` at 0.72
+ * in mh3 and 1.35 in ktk. Across sets the spread of those offsets is 0.28, 0.14,
+ * 0.07 and 0.11 on the four live dials, against a between-drafter tau of 0.229.
+ *
+ * So a player measured against `table3` is being told about the set they drafted
+ * as much as about themselves -- and pooling their drafts does not wash it out,
+ * because three drafts is three sets rather than a sample of eighteen. That is
+ * the exact defect this whole readout was meant to avoid: `asked-again` records
+ * that a run of draft scores cannot be made into a direction BECAUSE each is a
+ * different set, and a within-pack comparison removes the set's difficulty
+ * without removing its habits.
+ *
+ * ADDITIVE, WHICH IS NOT A TASTE
+ *
+ * The stored curvature is a quadratic expanded at theta = 1. Shifting a
+ * quadratic's expansion point is exactly this subtraction and nothing else is
+ * exact -- a multiplicative rebase would need the curvature re-evaluated at the
+ * baseline, which needs the rows. So a drafter's dial is their absolute dial
+ * MINUS their set's offset from the pod, and a player who is perfectly average
+ * for their set reads 1 either way.
+ *
+ * AND IT LEAVES POOLING ALONE, WHICH IS THE POINT. Correct each draft against
+ * its own set as it is written, and the corrected curvatures still ADD -- so a
+ * player with drafts in four sets is still twenty-seven numbers plus twenty-
+ * seven numbers, and nothing has to remember which set each came from at read
+ * time.
+ */
+export function rebaseCurvature(
+  curvature: DialCurvature,
+  baseline: readonly number[],
+): DialCurvature {
+  const n = curvature.gradient.length;
+  const gradient = curvature.gradient.map((g, b) => {
+    let shifted = g;
+    for (let c = 0; c < n; c++) {
+      const at = b <= c ? triangleIndex(n, b, c) : triangleIndex(n, c, b);
+      shifted -= -curvature.hessian[at] * (baseline[c] - 1);
+    }
+    return shifted;
+  });
+  // The Hessian does not move. A quadratic has the same second derivative
+  // everywhere, which is the same fact that makes the shift above exact.
+  return { ...curvature, gradient };
+}
+
 // ------------------------------------------------------------------------ tau
 //
 // HOW FAR APART REAL DRAFTERS ARE, WHICH IS THE ONE NUMBER THE FIT ASSUMES
@@ -511,18 +563,10 @@ export function marginalGain(
     }
   }
 
-  // The gradient as seen FROM the prior's centre rather than from the pod. The
-  // curvature is still the one stored at theta = 1 -- only the point the spread
-  // is measured around moves, and shifting a quadratic's expansion point is
-  // exactly this subtraction.
-  const offset = curvature.gradient.map((g, b) => {
-    let shifted = g;
-    for (let c = 0; c < n; c++) {
-      const at = b <= c ? triangleIndex(n, b, c) : triangleIndex(n, c, b);
-      shifted -= -curvature.hessian[at] * (centre[c] - 1);
-    }
-    return shifted;
-  });
+  // The gradient as seen FROM the prior's centre rather than from the pod --
+  // the same shift `rebaseCurvature` applies for a set, so there is one copy of
+  // it and not two.
+  const offset = rebaseCurvature(curvature, centre).gradient;
 
   const solved = solveSymmetric(penalised, offset, n);
   let quadratic = 0;

@@ -42,6 +42,7 @@
     "feedback": "node scripts/feedback.mjs",
     "fit-bot-policy": "node scripts/fit-bot-policy.mjs",
     "fit-drafter": "node scripts/fit-drafter.mjs",
+    "fit-set-baselines": "node scripts/fit-set-baselines.mjs",
     "ingest-sets": "node scripts/ingest-sets.mjs",
     "llm": "node scripts/llm-provider.mjs",
     "measure-tau": "node scripts/measure-tau.mjs",
