@@ -66,11 +66,10 @@ import {
   dealDraft,
   dialCurvature,
   dialPicksFrom,
-  dialStep,
   dialledWeights,
   draftProgress,
-  fitDials,
-  fitSharpness,
+  drafterFrom,
+  drafterFromCurvature,
   poolCurvature,
   policyScore,
 } from "@mtg-tutor/core";
@@ -251,7 +250,6 @@ function drafterCurvatures(theta, drafterIndex) {
 }
 
 const results = [];
-const stepGap = [];
 
 for (const subject of SUBJECTS) {
   log(`  ${subject.name}...`);
@@ -259,64 +257,78 @@ for (const subject of SUBJECTS) {
     draftCounts.map((c) => [
       c,
       {
+        relative: new Array(DIAL_BUNDLES.length).fill(0),
         theta: new Array(DIAL_BUNDLES.length).fill(0),
-        se: new Array(DIAL_BUNDLES.length).fill(0),
         called: new Array(DIAL_BUNDLES.length).fill(0),
         covered: new Array(DIAL_BUNDLES.length).fill(0),
         sharpness: 0,
-        sharpnessSe: 0,
       },
     ]),
   );
+  const gaps = [];
 
   for (let i = 0; i < drafters; i++) {
-    const { curvatures, picks } = drafterCurvatures(subject.theta, i);
-
-    for (const count of draftCounts) {
-      const fit = dialStep(poolCurvature(curvatures.slice(0, count)), tau);
-      const bucket = byCount.get(count);
-      for (let b = 0; b < DIAL_BUNDLES.length; b++) {
-        bucket.theta[b] += fit.theta[b];
-        bucket.se[b] += fit.se[b];
-        // Different from the pod, at the width the panel would draw.
-        if (Math.abs(fit.theta[b] - 1) > 1.96 * fit.se[b]) bucket.called[b]++;
-        // And whether the truth is inside that interval, which is the property
-        // an interval is FOR -- a tight one in the wrong place is worse than a
-        // wide one.
-        if (Math.abs(fit.theta[b] - subject.theta[b]) <= 1.96 * fit.se[b]) bucket.covered[b]++;
-      }
-      const sharp = fitSharpness(picks.slice(0, count).flat(), tau);
-      bucket.sharpness += sharp.theta[0];
-      bucket.sharpnessSe += sharp.se[0];
+    const curvatures = [];
+    const picks = [];
+    for (let d = 0; d < maxDrafts; d++) {
+      const rows = simulateDraft(subject.theta, (seed0 + i * 1000 + d) >>> 0);
+      const p = picksOf(rows);
+      picks.push(p);
+      curvatures.push(dialCurvature(p));
     }
 
-    // The step against the iterated fit, on the largest window, for a subset --
-    // this is the expensive comparison and it only has to be measured, not
-    // averaged to three places.
-    if (i < 20) {
-      const all = picks.flat();
-      const step = dialStep(poolCurvature(curvatures), tau);
-      const full = fitDials(all, tau);
+    for (const count of draftCounts) {
+      const fit = drafterFromCurvature(poolCurvature(curvatures.slice(0, count)), tau);
+      const bucket = byCount.get(count);
+      bucket.sharpness += fit.sharpness;
       for (let b = 0; b < DIAL_BUNDLES.length; b++) {
-        stepGap.push(Math.abs(step.theta[b] - full.theta[b]));
+        bucket.relative[b] += fit.relative[b];
+        bucket.theta[b] += fit.theta[b];
+        // Different from the pod, at the width the panel would draw. Read off
+        // the RELATIVE dial, because that is what a panel would print -- a
+        // drafter who is merely decisive must not light up six of these.
+        if (Math.abs(fit.relative[b] - 1) > 1.96 * fit.relativeSe[b]) bucket.called[b]++;
+        // Coverage is checked on the absolute dial, where the truth is written
+        // down. A relative truth would need the pseudo-true sharpness of a
+        // drafter whose dials are not uniform, which is not a number anybody
+        // has, and inventing one would make this table agree with itself.
+        if (Math.abs(fit.theta[b] - subject.theta[b]) <= 1.96 * fit.se[b]) bucket.covered[b]++;
+      }
+    }
+
+    // The stored path against the iterated one, PER SUBJECT. Pooled across
+    // subjects this number is dominated by the drafters furthest from the pod,
+    // where one step from the pod obviously undershoots -- and those are the
+    // drafters least like anybody real. What the storage decision turns on is
+    // the gap near the pod, so the gap is reported where it can be read.
+    if (i < 20) {
+      const stored = drafterFromCurvature(poolCurvature(curvatures), tau);
+      const iterated = drafterFrom(picks.flat(), tau);
+      for (let b = 0; b < DIAL_BUNDLES.length; b++) {
+        gaps.push(Math.abs(stored.relative[b] - iterated.relative[b]));
       }
     }
   }
 
+  gaps.sort((a, b) => a - b);
   results.push({
     subject: subject.name,
     truth: subject.theta,
     moved: subject.moved,
+    gap: {
+      median: gaps[Math.floor(gaps.length / 2)],
+      p95: gaps[Math.floor(gaps.length * 0.95)],
+      worst: gaps[gaps.length - 1],
+    },
     byCount: Object.fromEntries(
       [...byCount].map(([count, b]) => [
         count,
         {
+          relative: b.relative.map((t) => t / drafters),
           theta: b.theta.map((t) => t / drafters),
-          se: b.se.map((s) => s / drafters),
           called: b.called.map((c) => c / drafters),
           covered: b.covered.map((c) => c / drafters),
           sharpness: b.sharpness / drafters,
-          sharpnessSe: b.sharpnessSe / drafters,
         },
       ]),
     ),
@@ -329,14 +341,15 @@ const ids = DIAL_BUNDLES.map((b) => b.id);
 
 console.log("");
 console.log("WHAT THE ESTIMATOR SAYS ABOUT DRAFTERS WHOSE ANSWER IS KNOWN");
-console.log(`mean fitted theta over ${drafters} drafters, tau ${tau}. truth in brackets.`);
+console.log(`mean dial RELATIVE to the drafter's own sharpness, over ${drafters}`);
+console.log(`drafters, tau ${tau}. this is what a panel would print.`);
 console.log("");
 console.log(`  ${pad("subject", 20)} ${pad("n", 3)} ${ids.map((i) => pad(i, 8)).join(" ")}  sharp`);
 
 for (const r of results) {
   for (const count of draftCounts) {
     const b = r.byCount[count];
-    const row = b.theta.map((t, i) => pad(num(t), 8)).join(" ");
+    const row = b.relative.map((t) => pad(num(t), 8)).join(" ");
     console.log(
       `  ${pad(count === draftCounts[0] ? r.subject : "", 20)} ${pad(count, 3)} ${row}  ${num(b.sharpness)}`,
     );
@@ -377,19 +390,20 @@ for (const r of results) {
   }
 }
 
-stepGap.sort((a, b) => a - b);
 console.log("");
-console.log("ONE NEWTON STEP AGAINST THE ITERATED FIT");
-console.log(`|step - full| over ${stepGap.length} dials at ${maxDrafts} drafts:`);
-console.log(
-  `  median ${stepGap[Math.floor(stepGap.length / 2)].toFixed(4)}   ` +
-    `p95 ${stepGap[Math.floor(stepGap.length * 0.95)].toFixed(4)}   ` +
-    `worst ${stepGap[stepGap.length - 1].toFixed(4)}`,
-);
+console.log("THE STORED PATH AGAINST THE ITERATED ONE");
+console.log(`|relative dial| difference at ${maxDrafts} drafts, per subject. the`);
+console.log("storage decision turns on the rows near the pod: a drafter at 0.5x");
+console.log("on everything is nobody real, and one step from the pod undershoots");
+console.log("them by construction.");
 console.log("");
-console.log("if the worst is small beside the intervals above, a draft can be");
-console.log("stored as its curvature -- twenty-seven numbers -- and no read ever");
-console.log("touches a pick row again.");
+console.log(`  ${pad("subject", 20)} ${pad("median", 9)} ${pad("p95", 9)} worst`);
+for (const r of results) {
+  console.log(
+    `  ${pad(r.subject, 20)} ${pad(r.gap.median.toFixed(4), 9)} ` +
+      `${pad(r.gap.p95.toFixed(4), 9)} ${r.gap.worst.toFixed(4)}`,
+  );
+}
 
 // -------------------------------------------------- 5. is a shark expressible
 
@@ -404,6 +418,7 @@ if (FITTED_POLICIES[sharkPod]) {
 
   const sharkTheta = new Array(DIAL_BUNDLES.length).fill(0);
   const sharkCalled = new Array(DIAL_BUNDLES.length).fill(0);
+  let sharkSharp = 0;
   const count = maxDrafts;
 
   for (let i = 0; i < drafters; i++) {
@@ -413,10 +428,11 @@ if (FITTED_POLICIES[sharkPod]) {
       const rows = simulateWithWeights(FITTED_POLICIES[sharkPod], seed);
       curvatures.push(dialCurvature(picksOf(rows)));
     }
-    const fit = dialStep(poolCurvature(curvatures), tau);
+    const fit = drafterFromCurvature(poolCurvature(curvatures), tau);
+    sharkSharp += fit.sharpness / drafters;
     for (let b = 0; b < DIAL_BUNDLES.length; b++) {
-      sharkTheta[b] += fit.theta[b] / drafters;
-      if (Math.abs(fit.theta[b] - 1) > 1.96 * fit.se[b]) sharkCalled[b] += 1 / drafters;
+      sharkTheta[b] += fit.relative[b] / drafters;
+      if (Math.abs(fit.relative[b] - 1) > 1.96 * fit.relativeSe[b]) sharkCalled[b] += 1 / drafters;
     }
   }
 
@@ -426,7 +442,8 @@ if (FITTED_POLICIES[sharkPod]) {
   console.log("coefficient, and the bundles may or may not be able to hold it.");
   console.log("");
   console.log(`  ${pad("", 12)} ${ids.map((i) => pad(i, 8)).join(" ")}`);
-  console.log(`  ${pad("theta", 12)} ${sharkTheta.map((t) => pad(num(t), 8)).join(" ")}`);
+  console.log(`  ${pad("relative", 12)} ${sharkTheta.map((t) => pad(num(t), 8)).join(" ")}`);
+  console.log(`  ${pad("sharpness", 12)} ${num(sharkSharp)}`);
   console.log(
     `  ${pad("called", 12)} ` +
       sharkCalled.map((c) => pad(`${(c * 100).toFixed(0)}%`, 8)).join(" "),
