@@ -119,7 +119,18 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
 
         {!score.isBest && (
           <div>
-            <div className="eyebrow mb-1.5 flex items-baseline justify-between gap-2">
+            {/* WRAPS RATHER THAN CRUSHES. The label is an eyebrow -- uppercase
+                at 0.14em of tracking -- so "Graded against" is about 112px, and
+                the group opposite is an 80px mark plus "−2.3pp ± 0.6pp", about
+                180px. In the 300px coach rail this row has 188px for the pair
+                of them, and `justify-between` on a nowrap flex answered that by
+                breaking both: the label went to two lines and the figure came
+                out as "−2.3pp / ± / 0.6pp" stacked three high, a margin
+                separated from the gap it is the margin OF.
+                With `flex-wrap` the group moves down whole instead, which is
+                the honest failure: one line naming the thing, one line
+                measuring it. */}
+            <div className="eyebrow mb-1.5 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
               {/* Three labels for three different claims. "Graded against" is
                   what the grade was measured against and is only true when the
                   data could measure it. Inside the margin there is no single
@@ -144,7 +155,11 @@ export function Verdict({ score }: { score: PickScore<Card> }) {
                   say something the sentence beside it does not. */}
               <span className="flex items-center gap-2 tabular-nums normal-case tracking-normal">
                 <GapMark gap={-gap} margin={margin} />
-                <span>
+                {/* One unbreakable run. A gap and its margin are a single
+                    quantity said in two halves, and a line break between them
+                    reads as two separate numbers -- which is precisely the
+                    misreading the margin is carried to prevent. */}
+                <span className="whitespace-nowrap">
                   {lost}
                   <span className="text-base-content/45">
                     {margin == null ? " · no margin" : ` ± ${points(margin).slice(1)}`}
