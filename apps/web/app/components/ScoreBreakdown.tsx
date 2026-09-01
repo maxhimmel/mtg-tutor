@@ -488,11 +488,21 @@ export function ScoreBreakdown({
           as well, by the + and − `points` emits into every figure on the right
           of every row. So the key names the hues rather than being the only
           thing separating them. The torn entry appears only where there is a
-          torn bar to explain. */}
+          torn bar to explain.
+
+          TWO WORDS AND NO GLOSS, because the gloss was a third statement of
+          something already said twice. "right of the rule" and "left of the
+          rule" sat under the labels as second lines, and in the 188px rail that
+          made a two-entry key four lines tall -- taller than the 26px axis
+          above it and taller than the bars the whole key is about, which is the
+          tell that a legend has stopped explaining a chart and started
+          competing with it. The axis directly above now prints −8 … 0 … +8, and
+          every row prints its own signed figure. Which side is which is the one
+          thing here nobody needed telling. */}
       <Key
         entries={[
-          { label: "helped", ink: INK.up, shape: "bar", means: "right of the rule" },
-          { label: "cost you", ink: INK.down, shape: "bar", means: "left of the rule" },
+          { label: "helped", ink: INK.up, shape: "bar" },
+          { label: "cost you", ink: INK.down, shape: "bar" },
           ...(anyTorn
             ? [
                 {
