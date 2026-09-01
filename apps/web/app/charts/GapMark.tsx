@@ -32,8 +32,31 @@ import { points } from "../lib/format";
  * gap is real" -- that the missing margin is what makes unavailable.
  */
 
+/**
+ * WHY IT IS DRAWN AS AN ERROR BAR AND NOT AS A BAND WITH A DOT ON IT.
+ *
+ * The first version was one 6px round-capped stroke with an 8px circle sitting
+ * inside it -- a filled lozenge with a slightly fatter bump somewhere along its
+ * length, in one colour, 80 by 14, next to a vertical line. That is a TOGGLE
+ * SWITCH. Not approximately: it is the exact silhouette of every on/off control
+ * on the platform, and a reader meets it at the top of a panel full of controls,
+ * where the first thing to decide about a small rounded thing with a knob in it
+ * is whether it can be clicked. The mark meant "an interval, and where inside it
+ * the estimate sits" and read "a setting, currently off".
+ *
+ * The fix is the oldest convention there is for exactly this quantity: a thin
+ * rule with a serif at each end and a point estimate on it. Nobody has to be
+ * taught it, it cannot be mistaken for a control, and it makes the two things
+ * the mark is actually made of -- a SPAN and a POINT -- different shapes rather
+ * than the same shape at two thicknesses. The reading is unchanged and so is
+ * every number: does the span reach the rule.
+ */
 const WIDTH = 80;
-const HEIGHT = 14;
+const HEIGHT = 16;
+/** Half the height of the serif closing each end of the interval. */
+const SERIF = 4;
+/** The interval's own weight. Thin, so the dot on it is unmistakably a dot. */
+const SPAN_W = 1.5;
 
 export function GapMark({
   /** The gap itself, in rate units. Signed the way the caller says it. */
@@ -53,6 +76,7 @@ export function GapMark({
 
   const mid = HEIGHT / 2;
   const clears = Math.abs(gap) > margin;
+  const ink = clears ? INK.value : INK.hollow;
 
   return (
     <svg
@@ -66,23 +90,19 @@ export function GapMark({
           : `${points(gap)}, inside a margin of ${points(margin).slice(1)} — too small for the data to call.`
       }
     >
-      {/* The bar first, so the zero rule paints over it: the rule is the thing
-          being measured against, not a mark on the measurement. */}
-      <line
-        x1={x(gap - margin)}
-        x2={x(gap + margin)}
-        y1={mid}
-        y2={mid}
-        stroke={clears ? INK.value : INK.hollow}
-        strokeWidth={MARK.band}
-        strokeLinecap="round"
+      {/* The interval first, so the zero rule paints over it: the rule is the
+          thing being measured against, not a mark on the measurement. */}
+      <path
+        d={
+          `M ${x(gap - margin)} ${mid - SERIF} V ${mid + SERIF} ` +
+          `M ${x(gap - margin)} ${mid} H ${x(gap + margin)} ` +
+          `M ${x(gap + margin)} ${mid - SERIF} V ${mid + SERIF}`
+        }
+        stroke={ink}
+        strokeWidth={SPAN_W}
+        fill="none"
       />
-      <circle
-        cx={x(gap)}
-        cy={mid}
-        r={MARK.dot / 2}
-        fill={clears ? INK.value : INK.hollow}
-      />
+      <circle cx={x(gap)} cy={mid} r={MARK.dot / 2} fill={ink} />
       <line x1={x(0)} x2={x(0)} y1={0} y2={HEIGHT} stroke={INK.zero} strokeWidth={1} />
     </svg>
   );
