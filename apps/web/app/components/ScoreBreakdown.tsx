@@ -442,7 +442,12 @@ export function ScoreBreakdown({
       <div className={ROW}>
         <div className={SLOT_TRACK} style={{ width: SPAN }}>
           <Plot
-            height={18}
+            // Tall enough for the labels. visx puts a bottom tick label at
+            // tickLength + fontSize + dy -- 8 + 10 + 2.5 -- so its baseline is
+            // at 20.5 and its descenders reach 23. In an 18px box the outermost
+            // SVG clipped every digit through the middle, which is what the
+            // "−5 0 +5" under this track has looked like since it was added.
+            height={26}
             needs={SPAN}
             // A fixed-width mark in a fixed-width column: it fits by
             // construction, and the sentence is what a reader gets if that ever
@@ -462,7 +467,14 @@ export function ScoreBreakdown({
               <ValueAxisBottom
                 scale={scaleLinear({ domain: [-MAX_PP, MAX_PP], range: [0, box.width] })}
                 top={0}
-                numTicks={5}
+                // THE ENDS OF THE TRACK, NAMED. Asked for five round ticks this
+                // axis printed −5, 0, +5: the two labels that say how far the
+                // track actually goes were the two d3 left out, so the panel
+                // drew an eight-point scale and told the reader it was a
+                // five-point one. Everything on it then reads about 60% too
+                // large. The halfway marks are here to be measured against; the
+                // ends are here because they are the domain.
+                values={[-MAX_PP, -MAX_PP / 2, 0, MAX_PP / 2, MAX_PP]}
                 format={(v) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : "0")}
               />
             )}
