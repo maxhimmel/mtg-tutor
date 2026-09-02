@@ -71,6 +71,17 @@ code cites them (`corpus.test.ts` cites issue #3, `diff.ts` cites idea #8,
     and `coach_shown` still cannot tell a set with no archetype data apart from
     one where the coach was merely quiet.
 
+9.  Change vernacular/vocabulary from "colours" to "colors".
+
+- NEVER say "colours"
+
+10. More thorough default set selection when running/testing/prototyping features.
+
+- You (the AI) tend to only select FDN
+- I want you to also choose a couple more.
+- I suggest also using SOS (because it emphasizes specific archetype color combos)
+- I also suggest using TDM (because it seems to want 3-color decks)
+
 # Ideas:
 
 1. **What is left of this is the DECK-TYPE quiz, and it is one derivation away.**
@@ -227,7 +238,6 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
 - And see the best drafts/decks people made, most popular archetype - biggest/most common mistakes.
 
 9. **Shipped as `asked-again` 2026-08-31. Three things stayed open.**
-
    - **The headline is confounded by memory** — the first answer came with a
      reveal naming the card — and the clean measure is a question's FIRST
      answer over time. That needs a bucketing rule and two buckets of history,
@@ -244,6 +254,7 @@ I'm certain that's asking a lot and would appreciate some thought going into thi
      decks out of a set's statistics — no pick behind it, so being asked again
      corrects no error of yours. Taking it costs a second identity shape on the
      row or a second table.
+
 10. --
 11. --
 
@@ -682,6 +693,7 @@ being read -- which bites hardest on a brand-new set, where this app is most
 useful and 17Lands has published nothing).
 
 **What is still open.**
+
 - The backfill has run on the LOCAL deployment only. Prod needs
   `internal.migrations.backfillDials` after the deploy.
 - `habitsCalled` on `stats_viewed` is the number that decides whether any of this
@@ -694,7 +706,6 @@ useful and 17Lands has published nothing).
   tables of pods, whose wheel differs by 0.27-0.41 in `bench-packs`. `openness` is
   computed over packs somebody else passed, so `tau` and the baselines are both
   carried across that gap.
-
 
 3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
@@ -868,6 +879,7 @@ to the data work.
     first key's job unaided, and flattening the first key left the expected
     order standing. A default value in a comparator is a silent tie-break, so
     perturb EACH key, not the function.
+
 5.  **A test one function upstream of the hole also reads as coverage, and this
     one passes.** Trap #4 is a test that cannot go red. This is a test that is
     correct, goes red properly, and is pointed at the wrong function. `layout` and
@@ -895,6 +907,7 @@ to the data work.
     `drill_answered` carries the tier and the outcome, so PostHog could see a
     fixed question answered `stood` while the app's own panel said it had never
     happened.
+
 6.  **A comparison drawn from one side of itself agrees by construction.** The
     results screen sets your forty beside the one `suggestDeck` would have built,
     and for the whole life of that screen the suggestion was handed the MAINDECK
