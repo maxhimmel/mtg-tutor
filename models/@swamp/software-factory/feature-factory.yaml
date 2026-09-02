@@ -1,0 +1,281 @@
+type: '@swamp/software-factory'
+typeVersion: 2026.06.24.1
+id: 6f58cef4-ca3f-40af-973a-e052361875d8
+name: feature-factory
+version: 1
+tags: {}
+methods: {}
+
+# The lifecycle every feature in this repo walks:
+#
+#   research -> planning -> plan-review -> implementing -> review -> done
+#
+# Two things here are enforcement, not paperwork, and they are the reason this
+# exists:
+#
+#   The `research` stage is initial. Nothing reaches planning without a
+#   recorded research artifact, and that artifact's schema requires
+#   `contradictions` -- so research that only found agreement has to say so out
+#   loud rather than by omission.
+#
+#   The `change-summary` schema requires a branch, a base branch, and two or
+#   more commits. A feature implemented as one commit straight onto the base
+#   branch cannot be recorded, so it cannot advance. That is the git discipline
+#   expressed as a schema rather than as a note somebody skims.
+#
+# Every review stage is `dispatch` -- a subagent per skill, findings merged,
+# critical/high blocking. Those reviews are LLM judgement today. The
+# deterministic versions (Playwright + axe over /dev, the vernacular avoid-list
+# lint) become `workflow` stages beside them, which is a YAML edit and no
+# change to the machine's shape.
+globalArguments:
+  stages:
+    - id: research
+      initial: true
+      description: >-
+        Read before building. Collate sources, and go looking for the argument
+        against.
+      maxCycles: 3
+      work:
+        mode: interactive
+        skills: [research]
+        constraints: agent-constraints/research-conventions.md
+      artifacts:
+        - name: research
+          schema:
+            type: object
+            required: [question, sources, findings, contradictions, openQuestions]
+            properties:
+              question:
+                type: string
+                minLength: 1
+              sources:
+                type: array
+                minItems: 2
+                items:
+                  type: object
+                  required: [url, claim]
+                  properties:
+                    url: { type: string, minLength: 1 }
+                    claim: { type: string, minLength: 1 }
+              findings:
+                type: array
+                minItems: 1
+                items: { type: string }
+              contradictions:
+                type: array
+                items:
+                  type: object
+                  required: [claim, counterClaim]
+                  properties:
+                    claim: { type: string, minLength: 1 }
+                    counterClaim: { type: string, minLength: 1 }
+                    resolution: { type: string }
+              openQuestions:
+                type: array
+                items: { type: string }
+      transitions:
+        - name: submit
+          to: planning
+          gates:
+            - type: artifact-exists
+              config: { artifact: research }
+
+    - id: planning
+      description: Turn the research into a plan somebody could disagree with.
+      maxCycles: 5
+      work:
+        mode: interactive
+        skills: [planning]
+        constraints: agent-constraints/planning-conventions.md
+      artifacts:
+        - name: plan
+          schema:
+            type: object
+            required: [summary, steps, testingStrategy, instrumentation]
+            properties:
+              summary:
+                type: string
+                minLength: 1
+              steps:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required: [description]
+                  properties:
+                    description: { type: string, minLength: 1 }
+                    files: { type: array, items: { type: string } }
+              testingStrategy:
+                type: string
+                minLength: 1
+              # CLAUDE.md: every change a person can feel gets a paired metric.
+              # "nothing to instrument, and here is why" is a valid answer; a
+              # missing answer is not.
+              instrumentation:
+                type: string
+                minLength: 1
+              rejectedOptions:
+                type: array
+                items:
+                  type: object
+                  required: [option, why]
+                  properties:
+                    option: { type: string, minLength: 1 }
+                    why: { type: string, minLength: 1 }
+      transitions:
+        - name: submit
+          to: plan-review
+          gates:
+            - type: artifact-exists
+              config: { artifact: plan }
+
+    - id: plan-review
+      description: Adversarial review of the plan, before a line of it is built.
+      maxCycles: 5
+      work:
+        mode: dispatch
+        skills: [architecture-review, research-critic]
+        systemPrompt: |
+          You are an adversarial reviewer. Refute this plan:
+
+          ${{ data.latest(self.name, "artifact-plan").payload.summary }}
+
+          It was built on this research question:
+          ${{ data.latest(self.name, "artifact-research").payload.question }}
+
+          Record findings with severities. Do not soften them, and do not pad
+          the list to look thorough -- a clean review is a real verdict.
+      artifacts:
+        - name: plan-review
+          kind: findings
+          reviews: plan
+      transitions:
+        - name: approve
+          to: implementing
+          gates:
+            - type: artifact-fresh
+              config: { artifact: plan-review, recordedThisCycle: true }
+            - type: findings-clear
+              config: { artifact: plan-review, blocking: [critical, high] }
+            - type: human-approval
+              config: { id: plan-approval }
+        - name: rework
+          to: planning
+
+    - id: implementing
+      description: Build it, on a branch, in commits somebody could review one at a time.
+      maxCycles: 5
+      work:
+        mode: interactive
+        skills: [implementation]
+        constraints: agent-constraints/git-conventions.md
+      artifacts:
+        - name: change-summary
+          schema:
+            type: object
+            required: [summary, branch, baseBranch, commits, headSha]
+            properties:
+              summary:
+                type: string
+                minLength: 1
+              branch:
+                type: string
+                minLength: 1
+              baseBranch:
+                type: string
+                minLength: 1
+              # Two is the whole point. One commit is not incremental, and this
+              # is the knob to relax if it ever costs more than it buys.
+              commits:
+                type: array
+                minItems: 2
+                items:
+                  type: object
+                  required: [sha, subject]
+                  properties:
+                    sha: { type: string, minLength: 7 }
+                    subject: { type: string, minLength: 1 }
+              headSha:
+                type: string
+                minLength: 7
+              files:
+                type: array
+                items: { type: string }
+      transitions:
+        - name: submit
+          to: review
+          gates:
+            - type: artifact-exists
+              config: { artifact: change-summary }
+            - type: cel
+              config:
+                expr: artifacts.change_summary.branch != artifacts.change_summary.baseBranch
+                message: >-
+                  The work was committed onto its own base branch. Move it to a
+                  feature branch and re-record the change summary.
+
+    - id: review
+      description: >-
+        Four adversarial reviews of the built change, in parallel -- the three
+        recurring complaints in this repo, plus architecture.
+      maxCycles: 5
+      work:
+        mode: dispatch
+        skills:
+          - architecture-review
+          - graphics-review
+          - voice-review
+          - stats-review
+        systemPrompt: |
+          You are an adversarial reviewer with one specialty, named by the
+          skill you were given. Review this change:
+
+          ${{ data.latest(self.name, "artifact-change-summary").payload.summary }}
+
+          on branch ${{ data.latest(self.name, "artifact-change-summary").payload.branch }}
+          at ${{ data.latest(self.name, "artifact-change-summary").payload.headSha }}
+
+          against the plan it claims to implement:
+          ${{ data.latest(self.name, "artifact-plan").payload.summary }}
+
+          Stay in your lane -- another reviewer has the other lanes. If your
+          specialty has nothing to say about this change, record no findings
+          and say so. Severities are critical/high/medium/low, and
+          critical/high block the ship.
+      artifacts:
+        - name: review
+          kind: findings
+          reviews: change-summary
+      transitions:
+        - name: ship
+          to: done
+          gates:
+            - type: artifact-fresh
+              config: { artifact: review, recordedThisCycle: true }
+            - type: findings-clear
+              config: { artifact: review, blocking: [critical, high] }
+            - type: human-approval
+              config: { id: ship-approval }
+        - name: rework
+          to: implementing
+
+    - id: done
+      terminal: true
+
+    - id: aborted
+      terminal: true
+
+  globalTransitions:
+    - name: abort
+      to: aborted
+      gates:
+        - type: human-approval
+          config: { id: abort-confirmation }
+
+# Method-scoped so the stored summaries are real history rather than a stack of
+# empty placeholders written after every record_artifact.
+reports:
+  require:
+    - name: "@swamp/software-factory/work-item-summary"
+      methods: [summary]
