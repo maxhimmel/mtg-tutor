@@ -8,20 +8,28 @@ methods: {}
 
 # The lifecycle every feature in this repo walks:
 #
-#   research -> planning -> plan-review -> implementing -> review -> done
+#   triage -+-> research -> planning -> plan-review -+-> implementing -> review -> done
+#           |                                        |
+#           +----------------- express --------------+
 #
 # Two things here are enforcement, not paperwork, and they are the reason this
 # exists:
 #
-#   The `research` stage is initial. Nothing reaches planning without a
-#   recorded research artifact, and that artifact's schema requires
-#   `contradictions` -- so research that only found agreement has to say so out
+#   The `research` stage gates the full lane. Nothing reaches planning without
+#   a recorded research artifact, and that artifact's schema requires
+#   `contradictions` -- so research that found only agreement has to say so out
 #   loud rather than by omission.
 #
-#   The `change-summary` schema requires a branch, a base branch, and two or
-#   more commits. A feature implemented as one commit straight onto the base
-#   branch cannot be recorded, so it cannot advance. That is the git discipline
-#   expressed as a schema rather than as a note somebody skims.
+#   The `change-summary` schema requires a branch and a base branch, and a cel
+#   gate refuses `submit` when they match. Work committed straight onto the
+#   base branch cannot advance.
+#
+# The lane is not a judgement call. `triage` records booleans, and `express`
+# and `full` carry inverse cel gates over them, so exactly one transition is
+# ever satisfied and the driver advances without asking. The express lane is
+# closed whenever the change touches graphics, stats, or user-facing copy --
+# the three things this repo gets wrong -- so the lane that can be skipped is
+# the lane where none of them is in play.
 #
 # Every review stage is `dispatch` -- a subagent per skill, findings merged,
 # critical/high blocking. Those reviews are LLM judgement today. The
@@ -30,8 +38,76 @@ methods: {}
 # change to the machine's shape.
 globalArguments:
   stages:
-    - id: research
+    - id: triage
       initial: true
+      description: >-
+        Declare what the change touches. The answer picks the lane; nobody
+        chooses it.
+      maxCycles: 3
+      work:
+        mode: interactive
+        constraints: agent-constraints/triage-conventions.md
+      artifacts:
+        - name: triage
+          schema:
+            type: object
+            required:
+              - summary
+              - touchesGraphics
+              - touchesStats
+              - touchesUserFacingCopy
+              - touchesUserFacingFlow
+              - needsNewDependency
+              - rationale
+            properties:
+              summary:
+                type: string
+                minLength: 1
+              # Each of these, true, closes the express lane. They are the
+              # standing complaints in this repo, not a generic risk taxonomy.
+              touchesGraphics: { type: boolean }
+              touchesStats: { type: boolean }
+              touchesUserFacingCopy: { type: boolean }
+              touchesUserFacingFlow: { type: boolean }
+              needsNewDependency: { type: boolean }
+              rationale:
+                type: string
+                minLength: 1
+      transitions:
+        - name: express
+          to: implementing
+          gates:
+            - type: artifact-exists
+              config: { artifact: triage }
+            - type: cel
+              config:
+                expr: >-
+                  artifacts.triage.touchesGraphics == false &&
+                  artifacts.triage.touchesStats == false &&
+                  artifacts.triage.touchesUserFacingCopy == false &&
+                  artifacts.triage.touchesUserFacingFlow == false &&
+                  artifacts.triage.needsNewDependency == false
+                message: >-
+                  The change touches something this repo gets wrong when it is
+                  not looked at. Take the full lane.
+        - name: full
+          to: research
+          gates:
+            - type: artifact-exists
+              config: { artifact: triage }
+            - type: cel
+              config:
+                expr: >-
+                  artifacts.triage.touchesGraphics ||
+                  artifacts.triage.touchesStats ||
+                  artifacts.triage.touchesUserFacingCopy ||
+                  artifacts.triage.touchesUserFacingFlow ||
+                  artifacts.triage.needsNewDependency
+                message: >-
+                  Nothing risky is declared touched -- this is an express-lane
+                  change.
+
+    - id: research
       description: >-
         Read before building. Collate sources, and go looking for the argument
         against.
@@ -86,7 +162,6 @@ globalArguments:
       maxCycles: 5
       work:
         mode: interactive
-        skills: [planning]
         constraints: agent-constraints/planning-conventions.md
       artifacts:
         - name: plan
@@ -168,7 +243,6 @@ globalArguments:
       maxCycles: 5
       work:
         mode: interactive
-        skills: [implementation]
         constraints: agent-constraints/git-conventions.md
       artifacts:
         - name: change-summary
@@ -185,11 +259,12 @@ globalArguments:
               baseBranch:
                 type: string
                 minLength: 1
-              # Two is the whole point. One commit is not incremental, and this
-              # is the knob to relax if it ever costs more than it buys.
+              # One, deliberately: a genuine one-commit fix should not be
+              # blocked from being recorded. The discipline that stayed is the
+              # branch -- see the cel gate on `submit`.
               commits:
                 type: array
-                minItems: 2
+                minItems: 1
                 items:
                   type: object
                   required: [sha, subject]
@@ -236,8 +311,13 @@ globalArguments:
           on branch ${{ data.latest(self.name, "artifact-change-summary").payload.branch }}
           at ${{ data.latest(self.name, "artifact-change-summary").payload.headSha }}
 
-          against the plan it claims to implement:
-          ${{ data.latest(self.name, "artifact-plan").payload.summary }}
+          It was triaged as:
+          ${{ data.latest(self.name, "artifact-triage").payload.summary }}
+
+          The plan it claims to implement, if it had one -- express-lane changes
+          have no plan, and this is null for them. Judge those against the
+          triage summary instead:
+          ${{ data.latest(self.name, "artifact-plan") }}
 
           Stay in your lane -- another reviewer has the other lanes. If your
           specialty has nothing to say about this change, record no findings
