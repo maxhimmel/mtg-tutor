@@ -21,8 +21,10 @@ import { Panel } from "./Panel";
  * So the marks live in one `HabitTrack` with a single scale, both ends of it
  * printed, and the field drawn as a labelled rule. The sentences sit under it.
  * The chart says how much of each reading is margin; the list says what the
- * reading means. A row whose interval covers the field still gets its sentence,
- * saying there is nothing yet -- a missing row is not a sentence.
+ * reading means -- and only where there IS one. A quiet dial keeps its row on the
+ * chart, hollow and muted with its interval over the field, and gets no prose:
+ * printing "nothing yet" beside a mark already saying so was how a careful panel
+ * came to look like a broken one.
  *
  * WHY THERE ARE TWO ROWS AND NOT SIX
  *
@@ -50,20 +52,23 @@ import { Panel } from "./Panel";
 /**
  * How each dial reads in either direction, in words a drafter uses.
  *
+ * Two strings, not three: there is no "nothing yet" line, because the chart
+ * already draws that state -- hollow dot, muted label, an interval visibly over
+ * the field -- and a sentence repeating it was one of the three that made the
+ * empty panel read as broken.
+ *
  * "Lane" is what the code calls it and is NOT in `vernacular.yaml`; a player
  * says colours, committing, staying open. `signals` and `open` are both in the
  * corpus and are used as they are defined there.
  */
-const SAYS: Record<ShownDialId, { above: string; below: string; quiet: string }> = {
+const SAYS: Record<ShownDialId, { above: string; below: string }> = {
   lane: {
     above: "You commit to your colours sooner than most drafters do.",
     below: "You stay open longer than most drafters do.",
-    quiet: "Nothing yet on how early you commit to your colours.",
   },
   signal: {
     above: "You read signals harder than most drafters do — what is flowing moves your picks.",
     below: "You read signals less than most drafters do — you take the card in front of you.",
-    quiet: "Nothing yet on how much you read signals.",
   },
 };
 
@@ -99,7 +104,16 @@ export function Habits({ habits }: { habits: HabitsData | null }) {
   // are average" and gets a different panel -- see `stats.overview`.
   if (!habits) return null;
 
-  const quiet = habits.dials.every((d) => !d.called) && !habits.sharpness.called;
+  const said = [
+    ...habits.dials.filter((d) => d.called).map((d) => (d.value > 1 ? SAYS[d.id].above : SAYS[d.id].below)),
+    ...(habits.sharpness.called
+      ? [
+          habits.sharpness.above
+            ? "You pick more consistently than most drafters — the same pack twice gets the same card."
+            : "You pick less consistently than most drafters — close calls go either way.",
+        ]
+      : []),
+  ];
 
   return (
     <Panel
@@ -111,49 +125,47 @@ export function Habits({ habits }: { habits: HabitsData | null }) {
       }
       bodyClassName="gap-3"
     >
-      {/* The chart carries the scale and how much of each reading is margin;
-          the list under it carries what that means in words. Splitting them is
-          what lets the chart have ONE axis for every row -- stacked marks each
-          sized to their own row looked comparable and were not. */}
-      <HabitTrack rows={habits.dials.map(rowFor)} />
+      {/* CAPPED, AND THAT IS THE FIX THE FIRST VERSION MOST NEEDED. The panel is
+          the width of the page, and a two-row dot-and-interval chart handed
+          nineteen hundred pixels draws two hairlines an inch apart in an acre of
+          dark -- every mark tiny, the row labels stranded a hand's width from the
+          marks they name, and the two axis ticks so far apart the eye has nothing
+          to measure between them. The chart is responsive; how much room it
+          DESERVES is this panel's business, and it is about as wide as the prose
+          under it. */}
+      <div className="max-w-md">
+        <HabitTrack rows={habits.dials.map(rowFor)} />
+      </div>
 
-      <ul className="flex flex-col gap-2 border-t border-base-300 pt-3">
-        {habits.dials.map((dial) => (
-          <li
-            key={dial.id}
-            className={`max-w-prose text-sm leading-relaxed ${
-              dial.called ? "" : "text-base-content/55"
-            }`}
-          >
-            {dial.called
-              ? dial.value > 1
-                ? SAYS[dial.id].above
-                : SAYS[dial.id].below
-              : SAYS[dial.id].quiet}
-          </li>
-        ))}
+      {/* ONE LINE PER THING WORTH SAYING, WHICH IS NOT ONE LINE PER DIAL. The
+          first version printed a sentence for every dial and then a summary, so
+          a new player read "nothing yet", "nothing yet", and "nothing clears
+          yet" stacked -- three ways of saying the same thing, which reads as a
+          screen that has broken rather than one that is being careful.
 
-        {/* In the list and not on the chart, because it is the only reading here
-            that is not a measured quantity with an interval -- giving it a row
-            on a scale would draw an accuracy it does not have. */}
-        {habits.sharpness.called && (
-          <li className="max-w-prose text-sm leading-relaxed">
-            {habits.sharpness.above
-              ? "You pick more consistently than most drafters — the same pack twice gets the same card."
-              : "You pick less consistently than most drafters — close calls go either way."}
-          </li>
-        )}
-      </ul>
+          The chart already shows a quiet row: its dot is hollow, its label is
+          muted, and its interval visibly covers the field. So the prose says
+          only what the chart cannot -- what a reading MEANS -- and where there
+          is no reading it says the one useful thing instead, which is how many
+          drafts it takes. */}
+      {said.length > 0 && (
+        <ul className="flex flex-col gap-2 border-t border-base-300 pt-3">
+          {said.map((line) => (
+            <li key={line} className="max-w-prose text-sm leading-relaxed">
+              {line}
+            </li>
+          ))}
+        </ul>
+      )}
 
-      {quiet && (
-        // The empty state has to be a sentence about DRAFTS, because that is the
-        // thing a person can do something about. "Not enough data" is true and
-        // useless; five drafts is a number they can go and get -- and it is
-        // measured rather than guessed, which is what the whole first phase was
-        // for.
+      {said.length === 0 && (
+        // The empty state names DRAFTS, because that is the thing a person can go
+        // and do about it. "Not enough data" is true and useless; five is a
+        // number, and it is a measured one -- `fit-drafter` put committing at
+        // about five drafts and signals at about ten.
         <p className="max-w-prose text-sm leading-relaxed text-base-content/55">
-          Nothing here clears its margin yet. Committing to colours usually takes
-          about five drafts to show, and reading signals about ten.
+          Neither reading clears its margin yet — committing to colours usually
+          shows after about five drafts, and reading signals after ten.
         </p>
       )}
 

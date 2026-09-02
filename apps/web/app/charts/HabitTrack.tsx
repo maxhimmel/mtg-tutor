@@ -52,10 +52,20 @@ import { Plot, Reference, TICK_TEXT, ValueAxisBottom } from "./Plot";
  */
 const FLOOR = 1.96 * DRAFTER_TAU;
 
-const ROW = 22;
+/**
+ * How much room the widest interval leaves before the edge.
+ *
+ * Without it the row that SETS the domain has its end serif drawn exactly on the
+ * axis's first pixel, which reads as a bar running off the chart rather than as
+ * the widest thing on it. `GapMark` pads by 1.15 for the same reason; this needs
+ * less, because here the domain is shared and the padding shows on every row.
+ */
+const BREATHE = 1.08;
+
+const ROW = 30;
 const SERIF = 4;
 const SPAN_W = 1.5;
-const MARGIN = { top: 8, right: 10, bottom: 26, left: 64 };
+const MARGIN = { top: 10, right: 12, bottom: 28, left: 68 };
 
 /** A multiple of what the field weighs something at. */
 const times = (v: number) => `${v.toFixed(2)}×`;
@@ -70,10 +80,8 @@ export interface HabitRow {
 }
 
 export function HabitTrack({ rows }: { rows: HabitRow[] }) {
-  const half = Math.max(
-    FLOOR,
-    ...rows.map((r) => Math.abs(r.value - 1) + 1.96 * r.se),
-  );
+  const half =
+    Math.max(FLOOR, ...rows.map((r) => Math.abs(r.value - 1) + 1.96 * r.se)) * BREATHE;
   const low = 1 - half;
   const high = 1 + half;
   const height = rows.length * ROW + MARGIN.top + MARGIN.bottom;
@@ -81,8 +89,8 @@ export function HabitTrack({ rows }: { rows: HabitRow[] }) {
   return (
     <Plot
       height={height}
-      // Sixty-four of left margin before a track starts, and a track under about
-      // 150px cannot show an interval, its ends and a dot as separate things.
+      // Sixty-eight of left margin before a track starts, and a track under about
+      // 200px cannot show an interval, its ends and a dot as separate things.
       needs={280}
       // The sentences alone, which is what a reader on a phone wanted anyway --
       // and they carry the whole reading, since the chart's job here is to show
@@ -112,16 +120,24 @@ export function HabitTrack({ rows }: { rows: HabitRow[] }) {
       tip={{ none: "Every row is direct-labelled and read out in the list below it." }}
       margin={MARGIN}
     >
-      {({ width, height: inner }) => {
+      {({ width }) => {
         const x = scaleLinear({ domain: [low, high], range: [0, width] });
         const mid = (i: number) => i * ROW + ROW / 2;
 
         return (
           <>
             {rows.map((row, i) => {
-              // Hollow where the interval covers the field, filled where it
-              // clears -- the same pairing `GapMark` uses, and the second
-              // channel beside position so the reading never rests on hue.
+              // THE SPAN IS ALWAYS RECESSIVE AND ONLY THE DOT CHANGES, which is
+              // the hierarchy the first version did not have: it drew the
+              // estimate and its margin in one weight, so a row read as a length
+              // rather than as a value with a margin around it. The span is the
+              // uncertainty, the dot is the answer, and the rule is what the
+              // answer is measured against -- three jobs, three weights.
+              //
+              // Hollow against saturated on the dot is the second channel beside
+              // position, so the reading never rests on hue: the label's own
+              // weight below is the third, and the sentence under the chart is
+              // the fourth.
               const ink = row.called ? INK.yours : INK.hollow;
               const y = mid(i);
               return (
@@ -142,7 +158,7 @@ export function HabitTrack({ rows }: { rows: HabitRow[] }) {
                       `M ${x(row.value - 1.96 * row.se)} ${y} H ${x(row.value + 1.96 * row.se)} ` +
                       `M ${x(row.value + 1.96 * row.se)} ${y - SERIF} V ${y + SERIF}`
                     }
-                    stroke={ink}
+                    stroke={INK.hollow}
                     strokeWidth={SPAN_W}
                     fill="none"
                   />
