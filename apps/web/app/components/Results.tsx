@@ -61,7 +61,7 @@ const REVEAL = [
 // had the identical problem and the identical fix.
 function Uncastable({ colors }: { colors: string }) {
   const cited = splitCitations(
-    "cannot reach a reliable number of sources at this land count — eight for a main colour, " +
+    "cannot reach a reliable number of sources at this land count — eight for a main color, " +
       "three for a splash [MANA-02, MANA-05].",
     PRINCIPLES,
   );

@@ -19,7 +19,9 @@ import { Panel } from "./Panel";
  * where the rows looked comparable and were drawn on different scales.
  *
  * So the marks live in one `HabitTrack` with a single scale, both ends of it
- * printed, and the field drawn as a labelled rule. The sentences sit under it.
+ * printed, the field drawn as a labelled rule, and every track answering the
+ * pointer -- which is where the numbers live, since none are printed on a mark.
+ * The sentences sit under it.
  * The chart says how much of each reading is margin; the list says what the
  * reading means -- and only where there IS one. A quiet dial keeps its row on the
  * chart, hollow and muted with its interval over the field, and gets no prose:
@@ -58,12 +60,12 @@ import { Panel } from "./Panel";
  * empty panel read as broken.
  *
  * "Lane" is what the code calls it and is NOT in `vernacular.yaml`; a player
- * says colours, committing, staying open. `signals` and `open` are both in the
+ * says colors, committing, staying open. `signals` and `open` are both in the
  * corpus and are used as they are defined there.
  */
 const SAYS: Record<ShownDialId, { above: string; below: string }> = {
   lane: {
-    above: "You commit to your colours sooner than most drafters do.",
+    above: "You commit to your colors sooner than most drafters do.",
     below: "You stay open longer than most drafters do.",
   },
   signal: {
@@ -79,9 +81,9 @@ const SAYS: Record<ShownDialId, { above: string; below: string }> = {
  * chart is where the idea gets said properly; this is only the handle that ties
  * a row to its line.
  */
-const TRACK_LABEL: Record<ShownDialId, string> = {
-  lane: "Colours",
-  signal: "Signals",
+const TRACK: Record<ShownDialId, { label: string; about: string }> = {
+  lane: { label: "Colors", about: "committing to your colors" },
+  signal: { label: "Signals", about: "reading what is flowing" },
 };
 
 const rowFor = (dial: {
@@ -89,7 +91,7 @@ const rowFor = (dial: {
   value: number;
   se: number;
   called: boolean;
-}): HabitRow => ({ label: TRACK_LABEL[dial.id], ...dial });
+}): HabitRow => ({ ...TRACK[dial.id], ...dial });
 
 export interface HabitsData {
   drafts: number;
@@ -134,7 +136,7 @@ export function Habits({ habits }: { habits: HabitsData | null }) {
           DESERVES is this panel's business, and it is about as wide as the prose
           under it. */}
       <div className="max-w-md">
-        <HabitTrack rows={habits.dials.map(rowFor)} />
+        <HabitTrack rows={habits.dials.map(rowFor)} picks={habits.picks} />
       </div>
 
       {/* ONE LINE PER THING WORTH SAYING, WHICH IS NOT ONE LINE PER DIAL. The
@@ -164,7 +166,7 @@ export function Habits({ habits }: { habits: HabitsData | null }) {
         // number, and it is a measured one -- `fit-drafter` put committing at
         // about five drafts and signals at about ten.
         <p className="max-w-prose text-sm leading-relaxed text-base-content/55">
-          Neither reading clears its margin yet — committing to colours usually
+          Neither reading clears its margin yet — committing to colors usually
           shows after about five drafts, and reading signals after ten.
         </p>
       )}

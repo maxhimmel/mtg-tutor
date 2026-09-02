@@ -1133,10 +1133,10 @@ function ColorKey({ rows }: { rows: DiffRow[] }) {
           ...(anyUndecided
             ? [
                 {
-                  label: "no colours yet",
+                  label: "no colors yet",
                   ink: THREAD,
                   shape: "hollow" as const,
-                  means: "drawn as a thread, before two cards of a colour are in the pool",
+                  means: "drawn as a thread, before two cards of a color are in the pool",
                 },
               ]
             : []),

@@ -2,38 +2,40 @@
 
 import { scaleLinear } from "@visx/scale";
 import { DRAFTER_TAU } from "@mtg-tutor/core";
-import { INK, MARK } from "./ink";
-import { Plot, Reference, TICK_TEXT, ValueAxisBottom } from "./Plot";
+import { useCursorTip } from "../components/CursorTip";
+import { Plot, Reference, ValueAxisBottom } from "./Plot";
 
 /**
  * Where a drafter sits against the field, on one dial per row.
  *
- * WHY THIS IS NOT `GapMark` STACKED, WHICH IS WHAT IT WAS FIRST
+ * WHY THE MARK IS A BAND AND NOT A HAIRLINE, WHICH IS WHAT IT WAS TWICE
  *
- * `GapMark` earns its missing axis with one sentence in its own docblock: it
- * "rides inside an eyebrow beside the numbers it draws", so the marks carry the
- * relation and the text carries the values. The habits panel took that mark and
- * deliberately printed no numbers -- which removes the exact thing the exemption
- * rests on and leaves a rule, a dot and a span with nothing on screen saying
- * what any of them are worth.
+ * The first two versions drew each row as `GapMark`'s thin span with serifs on
+ * the ends. That mark is eighty pixels wide and lives in an eyebrow with its
+ * numbers printed beside it; here it is a track in a panel with no numbers on
+ * it, and at that size a 1.5px rule with a 4px dot is not a small chart, it is
+ * an empty one. Shrinking the frame did not fix that -- the proportions changed
+ * and the drawing still had nothing in it to look at.
  *
- * Two more followed from it, and both are in the house rules by name. The rule
- * here is at ONE, not zero, and `Reference` exists because "an unlabelled
- * reference line is a mark the reader has to guess the meaning of, and the guess
- * is usually zero". And `GapMark` computes its own `reach` per call, which is
- * right for one mark alone in an eyebrow and wrong the moment there are two
- * stacked: each row would be drawn on its own scale, they would look comparable,
- * and nothing would say they were not.
+ * `MARK.band` exists in `ink.ts` for exactly this and says so: "the band under a
+ * dot: an interval, a margin, a range". And `DeckBands` in the archetype quiz is
+ * the model CLAUDE.md names for showing uncertainty -- a 6px rounded band with
+ * the estimate as a dot on it, a rule it either reaches or does not, and the
+ * whole track taking the pointer. So this is that, and a reader who has met the
+ * quiz has already met this.
  *
- * So: one frame, one scale for every row, both ends of it printed, and the field
- * drawn as a labelled rule.
+ * `GapMark`'S TOGGLE-SWITCH WARNING DOES NOT REACH HERE, and that is worth
+ * arguing rather than quietly ignoring. Its first version read as a control
+ * because it was a rounded lozenge with a knob in it, unlabelled, at the top of
+ * a panel full of buttons. This has a named row beside it, an axis under it and
+ * a labelled rule through it. What that warning is about is a mark with no
+ * context; this one has three.
  *
- * THE GRAMMAR OF THE MARK IS STILL `GapMark`'S, on purpose. A thin span with a
- * serif at each end and a point estimate on it -- a SPAN and a POINT as
- * different shapes rather than one shape at two thicknesses, which is the fix
- * that stopped the first version reading as a toggle switch. A reader who has
- * learned the mark on the review screen has already learned this one, and the
- * question is the same question: does the span reach the rule.
+ * AND IT CAN BE ASKED. Same reasoning `DeckBands` gives: the band, the dot and
+ * the rule each carry a different claim, and no caption explains three claims at
+ * once in a way anybody reads. `useCursorTip` is where the numbers live -- which
+ * is the resolution to this chart printing none on its marks, rather than an
+ * exception to it.
  */
 
 /**
@@ -42,148 +44,206 @@ import { Plot, Reference, TICK_TEXT, ValueAxisBottom } from "./Plot";
  * A dial with NO information comes back at the prior: sitting on the field, with
  * the prior's own width as its interval. So `1.96 * tau` is the widest interval
  * this chart can ever be handed, and a domain narrower than it would crop the
- * one case the chart most has to draw honestly -- somebody with two drafts, who
- * is most people. Deriving the floor from `DRAFTER_TAU` rather than picking one
+ * one case it most has to draw honestly -- somebody with two drafts, who is most
+ * people. Deriving the floor from `DRAFTER_TAU` rather than picking a number
  * also means it moves if the prior is ever remeasured.
  *
- * It grows for a drafter further out than that, because `GapMark` is right that
- * the whole bar has to be on screen: the reading is whether the span reaches the
- * rule, and a cropped span answers a question nobody asked.
+ * It grows for a drafter further out than that: the reading is whether the band
+ * reaches the rule, and a cropped band answers a question nobody asked.
  */
 const FLOOR = 1.96 * DRAFTER_TAU;
 
 /**
- * How much room the widest interval leaves before the edge.
+ * Room between the widest band and the edge.
  *
- * Without it the row that SETS the domain has its end serif drawn exactly on the
- * axis's first pixel, which reads as a bar running off the chart rather than as
- * the widest thing on it. `GapMark` pads by 1.15 for the same reason; this needs
- * less, because here the domain is shared and the padding shows on every row.
+ * Without it the row that SETS the domain has its end drawn on the axis's first
+ * pixel, which reads as a bar running off the chart rather than as the widest
+ * thing on it.
  */
 const BREATHE = 1.08;
 
-const ROW = 30;
-const SERIF = 4;
-const SPAN_W = 1.5;
-const MARGIN = { top: 10, right: 12, bottom: 28, left: 68 };
+const AXIS_H = 22;
+/** Under this the axis is two numbers instead, and the rows carry on regardless. */
+const AXIS_NEEDS = 200;
+/** The label column, wide enough for the longest dial name at this size. */
+const NAME = "w-[4.5rem]";
 
 /** A multiple of what the field weighs something at. */
 const times = (v: number) => `${v.toFixed(2)}×`;
 
 export interface HabitRow {
-  /** Short enough to sit in the left margin: "Colours", "Signals". */
+  /** Short enough for the label column: "Colors", "Signals". */
   label: string;
+  /** What this dial is about, for the pointer: "how early you commit". */
+  about: string;
   /** 1 is the field. */
   value: number;
   se: number;
   called: boolean;
 }
 
-export function HabitTrack({ rows }: { rows: HabitRow[] }) {
+export function HabitTrack({ rows, picks }: { rows: HabitRow[]; picks: number }) {
+  const tip = useCursorTip();
+
   const half =
     Math.max(FLOOR, ...rows.map((r) => Math.abs(r.value - 1) + 1.96 * r.se)) * BREATHE;
-  const low = 1 - half;
-  const high = 1 + half;
-  const height = rows.length * ROW + MARGIN.top + MARGIN.bottom;
+  const domain: [number, number] = [1 - half, 1 + half];
+
+  // Per cent rather than pixels, which is what keeps the marks as HTML: a row
+  // carries a name in real text beside its track, and a span cannot be placed in
+  // pixels by a parent nothing has measured. The axis below maps the SAME domain
+  // onto its own box in pixels -- two scales, one domain, and the domain is the
+  // thing that must not be duplicated.
+  const x = scaleLinear({ domain, range: [0, 100] });
+  const field = x(1);
+
+  /**
+   * What the pointer is nearest, and what that mark claims.
+   *
+   * Measured in pixels off the track's own box rather than in dial units,
+   * because "am I on the dot" is a question about the drawing: the dot is eight
+   * pixels whatever the scale, and a reader aiming at it is aiming at what they
+   * can see. Same shape as `DeckBands.describe`, deliberately.
+   */
+  function describe(row: HabitRow, e: { clientX: number; currentTarget: Element }): string {
+    const box = e.currentTarget.getBoundingClientRect();
+    const at = e.clientX - box.left;
+    const under = x.invert((at / box.width) * 100);
+    const margin = 1.96 * row.se;
+    const near = (v: number) => Math.abs(at - (x(v) / 100) * box.width) < 8;
+
+    if (near(row.value)) {
+      return `You weigh ${row.about} ${times(row.value)} what a typical drafter does.`;
+    }
+    if (near(1)) {
+      return "A typical drafter of the sets you played, from 17Lands. Every row is measured from here.";
+    }
+    if (Math.abs(under - row.value) <= margin) {
+      return row.called
+        ? `The slack ${picks} picks leave. It clears the line, so the reading holds.`
+        : `The slack ${picks} picks leave. While it covers the line there is nothing to call, whichever side the dot is on.`;
+    }
+    return `${times(under)}, which is outside what ${picks} picks can support.`;
+  }
 
   return (
-    <Plot
-      height={height}
-      // Sixty-eight of left margin before a track starts, and a track under about
-      // 200px cannot show an interval, its ends and a dot as separate things.
-      needs={280}
-      // The sentences alone, which is what a reader on a phone wanted anyway --
-      // and they carry the whole reading, since the chart's job here is to show
-      // how much of it is margin.
-      instead={
-        <ul className="flex flex-col gap-1 text-sm">
-          {rows.map((r) => (
-            <li key={r.label} className={r.called ? "" : "text-base-content/55"}>
-              {r.label}: {r.called ? times(r.value) : "inside the margin"}
+    <div>
+      <ul className="relative flex flex-col gap-1">
+        {rows.map((row) => {
+          const margin = 1.96 * row.se;
+          const lo = row.value - margin;
+          const hi = row.value + margin;
+
+          return (
+            <li key={row.label} className="flex items-center gap-3">
+              <span
+                className={`${NAME} shrink-0 text-xs ${
+                  row.called ? "text-base-content/80" : "text-base-content/45"
+                }`}
+              >
+                {row.label}
+              </span>
+
+              {/* The whole track takes the pointer, not the marks: the dot is
+                  eight pixels and the band six tall, and a reader aiming at
+                  either would spend the hover missing. */}
+              <span
+                className="relative h-5 min-w-0 flex-1"
+                role="img"
+                aria-label={
+                  `${row.label}: you weigh ${row.about} ${times(row.value)} what a typical ` +
+                  `drafter does, give or take ${margin.toFixed(2)} — ` +
+                  (row.called
+                    ? "a reading that clears the field."
+                    : "a margin that still covers the field, so there is nothing to call.")
+                }
+                {...tip.follow((e) => describe(row, e))}
+              >
+                <span
+                  aria-hidden
+                  className={`absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full ${
+                    row.called ? "bg-primary/30" : "bg-base-content/15"
+                  }`}
+                  style={{ left: `${x(lo)}%`, width: `${x(hi) - x(lo)}%` }}
+                />
+                <span
+                  aria-hidden
+                  className={`absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                    row.called ? "bg-primary" : "bg-base-content/40"
+                  }`}
+                  style={{ left: `${x(row.value)}%` }}
+                />
+              </span>
             </li>
-          ))}
-        </ul>
-      }
-      label={
-        `How much you weigh each thing against a typical drafter, ` +
-        `${times(low)} to ${times(high)}, with the field at ${times(1)}. ` +
-        `Each row is an estimate and the interval around it; a row whose ` +
-        `interval covers the field is one the data cannot call.`
-      }
-      // One series -- every row is the same quantity about a different thing --
-      // and each is direct-labelled in the left margin. A key would name the
-      // colour of the only ink on the chart.
-      legend={{ none: "One series, and every row is labelled where it sits." }}
-      // The scale is printed, the field is labelled, and the sentence under the
-      // chart says the reading for each row in words. There is nothing a hover
-      // could add that is not already on screen.
-      tip={{ none: "Every row is direct-labelled and read out in the list below it." }}
-      margin={MARGIN}
-    >
-      {({ width }) => {
-        const x = scaleLinear({ domain: [low, high], range: [0, width] });
-        const mid = (i: number) => i * ROW + ROW / 2;
+          );
+        })}
 
-        return (
-          <>
-            {rows.map((row, i) => {
-              // THE SPAN IS ALWAYS RECESSIVE AND ONLY THE DOT CHANGES, which is
-              // the hierarchy the first version did not have: it drew the
-              // estimate and its margin in one weight, so a row read as a length
-              // rather than as a value with a margin around it. The span is the
-              // uncertainty, the dot is the answer, and the rule is what the
-              // answer is measured against -- three jobs, three weights.
-              //
-              // Hollow against saturated on the dot is the second channel beside
-              // position, so the reading never rests on hue: the label's own
-              // weight below is the third, and the sentence under the chart is
-              // the fourth.
-              const ink = row.called ? INK.yours : INK.hollow;
-              const y = mid(i);
-              return (
-                <g key={row.label}>
-                  <text
-                    x={-8}
-                    y={y}
-                    textAnchor="end"
-                    dominantBaseline="middle"
-                    {...TICK_TEXT}
-                    fill={row.called ? INK.value : INK.label}
-                  >
-                    {row.label}
-                  </text>
-                  <path
-                    d={
-                      `M ${x(row.value - 1.96 * row.se)} ${y - SERIF} V ${y + SERIF} ` +
-                      `M ${x(row.value - 1.96 * row.se)} ${y} H ${x(row.value + 1.96 * row.se)} ` +
-                      `M ${x(row.value + 1.96 * row.se)} ${y - SERIF} V ${y + SERIF}`
-                    }
-                    stroke={INK.hollow}
-                    strokeWidth={SPAN_W}
-                    fill="none"
-                  />
-                  <circle cx={x(row.value)} cy={y} r={MARK.dot / 2} fill={ink} />
-                </g>
-              );
-            })}
-
-            {/* Over the marks, because it is the thing they are measured
-                against rather than a mark among them -- same ordering GapMark
-                uses for its zero. */}
-            <Reference at={x(1)} height={rows.length * ROW} label="the field" />
-
-            {/* The ends of the domain and nothing between them. They ARE the
-                fact being stated, and a tick at 1 would sit under the reference
-                label saying the same thing twice. */}
-            <ValueAxisBottom
-              scale={x}
-              top={rows.length * ROW}
-              values={[low, high]}
-              format={times}
+        {/* The field, running the height of the list inside a spacer laid out to
+            the same columns as a row -- so it lands on the tracks' own scale
+            without anything having to know what the columns add up to. Same
+            trick `DeckBands` uses for its zero. */}
+        <span aria-hidden className="pointer-events-none absolute inset-0 flex items-stretch gap-3">
+          <span className={`${NAME} shrink-0`} />
+          <span className="relative min-w-0 flex-1">
+            <span
+              className="absolute inset-y-0 w-px bg-base-content/45"
+              style={{ left: `${field}%` }}
             />
-          </>
-        );
-      }}
-    </Plot>
+          </span>
+        </span>
+      </ul>
+
+      {/* The scale, in numbers, on the tracks' own box. The spacer columns are
+          the same trick again, so the axis is drawn at the width it is aligned
+          to rather than at a width anything here had to work out. */}
+      <div className="flex items-start gap-3 pt-0.5">
+        <span className={`${NAME} shrink-0`} />
+        <div className="min-w-0 flex-1">
+          <Plot
+            height={AXIS_H}
+            needs={AXIS_NEEDS}
+            instead={
+              <p className="eyebrow pt-1">
+                {times(domain[0])} to {times(domain[1])}, field at {times(1)}
+              </p>
+            }
+            label={
+              `How much you weigh each thing against a typical drafter, ` +
+              `${times(domain[0])} to ${times(domain[1])}, with the field at ${times(1)}.`
+            }
+            // This `Plot` is the AXIS ONLY -- the marks are the HTML rows above,
+            // because a row carries a name in real text -- so both guides belong
+            // to the chart rather than to the frame, and saying so here is what
+            // stops a second key appearing under a rule.
+            legend={{
+              none: "One series; every row is named where it sits and the rule is labelled on the axis.",
+            }}
+            tip={{
+              none: "The rows own the pointer: `useCursorTip` is wired onto each track above, where the marks a reader is aiming at actually are.",
+            }}
+          >
+            {({ width }) => {
+              const px = scaleLinear({ domain, range: [0, width] });
+              return (
+                <>
+                  <ValueAxisBottom
+                    scale={px}
+                    top={1}
+                    values={[domain[0], domain[1]]}
+                    format={times}
+                  />
+                  {/* Continues the rule through the axis and names it. An
+                      unlabelled reference gets read as a zero, and this one is
+                      at one. */}
+                  <Reference at={px(1)} height={1} label="the field" />
+                </>
+              );
+            }}
+          </Plot>
+        </div>
+      </div>
+
+      {tip.node}
+    </div>
   );
 }

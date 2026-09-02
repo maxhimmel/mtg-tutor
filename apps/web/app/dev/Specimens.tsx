@@ -1009,11 +1009,11 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="At the narrowest the app gives it" width="w-[375px] shrink-0">
           <Habits habits={habitsFixture("both")} />
         </Bay>
-        {/* Under `HabitTrack`'s `needs`, so the track is replaced by the values
+        {/* Under the axis `Plot`'s `needs`, so the scale is replaced by the values
             as a list. Here because a fallback nobody has looked at is a fallback
             that renders clipped, empty or wrong on the first phone that meets
             it -- which is the whole reason this page exists. */}
-        <Bay label="Below the width where the track stops being true" width="w-[260px] shrink-0">
+        <Bay label="Below the width where the axis stops fitting" width="w-[260px] shrink-0">
           <Habits habits={habitsFixture("both")} />
         </Bay>
       </div>

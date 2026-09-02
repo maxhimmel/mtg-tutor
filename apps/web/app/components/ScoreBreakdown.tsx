@@ -28,11 +28,11 @@ import { useCursorTip, type CursorTip } from "./CursorTip";
 const TERM_COPY: Record<string, { label: string; why: string }> = {
   archetype: {
     label: "What the archetype wants",
-    why: "How this card does in decks your colours, against how it does everywhere.",
+    why: "How this card does in decks your colors, against how it does everywhere.",
   },
   splash: {
     label: "Splash cost",
-    why: "The measured win rate a deck gives up to run the extra colour.",
+    why: "The measured win rate a deck gives up to run the extra color.",
   },
   "off-color": {
     label: "Your deck can't cast it",
