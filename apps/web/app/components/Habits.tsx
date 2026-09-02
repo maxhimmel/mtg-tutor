@@ -1,20 +1,28 @@
 "use client";
 
 import type { ShownDialId } from "@mtg-tutor/core";
-import { GapMark } from "../charts/GapMark";
+import { HabitTrack, type HabitRow } from "../charts/HabitTrack";
 import { Panel } from "./Panel";
 
 /**
  * What the app has noticed about how you draft, and what it refuses to say.
  *
- * ONE SENTENCE PER DIAL, AND ONLY WHERE THE INTERVAL EARNS IT
+ * A CHART, THEN THE SENTENCES, AND THE SPLIT IS THE POINT
  *
- * Every row is the same picture as `GapMark` everywhere else in the app: a
- * span, a point on it, and a rule the span either reaches or does not. The rule
- * is the field rather than zero, and the reading is unchanged -- if the span
- * touches it, the app has nothing to say and says so in the row rather than
- * hiding it. A reader who has learned the mark on the review screen has already
- * learned this one.
+ * The first version put one `GapMark` inline beside each sentence, and that was
+ * wrong three ways, all of them in the house rules by name. `GapMark` earns its
+ * missing axis by riding inside an eyebrow beside the numbers it draws, and this
+ * panel prints no numbers, so the exemption did not come with it. Its reference
+ * rule sits at ONE here rather than at zero and was unlabelled, which is exactly
+ * the mark a reader guesses is a zero. And it sizes its own scale per call --
+ * right for one mark alone in an eyebrow, wrong the moment two are stacked,
+ * where the rows looked comparable and were drawn on different scales.
+ *
+ * So the marks live in one `HabitTrack` with a single scale, both ends of it
+ * printed, and the field drawn as a labelled rule. The sentences sit under it.
+ * The chart says how much of each reading is margin; the list says what the
+ * reading means. A row whose interval covers the field still gets its sentence,
+ * saying there is nothing yet -- a missing row is not a sentence.
  *
  * WHY THERE ARE TWO ROWS AND NOT SIX
  *
@@ -23,15 +31,14 @@ import { Panel } from "./Panel";
  * would be a second opinion about what is measurable, free to disagree with the
  * one that was actually derived.
  *
- * AND WHY THE NUMBERS ARE NOT PRINTED
+ * AND WHY NO NUMBER IS PRINTED PER ROW
  *
- * A dial is a multiple of what the field weighs something at, and "1.28" is a
- * figure with no unit anybody can hold. The mark carries the relation, which is
- * the whole of what a reader can act on -- more than the field, less, or not
- * enough drafts to tell. Printing 1.28 beside it would invite a precision the
- * measurement does not have: the same drafter's next ten drafts move it, and
- * `notes.md` records that the honest resolution here is three claims, not three
- * decimal places.
+ * The axis states the scale, which is the thing that has to be on screen. What
+ * is not on screen is a figure beside each dot, because a drafter's next ten
+ * drafts move it and "1.28" invites a precision the measurement does not have --
+ * the honest resolution here is a side of the rule and a margin, not three
+ * decimal places. A reader who wants the value can read it off the axis, which
+ * is what an axis is for.
  *
  * Sharpness is a DIRECTION with no figure at all, and that is not squeamishness.
  * The one-step estimate off stored curvature is biased -- 0.24 against a truth
@@ -60,9 +67,24 @@ const SAYS: Record<ShownDialId, { above: string; below: string; quiet: string }>
   },
 };
 
-/** A multiple of what the field weighs something at, said out loud. */
-const asMultiple = (value: number) =>
-  `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(2)} against the field`;
+/**
+ * The short name each dial goes by in the chart's left margin.
+ *
+ * Two syllables, because it sits in 64px beside a track. The sentence below the
+ * chart is where the idea gets said properly; this is only the handle that ties
+ * a row to its line.
+ */
+const TRACK_LABEL: Record<ShownDialId, string> = {
+  lane: "Colours",
+  signal: "Signals",
+};
+
+const rowFor = (dial: {
+  id: ShownDialId;
+  value: number;
+  se: number;
+  called: boolean;
+}): HabitRow => ({ label: TRACK_LABEL[dial.id], ...dial });
 
 export interface HabitsData {
   drafts: number;
@@ -89,33 +111,33 @@ export function Habits({ habits }: { habits: HabitsData | null }) {
       }
       bodyClassName="gap-3"
     >
-      <ul className="flex flex-col gap-3">
+      {/* The chart carries the scale and how much of each reading is margin;
+          the list under it carries what that means in words. Splitting them is
+          what lets the chart have ONE axis for every row -- stacked marks each
+          sized to their own row looked comparable and were not. */}
+      <HabitTrack rows={habits.dials.map(rowFor)} />
+
+      <ul className="flex flex-col gap-2 border-t border-base-300 pt-3">
         {habits.dials.map((dial) => (
-          <li key={dial.id} className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <GapMark
-              gap={dial.value - 1}
-              margin={1.96 * dial.se}
-              describe={asMultiple}
-            />
-            <p
-              className={`max-w-prose flex-1 text-sm leading-relaxed ${
-                dial.called ? "" : "text-base-content/55"
-              }`}
-            >
-              {dial.called
-                ? dial.value > 1
-                  ? SAYS[dial.id].above
-                  : SAYS[dial.id].below
-                : SAYS[dial.id].quiet}
-            </p>
+          <li
+            key={dial.id}
+            className={`max-w-prose text-sm leading-relaxed ${
+              dial.called ? "" : "text-base-content/55"
+            }`}
+          >
+            {dial.called
+              ? dial.value > 1
+                ? SAYS[dial.id].above
+                : SAYS[dial.id].below
+              : SAYS[dial.id].quiet}
           </li>
         ))}
 
-        {/* Below the dials and without a mark, because it is the only line here
-            that is not a measured quantity with an interval. Giving it one would
-            be drawing an accuracy it does not have. */}
+        {/* In the list and not on the chart, because it is the only reading here
+            that is not a measured quantity with an interval -- giving it a row
+            on a scale would draw an accuracy it does not have. */}
         {habits.sharpness.called && (
-          <li className="border-t border-base-300 pt-3 text-sm leading-relaxed">
+          <li className="max-w-prose text-sm leading-relaxed">
             {habits.sharpness.above
               ? "You pick more consistently than most drafters — the same pack twice gets the same card."
               : "You pick less consistently than most drafters — close calls go either way."}

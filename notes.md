@@ -805,8 +805,23 @@ unread (Deferred #2), and what is left open is Ideas #9.
    would rot the day a curve feature lands, and `policy.ts` has had one as far as
    a fitted number twice. Narrowed, that day is a compile error.
 
-   **What is still not done.** The backfill has not been run on either
-   deployment. Nobody has looked at the panel with a real history in it. And
+   **The chart was wrong first, and the way it was wrong is worth keeping.** It
+   reused `GapMark`, which is exempt from having an axis for a reason written in
+   its own docblock -- it "rides inside an eyebrow beside the numbers it draws",
+   so the mark carries the relation and the text carries the values. The panel
+   then printed no numbers, which removes the thing the exemption rests on. Two
+   more followed: the reference rule sits at ONE here rather than zero and was
+   unlabelled, which is the case `Reference` exists for by name; and `GapMark`
+   sizes its scale per call, so two stacked rows were drawn on two different
+   scales, looked comparable, and said nothing about it. **An exemption travels
+   with the conditions that earned it, and reusing a mark does not reuse them.**
+   Fixed as `HabitTrack`: one frame, one scale, both ends printed, the field
+   drawn as a labelled rule.
+
+   **What is still not done.** The backfill has been run on the LOCAL deployment
+   only -- two drafts, both measurable, and at 78 picks both dials come back
+   quiet (lane 1.13 +-0.31, signal 0.84 +-0.44), which is the empty state
+   working. Neither deployment beyond that. Nobody has looked at the panel with a real history in it. And
    `habitsCalled` on `stats_viewed` is the number that decides whether any of
    this was real: if drafts climb past five and ten across the userbase while it
    stays at zero, the counts that came out of a simulated drafter did not survive
