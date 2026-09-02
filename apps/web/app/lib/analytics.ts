@@ -877,6 +877,33 @@ export function statsViewed(p: {
   asked?: number;
   askedAgain?: number;
   tookBack?: number;
+  /**
+   * What the habits panel had, and whether it had anything to SAY.
+   *
+   * Fields here rather than a `habits_shown` of its own, for the reason the
+   * paragraph above gives about `stats_empty`: this panel only ever renders on
+   * this page, in this view, so a separate event would be this one filtered.
+   * Same shape as `asked`/`tookBack` for the panel beside it.
+   *
+   * `habitsCalled` is the one that decides whether this feature is real. Every
+   * dial it draws has an interval, and a dial whose interval covers the field is
+   * a row that says "nothing yet" -- correctly, and forever, if nobody ever
+   * plays enough. The measurement says five drafts for one of them and ten for
+   * the other; if `habitsDrafts` climbs past that across the userbase and
+   * `habitsCalled` stays at zero, the number that came out of a simulated
+   * drafter did not survive a real one, and the panel is a promissory note
+   * nothing else would report.
+   *
+   * `habitsNewSet` is drafts left out because nobody has measured that set's own
+   * population. It goes up when a new set is ingested and can only come down
+   * when 17Lands publishes and the baselines are refitted -- so if it is most of
+   * somebody's history, the panel is quiet for a reason that has nothing to do
+   * with them and everything to do with what has been measured.
+   */
+  habitsDrafts?: number;
+  habitsCalled?: number;
+  habitsSharp?: boolean;
+  habitsNewSet?: number;
 }): void {
   if (!on()) return;
   posthog.capture("stats_viewed", p);

@@ -1,4 +1,4 @@
-import { REVIEW, isDecisionPick } from "@mtg-tutor/core";
+import { REVIEW, dialsForDraft, isDecisionPick } from "@mtg-tutor/core";
 import type { Doc, Id } from "./_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "./_generated/server.js";
 import type { DigestMistake } from "./validators.js";
@@ -58,6 +58,23 @@ function mistakesFrom(rows: readonly Doc<"draftPicks">[]): DigestMistake[] {
  * Called from `draft.pick`'s completion branch, which has already read these
  * rows to summarise the draft -- so this costs the write and nothing else.
  */
+/**
+ * A draft's rows as the dial walk wants them.
+ *
+ * `pickedName` is a name and the walk wants the card, which is in the row's own
+ * pack -- a pack snapshot is the engine half of every card that was on offer, so
+ * nothing has to be read to resolve it. A name that is not in its own pack is
+ * left undefined rather than guessed at, and `dialPicksFrom` skips that pick;
+ * the alternative is a pick recorded as "took index 0", which is a preference
+ * nobody expressed.
+ */
+export function dialRows(rows: readonly Doc<"draftPicks">[]) {
+  return rows.map((row) => ({
+    pack: row.pack,
+    picked: row.pack.find((card) => card.name === row.pickedName),
+  }));
+}
+
 export async function storeDigest(
   ctx: MutationCtx,
   sessionId: Id<"draftSessions">,
@@ -75,6 +92,16 @@ export async function storeDigest(
       pickNos: rows.map((r) => r.pickNo),
     },
     mistakes: mistakesFrom(rows),
+    // Twenty-eight numbers, off rows the caller has already read. Undefined when
+    // this draft cannot be measured -- a pool with no pick order at all, or a
+    // draft with no decision in it -- because `dialsForDraft` refuses rather
+    // than handing back something that would sum with everything else and mean
+    // something different.
+    //
+    // At theta = 1 and NOT corrected for the set: the baselines are refittable,
+    // and a curvature stored already-corrected would freeze whichever vintage of
+    // that correction was current on the day. See `curvatureOf`.
+    dials: dialsForDraft(dialRows(rows)),
   });
 }
 

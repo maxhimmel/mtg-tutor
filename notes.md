@@ -582,6 +582,120 @@ an answer written down at the time — the only comparison this app can draw wit
 no set-to-set variance in it. That is also why the review's rows are stored and
 unread (Deferred #2), and what is left open is Ideas #9.
 
+`drafter-fit` shipped 2026-09-02, in four phases, and most of what it produced
+is a list of things it turned out not to be able to say. The panel is "How you
+draft" on `/stats`; the estimator is `dials.ts` / `dialFit.ts` / `draftDials.ts`
+in core; `pnpm fit-drafter`, `pnpm measure-tau` and `pnpm fit-set-baselines` are
+the harnesses and none of them needs a deployment.
+
+**The model is the shipped pod with one multiplier per BUNDLE of its columns.**
+Not ten free weights: a person brings ~42 picks a draft against the 571,996
+`table3` was fitted on, and `value`/`valueOpen` mean nothing apart -- fitted free
+they trade places between drafts while their sum sits still. At theta = 1 the
+dialled score IS `policyScore`, asserted per pod, and the bundles are a partition
+the module refuses to load without.
+
+**Nothing here was checked only against itself, and that is the part worth
+keeping.** `fit-drafter` deals simulated drafters whose dials are written down
+first, because a per-drafter fit always returns six numbers and a real player's
+truth is written nowhere -- a broken estimator would produce a confident,
+readable, unfalsifiable panel. `measure-tau` then checks the row walk against
+370,325 REAL drafters: `table3` is the optimum of the ten-weight problem on that
+population, so their pooled theta has to come back at 1, and it does on all six
+dials with every interval under 0.04.
+
+**Four dials of six can be moved at all.** Mean within-pack spread of each
+bundle's contribution over real fdn packs, in logit units: `table` 4.101, `lane`
+0.938, `power` 0.793, `signal` 0.416, `rare` 0.029, `removal` 0.011. A drafter
+dealt at 1.5x or 0.5x on `rare` or `removal` is never once called different at
+any draft count, as it must be.
+
+**Two of the four reach a screen, and the other two failed for opposite
+reasons.** `power` is not SEPARABLE from `table` -- both are raw power, `table`
+carries five times the spread and absorbs it, and a 1.5x drafter is called 13% of
+the time after twenty-five drafts. `table` is measurable and not separable from
+`lane`: at fifteen drafts a `lane` x1.5 drafter lights up `lane` at 100% and
+`table` at 92%, and the confusion SHARPENS with more data rather than washing
+out, which is what says it is real. Of that pair `lane` is kept, and that is a
+judgement rather than a measurement -- committing early or staying open is a
+decision a player makes on purpose, where "you take the cards the field takes" is
+close to a restatement of the grade every pick already gets. `SHOWN_DIALS` in
+core is where this is decided, so no surface can hold a second opinion about it.
+
+**The shark axis is not sayable, and it was the best thing this could have
+said.** `FITTED_POLICIES` records that the two tiers differ on essentially one
+coefficient -- `valueOpen` 17.17 against 20.82 -- which sits inside the bundle
+with the least spread. A drafter playing `sharks3` against `table3` is called on
+`power` 2% of the time after TWENTY-FIVE drafts. Do not promise "here is where
+you sit against a drafter who goes 3-0".
+
+**How many drafts, measured rather than guessed.** At 80% detection of a
+1.5x/0.5x difference: `lane` about five drafts, `signal` about ten, `table` ten,
+`power` never. False positives on a drafter who really is the pod run 0-2%
+against a nominal 5%. Those two numbers are what the panel's empty state prints.
+
+**`tau` is 0.229** -- the spread of real drafters, maximising the marginal
+likelihood over 370,325 of them across all eighteen cached sets, each set's
+population centred on its own pooled theta. Sharp rather than nominal: 2,741
+below best at 0.20 and 13,748 below at 0.30. Per set it runs 0.151 (ktk) to 0.362
+(mh3), and mh3 being the outlier is the estimator noticing that drafters disagree
+with each other more in a Modern Horizons format. 3-0 drafters come in at 0.211,
+slightly more alike than everybody else, which is the third time this data has
+said that about them.
+
+**THE SET IS AS BIG AS THE PLAYER.** `table3` is a compromise across eighteen
+sets and no single set is the compromise: pooled `power` sits at 0.28 in ktk and
+1.33 in woe, `table` at 0.72 in mh3 and 1.35 in ktk. Across sets the spread of
+those offsets is 0.28, 0.14, 0.07 and 0.11 on the four live dials, against a tau
+of 0.229 -- so a player measured against the pod alone is told about the set they
+drafted at up to the size of what is read about them, and three drafts is three
+sets rather than a sample of eighteen. `DIAL_BASELINES` is one vector per set and
+`rebaseCurvature` applies it, additively, because the stored curvature is a
+quadratic at theta = 1 and moving its expansion point is exactly one subtraction.
+Held out, a player with twenty drafts in ONE format went from being called
+different on `lane` 15% of the time and `signal` 16% to 3% and 9%.
+
+**A draft is stored as twenty-eight numbers.** Its gradient and Hessian at
+theta = 1, on the digest, from rows `draft.pick` has already read. They ADD, so a
+new draft updates a drafter without re-reading an old one, and sharpness falls
+out of the same numbers -- the collapsed one-parameter model is the row sum of
+the gradient and the full sum of the Hessian. Stored UNCORRECTED and rebased on
+read, because the baselines are refittable and a curvature stored already-
+corrected would freeze whichever vintage was current that day.
+
+**One yardstick whatever pod dealt.** The pod decides which cards a player was
+offered, not how they chose between them. Measuring a `sharks3` draft against
+`sharks3` would put one history on two rulers that differ on `valueOpen`, and it
+is not the ruler `DIAL_BASELINES` was fitted in.
+
+**Sharpness is a DIRECTION and never a figure.** The one-step estimate off stored
+curvature is biased -- 0.24 against a truth of 0.50 on a drafter who is half as
+decisive -- so the sign survives the approximation and the value does not. The
+type it arrives in carries no number for a screen to print.
+
+**Three refusals rather than three degradations**, each counted where a reader
+can see it: a pool with no pick order at all (a whole draft measured on a
+different column from the rest of a history), a curvature whose `DIAL_FINGERPRINT`
+no longer matches (six numbers that still sum and still fit and mean nothing), and
+a set nobody has measured (an unknown offset, routinely larger than the thing
+being read -- which bites hardest on a brand-new set, where this app is most
+useful and 17Lands has published nothing).
+
+**What is still open.**
+- The backfill has run on the LOCAL deployment only. Prod needs
+  `internal.migrations.backfillDials` after the deploy.
+- `habitsCalled` on `stats_viewed` is the number that decides whether any of this
+  was real. If drafts climb past five and ten across the userbase while it stays
+  at zero, the counts that came out of a simulated drafter did not survive a real
+  one, and nothing else would report that.
+- `lane` and `table` still do not separate. Prising them apart, or accepting one
+  axis and saying so, is the next real question.
+- The 17Lands drafters sat at tables of humans and the app's players sit at
+  tables of pods, whose wheel differs by 0.27-0.41 in `bench-packs`. `openness` is
+  computed over packs somebody else passed, so `tau` and the baselines are both
+  carried across that gap.
+
+
 3. **`mulligan-trainer`** — a keep/mull practice mode. **Researched 2026-08-27;
    `.omc/plans/mulligan-trainer.md` is the plan and it changes the shape of this
    item. Read that, not this paragraph.**
@@ -1248,6 +1362,56 @@ contextFor }` -- because `packScoringContext` also wants `needs` and the
     first real run. The metric answers "how many does the floor withhold", and no
     size of that number answers "is the floor in the right place". Worth having;
     not worth waiting for.
+
+24. **A prior that shrinks every parameter evenly, over parameters whose data
+    is wildly uneven, invents differences that are not there** (2026-09-01).
+    `fit-drafter` dealt a simulated drafter who is uniformly TWICE as decisive
+    as the pod -- identical preferences, sharper picks -- and the six-dial fit
+    called them different from the field on `table`, `lane` and `signal` at
+    100%. Three claims that this person weighs something more than the field,
+    about somebody who weighs nothing differently at all.
+
+    The shrinkage was not too strong. It was EVEN. The bundles move a real fdn
+    pack by 4.10, 0.94, 0.79, 0.42, 0.029 and 0.011 logits, so one pull of equal
+    force leaves the well-measured bundles near the truth and the badly-measured
+    ones at the prior -- and the SPREAD between them then reads as an opinion.
+    Dividing afterwards by a separately fitted overall scale does not undo it,
+    because the parameters were never scaled together.
+
+    The fix is to fit the shared scale FIRST and centre the prior there. False
+    positives on that drafter went from 100% on three dials to 0-7%. The general
+    form: whenever a prior is centred at a point the data may be uniformly
+    displaced from, estimate the displacement before shrinking toward it.
+
+    **The same mistake was then made again, one level up, in the same phase**
+    (2026-09-01). `measure-tau` fitted the spread of real drafters with the
+    prior at `table3` -- and `table3` is a compromise across eighteen sets that
+    no single set is, so pooled `power` sits at 0.30 in ktk and 1.46 in blb.
+    Each set's own offset was being counted as spread BETWEEN its drafters:
+    0.241 against 0.229 pooled, and 0.246 against 0.151 on ktk alone. Centring
+    each set's prior on its own population fixes it, and `fitTauGrouped` is
+    that.
+
+    Twice, by two different routes, in one phase. The tell both times was a
+    number that stayed suspiciously large where the data was thinnest.
+
+25. **An exemption travels with the conditions that earned it, and reusing a
+    mark does not reuse them** (2026-09-02). `GapMark` has no axis and argues
+    for it in its own docblock: it "rides inside an eyebrow beside the numbers
+    it draws", so the marks carry the relation and the text carries the values.
+    The habits panel reused that mark and deliberately printed no numbers --
+    taking the conclusion and leaving the premise behind. Two more followed:
+    its reference rule is at ONE here rather than zero and was unlabelled,
+    which is the case `Reference` exists for by name; and it sizes its scale
+    per call, so two stacked rows were drawn on different scales, looked
+    comparable, and said nothing about it.
+
+    **And the second version only shrank it.** The proportions were wrong AND
+    the mark was empty, and fixing the first made the second no better -- a
+    1.5px span with a 4px dot in a panel track is not a small chart. `MARK.band`
+    already existed for "an interval, a margin, a range", and `DeckBands` is
+    the model CLAUDE.md names. The tell that a drawing has nothing in it is
+    that resizing does not help.
 
 # Deferred trade-offs (revisit when the premise changes):
 

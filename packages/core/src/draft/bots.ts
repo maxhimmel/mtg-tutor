@@ -1,6 +1,12 @@
 import type { EngineCard } from "../model/card.js";
 import { cardValue } from "../scoring/value.js";
-import { FITTED_POLICIES, POD_TEMPERATURE, type PolicyWeights, policyScore } from "./policy.js";
+import {
+  FITTED_POLICIES,
+  POD_TEMPERATURE,
+  type PolicyCard,
+  type PolicyWeights,
+  policyScore,
+} from "./policy.js";
 
 // A bot commits to colors as it drafts: it tracks accumulated value per color
 // and biases future picks toward its strongest colors, producing readable
@@ -39,9 +45,9 @@ export class BotMemory {
   private poolQuality = 0;
   private seenValue = new Map<string, number>();
   private seenQuality = 0;
-  readonly pool: EngineCard[] = [];
+  readonly pool: PolicyCard[] = [];
 
-  take(card: EngineCard): void {
+  take(card: PolicyCard): void {
     this.pool.push(card);
     const q = quality(card);
     this.poolQuality += q;
@@ -60,7 +66,7 @@ export class BotMemory {
    * Reads nothing the legacy policy scores, so accumulating it costs the deal
    * nothing -- which is what lets this land before any policy uses it.
    */
-  see(pack: readonly EngineCard[]): void {
+  see(pack: readonly PolicyCard[]): void {
     for (const card of pack) {
       const q = quality(card);
       this.seenQuality += q;
@@ -68,7 +74,7 @@ export class BotMemory {
     }
   }
 
-  colorBias(card: EngineCard): number {
+  colorBias(card: PolicyCard): number {
     if (card.colors.length === 0) return 0;
     // Reward the bot's strongest matching color; cap so a real bomb can still
     // pull the bot off its lane, but committed colors are clearly preferred.
@@ -78,12 +84,12 @@ export class BotMemory {
   }
 
   /** Share of the quality this bot has TAKEN that sits in this card's colour. */
-  laneFit(card: EngineCard): number {
+  laneFit(card: PolicyCard): number {
     return share(card, this.colorValue, this.poolQuality);
   }
 
   /** Share of the quality this bot has SEEN that sits in this card's colour. */
-  openness(card: EngineCard): number {
+  openness(card: PolicyCard): number {
     return share(card, this.seenValue, this.seenQuality);
   }
 }
@@ -91,11 +97,11 @@ export class BotMemory {
 // What one card adds to a colour's weight. Above the format's rough midpoint
 // only, so a pile of unplayables cannot claim a lane -- the same expression the
 // colour commitment has always used.
-function quality(card: EngineCard): number {
+function quality(card: PolicyCard): number {
   return Math.max(0, cardValue(card) - 0.5);
 }
 
-function share(card: EngineCard, weights: Map<string, number>, total: number): number {
+function share(card: PolicyCard, weights: Map<string, number>, total: number): number {
   if (total <= 0 || card.colors.length === 0) return 0;
   let best = 0;
   for (const c of card.colors) best = Math.max(best, weights.get(c) ?? 0);
@@ -250,7 +256,7 @@ export class Bot {
     this.temperature = temperature ?? POD_TEMPERATURE[policy];
   }
 
-  get pool(): readonly EngineCard[] {
+  get pool(): readonly PolicyCard[] {
     return this.memory.pool;
   }
 

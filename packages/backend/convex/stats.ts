@@ -1,10 +1,18 @@
 import { v } from "convex/values";
 import {
+  DIAL_BUNDLES,
+  DIAL_FINGERPRINT,
+  DRAFTER_TAU,
   REVIEW,
+  addCurvature,
   cardsLeftAtMiss,
+  curvatureOf,
+  drafterReadout,
+  emptyCurvature,
   isDecisionPick,
   missFixed,
   missProgress,
+  setBaseline,
 } from "@mtg-tutor/core";
 import { query } from "./_generated/server.js";
 import type { Doc } from "./_generated/dataModel.js";
@@ -59,6 +67,18 @@ export const overview = query({
     // floor is in the right place. Kept anyway, because how much of a history
     // the floor eats is still worth knowing before it is ever moved again.
     let forced = 0;
+
+    // What this window says about how the player picks, off the same digests the
+    // charts above are made of. NO EXTRA READS: every one of these documents is
+    // already being fetched a few lines down, and a draft's whole contribution
+    // is twenty-eight numbers sitting on it.
+    //
+    // Three ways a finished draft contributes nothing, counted apart because
+    // they mean different things and only one of them ever goes away on its own.
+    let dials = emptyCurvature(DIAL_BUNDLES.length);
+    let contributed = 0;
+    const skipped = { unmeasured: 0, stale: 0, newSet: 0 };
+
     for (const session of window) {
       const digest = await digestFor(ctx, session._id);
       // A draft that finished before digests existed, or one still in progress.
@@ -66,6 +86,30 @@ export const overview = query({
       // breakdown is unavailable, and `countedDrafts` says how many that is.
       if (!digest) continue;
       counted++;
+
+      if (!digest.dials) {
+        // Finished before the curvature was written, or a draft that could not
+        // be measured at all -- a pool with no pick order, or one with no
+        // decision in it. The backfill closes the first and never the second.
+        skipped.unmeasured++;
+      } else if (digest.dials.fingerprint !== DIAL_FINGERPRINT) {
+        // Numbers in units nothing records any more. They still sum and still
+        // fit, which is exactly why they are refused rather than trusted.
+        skipped.stale++;
+      } else if (!setBaseline(session.setCode)) {
+        // Nobody has measured what the average drafter of this set does, and
+        // that offset is routinely larger than what is being read about a
+        // person -- so this draft would put a fact about the format inside a
+        // sentence about them. Which bites hardest on a brand-new set, where
+        // this app is most useful and 17Lands has published nothing yet.
+        skipped.newSet++;
+      } else {
+        const curvature = curvatureOf(digest.dials, session.setCode);
+        if (curvature) {
+          dials = addCurvature(dials, curvature);
+          contributed++;
+        }
+      }
 
       const { scores, packNos, pickNos } = digest.picks;
       for (let i = 0; i < scores.length; i++) {
@@ -128,6 +172,17 @@ export const overview = query({
       topMistakes: mistakes
         .sort((a, b) => b.bestValue - b.pickedValue - (a.bestValue - a.pickedValue))
         .slice(0, Math.min(args.mistakeLimit ?? 10, DIGEST_MISTAKES)),
+      // How this player picks, or null when nothing could be pooled. Null rather
+      // than a readout of zeros: "we have nothing to say yet" and "you are
+      // exactly average" are different sentences and must not share a shape.
+      habits:
+        contributed === 0
+          ? null
+          : {
+              drafts: contributed,
+              skipped,
+              ...drafterReadout(dials, DRAFTER_TAU),
+            },
       // So the caller can say what it could not see, rather than implying totals.
       truncated,
       countedDrafts: counted,

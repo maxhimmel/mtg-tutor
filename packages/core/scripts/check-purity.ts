@@ -18,8 +18,15 @@ function walk(dir: string): string[] {
 }
 
 // Matches `... from "spec"` and bare `import "spec"`.
-const FROM_RE = /\bfrom\s+["']([^"']+)["']/g;
-const BARE_RE = /\bimport\s+["']([^"']+)["']/g;
+//
+// No newline inside the quotes, which an import specifier cannot contain and
+// ordinary prose can. Without that, a comment saying somebody was
+// indistinguishable from "one thing" and "another" -- wrapped across a line, as
+// comments are -- reads as an import of everything between the quotes, and the
+// guard fails on English. A guard with false positives is one people start
+// ignoring, which costs more than the thing it watches for.
+const FROM_RE = /\bfrom\s+["']([^"'\n]+)["']/g;
+const BARE_RE = /\bimport\s+["']([^"'\n]+)["']/g;
 
 const violations: string[] = [];
 
