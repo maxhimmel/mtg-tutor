@@ -75,6 +75,29 @@
      width at which `useRailEdge` still agrees a rail beside the pack counts as
      one. */
   --breakpoint-wide: 90rem;
+
+  /* The width at which the masthead's sections stop being a drawer and become
+     an inline row.
+
+     MEASURED, not chosen, and measured across the WHOLE header rather than the
+     nav: wordmark 47 + gap 24 + nav 467 + gap 24 + right 64, inside PageShell's
+     48px of gutter, is 674px for one row. The right-hand figure is the binding
+     one and it is the SIGNED-OUT case -- a 64px "Sign in" button where a signed
+     in reader has a 32px signet, which needs only 642. A breakpoint cannot vary
+     with a session, so it takes the wider case, which is also the one a friend
+     opening an invitation meets first.
+
+     43rem is 688px: the measured 674 plus enough slack to survive a real phone,
+     whose font metrics move a text-measured threshold by a few pixels either
+     way. `sm` (640) was tried and is 34px short -- it showed the inline row in a
+     band where it does not fit.
+
+     Named rather than `min-[688px]:` because named breakpoints sort by value and
+     this file already keeps its custom one here. NOT because an arbitrary
+     variant would lose: the trap in `wide` above needs a named variant of the
+     same property on the same element to collide with, and `hidden nav:flex` has
+     no such collision. */
+  --breakpoint-nav: 43rem;
 }
 
 /* The card tile keeps MTG's fixed card proportions; nothing in daisyUI/Tailwind
