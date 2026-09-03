@@ -35,8 +35,8 @@ export function Panel({
     // child and :last-child -- and they reach any <figure> at any depth inside.
     // Reasoning renders a <figure> and sits in a Panel on the review
     // walkthrough, the review breakdown and the challenge diff, where it
-    // declares flex and flex-col but no align-items: so the centre won
-    // uncontested and its quote and attribution shrink-to-fit and centred
+    // declares flex and flex-col but no align-items: so the center won
+    // uncontested and its quote and attribution shrink-to-fit and centered
     // instead of filling the width under their own pl-3 rail. Measured before
     // the fix: the attribution was 5% of the figure's width at 1280 and the
     // quote 13% on a short reason.
@@ -47,12 +47,19 @@ export function Panel({
     // and spreads no props, and every direct child is a div, so :focus-visible,
     // [aria-checked] and :has(>:checked) are all unreachable.
     //
+    // One thing here is NOT a no-op: the cascade TIER moves. daisyUI emits
+    // `.card` in a nested sublayer of @layer utilities, so a utility passed
+    // through `className` always beat it. `relative` and `flex-col` are now
+    // unlayered in that layer and decided by emission order, and `.absolute` is
+    // emitted before `.relative` -- so a caller passing `absolute` would now
+    // lose where it previously won. No caller passes one today.
+    //
     // `card-body` below is knowingly kept: it carries `& p{flex-grow:1}`, the
     // same species of descendant rule, but its blast radius is every <p> that
     // is a flex item at any depth in a Panel body and most such Panels are
     // behind auth. That is its own work item, with a bounded grep over Panel
     // callers as the instrument -- Summary.tsx:132 already found the trap and
-    // neutralises it with an inline flexGrow:0.
+    // neutralizes it with an inline flexGrow:0.
     <section className={`rounded-box relative flex flex-col border border-base-300 bg-base-200 ${className ?? ""}`}>
       {(title != null || aside != null) && (
         // Wraps, because an aside is allowed to be a control and a control is

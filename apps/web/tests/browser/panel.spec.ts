@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 // <figure> at any depth inside: `display:flex; align-items:center;
 // justify-content:center`, plus overflow and radius rewrites on figure's
 // :first-child and :last-child. Reasoning renders a <figure> and sits in a
-// Panel on three shipped screens, so its quote and attribution were centred and
+// Panel on three shipped screens, so its quote and attribution were centered and
 // shrink-wrapped instead of filling the width under their own pl-3 rail --
 // measured at 5% of the figure's width for the attribution at 1280.
 //
@@ -22,40 +22,56 @@ test.beforeEach(async ({ page }) => {
   await page.waitForSelector('svg[role="img"]', { timeout: 60_000 });
 });
 
-test("no figure in a Panel is restyled by daisyUI's card rules", async ({ page }) => {
-  // The subject is pinned deliberately. The glossary Figure is NOT its
-  // card-body's only child -- card-body holds the specimen's wrapper div, which
-  // holds Bay divs, and Bay renders a label span BEFORE its children. So the
-  // figure's parent is the Bay div and it is :last-child only, never
-  // :first-child. That matters: `.card figure:last-child` is what sets
-  // overflow:hidden, so a subject that is neither would pass this identically
-  // before and after the fix and pin nothing.
-  const state = await page.evaluate(() => {
-    const figures = Array.from(document.querySelectorAll<HTMLElement>("section figure"));
-    return figures.map((figure) => {
-      const style = getComputedStyle(figure);
-      return {
-        isLastChild: figure === figure.parentElement?.lastElementChild,
-        alignItems: style.alignItems,
-        justifyContent: style.justifyContent,
-        overflowX: style.overflowX,
-        overflowY: style.overflowY,
-      };
+test("no Panel is a daisyUI card", async ({ page }) => {
+  // The direct assertion, and the one that cannot fail for an unrelated reason.
+  // An earlier version of this test looped EVERY `section figure` on /dev and
+  // demanded align-items:normal -- but Commitment already ships a figure with
+  // `items-center`, and the charting standard requires wide content to scroll
+  // inside its own overflow-x:auto container. Either pattern landing on this
+  // page would have failed here and reported "the card rules came back", which
+  // is a test naming the wrong cause.
+  const panels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>("main section")).map((section) => ({
+      classes: Array.from(section.classList),
+      heading: section.querySelector("h2")?.textContent?.slice(0, 40) ?? "",
+    })),
+  );
+
+  expect(panels.length, "no Panel sections found — the check would pass vacuously").toBeGreaterThan(0);
+  for (const panel of panels) {
+    expect(panel.classes, `"${panel.heading}" is still a daisyUI card`).not.toContain("card");
+  }
+});
+
+test("the Reasoning figure fills its width instead of centering", async ({ page }) => {
+  // The specific subject, measured rather than inspected. Reasoning renders a
+  // <figure> and appears in a Panel on three shipped screens; when Panel was a
+  // `.card`, daisyUI's `align-items:center` won uncontested and both children
+  // shrink-wrapped -- the attribution to 5% of the figure's width at this
+  // viewport, the quote to 13% on a short reason.
+  //
+  // Both children, deliberately. The attribution never wraps, so it detached
+  // from its rail at every width and every reason length; measuring the quote
+  // alone with a long sample reads ~100% and would have called this fixed while
+  // half of it was still broken.
+  const measured = await page.evaluate(() => {
+    const panel = Array.from(document.querySelectorAll("section")).find((section) =>
+      section.querySelector("h2")?.textContent?.includes("A player's reason"),
+    );
+    if (!panel) return null;
+    return Array.from(panel.querySelectorAll("figure")).map((figure) => {
+      const width = figure.getBoundingClientRect().width;
+      const quote = figure.querySelector("blockquote")!.getBoundingClientRect().width;
+      const caption = figure.querySelector("figcaption")!.getBoundingClientRect().width;
+      return { quotePct: (quote / width) * 100, captionPct: (caption / width) * 100 };
     });
   });
 
-  expect(state.length, "no figures found — the check would pass vacuously").toBeGreaterThan(0);
-  expect(state.some((f) => f.isLastChild), "no :last-child figure — the overflow half is unexercised").toBe(true);
-
-  // No border-radius assertion here on purpose. `.rounded-box` on Figure is
-  // emitted unlayered while `.card figure:last-child` sits in a daisyUI
-  // sublayer, so the corners computed 12px before this fix as well as after --
-  // asserting them would pin nothing. Only these four actually change.
-  for (const figure of state) {
-    expect(figure.alignItems).toBe("normal");
-    expect(figure.justifyContent).toBe("normal");
-    expect(figure.overflowX).toBe("visible");
-    expect(figure.overflowY).toBe("visible");
+  expect(measured, "the Reasoning specimen is missing from /dev").not.toBeNull();
+  expect(measured!.length, "no Reasoning figures in the specimen").toBeGreaterThan(0);
+  for (const figure of measured!) {
+    expect(figure.quotePct).toBeGreaterThan(99);
+    expect(figure.captionPct).toBeGreaterThan(99);
   }
 });
 
