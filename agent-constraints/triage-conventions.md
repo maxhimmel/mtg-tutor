@@ -1,17 +1,19 @@
 # Triage conventions for the `triage` stage
 
-This stage picks the lane, and it does not pick it by judgement. Five booleans
-decide it: all false takes the express lane straight to implementation, any one
-true takes the full lane through research, planning and plan review.
+Five booleans, declared before anyone has an interest in the answer.
 
-**Answer the flags before you think about the lane.** Deciding the change "feels
-small" and then filling in flags to match is the one failure mode this stage
-has, and it is the failure mode the whole factory exists to prevent. Nobody
-audits the lane; the flags are the record.
+They used to pick a lane -- all false went straight to implementation. That
+lane is gone. With "uncertain means true" written here, it could not fire on
+anything worth a factory run, and it never once fired on real work. Every work
+item now takes the same path.
 
-When a flag is genuinely uncertain, it is `true`. The cost of the full lane on
-a small change is some minutes. The cost of the express lane on a change that
-needed research is the thing that has been going wrong.
+So the flags no longer route. **Every reviewer is handed them**, which makes
+each `false` a claim in that reviewer's own lane, and a wrong one is a finding
+against you. That is a sharper incentive than the lane ever was: nobody audited
+a lane, but the graphics reviewer reads `touchesGraphics: false` and goes
+looking.
+
+When a flag is genuinely uncertain, it is `true`.
 
 ## The flags
 
@@ -40,8 +42,9 @@ so one arriving is a thing to research rather than to add.
 
 ## The other fields
 
-**`summary`** — what the change is, in a sentence or two. Every reviewer on the
-express lane sees this and nothing else, because there is no plan to read.
+**`summary`** — what the change is, in a sentence or two. Every reviewer sees
+it beside the research and the plan, so it is the one place the change is
+described without an argument attached.
 
 **`rationale`** — why the flags are what they are. One line per `true`, and for
 an all-false triage, a sentence saying what you checked to be sure. This is the
