@@ -1,0 +1,9 @@
+type: '@mgreten/test-evidence-validator'
+typeVersion: 2026.07.20.1
+id: 8e5b9aef-b6cb-4168-b82b-c5a2f5a07ee8
+name: evidence-validator
+version: 1
+tags: {}
+globalArguments:
+  persistVerdict: true
+methods: {}
