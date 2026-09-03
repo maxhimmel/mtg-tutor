@@ -40,6 +40,16 @@ methods: {}
 #   gate refuses `submit` when they match. Work committed straight onto the
 #   base branch cannot advance.
 #
+#   A work item that came out of `notes.md` takes its entry with it. Triage
+#   records `notesEntry` at intake, when nobody yet has an interest in the
+#   answer, and a cel gate on `ship` refuses a branch that does not touch the
+#   file. notes.md is Max's backlog and no agent writes to it, so nothing else
+#   in this repo would ever remove a shipped item -- which is why every feature
+#   in the Roadmap section that already shipped is still sitting in it wearing
+#   its own post-mortem. The gate proves the file was touched, not that the
+#   right entry went; it exists to catch forgetting, which is the failure that
+#   actually occurs.
+#
 # `review`'s only failure edge goes back to `research`, deliberately. The first
 # run put a second edge beside it leading to `planning`, and the driver took
 # the cheap-looking one every time -- rewriting the plan when five of nine
@@ -92,6 +102,7 @@ globalArguments:
               - touchesUserFacingCopy
               - touchesUserFacingFlow
               - needsNewDependency
+              - notesEntry
               - rationale
             properties:
               summary:
@@ -108,6 +119,14 @@ globalArguments:
               touchesUserFacingCopy: { type: boolean }
               touchesUserFacingFlow: { type: boolean }
               needsNewDependency: { type: boolean }
+              # Where this came from, so it can be removed when it ships.
+              # notes.md is Max's backlog and nobody else writes to it, which
+              # means a shipped item stays in it forever unless something makes
+              # the deletion part of the work. This field plus the cel gate on
+              # `ship` is that something. The exact heading and number --
+              # "Issues #10", "Roadmap: archetype-quiz" -- and empty when the
+              # work did not come from notes.md, which is most of it.
+              notesEntry: { type: string }
               rationale:
                 type: string
                 minLength: 1
@@ -265,7 +284,7 @@ globalArguments:
         - name: change-summary
           schema:
             type: object
-            required: [summary, branch, baseBranch, commits, headSha]
+            required: [summary, branch, baseBranch, commits, headSha, files]
             properties:
               summary:
                 type: string
@@ -293,8 +312,12 @@ globalArguments:
               headSha:
                 type: string
                 pattern: '^[0-9a-f]{40}$'
+              # Required, because the notes-entry gate on `ship` reads it.
+              # An empty list would satisfy the schema and defeat the gate, so
+              # a change is at least one file.
               files:
                 type: array
+                minItems: 1
                 items: { type: string }
       evidence:
         # The verdict from `evidence-validator validate`. Recorded, not
@@ -404,6 +427,21 @@ globalArguments:
               config: { artifact: review, recordedThisCycle: true }
             - type: findings-clear
               config: { artifact: review, blocking: [critical, high] }
+            # A work item that came out of notes.md takes its entry with it.
+            # This can only prove notes.md was touched, not that the right
+            # entry went -- an unrelated edit on the same branch satisfies it.
+            # It cannot be satisfied by forgetting, which is the failure that
+            # actually happens: every shipped roadmap item is still in that
+            # file, annotated with its own post-mortem.
+            - type: cel
+              config:
+                expr: >-
+                  artifacts.triage.notesEntry == "" ||
+                  artifacts.change_summary.files.exists(f, f == "notes.md")
+                message: >-
+                  Triage said this came from notes.md, and the branch does not
+                  touch it. Delete the entry it names, in its own commit, and
+                  re-record the change summary.
             - type: human-approval
               config: { id: ship-approval }
         # The only way back, and it goes to research rather than to planning.

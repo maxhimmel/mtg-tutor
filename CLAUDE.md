@@ -45,6 +45,34 @@ the full tree, and `swamp help model method run` scopes to a subtree.
 
 # Working in this repo
 
+## notes.md is Max's, and docs/rulings.md is yours
+
+Two files, and the split is who writes to them.
+
+`notes.md` is a backlog Max writes to: what is open, what is worth doing next,
+what is still wrong. **You never add to it.** Not a finding from the work you
+just did, not a problem you noticed on the way, not a note that something
+shipped. It got to 2,499 lines because every shipped item was annotated with
+its own post-mortem instead of being deleted, and the annotator was me.
+
+You make exactly one edit to it: when a factory work item that recorded a
+`notesEntry` ships, its entry is deleted, in its own commit. Deleted, not
+rewritten to say what happened — what shipped is in the git history, and the
+entry going away is the signal. A cel gate on `ship` refuses a branch that
+leaves the file alone.
+
+Everything you would have written there goes to one of two places:
+
+- **A finding that outlives its work item** becomes a new factory work item.
+  `swamp model method run feature-factory start` — not a line in notes.md.
+- **A ruling worth not re-deriving** goes in `docs/rulings.md`: a measurement
+  trap, a trade-off you priced and declined, a decision with the argument
+  attached. That file is what the `research` stage reads before searching
+  outward, and `research-critic` files a finding when a change re-derives
+  something already settled in it.
+
+If neither fits, it belongs in the commit message.
+
 ## Every change that a person can feel gets a paired metric
 
 This app went live to friends with no analytics at all, and the questions that

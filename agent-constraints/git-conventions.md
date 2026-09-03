@@ -38,12 +38,29 @@ as it governs the coach.
 Every commit ends with the co-author trailer. Author email is
 `himmelmax@gmail.com`.
 
+## The notes entry comes out on this branch
+
+If triage recorded a `notesEntry`, deleting it from `notes.md` is part of this
+work, in its own commit, before you record the change summary. A cel gate on
+`ship` refuses a branch that does not touch the file.
+
+Delete it. Do not rewrite it to say what happened, do not leave a line saying
+it shipped, do not move it to a "done" section. What shipped is in the git
+history, and the entry going away is the signal. Something that outlives the
+work item is either a new work item or a ruling in `docs/rulings.md`.
+
+`notes.md` is Max's backlog and this deletion is the only edit an agent makes
+to it — you never add to that file, including for problems this work uncovered.
+
 ## What gets recorded
 
 `record_artifact name=change-summary` takes `branch`, `baseBranch`, `commits`
 (sha + subject each), `headSha`, and the files touched. Read them out of git
 rather than from memory — `git log --oneline <base>..HEAD` is the list, and a
 sha you typed from recollection is a sha that will not resolve at review.
+
+`files` is required now, and the notes gate reads it, so a summary that lists
+nothing cannot advance.
 
 ## Prove the suite ran, on the commit you are claiming
 
