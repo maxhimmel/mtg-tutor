@@ -29,7 +29,31 @@ export function Panel({
   footer?: ReactNode;
 }) {
   return (
-    <section className={`card border border-base-300 bg-base-200 ${className ?? ""}`}>
+    // NOT daisyUI's `card`, deliberately. That class ships descendant rules for
+    // a card's COVER IMAGE -- `.card figure{display:flex;align-items:center;
+    // justify-content:center}` and overflow/radius rewrites on figure:first-
+    // child and :last-child -- and they reach any <figure> at any depth inside.
+    // Reasoning renders a <figure> and sits in a Panel on the review
+    // walkthrough, the review breakdown and the challenge diff, where it
+    // declares flex and flex-col but no align-items: so the centre won
+    // uncontested and its quote and attribution shrink-to-fit and centred
+    // instead of filling the width under their own pl-3 rail. Measured before
+    // the fix: the attribution was 5% of the figure's width at 1280 and the
+    // quote 13% on a short reason.
+    //
+    // These four utilities are `.card`'s replaceable contribution. Its outline,
+    // outline-offset and transition:outline are dropped on purpose and are
+    // inert here -- the outline is transparent, this section takes no tabIndex
+    // and spreads no props, and every direct child is a div, so :focus-visible,
+    // [aria-checked] and :has(>:checked) are all unreachable.
+    //
+    // `card-body` below is knowingly kept: it carries `& p{flex-grow:1}`, the
+    // same species of descendant rule, but its blast radius is every <p> that
+    // is a flex item at any depth in a Panel body and most such Panels are
+    // behind auth. That is its own work item, with a bounded grep over Panel
+    // callers as the instrument -- Summary.tsx:132 already found the trap and
+    // neutralises it with an inline flexGrow:0.
+    <section className={`rounded-box relative flex flex-col border border-base-300 bg-base-200 ${className ?? ""}`}>
       {(title != null || aside != null) && (
         // Wraps, because an aside is allowed to be a control and a control is
         // wider than a count. Without it the comparison's sort buttons pushed
