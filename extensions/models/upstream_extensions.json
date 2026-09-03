@@ -24,5 +24,20 @@
     "checksum": "29622d1cb0a3bffabf82f68b3d6cbe7e18efcac2c38458b7231e436eb91ab55f",
     "filesChecksum": "b67885110295b63236743cdc42522703b2c5b18fae873892420b72e662c6c9d7",
     "serverUrl": "https://swamp-club.com"
+  },
+  "@mgreten/browser-test-evidence": {
+    "version": "2026.08.28.1",
+    "pulledAt": "2026-09-03T15:28:14.904Z",
+    "files": [
+      ".swamp/bundles/11b747c7/browser_test_evidence.js",
+      ".swamp/pulled-extensions/@mgreten/browser-test-evidence/files/LICENSE",
+      ".swamp/pulled-extensions/@mgreten/browser-test-evidence/files/README.md",
+      ".swamp/pulled-extensions/@mgreten/browser-test-evidence/files/docs/playwright-json-example.json",
+      ".swamp/pulled-extensions/@mgreten/browser-test-evidence/manifest.yaml",
+      ".swamp/pulled-extensions/@mgreten/browser-test-evidence/models/browser_test_evidence.ts"
+    ],
+    "checksum": "568b8b73984b6a8504b2b26de9cfe2511f8532ecafd294d93129b94577888752",
+    "filesChecksum": "ce0c9d1c48c1085179f5860697ddd3a72dc38630fe590e1484deee5655169c7f",
+    "serverUrl": "https://swamp-club.com"
   }
 }

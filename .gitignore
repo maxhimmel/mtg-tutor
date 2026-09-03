@@ -82,3 +82,8 @@ packages/backend/bench/report.*.html
 .claude/scheduled_tasks.lock
 .claude/scheduled_tasks.json
 # END swamp managed section
+
+# Playwright chart-check artifacts. A run produces these; nobody edits them.
+.checks/
+apps/web/test-results/
+apps/web/playwright-report/
