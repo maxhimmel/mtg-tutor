@@ -19,6 +19,12 @@ import { GapMark } from "../charts/GapMark";
 import { Habits, type HabitsData } from "../components/Habits";
 import { Reasoning } from "../components/Reasoning";
 import { REASON_LIMIT } from "@mtg-tutor/core";
+
+// The long Reasoning sample, hoisted so the specimen's label can read its
+// length instead of asserting one. REASON_LIMIT being imported stops the CAP
+// going stale; only this stops the SAMPLE going stale against it.
+const LONG_REASON =
+  "Took the flier over the removal. I'm deep in blue already and I'm light on two-drops — I can find another kill spell easier than a body.";
 import { spokenColors } from "../lib/colorTokens";
 import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
@@ -966,10 +972,10 @@ export const SPECIMENS: Specimen[] = [
     // review breakdown and the challenge diff -- all behind auth, where a
     // browser test cannot reach. daisyUI ships `.card figure { display:flex;
     // align-items:center; justify-content:center }` as a DESCENDANT rule for a
-    // card's cover image, Panel is a `.card`, and Reasoning declares flex and
-    // flex-col but no align-items -- so the center won uncontested and its
-    // quote and attribution shrink-to-fit and centered instead of filling the
-    // width under their own pl-3 rail.
+    // card's cover image. Panel WAS a `.card` until this specimen's own commit,
+    // and Reasoning declares flex and flex-col but no align-items -- so the
+    // center won uncontested and its quote and attribution shrink-to-fit and
+    // centered instead of filling the width under their own pl-3 rail.
     //
     // Both lengths, because the defect reads differently at each: the field is
     // capped at REASON_LIMIT (packages/core/src/tutor/challenge.ts), imported
@@ -982,9 +988,11 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="A short reason — where this used to collapse to 13% of the width">
           <Reasoning reason="Wheeled, so I took it." attribution={<span>You said</span>} />
         </Bay>
-        <Bay label={`At the ${REASON_LIMIT}-character cap — long enough to wrap, where the caption still floated free of its rail`}>
+        <Bay
+          label={`At ${LONG_REASON.length} characters against a ${REASON_LIMIT} cap — long enough to wrap, where the caption still floated free of its rail`}
+        >
           <Reasoning
-            reason="Took the flier over the removal. I'm deep in blue already and I'm light on two-drops — I can find another kill spell easier than a body."
+            reason={LONG_REASON}
             attribution={<span>You said</span>}
           />
         </Bay>
