@@ -204,6 +204,21 @@ globalArguments:
           gates:
             - type: artifact-exists
               config: { artifact: plan }
+        # The way back. plan-review's findings land in three kinds -- the plan
+        # is wrong, the plan is right and under-argued, or THE RESEARCH IS
+        # WRONG -- and the first run of this factory produced all three at once:
+        # a source that did not say what it was quoted as saying, a component
+        # nobody opened, and a local precedent nobody looked for. Without this
+        # edge the only route was plan -> plan-review -> plan, so the fix for a
+        # research defect was research done quietly inside planning, which is
+        # the stage smearing this machine exists to stop.
+        #
+        # `manual: true` so it never competes with `submit` for the propulsion
+        # rule -- an ungated edge here would leave two transitions satisfied at
+        # every planning cycle and turn every advance into a question.
+        - name: revisit-research
+          to: research
+          manual: true
 
     - id: plan-review
       description: Adversarial review of the plan, before a line of it is built.
