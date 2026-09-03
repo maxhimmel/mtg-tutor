@@ -4,12 +4,22 @@ import { test, expect, type Page } from "@playwright/test";
 // this file measured only one of them and its silence was then used as proof
 // of the other.
 //
-// VIEWPORT OVERFLOW -- does anything cross the right edge of the window. This
-// is what makes a page scroll sideways on a phone. The nav used to do it on
-// every route -- 467px of `nowrap` flex line in a 327px box, documentScrollWidth
-// 491 at a 375px viewport -- and that was work item nav-overflow-375, fixed by
-// giving the sections a drawer below `sm`. This half now ASSERTS; see the note
-// above the runner.
+// VIEWPORT OVERFLOW -- does anything cross the right edge of the window. The
+// nav used to, on every route: 467px of `nowrap` flex line in a 327px box,
+// documentScrollWidth 491 at a 375px viewport. That was work item
+// nav-overflow-375, fixed by giving the sections a drawer below `nav`.
+//
+// IT DID NOT MAKE THE PAGE SCROLL SIDEWAYS, and the difference is the whole
+// reason to read this paragraph before trusting the number. `globals.css` has
+// set `html { overflow-x: clip }` since July, so this app cannot pan sideways at
+// any width -- `scrollsSideways` below is derived from scrollWidth, which still
+// reports the overflow, but no gesture will ever reach it. What actually
+// happened is that three of seven nav sections were CLIPPED and unreachable on a
+// phone. Worse than a scrollbar, and it survived because everyone who looked at
+// the 491 wrote down the symptom they expected rather than the one the CSS
+// allows. If this assertion fires, do not go hunting for a scrollbar.
+//
+// This half now ASSERTS; see the note above the runner.
 //
 // CONTAINER OVERFLOW -- does any element spill out of its own parent's box.
 // This is invisible to the viewport measure whenever it happens left of the
@@ -49,29 +59,48 @@ async function report(page: Page, route: string) {
       const overViewport = Math.round(box.right - viewport);
       if (overViewport > 1) {
         const parent = el.parentElement;
-        // A box parked outside the window but CLIPPED by an ancestor is not on
-        // screen and does not scroll the page -- getBoundingClientRect reports
-        // the unclipped rect and cannot tell you so. The closed nav drawer is
-        // exactly this: daisyUI parks the panel a full width off the trailing
-        // edge and `.drawer-side` has `overflow: hidden`, so it reads as 288px
-        // of overflow on every route while `scrollsSideways` is correctly
-        // false. Without this walk the check reports its own working fix.
-        let clipped = false;
+        // A box parked WHOLLY outside a clipping ancestor is not on screen and
+        // cannot be seen -- getBoundingClientRect reports the unclipped rect and
+        // cannot tell you so. The closed nav drawer is exactly this: daisyUI
+        // parks the panel a full width off the trailing edge and
+        // `:where(.drawer-side)` is `overflow: hidden`, so it reads as 288px of
+        // overflow on every route while nothing is visibly wrong. Without this
+        // the check reports its own working fix.
+        //
+        // WHOLLY outside, and only `hidden`/`clip`. Both narrowings matter and
+        // the first version had neither. A box STRADDLING its clipping ancestor
+        // is content cut off mid-stride -- the exact failure this file exists to
+        // catch, "three charts that overflowed a 375px screen without looking
+        // broken" -- and exempting it alongside the harmless case would make the
+        // assertion below green by construction. And `overflow-x: auto` does not
+        // clip at all; it scrolls, which is a different thing and one the
+        // container half already handles.
+        let hidden = false;
         for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
           const ox = getComputedStyle(a).overflowX;
-          if (ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") {
-            clipped = true;
+          if (ox !== "hidden" && ox !== "clip") continue;
+          const ab = a.getBoundingClientRect();
+          if (box.left >= ab.right - 1 || box.right <= ab.left + 1) {
+            hidden = true;
             break;
           }
         }
         // Keep the outermost of a chain; a child inherits its parent's crossing.
-        if (!clipped && (!parent || parent.getBoundingClientRect().right - viewport <= 1)) {
+        if (!hidden && (!parent || parent.getBoundingClientRect().right - viewport <= 1)) {
           pastViewport.push({ el: describe(el), over: overViewport, text });
         }
       }
 
       const parent = el.parentElement;
       if (!parent || parent === document.body) continue;
+      // A fixed element is laid out against the viewport, not against whatever
+      // happens to contain it in the tree, so measuring it against its parent's
+      // box compares two unrelated things. daisyUI's `.drawer-side` is
+      // `position: fixed; width: 100%`, which made it a standing 96px offender
+      // on every route the moment the nav drawer landed -- a permanent
+      // non-defect at the top of every report is how a reader learns to skip the
+      // report.
+      if (getComputedStyle(el).position === "fixed") continue;
       const style = getComputedStyle(parent);
       // `display: contents` generates NO BOX, so its rect is degenerate and
       // every child appears to overflow it. BandList wraps each grade row in
@@ -140,8 +169,14 @@ for (const width of [320, 375]) {
       const result = await report(page, route);
 
       if (SHIPPED.includes(route)) {
-        expect(result.scrollsSideways, `${route} scrolls sideways at ${width}px`).toBe(false);
-        expect(result.pastViewportCount, `${route} has elements past the right edge at ${width}px`).toBe(0);
+        expect(
+          result.scrollsSideways,
+          `${route} lays out wider than the viewport at ${width}px (clipped, not scrollable -- see the note at the top of this file)`,
+        ).toBe(false);
+        expect(
+          result.pastViewportCount,
+          `${route} has visible elements crossing the right edge at ${width}px`,
+        ).toBe(0);
       } else {
         expect(result.viewport).toBeGreaterThan(0);
       }
