@@ -3,7 +3,7 @@ name: graphics-review
 description: >
   Adversarial review of charts, bars, rulers, tracks and diagrams in apps/web
   against this repo's scale rules. Dispatched by the feature-factory `review`
-  and `plan-review` stages. Checks that a graphic states its scale, encodes on
+  stage. Checks that a graphic states its scale, encodes on
   more than hue, and survives the narrowest width the app gives it.
 ---
 
