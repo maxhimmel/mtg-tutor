@@ -16,6 +16,23 @@ import AxeBuilder from "@axe-core/playwright";
 // container, which is the rule as actually written: a chart that will not fit
 // says so instead of overflowing.
 
+// Fifteen of the twenty specimens only render once a card is on the stage. The
+// first version of this suite went to a bare /dev, rendered five of them, and
+// reported green -- including over `glossary-figures`, which was visibly broken
+// the whole time. A check that silently measures a quarter of its subject is
+// the failure this repo has a rule against, so the staged URL is not a
+// convenience here, it is the fix.
+const STAGED = "/dev?set=fdn:PremierDraft&cards=Progenitus";
+
+// Specimens that CANNOT render without the staged card. Asserting these are
+// visible is how the suite proves it is looking at the whole gallery -- if
+// staging ever breaks, this fails loudly instead of quietly shrinking.
+const REQUIRES_STAGED_CARD = [
+  "Glossary figures",
+  "Score breakdown at every width",
+  "How you draft",
+];
+
 const VIEWPORTS = [
   // The width the audit found three charts broken at, and the one that matters.
   { name: "phone", width: 375, height: 900 },
@@ -33,8 +50,21 @@ for (const viewport of VIEWPORTS) {
       // that was really a timeout. The charts appearing is the real readiness
       // signal, and Plot measures its parent with useParentSize, so a chart
       // read before layout settles reports a width it will not keep.
-      await page.goto("/dev", { waitUntil: "domcontentloaded" });
+      await page.goto(STAGED, { waitUntil: "domcontentloaded" });
       await page.waitForSelector('svg[role="img"]', { timeout: 60_000 });
+
+      // Coverage, asserted rather than assumed. These mount only after the
+      // stage resolves its card, so waiting on them is both the readiness
+      // signal and the proof that the gallery is whole.
+      for (const heading of REQUIRES_STAGED_CARD) {
+        // `.first()`: a specimen Panel wraps a component that carries its own
+        // Panel of the same name, so "How you draft" legitimately matches
+        // seven headings. Presence is the assertion here, not uniqueness.
+        await expect(
+          page.getByRole("heading", { name: heading, exact: true }).first(),
+          `"${heading}" did not render — the card did not stage, so this run covers a fraction of the gallery`,
+        ).toBeVisible({ timeout: 30_000 });
+      }
     });
 
     // A gallery that rendered nothing passes every check below, because

@@ -15,6 +15,39 @@ another has prose, another has statistics — stay out of theirs.
 **If the change touches no graphic, record no findings and say so.** A clean
 review is a real verdict. Do not pad.
 
+## Look at the pictures first
+
+`pnpm check-charts` writes screenshots to `.checks/screens/` — the full `/dev`
+gallery at 375, 768 and 1280, plus per-panel shots. **Read them with the Read
+tool before you read a line of the diff.** They are images and you can see
+them.
+
+This is not optional garnish, it is the half of this lane nothing else covers.
+The deterministic suite checks contrast, container overflow and accessible
+names — real defects, all arithmetic. It ran green over a gallery in which text
+was clipped off the left edge of its container and wrapping one word per line,
+because the numbers it measures were all fine. A person spotted that from
+across the room; no assertion did.
+
+So the division is: the suite owns what is measurable, you own what is
+**visible**. Specifically look for —
+
+- text clipped, truncated, or wrapping one word per line
+- elements colliding, overlapping, or sitting on top of each other
+- large dead regions where unequal column heights leave the layout broken
+- a section that reads nothing like the same component elsewhere in the app
+- things that are meant to be compared side by side and cannot be
+- a graphic that is simply illegible at a width, whatever its measurements say
+
+**Check the full-width rendering before blaming the component.** If a component
+looks right at full width and wrong in a narrow bay, the fault is usually the
+dev page's scaffolding, not the component — say which you think it is, because
+the fix lands in a different file.
+
+If `.checks/screens/` is missing or stale, say so and record a finding rather
+than reviewing the diff alone — a graphics review with no pictures is the
+review that missed the clipped text.
+
 ## What went wrong last time
 
 An audit of thirty hand-drawn graphics found sixteen defects. Not one was a
