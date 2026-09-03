@@ -1182,31 +1182,6 @@ export function settingsOpened(p: { from: "menu" | "link" }): void {
 }
 
 /**
- * Somebody opened the phone nav.
- *
- * THIS EXISTS TO FALSIFY THE DECISION THAT CREATED IT. Below `sm` the seven
- * sections stopped being a visible row and became a control you have to open --
- * chosen over folding them onto two rows, and the argument for it was that a
- * drawer is tidier. That argument is unfalsifiable without this: a nav nobody
- * opens has not been tidied, it has been removed, and the two look identical
- * from every other signal the app collects. A low rate here says put the row
- * back.
- *
- * `from` is the route it was opened on, because "which screens leave people
- * needing to go somewhere else" is a different and more useful question than
- * the raw count, and it costs one property to keep it available.
- *
- * NOT PAIRED WITH A PER-LINK EVENT. Where people went next is already in the
- * route changes PostHog captures, so a `nav_link_clicked` would be a second,
- * worse copy of something held -- and `button_clicked` is the shape this
- * codebase names as the failure mode.
- */
-export function navOpened(p: { from: string }): void {
-  if (!on()) return;
-  posthog.capture("nav_opened", p);
-}
-
-/**
  * A drill was started, answered, finished.
  *
  * THREE EVENTS FOR EVERY DRILL, NOT THREE PER DRILL. The `drill` property is
