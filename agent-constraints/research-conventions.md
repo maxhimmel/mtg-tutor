@@ -57,8 +57,11 @@ built, or how, it is background and belongs in the prose, not the artifact.
 It is not design, and it is not a plan. It answers "what is already known and
 where do the sources disagree." The plan comes next and is reviewed separately.
 
-Check `notes.md` and existing repo docs before searching outward — a
-contradiction already resolved in this repo is a finding with a local source.
+Check `docs/rulings.md` before searching outward. It holds the measurement
+traps, the deferred trade-offs and the decisions this repo has already paid
+for, and a contradiction resolved in there is a finding with a local source.
+`notes.md` is Max's backlog, not a ledger — read it for what is open, not for
+what is settled.
 
 ## Coming back here after a review
 

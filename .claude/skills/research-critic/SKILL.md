@@ -65,9 +65,11 @@ when you find it.
 schema minimum, not a target. If both say the same thing and both are
 downstream of one origin — two blog posts about one doc — that is one source.
 
-**Local knowledge skipped.** `notes.md` and the repo docs often already hold a
-resolved contradiction. Research that went outward without checking inward
-tends to re-derive a conclusion this repo already paid for, sometimes wrongly.
+**Local knowledge skipped.** `docs/rulings.md` often already holds the resolved
+contradiction — measurement traps, deferred trade-offs, decisions not worth
+re-litigating. Research that went outward without checking inward tends to
+re-derive a conclusion this repo already paid for, sometimes wrongly. Cite the
+section and number when it does.
 
 ## What is not your lane
 
