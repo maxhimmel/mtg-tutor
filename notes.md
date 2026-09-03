@@ -2365,3 +2365,135 @@ The architecture, the data pipeline and the deploy story are all documented in
     only fixed until an ancestor becomes a containing block and any `z-*` on
     one caps it; and it draws mana pips, so a tip that names a colour says it
     the way the rest of the app does.
+
+# Swamp's first run (2026-09-03): what the factory earned, and what it cost:
+
+    One session, from `swamp repo init` to a merged production fix. Written
+    while it was fresh because most of what follows is not recoverable from the
+    artifacts -- those record what was decided, not which habits produced the
+    bad decisions.
+
+    THE SHORT VERSION. `@swamp/software-factory` drove six work items. It found
+    a real user-facing bug nobody was looking for. It also cost five plan cycles
+    on one item and three human interventions that should not have been needed,
+    and roughly all of that overrun was driver error rather than machine
+    friction.
+
+## What the gates actually caught, with receipts:
+
+    Not theory -- each of these is a thing that would have shipped.
+
+    **A causal claim nobody had measured.** Three plan cycles chased a media
+    query. The real cause was daisyUI's `.card figure{display:flex}` descendant
+    rule reaching a `<figure>` through `Panel`. It surfaced because a reviewer
+    asked whether the plan's central claim was *measured* rather than argued --
+    and finding it exposed a live defect on the review walkthrough, the review
+    breakdown and the challenge diff, where a player's own words rendered at 5%
+    of the available width. Nobody was looking for that. It was found doing
+    paperwork on a dev-tool bug.
+
+    **An unrepeatable measurement, ordered so it could not be taken.** Three
+    separate times, the plan placed the before-capture where it could not
+    observe the defect: after the fix, then while an override suppressed it,
+    then with the capture spec edited too late so before and after were
+    different crops. Each caught before implementation.
+
+    **A vacuity bug rebuilt one layer up.** The headline assertion
+    (`framedInnerWidth === declaredWidth`) is a property of the frame, not its
+    contents -- a sign-in redirect satisfies it. That is the same defect as the
+    chart suite passing over five of twenty specimens, recommitted an hour after
+    committing the fix for it.
+
+    **A gate cleared by paperwork.** `findings-clear` passed because a blocking
+    finding was marked `resolved: true` with a note that was an
+    acknowledgement, not a fix. Caught by the next review cycle. This is the
+    one worth fearing: the machine cannot tell a resolution from a sentence.
+
+    **The git wall.** `change-summary` requires a branch and a base branch and a
+    `cel` gate refuses `submit` when they match. It bit on the smoke test and
+    stayed honest afterwards.
+
+    **The cycle limit.** `planning` jammed at maxCycles and parked for a human.
+    Correct: that work item had genuinely gone round too many times.
+
+## What it cost, and whose fault that was:
+
+    **Five plan cycles on `panel-figure-rule`, and three of them were mine.**
+    The gate blocks on critical/high only. Cycles 1 and 2 had one high each,
+    and instead of fixing that one blocker I rewrote the whole plan -- which
+    invited a fresh full review and generated a new crop of mediums. Treating a
+    passing gate as a failing one is the single most expensive habit of the day,
+    and it is what caused both cycle-override requests.
+
+    **Four claims asserted without checking, each caught by a reviewer.** A CSS
+    combinator read as child when it was descendant. A Tailwind equivalence
+    (`text-sm` is not font-size-only). An invented sample distribution ("one to
+    three sentences") for a field capped at 140 characters. And -- twice -- a
+    reviewer's own citation propagated into a plan without opening the file,
+    including one refuted by a source already sitting in my own research.
+
+    **A string replace that silently matched nothing**, so a commit listed a fix
+    its diff did not contain. Verified by grep only after a reviewer found it.
+
+    **`pnpm test` was red for several commits.** vitest collects `*.spec.ts` and
+    claimed the Playwright suite. The working loop was `check-charts` and
+    `typecheck`; neither runs vitest. Caught only by running the full suite
+    before merging.
+
+## Changes worth making to the machine:
+
+    **1. Write the rework rule into the constraints.** "Only critical/high
+    triggers a rework; record mediums and lows as accepted with a reason and
+    advance." This is the highest-value change and it is one paragraph in
+    `agent-constraints/planning-conventions.md`. It removes most of the loop
+    count and both cycle-override interventions.
+
+    **2. Declare `change-summary` on `review` as well as `implementing`.** After
+    a review finds something, fixing it produces a new commit, which makes the
+    recorded `headSha` false -- and re-recording requires leaving `review` and
+    coming back, which unpins `artifact-fresh` and demands a fresh review. Each
+    fix invalidates the record describing the previous one. A fix-up should not
+    cost a stage round-trip.
+
+    **3. Add to `research-conventions.md`: open every file you cite.** Never
+    carry a citation from a review into an artifact without reading the file.
+    Two of the four unchecked claims came from exactly this.
+
+    **4. Put the reviewer brief in the definition's `systemPrompt`, not in the
+    dispatch.** Every review prompt was hand-written, so calibration drifted
+    between cycles. Two things belong there permanently: keep each finding under
+    ~700 characters (long ones were truncated in transit repeatedly), and
+    "a clean verdict is a real verdict -- do not inflate a medium to force a
+    change."
+
+    **5. Consider whether `resolved: true` should require more than a string.**
+    The one integrity failure of the day. No obvious fix inside the engine, but
+    a driver rule helps: a resolution names the commit that applied it, or it is
+    not a resolution.
+
+    **6. The express lane never fired.** Both real work items declared
+    `touchesGraphics`, so both took the full lane. The routing worked exactly as
+    designed; it just never got exercised on real work. Watch whether it ever
+    does -- if not, the flags are miscalibrated.
+
+## What to keep exactly as it is:
+
+    Research as an unskippable initial stage, with `contradictions` required.
+    It turned "the components are broken" into "this is documented behaviour"
+    within minutes, on the first real work item.
+
+    Lane routing by declared fact rather than judgement. Inverse `cel` gates
+    over triage booleans mean exactly one transition is satisfied and nobody
+    chooses -- which matters because a driver with a long context will choose
+    the express lane.
+
+    Versioned, immutable artifacts. Three superseded plans and every finding
+    remain retrievable. When a plan was dropped, nothing was lost -- and the
+    fallback is the plan *plus* the reasoning that killed it.
+
+    Splitting rather than widening. Four work items were split out mid-session
+    (the nav overflow, the card-body trap, the daisyUI specimens, the plugin
+    task) instead of being absorbed. Each split cost one command and kept every
+    item's triage honest -- and the triage itself decided where work belonged:
+    `dev-narrow-bays` declared `touchesUserFacingFlow: false`, so a shipped fix
+    could not go in it.
