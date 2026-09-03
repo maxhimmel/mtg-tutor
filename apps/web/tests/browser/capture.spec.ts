@@ -22,6 +22,10 @@ const VIEWPORTS = [
 
 // Panels carry no id, so they are found by their heading text.
 const SECTIONS = [
+  // The production defect this work item exists to photograph. It can only be
+  // captured before Panel stops being a .card, so it is listed before anything
+  // else changes -- a panel absent from this list gets no cropped shot at all.
+  "A player's reason, inside a panel",
   "Glossary figures",
   "Deck bands at every width",
   "Score breakdown at every width",

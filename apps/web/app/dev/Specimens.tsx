@@ -17,6 +17,14 @@ import { Braid } from "../challenge/[id]/diff/Braid";
 import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import { GapMark } from "../charts/GapMark";
 import { Habits, type HabitsData } from "../components/Habits";
+import { Reasoning } from "../components/Reasoning";
+import { REASON_LIMIT } from "@mtg-tutor/core";
+
+// The long Reasoning sample, hoisted so the specimen's label can read its
+// length instead of asserting one. REASON_LIMIT being imported stops the CAP
+// going stale; only this stops the SAMPLE going stale against it.
+const LONG_REASON =
+  "Took the flier over the removal. I'm deep in blue already and I'm light on two-drops — I can find another kill spell easier than a body.";
 import { spokenColors } from "../lib/colorTokens";
 import { ManaCurve } from "../components/ManaCurve";
 import { GradeRuler } from "../glossary/figures/GradeRuler";
@@ -951,6 +959,43 @@ export const SPECIMENS: Specimen[] = [
             <ScoreBreakdown base={0.586} total={0.586} terms={undefined} />
           </Bay>
         </div>
+      </div>
+    ),
+  },
+  {
+    id: "reasoning-in-panel",
+    title: "A player's reason, inside a panel",
+    note: "The one thing on either screen a person wrote — at a short reason and at the cap the field allows",
+    // THE SPECIMEN THAT EXISTS TO CATCH A PRODUCTION BUG, and the reason it is
+    // here rather than on the screens that ship it. Reasoning renders a
+    // <figure>, and it appears inside a Panel on the review walkthrough, the
+    // review breakdown and the challenge diff -- all behind auth, where a
+    // browser test cannot reach. daisyUI ships `.card figure { display:flex;
+    // align-items:center; justify-content:center }` as a DESCENDANT rule for a
+    // card's cover image. Panel WAS a `.card` until this specimen's own commit,
+    // and Reasoning declares flex and flex-col but no align-items -- so the
+    // center won uncontested and its quote and attribution shrink-to-fit and
+    // centered instead of filling the width under their own pl-3 rail.
+    //
+    // Both lengths, because the defect reads differently at each: the field is
+    // capped at REASON_LIMIT (packages/core/src/tutor/challenge.ts), imported
+    // here rather than retyped so the specimen cannot outlive the cap, and
+    // a long reason wraps and fills its box while a short one collapses to its
+    // own width and floats. Measuring only one would have recorded the wrong
+    // answer for how bad this is.
+    renderBare: () => (
+      <div className="flex flex-col gap-6">
+        <Bay label="A short reason — where this used to collapse to 13% of the width">
+          <Reasoning reason="Wheeled, so I took it." attribution={<span>You said</span>} />
+        </Bay>
+        <Bay
+          label={`At ${LONG_REASON.length} characters against a ${REASON_LIMIT} cap — long enough to wrap, where the caption still floated free of its rail`}
+        >
+          <Reasoning
+            reason={LONG_REASON}
+            attribution={<span>You said</span>}
+          />
+        </Bay>
       </div>
     ),
   },
