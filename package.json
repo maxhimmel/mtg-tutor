@@ -47,7 +47,8 @@
     "validate-set-stats": "pnpm --filter @mtg-tutor/backend validate-set-stats",
     "verify-data": "pnpm --filter @mtg-tutor/cli verify-data",
     "verify-table-value": "pnpm --filter @mtg-tutor/backend verify-table-value",
-    "wipe-drafts": "pnpm --filter @mtg-tutor/backend wipe-drafts"
+    "wipe-drafts": "pnpm --filter @mtg-tutor/backend wipe-drafts",
+    "check-charts": "pnpm --filter @mtg-tutor/web test:browser"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
