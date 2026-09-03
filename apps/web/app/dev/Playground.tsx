@@ -265,6 +265,23 @@ export function Playground() {
                 key={specimen.id}
                 title={specimen.title}
                 aside={<span className="text-xs text-base-content/50">{specimen.note}</span>}
+                // THE REASON THE GALLERY LIED ABOUT THE GLOSSARY FIGURES.
+                // Panel is a daisyUI `.card`, and daisyUI ships
+                // `.card figure { display:flex; align-items:center;
+                // justify-content:center }` as a DESCENDANT rule -- meant for a
+                // card's cover image, applied to any <figure> anywhere inside.
+                // Figure.tsx renders figcaption, plot and coda as three
+                // children of a <figure>, so inside a Panel they laid out side
+                // by side instead of stacked, and a 23rem bay then had to fit
+                // three columns. On /glossary the same figures are not inside a
+                // card, are `display:block`, and stack correctly -- which is
+                // exactly why they looked right there and wrong here.
+                //
+                // Scoped to the dev gallery's own panels, never to Panel: every
+                // real page uses it, and none of them puts a <figure> inside
+                // one today. `.card figure` and this land at the same
+                // specificity, so `!` rather than source order decides it.
+                className="[&_figure]:!block"
               >
                 {specimen.renderBare
                   ? specimen.renderBare()
