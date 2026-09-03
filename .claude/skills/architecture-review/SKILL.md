@@ -3,7 +3,7 @@ name: architecture-review
 description: >
   Adversarial review of structure — seams, module depth, CLI/web parity,
   Convex bandwidth and transaction semantics, build-artifact staleness, and
-  scope. Dispatched by the feature-factory plan-review and review stages.
+  scope. Dispatched by the feature-factory review stage.
 ---
 
 # Architecture review
@@ -12,8 +12,8 @@ Your lane is structure: where a seam goes, what a module hides, what a change
 costs at runtime, and whether it did what was asked. Another reviewer has
 graphics, another prose, another statistics.
 
-Unlike the other lanes, this one is almost never empty — a plan or a change
-with no structural consequence is rare. But **a clean review is still a real
+Unlike the other lanes, this one is almost never empty — a change with no
+structural consequence is rare. But **a clean review is still a real
 verdict**; do not manufacture findings to look thorough.
 
 ## The seams that already exist
@@ -52,7 +52,7 @@ captured server-side at all — they belong in the browser.
 **A build is not a deploy, locally.** Verify what actually runs, not what
 compiled.
 
-## What to review in a plan
+## What to review
 
 - **Is the seam in the right place?** A module should hide more than it
   exposes. A wide interface over a thin implementation is the shape to flag.
@@ -63,7 +63,8 @@ compiled.
   itself against the dependency-free version. Prefer the small option; make the
   large one argue.
 - **Instrumentation.** The plan's `instrumentation` field must answer a
-  question that would change a decision. `button_clicked` is the failure mode.
+  question that would change a decision, and the branch must actually contain
+  what it promised. `button_clicked` is the failure mode.
   Browser captures interaction, backend captures lifecycle, and failure paths
   count as much as features.
 - **Scope.** The requested scope is the deliverable. A plan that quietly widens
@@ -87,3 +88,8 @@ compiled.
 Point at the file and the mechanism. "This could be cleaner" is not a finding;
 "`draft.pick` reads the whole board to return one row, and Convex bills the
 read" is.
+
+Keep each finding under 700 characters — longer ones get truncated in transit,
+which is how a real finding arrives unreadable. Only `critical` and `high`
+block the ship; a medium inflated to force a change costs a cycle in a loop
+that returns to research, and stops nothing.

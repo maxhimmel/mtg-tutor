@@ -24,6 +24,18 @@ a valid value; a missing answer is not. Failure paths count — `access_blocked`
 and `draft_refused` are the two most valuable events in this codebase and both
 were invisible before they existed.
 
+## A before-and-after measurement is takeable exactly once
+
+If the plan proves itself by comparing a before to an after, the before-capture
+is step one and nothing precedes it. The first run got this wrong three
+separate times in a row -- the capture placed after the fix, then taken while
+an override suppressed the defect, then with the capture spec edited so late
+that before and after were different crops. Each of those is unrecoverable
+once the defect is fixed, because the thing being measured no longer exists.
+
+Say in `testingStrategy` what the before-capture is, that it is taken first,
+and what would make it not comparable to the after.
+
 ## Rejected options belong in the plan
 
 `rejectedOptions` is optional but rarely should be. A conclusion reached and

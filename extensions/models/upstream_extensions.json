@@ -39,5 +39,19 @@
     "checksum": "568b8b73984b6a8504b2b26de9cfe2511f8532ecafd294d93129b94577888752",
     "filesChecksum": "ce0c9d1c48c1085179f5860697ddd3a72dc38630fe590e1484deee5655169c7f",
     "serverUrl": "https://swamp-club.com"
+  },
+  "@mgreten/test-evidence-validator": {
+    "version": "2026.07.20.1",
+    "pulledAt": "2026-09-03T19:54:50.492Z",
+    "files": [
+      ".swamp/bundles/84a422f5/test_evidence_validator.js",
+      ".swamp/pulled-extensions/@mgreten/test-evidence-validator/files/LICENSE.txt",
+      ".swamp/pulled-extensions/@mgreten/test-evidence-validator/files/README.md",
+      ".swamp/pulled-extensions/@mgreten/test-evidence-validator/manifest.yaml",
+      ".swamp/pulled-extensions/@mgreten/test-evidence-validator/models/test_evidence_validator.ts"
+    ],
+    "checksum": "0932cd5ac8a4659e1965fe92ba44fd86721a9d97e0dcb2070897e9a08355834e",
+    "filesChecksum": "124a4f27d2c5d8d4eb8a6a63b0c9b9d8b4dc8cc413e95d60e9ed1e940c2f6879",
+    "serverUrl": "https://swamp-club.com"
   }
 }
