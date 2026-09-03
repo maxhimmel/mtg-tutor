@@ -49,3 +49,19 @@ described without an argument attached.
 **`rationale`** — why the flags are what they are. One line per `true`, and for
 an all-false triage, a sentence saying what you checked to be sure. This is the
 field that makes a wrong lane visible afterwards.
+
+**`notesEntry`** — the heading and number in `notes.md` this came from, exactly
+as written there: `Issues #10`, `Ideas #1`, `Roadmap: archetype-quiz`. Empty
+when the work came from somewhere else, which is most of it — four of the first
+five work items were never in that file.
+
+Record it now rather than at the end, because at the end there is an interest
+in the answer: an empty string ships without touching notes.md, and a filled
+one does not. A cel gate on `ship` refuses a branch that leaves the file alone.
+
+The entry is deleted, not annotated. That distinction is the whole point of the
+field — every feature in the Roadmap section that already shipped is still
+sitting there with its post-mortem stapled underneath, which is how a backlog
+becomes 2,499 lines. What shipped is in the git history. If the work turned up
+something that outlives it, that is a new work item or a ruling in
+`docs/rulings.md`, and neither of them goes back into notes.md.
