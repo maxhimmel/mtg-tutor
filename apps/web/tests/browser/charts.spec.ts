@@ -27,10 +27,14 @@ for (const viewport of VIEWPORTS) {
   test.describe(`/dev at ${viewport.width}px (${viewport.name})`, () => {
     test.beforeEach(async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      await page.goto("/dev", { waitUntil: "networkidle" });
-      // Plot measures its parent with useParentSize, so a chart read before
-      // layout settles reports a width it will not keep.
-      await page.waitForSelector('svg[role="img"]', { timeout: 30_000 });
+      // Not `networkidle`: Next's dev server holds an HMR websocket open, so
+      // the network never goes idle and the hook times out at ~30s on a slow
+      // compile. It cost one run a false "chart is wider than its container"
+      // that was really a timeout. The charts appearing is the real readiness
+      // signal, and Plot measures its parent with useParentSize, so a chart
+      // read before layout settles reports a width it will not keep.
+      await page.goto("/dev", { waitUntil: "domcontentloaded" });
+      await page.waitForSelector('svg[role="img"]', { timeout: 60_000 });
     });
 
     // A gallery that rendered nothing passes every check below, because
@@ -83,7 +87,7 @@ for (const viewport of VIEWPORTS) {
       expect(unnamed).toEqual([]);
     });
 
-    test("text meets contrast against the ground it sits on", async ({ page }) => {
+    test("text meets contrast against the ground it sits on", async ({ page }, testInfo) => {
       // The audit's finding was `/25` and `/30` text landing near 2:1 against a
       // 19%-lightness ground -- which is a contrast ratio, and therefore
       // arithmetic rather than opinion. This is the one check here that is a
@@ -98,7 +102,37 @@ for (const viewport of VIEWPORTS) {
           detail: node.failureSummary?.split("\n").slice(0, 3).join(" ").slice(0, 200),
         })),
       );
-      expect(violations).toEqual([]);
+
+      // The full list goes in an attachment, never in the assertion message.
+      // 185 failures inline produced a 105,030-character message, and
+      // @mgreten/browser-test-evidence rejects an import whose error text is
+      // over 10,000 -- so a verbose failure here is a failure that cannot be
+      // recorded as evidence, which is worse than a terse one.
+      if (violations.length > 0) {
+        await testInfo.attach("color-contrast-violations.json", {
+          body: JSON.stringify(violations, null, 2),
+          contentType: "application/json",
+        });
+      }
+
+      // Assert on the distinct colour/size combinations rather than the
+      // elements. One `text-base-content/45` decision produces hundreds of
+      // failing nodes and exactly one thing to fix.
+      const combinations = new Map<string, number>();
+      for (const violation of violations) {
+        const measured = violation.detail?.match(
+          /contrast of ([\d.]+) \(foreground color: (#\w+), background color: (#\w+), font size: ([^,)]+)/,
+        );
+        const key = measured
+          ? `${measured[1]}:1 — ${measured[2]} on ${measured[3]} at ${measured[4].trim()}`
+          : (violation.detail ?? "unparsed").slice(0, 80);
+        combinations.set(key, (combinations.get(key) ?? 0) + 1);
+      }
+      const distinct = [...combinations.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([combination, elements]) => `${combination} (${elements} elements)`);
+
+      expect(distinct, `${violations.length} elements below 4.5:1`).toEqual([]);
     });
   });
 }

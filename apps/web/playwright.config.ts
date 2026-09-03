@@ -18,6 +18,11 @@ export default defineConfig({
   workers: 1,
   retries: 0,
 
+  // Next's first compile of /dev pulls the whole workspace through
+  // transpilePackages, and the default 30s is a coin flip on a cold server --
+  // which shows up as a timeout wearing the name of whichever check ran first.
+  timeout: 90_000,
+
   reporter: [
     ["list"],
     // What @mgreten/browser-test-evidence ingests. Repo-root and gitignored --
@@ -45,5 +50,19 @@ export default defineConfig({
     stderr: "pipe",
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      // Required by @mgreten/browser-test-evidence, which reads project
+      // metadata as run provenance and rejects the import when these are
+      // absent. The viewports are set per test rather than per project, so
+      // `viewportProfile` names the sweep rather than one size.
+      metadata: {
+        browserEngine: "chromium",
+        viewportProfile: "phone-tablet-desktop",
+        viewport: "375x900,768x1000,1280x1000",
+      },
+      use: { ...devices["Desktop Chrome"] },
+    },
+  ],
 });
