@@ -20,6 +20,7 @@ import type * as draftDigests from "../draftDigests.js";
 import type * as draftPicks from "../draftPicks.js";
 import type * as draftPools from "../draftPools.js";
 import type * as drills_archetypes from "../drills/archetypes.js";
+import type * as drills_deckSpeed from "../drills/deckSpeed.js";
 import type * as drills_misses from "../drills/misses.js";
 import type * as feedback from "../feedback.js";
 import type * as http from "../http.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   draftPicks: typeof draftPicks;
   draftPools: typeof draftPools;
   "drills/archetypes": typeof drills_archetypes;
+  "drills/deckSpeed": typeof drills_deckSpeed;
   "drills/misses": typeof drills_misses;
   feedback: typeof feedback;
   http: typeof http;
