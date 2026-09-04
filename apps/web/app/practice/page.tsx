@@ -49,6 +49,16 @@ const DRILLS = [
     what: "One card and two decks that both played it. One got far more out of it — say which, and see what every deck in the set did with it.",
     length: "8 cards · a couple of minutes",
   },
+  {
+    href: "/practice/deck-speed",
+    // Named for the question, like the one above it. Not "deck types": the
+    // drill measures when a game ends and offers three answers on that one
+    // axis, and a name promising types would promise a taxonomy it does not
+    // have.
+    name: "How fast is this card's deck?",
+    what: "One card, and whether the decks that played it were fast, grindy, or neither. From how long the games really ran.",
+    length: "8 cards · a couple of minutes",
+  },
 ];
 
 export default function DrillsIndex() {

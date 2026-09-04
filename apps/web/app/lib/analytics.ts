@@ -3,6 +3,8 @@ import type {
   ArchetypeOutcome,
   ArchetypeResult,
   Confidence,
+  DeckSpeedOutcome,
+  DeckSpeedResult,
   DrillId,
   MissOutcome,
   MissTier,
@@ -1223,6 +1225,27 @@ export function drillStarted(p: {
    */
   separable?: number;
   /**
+   * How many of a set's cards have an end rather than the middle answer.
+   * Deck-speed drill only, and the same question `separable` asks: a run out of
+   * a set that is mostly middle is a different run, and pooling the rates would
+   * hide it.
+   */
+  ends?: number;
+  /**
+   * Why a run was empty, when it was. Deck-speed drill only so far.
+   *
+   * AN EMPTY STATE SOMEBODY CAN LAND IN AND NOT GET OUT OF, which is what makes
+   * this worth an argument rather than an inference from `served: 0`. The three
+   * causes want completely different actions -- `untimed` is a re-ingest we owe
+   * them, `unbuilt` is a pipeline failure, `unrated` is 17Lands having never
+   * recorded the set's deck colours, and `unmeasured` is a fact about a thin set
+   * -- and a zero on its own cannot tell them apart. On the deploy that
+   * introduces this drill EVERY set is `untimed`, so if that does not fall to
+   * zero as sets are re-ingested, the re-ingest did not happen. `unrated` should
+   * hold steady at exactly one set; if it grows, a set lost its colour data.
+   */
+  mute?: "unbuilt" | "unrated" | "untimed" | "unmeasured";
+  /**
    * What the run was made of, in the drill's own three piles. Misses drill only.
    *
    * The names are `MissTier`'s, deliberately, so there is one vocabulary for
@@ -1281,10 +1304,17 @@ export function drillAnswered(p: {
    * property itself is: `misses_answered` and `archetypes_answered` would be
    * two funnels that can never be compared or merged, and the question "do
    * people get better at these" is asked across drills before it is asked
-   * within one. The words do not overlap, so a breakdown by `outcome` splits
-   * cleanly on its own without needing `drill` beside it.
+   * within one.
+   *
+   * THE WORDS USED NOT TO OVERLAP AND NOW THEY DO. That claim held for two
+   * drills and the deck-speed drill breaks it: it grades to `read`/`misread`,
+   * the archetype quiz's own words, because it is the same kind of judgement and
+   * inventing a synonym would have been worse. So a breakdown by `outcome` alone
+   * no longer splits by drill -- `read` now means two things -- and anything
+   * comparing drills has to put `drill` beside it. Written down here rather than
+   * discovered in a chart, since the rows cannot be told apart afterwards.
    */
-  outcome: MissOutcome | ArchetypeOutcome;
+  outcome: MissOutcome | ArchetypeOutcome | DeckSpeedOutcome;
   /**
    * The most interesting way to be wrong, whichever drill asked.
    *
@@ -1315,15 +1345,27 @@ export function drillAnswered(p: {
    * `saw-none`. The first is the mistake the drill exists to correct; the
    * second is people reaching for "they are the same" when there IS an answer,
    * and if it dominates then the third answer is too tempting and the run's
-   * half-and-half split is doing harm rather than teaching.
+   * split is doing harm rather than teaching.
+   *
+   * THE DECK-SPEED DRILL SHARES BOTH OF THOSE WORDS ON PURPOSE. Calling a coin
+   * flip a difference and calling a flat card fast are the same error about
+   * different quantities, so they are one word and a breakdown pools them with
+   * no mapping -- the same call `tookRawBest` makes one level up. Only the ways
+   * of picking the wrong END differ: `stronger-deck` and `wrong-deck` in one,
+   * `backwards` in the other.
    */
-  mistake?: NonNullable<ArchetypeResult["mistake"]>;
+  mistake?:
+    | NonNullable<ArchetypeResult["mistake"]>
+    | NonNullable<DeckSpeedResult["mistake"]>;
   /**
    * How many error bars separated the two decks, in the archetype quiz.
    *
    * The same question `gap` asks for the misses drill -- if only the blatant
    * ones are ever read right, the gate is loose and the run wants shortening --
-   * in this drill's own units.
+   * in this drill's own units. The deck-speed drill reports it too, and there it
+   * is error bars from flat rather than between two decks. Both are "how obvious
+   * was this", both are in error bars, and neither is a win-rate gap, which is
+   * why they share a property where `gap` did not.
    */
   sigmas?: number;
   /**

@@ -16,6 +16,7 @@ import { PickStrip } from "../glossary/figures/PickStrip";
 import { Braid } from "../challenge/[id]/diff/Braid";
 import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import { GapMark } from "../charts/GapMark";
+import { SpeedRuler } from "../charts/SpeedRuler";
 import { Habits, type HabitsData } from "../components/Habits";
 import { Reasoning } from "../components/Reasoning";
 import { REASON_LIMIT } from "@mtg-tutor/core";
@@ -394,6 +395,62 @@ const FLAT_TERMS: ValueTerm[] = [
 ];
 
 export const SPECIMENS: Specimen[] = [
+  {
+    id: "speed-ruler",
+    title: "Speed ruler",
+    note: "The deck-speed drill's reveal. Real fdn numbers, and three bays sitting on the gate — the span must touch the rule exactly when the answer is Neither",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        {/* THE BAY THIS EXISTS FOR. A card fifteen error bars out and a card
+            measured flat have to be tellable apart at a glance, and the band
+            has to still be visible on the extreme one -- a domain that scaled
+            only to the dot would squash it to nothing and make every middle
+            card look like a rounding error. */}
+        {/* fdn's real floor: 0.5 x its residual sd of 0.168. Every bay below
+            uses it, because it is one number per SET and a specimen that made
+            one up per card would draw a band the app never draws. */}
+        <Bay label="Day of Judgment — +0.77 turns, far outside the band" width="max-w-[34rem]">
+          <SpeedRuler resid={0.7705} se={0.0461} worthSaying={0.084} n={5471} />
+        </Bay>
+        <Bay label="Mocking Sprite — +0.001 over 8,747 games, genuinely flat" width="max-w-[34rem]">
+          <SpeedRuler resid={0.0012} se={0.0315} worthSaying={0.084} n={8747} />
+        </Bay>
+
+        {/* THE BAYS THE REVIEW ASKED FOR, and the defect they would have caught.
+            Every specimen here used to sit at z = 0.1, 5.6, 7.7 or 15, so the
+            gallery could not show the boundary at all -- and the boundary was
+            where the drawing disagreed with the words. A card between one and
+            two error bars out must read as "Neither": its span has to touch the
+            rule. A card just outside the band with a tight span must read as an
+            end. */}
+        <Bay label="z = 1.5 — the span must touch the rule, because this is Neither" width="max-w-[34rem]">
+          <SpeedRuler resid={0.12} se={0.08} worthSaying={0.084} />
+        </Bay>
+        <Bay label="Just past the band, and separable — this one is an end" width="max-w-[34rem]">
+          <SpeedRuler resid={0.09} se={0.02} worthSaying={0.084} />
+        </Bay>
+        <Bay label="Clears the band, fails the z test — Neither, and the span says why" width="max-w-[34rem]">
+          <SpeedRuler resid={0.11} se={0.07} worthSaying={0.084} />
+        </Bay>
+
+        {/* The widths the app actually gives it: the drill's own column on a
+            laptop, and a phone. `needs` is 260, so the last one is the fallback
+            and has to read as a finished sentence rather than a broken chart. */}
+        <Bay label="At the drill's column width — 24rem" width="w-[24rem] max-w-full">
+          <SpeedRuler resid={0.363} se={0.0469} worthSaying={0.084} />
+        </Bay>
+        <Bay label="At 256px, inside `needs` — the drawing gives way to the sentence" width="w-[16rem] max-w-full">
+          <SpeedRuler resid={0.363} se={0.0469} worthSaying={0.084} />
+        </Bay>
+
+        <Bay label="In greyscale — nothing is encoded in hue" width="max-w-[34rem]">
+          <div style={{ filter: "grayscale(1)" }}>
+            <SpeedRuler resid={0.7705} se={0.0461} worthSaying={0.084} n={5471} />
+          </div>
+        </Bay>
+      </div>
+    ),
+  },
   {
     id: "pick-track",
     title: "Pick track",

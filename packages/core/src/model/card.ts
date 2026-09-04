@@ -308,11 +308,36 @@ export interface CardContext {
   // rated cards have a row for UB specifically. A card needs 200 games inside
   // an archetype to appear in it at all. Absent means no signal, not zero.
   archWr?: Record<string, number>;
-  // Opening-hand win rate minus drawn-later win rate: whether a card wants the
-  // game short or long. Measured at corr 0.022 with GIH WR across all 17 sets,
+  // Opening-hand win rate minus drawn-later win rate: WHEN IN A GAME THIS CARD
+  // IS BEST FOR YOU. Measured at corr 0.022 with GIH WR across all 17 sets,
   // which is what makes it worth storing -- it is a second axis, not a
   // restatement of the first.
+  //
+  // This comment used to say it measured "whether a card wants the game short or
+  // long", and that claim is more than it can carry. Correlated against
+  // `deckSpeed` below -- which measures exactly that, directly -- it comes back
+  // at -0.28 over 252 fdn cards and -0.29 over 269 woe cards. The sign is right,
+  // and about a tenth of the variance is shared. Two related questions, not one.
   speed?: number;
+  /**
+   * How much longer or shorter this card's games ran than the games of the
+   * colours it was played in, in turns, and one standard error on that.
+   *
+   * WHY A RESIDUAL. Game length is a joint outcome of both decks, so a card's
+   * raw mean says as much about the format and the colour pair it lives in as
+   * about the card. Subtracting the mean for the colours it was actually played
+   * in divides both out. Over 25 sets that recovers what Limited players already
+   * say from data carrying no labels -- equipment and one-drops at the fast end,
+   * wraths and mass removal at the slow -- and it is not the grade again:
+   * correlation with gihWr is +0.088.
+   *
+   * ABSENT MEANS UNMEASURED, NEVER AVERAGE. A card under the game floor has no
+   * residual, and a set whose game data carried no turns has none at all. The
+   * two arrive together or not at all, because a residual without its error bar
+   * is a number nobody can refuse -- and refusing is most of what this is for.
+   */
+  deckSpeed?: number;
+  deckSpeedSe?: number;
   iwd?: number;
   maindeckRate?: number;
   /**

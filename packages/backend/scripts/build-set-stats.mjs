@@ -169,10 +169,22 @@ async function readGameData(localPath, isBasic) {
   const colorRecord = new Map(); // main_colors -> {n, w}, the archetype's own win rate
   const pairN = new Map();
   const pairW = new Map();
+  // How long the game ran, kept as sufficient statistics rather than as games.
+  //
+  // The number the drill wants is a card's mean game length MINUS the mean for
+  // the colours it was played in, and the baselines are only known once the pass
+  // ends. Holding every game to subtract afterwards would cost hundreds of
+  // thousands of rows; holding a count, a sum and a sum of squares per (card,
+  // colours) costs about eight thousand entries and yields the residual and its
+  // standard error exactly. `turnsByColors` is the same three numbers per
+  // colour combination over all games, which is what the baselines come from.
+  const turnsByColors = new Map();
+  const cardTurns = new Map(); // `${name}|${colors}` -> {n, sum, sq}
   let header = null;
   let cols = null;
   let wonI = -1;
   let archI = -1;
+  let turnsI = -1;
   let games = 0;
   let wins = 0;
 
@@ -188,6 +200,9 @@ async function readGameData(localPath, isBasic) {
       header = splitRow(line);
       wonI = header.indexOf("won");
       archI = header.indexOf("main_colors");
+      // Absent in no dataset we have read, but a set that published one without
+      // it should write no speed at all rather than a column of zeros.
+      turnsI = header.indexOf("num_turns");
       const by = new Map();
       header.forEach((h, i) => {
         for (const p of ["deck_", "opening_hand_", "drawn_", "tutored_"]) {
@@ -213,11 +228,38 @@ async function readGameData(localPath, isBasic) {
     wins += won;
     if (arch) bump(colorRecord, arch, won);
 
+    // Basics are dropped from the per-card loop below by `isBasic`, and must NOT
+    // be dropped here: a baseline is per game rather than per card, and skipping
+    // games would change what every residual is taken against.
+    // `Number("")` is 0 and `isFinite(0)` is true, so a blank cell would enter
+    // both the baseline and the card sums as a game that ended on turn zero.
+    // Not observed in any of the 26 archived sets, which is what makes it worth
+    // one clause rather than a report -- a latent trap, not a live error.
+    const raw = turnsI < 0 ? "" : row[turnsI];
+    const turns = raw === "" ? NaN : Number(raw);
+    const timed = arch !== "" && Number.isFinite(turns);
+    if (timed) {
+      const t = turnsByColors.get(arch) ?? { n: 0, sum: 0, sq: 0 };
+      t.n++;
+      t.sum += turns;
+      t.sq += turns * turns;
+      turnsByColors.set(arch, t);
+    }
+
     const inDeck = [];
     for (const [name, d, o, dr, tu] of cols) {
       if (!row[d] || row[d] === "0") continue;
       if (isBasic(name)) continue;
       inDeck.push(name);
+
+      if (timed) {
+        const key = `${name}|${arch}`;
+        const ct = cardTurns.get(key) ?? { n: 0, sum: 0, sq: 0 };
+        ct.n++;
+        ct.sum += turns;
+        ct.sq += turns * turns;
+        cardTurns.set(key, ct);
+      }
 
       const s =
         stats.get(name) ??
@@ -255,7 +297,152 @@ async function readGameData(localPath, isBasic) {
     }
   }
 
-  return { stats, archetypes, colorRecord, pairN, pairW, games, wins };
+  return {
+    stats,
+    archetypes,
+    colorRecord,
+    pairN,
+    pairW,
+    games,
+    wins,
+    ...deckSpeed(turnsByColors, cardTurns),
+  };
+}
+
+// A colour combination needs this many games before its mean is a baseline worth
+// subtracting; below it the mean is noise, and every card played in those decks
+// would carry that noise into its own residual.
+const MIN_BASELINE_GAMES = 200;
+// And a card needs this many before its residual is worth a standard error.
+// This is the floor that GOVERNS -- a card under it gets no residual written, so
+// no reader can recover it. `DECK_SPEED.minGames` in core re-filters what does
+// get written and cannot widen the pool past this. The two are kept in step by
+// hand: this script imports no core, deliberately, so the pipeline can run
+// against a checkout whose core is not built.
+const MIN_SPEED_GAMES = 400;
+
+/**
+ * How much longer or shorter a card's games ran than its own colours' games did.
+ *
+ * WHY A RESIDUAL AND NOT A MEAN
+ *
+ * Game length is a joint outcome of both decks, so a card's raw mean says as much
+ * about the format and about the colour pair it lives in as about the card.
+ * Subtracting the mean for the colours the card was actually played in divides
+ * both of those out. Measured across 25 sets it recovers what Limited players
+ * already say from data carrying no labels: equipment and one-drops at the fast
+ * end, wraths and mass removal at the slow.
+ *
+ * IT IS NOT WIN RATE WEARING A DIFFERENT HAT, which is the check that matters --
+ * an axis that turned out to be the grade again would be worth nothing beside the
+ * grade a pick already gets. Correlation against gihWr is -0.001 over all 270
+ * measured fdn cards. Quote that figure and not the +0.088 an earlier draft
+ * carried: that one was taken over the 39 most extreme cards, which are selected
+ * on the variable being correlated, and it overstated the very thing it was
+ * offered as evidence against.
+ *
+ * AND IT IS NOT `speed`, WHICH ALREADY EXISTS. That field is ohWr - gdWr, set in
+ * convex/sets.ts, and it asks when in a game a card is best FOR YOU. This asks
+ * how long the game runs when the card is in the deck. Correlated against each
+ * other they come back at -0.28 over 252 fdn cards and -0.29 over 269 woe cards:
+ * the right sign, about a tenth of the variance shared, and neither can stand in
+ * for the other.
+ *
+ * THE ARITHMETIC, since it is done from sufficient statistics rather than from
+ * games. For a card played in colours c with n_c games, sum s_c and sum of
+ * squares q_c, against baselines b_c:
+ *
+ *   mean residual = (Σ s_c - Σ n_c·b_c) / N
+ *   E[residual²]  = (Σ q_c - 2·Σ b_c·s_c + Σ n_c·b_c²) / N
+ *
+ * which gives the variance, and the standard error is its root over N. Exact --
+ * this is algebra rather than an approximation to holding every game.
+ */
+function deckSpeed(turnsByColors, cardTurns) {
+  const baselines = new Map();
+  for (const [colors, t] of turnsByColors) {
+    if (t.n >= MIN_BASELINE_GAMES) baselines.set(colors, t.sum / t.n);
+  }
+  if (baselines.size === 0) return { deckSpeed: new Map(), turnStats: undefined };
+
+  let allN = 0;
+  let allSum = 0;
+  for (const t of turnsByColors.values()) {
+    allN += t.n;
+    allSum += t.sum;
+  }
+
+  const perCard = new Map();
+  for (const [key, ct] of cardTurns) {
+    const sep = key.lastIndexOf("|");
+    const name = key.slice(0, sep);
+    const colors = key.slice(sep + 1);
+    if (!baselines.has(colors)) continue;
+
+    // LEAVE THE CARD OUT OF THE LINE IT IS MEASURED AGAINST.
+    //
+    // The pooled baseline contains the card's own games, and that is not a
+    // rounding error: if the card is in a fraction p of its colour's games, the
+    // pooled mean is p*(with) + (1-p)*(without), so the residual comes out as
+    // (1 - p) times the real contrast -- shrunk hardest for the cards played
+    // most, which are exactly the staples. On fdn the median play share is 0.21
+    // and the maximum 0.56, so a fifth of the effect was being cancelled on a
+    // typical card and better than half on the most played one.
+    //
+    // It also made both clients liars. They say "other decks in the same
+    // colours", which is this quantity and was not what was computed.
+    const all = turnsByColors.get(colors);
+    const restN = all.n - ct.n;
+    // A card in every game of its colour has nothing to be compared against, so
+    // the comparison is refused rather than made against itself.
+    if (restN <= 0) continue;
+    const base = (all.sum - ct.sum) / restN;
+    // The baseline is an ESTIMATE, not a constant, and at the 200-game floor a
+    // thin colour carries an error bar of its own comparable to the residuals
+    // being measured. Holding it fixed understates the card's error bar, and
+    // since one of the two gates is a z test, an understated error bar
+    // manufactures ends. Its variance is carried through with the rest.
+    const restVar = Math.max(0, (all.sq - ct.sq) / restN - base * base);
+
+    const e =
+      perCard.get(name) ?? { n: 0, sum: 0, sq: 0, nb: 0, bs: 0, nbb: 0, bvar: 0 };
+    e.n += ct.n;
+    e.sum += ct.sum;
+    e.sq += ct.sq;
+    e.nb += ct.n * base;
+    e.bs += base * ct.sum;
+    e.nbb += ct.n * base * base;
+    // Weighted by this colour's share of the card's games, squared, because the
+    // residual is a weighted mean of per-colour differences.
+    e.bvar += ct.n * ct.n * (restVar / restN);
+    perCard.set(name, e);
+  }
+
+  const out = new Map();
+  for (const [name, e] of perCard) {
+    if (e.n < MIN_SPEED_GAMES) continue;
+    const m = (e.sum - e.nb) / e.n;
+    const second = (e.sq - 2 * e.bs + e.nbb) / e.n;
+    const variance = Math.max(0, second - m * m);
+    // Two sources: the spread of this card's own games, and the uncertainty in
+    // the lines they are measured against.
+    const se = Math.sqrt(variance / e.n + e.bvar / (e.n * e.n));
+    out.set(name, { resid: m, se, n: e.n });
+  }
+
+  return {
+    deckSpeed: out,
+    // The baselines the residuals were taken against, stored because a residual
+    // whose baseline is not written down cannot be re-read or re-argued later.
+    turnStats: {
+      mean: allSum / allN,
+      // `round` is a const declared further down and this runs before it, so the
+      // rounding is spelled out rather than borrowed.
+      byColors: Object.fromEntries(
+        [...baselines].map(([c, b]) => [c, Number(b.toFixed(4))]),
+      ),
+    },
+  };
 }
 
 // ---------------------------------------------------------------- draft data
@@ -488,6 +675,13 @@ for (const [name, s] of game.stats) {
       (draft.trophySeen.get(name) ?? 0) >= 100
         ? round((draft.trophyTaken.get(name) ?? 0) / draft.trophySeen.get(name))
         : undefined,
+    // How much longer or shorter this card's games ran than its own colours'
+    // games did, in turns, with the error bar that says whether the difference
+    // is separable from none at all. Both or neither -- a residual printed
+    // without its standard error is a number nobody can refuse.
+    deckSpeed: game.deckSpeed.get(name) ? round(game.deckSpeed.get(name).resid) : undefined,
+    deckSpeedSe: game.deckSpeed.get(name) ? round(game.deckSpeed.get(name).se) : undefined,
+    deckSpeedN: game.deckSpeed.get(name)?.n,
   });
 }
 
@@ -547,6 +741,10 @@ const artifact = {
   synergies,
   packCards: draft.packCards,
   packComposition: packComposition(draft.shapes, draft.packs),
+  // The format's own mean game length and the per-colour means every card's
+  // `deckSpeed` was taken against. Stored so the residuals can be re-read rather
+  // than only trusted, and absent for a set whose game data carried no turns.
+  turnStats: game.turnStats,
 };
 
 const out = flag("out") ?? resolve(HERE, "..", "data", `${setCode}.${format}.json`);

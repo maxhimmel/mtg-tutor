@@ -82,6 +82,7 @@ for (const file of files) {
     synergies: rest.synergies,
     packComposition: rest.packComposition,
     packCards: rest.packCards,
+    turnStats: rest.turnStats,
     sourceHash,
     force,
     deployKey: key,

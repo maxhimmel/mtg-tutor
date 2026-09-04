@@ -169,6 +169,69 @@ export const ARCHETYPE_QUIZ = {
   falsePositive: 0.05,
 };
 
+/**
+ * The deck-speed drill: how sharp a measurement has to be to be worth asking
+ * about, and how far from flat a card has to sit before it has an end.
+ *
+ * Its own block beside ARCHETYPE_QUIZ, and both settings are derived rather than
+ * picked -- see `deckSpeedQuestions` for the argument each one comes from.
+ */
+export const DECK_SPEED = {
+  // A run. Eight, matching the archetype quiz, for the same reason: one card and
+  // three words is a couple of minutes at this length. The banks are not the
+  // binding constraint here -- fdn holds 246 askable cards where the archetype
+  // quiz holds a handful -- so the number is set by the sitting rather than by
+  // what a set can fill.
+  runLength: 8,
+  // How many error bars from flat before a card is called fast or slow rather
+  // than middle. Two, the width `gapMargin` and the rest of this codebase use,
+  // and a width rather than a rate because the test is one number against a
+  // fixed point -- nothing here moves with a deck count the way the archetype
+  // quiz's range does.
+  width: 2,
+  // How sharp an estimate must be to be asked about at all, as a fraction of the
+  // set's own spread of residuals. Below this the card is not asked about at
+  // all: an estimate vaguer than half the spread cannot support any of the three
+  // answers. Against the set's own spread rather than a turn count, because that
+  // spread runs 0.11 to 0.17 between sets and a fixed threshold would ask about
+  // a different fraction of each one.
+  //
+  // NOTE WHAT `middle` THEREFORE MEANS -- two conditions, not one. A card is
+  // called neither when it sits inside half a set-spread of flat, OR when the
+  // data cannot separate it from flat. Both are honest, and they are different
+  // findings: the first says the difference is too small to matter, the second
+  // says we cannot see it. The screen says "too close to call" for the first and
+  // draws a span touching the rule for the second.
+  precision: 0.5,
+  // How far from flat a card must sit before it is called fast or slow, as a
+  // fraction of the set's own spread.
+  //
+  // THIS EXISTS BECAUSE THE Z TEST ALONE MEASURED SAMPLE SIZE. `width` asks
+  // whether the data can SEE a difference, and with 30,000 games it can see four
+  // hundredths of a turn -- so the first version of this graded Healer's Hawk
+  // (-0.042 turns, 28,755 games) as a card whose decks end games early, and
+  // Rite of the Dragoncaller (+0.143 over 1,446 games, three times the effect)
+  // as neither. The middle bucket's largest effect exceeded the ends' median:
+  // the two overlapped outright, and the answer tracked how much a card gets
+  // played rather than how fast its decks were.
+  //
+  // So a card gets an end only when BOTH are true -- the data can see the
+  // difference, and the difference is worth a sentence. Neither implies the
+  // other, which is the whole finding. At half the spread the buckets stop
+  // overlapping on fdn by construction: middle tops out at 0.084 turns and the
+  // ends start at 0.085.
+  floor: 0.5,
+  // Games a card needs before its residual is read at all.
+  //
+  // THE PIPELINE'S FLOOR GOVERNS, and this one cannot raise the pool above it.
+  // `MIN_SPEED_GAMES` in build-set-stats.mjs decides which cards get a residual
+  // written at all; that script imports no core, so the two cannot check each
+  // other. This is the reader's floor: it re-filters what the artifact carries,
+  // which matters when an artifact was built under a lower one. Raising this
+  // above the script's is the only edit that does something on its own.
+  minGames: 400,
+};
+
 export const DRILLS = {
   // How many questions one run of the misses drill deals. Ten because that is
   // what a draft's digest keeps of its own worst picks (DIGEST_MISTAKES), so a

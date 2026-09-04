@@ -2,6 +2,7 @@ import * as p from "@clack/prompts";
 import { convexClient } from "../../core/auth/session.js";
 import { humanError } from "../../core/ui/humanError.js";
 import { runArchetypes } from "./archetypes.js";
+import { runDeckSpeed } from "./deckSpeed.js";
 import { runMisses } from "./misses.js";
 
 // The drills, from the command line. The argument was here before there was a
@@ -14,8 +15,12 @@ import { runMisses } from "./misses.js";
 //
 // `misses` stays the default because it is the one built out of your own
 // drafts, and somebody typing `practice` with nothing after it is asking for
-// the personal one. `archetypes` is the one that works with no drafts at all.
-const DRILLS = { misses: runMisses, archetypes: runArchetypes };
+// the personal one. `archetypes` and `deck-speed` both work with no drafts at
+// all -- they read a set's statistics and nothing of yours.
+//
+// The key is kebab-case where the DrillId is camel. The id is a storage key and
+// reaches PostHog; this is what somebody types.
+const DRILLS = { misses: runMisses, archetypes: runArchetypes, "deck-speed": runDeckSpeed };
 
 export async function run(argv: string[]): Promise<void> {
   const name = (argv.find((a) => !a.startsWith("--")) ?? "misses") as keyof typeof DRILLS;

@@ -24,8 +24,22 @@
  * three type parameters. Lifting it would cost both drills their own
  * vocabulary and buy an import.
  *
- * What the two do share is written down where it is enforced instead: the event
- * family below, `ARCHETYPE_QUIZ` and `DRILLS` in config.ts for the run lengths,
- * and the route shape. Ask again at the third drill.
+ * What they share is written down where it is enforced instead: the event
+ * family below, `ARCHETYPE_QUIZ` / `DECK_SPEED` / `DRILLS` in config.ts for the
+ * run lengths, and the route shape.
+ *
+ * ASKED AGAIN AT THE THIRD DRILL, AND THE ANSWER IS STILL NO -- but it is closer
+ * than it was, so here is what changed. `deckSpeed` grades to the same shape the
+ * archetype quiz does: an outcome of `read` or `misread`, a boolean, and a
+ * `mistake` naming which kind of wrong. Two of three drills agreeing is the
+ * first real candidate this roof has had.
+ *
+ * It still does not earn a base type, because the part worth sharing is the part
+ * that cannot be: `mistake` is a different union in each drill and the unions ARE
+ * the value. `stronger-deck` and `backwards` are two specific Limited errors, and
+ * a lifted `mistake: string` would type-check every misuse while teaching
+ * nothing. The misses drill has three outcomes rather than two and does not fit
+ * either. Ask again if a fourth drill grades to `read`/`misread` -- at three of
+ * four, a generic over the mistake union starts to pay for its import.
  */
-export type DrillId = "misses" | "archetypes";
+export type DrillId = "misses" | "archetypes" | "deckSpeed";

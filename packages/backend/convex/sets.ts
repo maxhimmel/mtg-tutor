@@ -36,6 +36,7 @@ import {
   colorWinRate,
   packCard,
   packComposition,
+  turnStats,
 } from "./validators.js";
 
 // `ingest` calls `internal.sets.store`, which lives in this same module, so its
@@ -1062,6 +1063,11 @@ export const storeSetStats = mutation({
     ),
     packComposition: v.optional(packComposition),
     packCards: v.optional(v.array(packCard)),
+    // Deliberately NOT copied onto the set document beside packComposition. Pack
+    // generation needs the shapes on the hot path; nothing on the pick path
+    // needs the baselines, and Convex bills the bytes a document is READ for --
+    // which is what drained the tier the last time something rode along.
+    turnStats: v.optional(turnStats),
     // Hash of the artifact file, so an unchanged one is not re-written on every
     // deploy. Optional: an upload without one always writes.
     sourceHash: v.optional(v.string()),

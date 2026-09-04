@@ -896,11 +896,45 @@ The architecture, the data pipeline and the deploy story are all documented in
 
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
     is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
-    fast the format is, which needs the replay dataset. IWD has a sound
+    fast the format is, and nothing has measured that. IWD has a sound
     measurement argument and no derivable weight — the first attempt took 0.37
     from `1 - corr^2`, and how redundant a signal is says nothing about how far
     it should move an answer. A term whose magnitude cannot be justified does not
     belong in the score.
+
+    **This entry used to say speed's sign needed the REPLAY dataset. Only that
+    half is struck** (2026-09-04). Format speed is a mean over `num_turns`,
+    column 17 of the GAME dataset the pipeline already streams, and all 25 cached
+    game files were measured for it without touching replay: MH3 8.29 turns to
+    KTK 10.03. What is NOT struck is the sign-dependence itself — no work here
+    measured whether speed's sign moves with how fast a format is, and it remains
+    the reason speed is stored and not scored. The dataset was the wrong obstacle;
+    the obstacle is still there.
+
+    **And `speed` does not measure what its name suggests, which is the finding
+    worth not re-deriving.** It is `ohWr - gdWr` (convex/sets.ts) and asks WHEN
+    IN A GAME a card is best for you. `deckSpeed` — a card's mean game length
+    minus the mean for the colours it was played in — asks HOW LONG THE GAME
+    RUNS when the card is in the deck. Correlated against each other: −0.28 over
+    252 fdn cards, −0.29 over 269 woe cards, −0.35 and −0.36 on the cards that
+    clear their own error bar. Right sign, about a tenth of the variance shared.
+    Neither substitutes for the other, so anyone reaching for one should check
+    which question they are asking.
+
+    **`deckSpeed` is orthogonal to win rate at −0.001 over all 270 measured fdn
+    cards**, which is the population figure. An earlier draft of this entry
+    quoted +0.088; that came from the 39 most extreme cards — selected on the
+    very variable being correlated — and had no business standing for the whole
+    set. The conclusion survives and is stronger than the number it was made on.
+
+    **The within-set spread is as large as the between-set spread, and that is
+    what made a drill possible.** Colour pairs inside one set differ by about 1.6
+    turns, against a 1.74-turn range across all 25 formats — so game length is a
+    fact about the deck at least as much as about the format. But a pair's speed
+    is NOT a property of the pair: the spread between pairs is 0.294 turns and
+    the spread of one pair across sets is 0.250, a ratio of 1.18, and WR runs
+    from −1.09 to +0.24 depending on the set. Folding deck speed into the
+    colour-pair archetype would throw away the half that varies.
 
     **A gap is never reported without its margin, and nothing labels a card
     "better" without one** (2026-08-04). See measurement trap #3: at 17Lands
@@ -1537,3 +1571,74 @@ The architecture, the data pipeline and the deploy story are all documented in
     only fixed until an ancestor becomes a containing block and any `z-*` on
     one caps it; and it draws mana pips, so a tip that names a colour says it
     the way the rest of the app does.
+
+# Shipping a pipeline change (2026-09-04):
+
+**A change to `build-set-stats` is not shipped until the artifacts under
+`packages/backend/data/` are rebuilt and COMMITTED.** The deploy runs
+`convex deploy && seed-set-stats && ingest-sets`, and both scripts read the
+committed artifacts — never the CSVs. So a branch that changes the pipeline and
+leaves the artifacts alone deploys a pipeline nothing has run: every set carries
+the old shape, forever, and the feature is silently dead in production while
+passing every test and working perfectly on the machine that rebuilt one set by
+hand. The deck-speed drill shipped exactly that way and it was caught by a human
+opening the page, which is the only thing that could have caught it.
+
+**The rebuild is its own `data:` commit**, in the shape of `3d5462f4` — what
+moved, per set, with numbers, and an explicit note on any set deliberately left
+alone. The artifacts are committed precisely so this is a reviewable diff.
+
+**The command is `pnpm new-set <SET> <FORMAT>`.** It orchestrates availability →
+archive → build-set-stats → seed → ingest → validate-pack-model →
+refresh-mechanics for one set, reuses the archived CSVs when both are present,
+and is LOCAL ONLY. Do not hand-roll a loop over `build-set-stats`: the
+orchestrator also runs the two validation steps, and skipping them is how a set
+gets seeded with a pack model nothing checked.
+
+**No revision bump is needed for this case, and that is not an oversight.**
+`POOL_REVISION`, `CRAWL_REVISION` and `META_REVISION` gate ingest's derivation
+FROM an artifact; they cannot put a new field INTO one. The artifact's own hash
+is the fingerprint here — `seed-set-stats` hashes the file and `ingest-sets` keys
+on `POOL_REVISION:sourceHash` — so a rebuilt artifact re-seeds and re-derives on
+deploy and an unchanged one costs one small read. Bump a revision only when the
+stored CARD shape or the crawl changes; see the docblock at `sets.ts:180`, which
+is the actual test.
+
+**And run the query, not the function under it.** Every claim that the drill
+worked came from calling `deckSpeedQuestions` on an artifact, which cannot see
+`deal` at all — not its four refusals, not the roles read, not whether the data
+survived an ingest. `convex-test` runs the real query against a seeded set in
+milliseconds (`test/drillDeckSpeed.test.ts`), and the refusal it did not have is
+the one that shipped wrong: STX was told "it comes back the next time this set's
+data is refreshed" about a set 17Lands will never publish colours for.
+
+# Verify at the layer that breaks (2026-09-04):
+
+Every bad hour of the deck-speed drill was the same mistake: **evidence gathered
+one layer below the thing that could fail.** None of it was fabricated and all of
+it was green.
+
+    claimed                     tested                  broke
+    the drill works             deckSpeedQuestions      deal: pager, mute, roles
+    it is ready to test         seed-set-stats          ingest-sets never ran
+    the field is missing        a grep over a table     the field was there
+    the tooltip works           typecheck               hit target under the marks
+    the tests prove the fix     a test that passed      it passed against the bug too
+
+Each answer was true about the question actually asked and useless about the
+question that mattered, which is what makes this hard to catch from inside: the
+terminal says green either way.
+
+**Test the seam a person crosses.** A Convex query is not covered by testing the
+function it calls; `convex-test` runs the real query in milliseconds and is what
+`test/drillDeckSpeed.test.ts` does. A chart is not covered by a typecheck; there
+is a Playwright harness against `/dev` and `tests/browser/cursorTip.spec.ts` is
+what it looks like. A pipeline change is not covered by a green suite.
+
+**And watch a regression test fail before believing it.** Reinstate the defect,
+see red, restore, see green. The first tooltip test passed against the bug it was
+written for — it hovered the SVG's vertical centre, which the margins put below
+every mark, on empty plot that behaves identically whichever order the elements
+are painted in. One minute of reinstating the bug is the only reason that is not
+sitting in the repo as proof the tooltip works.
+

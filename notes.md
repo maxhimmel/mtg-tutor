@@ -93,18 +93,6 @@ here.
 
 # Ideas:
 
-1. **What is left of this is the DECK-TYPE quiz, and it is one derivation away.**
-   The colour-pair half shipped as `/practice/archetypes`. The half still open
-   is the other approach in the original note, and it is the better idea: what
-   TYPE of deck does a card belong in -- aggro, midrange, control. Nothing in
-   the app knows this, and it is not a labelling job: the honest axis is how
-   fast a deck wants the game to go, and `contextValue` has a speed term stored
-   and unscored waiting on exactly that number.
-
-   Which comes from `num_turns` in the game dataset the pipeline already
-   streams, NOT from the replay dataset it was assumed to need -- Phase 0 of
-   `.omc/plans/mulligan-trainer.md`, and nothing else.
-
 2. **The replay dataset is deliberately unused, and only ONE of the three things
    this entry wanted it for actually needs it.** Format speed and real land
    counts are both in the **game** dataset the pipeline already streams; only
