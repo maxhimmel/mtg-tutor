@@ -1612,3 +1612,33 @@ milliseconds (`test/drillDeckSpeed.test.ts`), and the refusal it did not have is
 the one that shipped wrong: STX was told "it comes back the next time this set's
 data is refreshed" about a set 17Lands will never publish colours for.
 
+# Verify at the layer that breaks (2026-09-04):
+
+Every bad hour of the deck-speed drill was the same mistake: **evidence gathered
+one layer below the thing that could fail.** None of it was fabricated and all of
+it was green.
+
+    claimed                     tested                  broke
+    the drill works             deckSpeedQuestions      deal: pager, mute, roles
+    it is ready to test         seed-set-stats          ingest-sets never ran
+    the field is missing        a grep over a table     the field was there
+    the tooltip works           typecheck               hit target under the marks
+    the tests prove the fix     a test that passed      it passed against the bug too
+
+Each answer was true about the question actually asked and useless about the
+question that mattered, which is what makes this hard to catch from inside: the
+terminal says green either way.
+
+**Test the seam a person crosses.** A Convex query is not covered by testing the
+function it calls; `convex-test` runs the real query in milliseconds and is what
+`test/drillDeckSpeed.test.ts` does. A chart is not covered by a typecheck; there
+is a Playwright harness against `/dev` and `tests/browser/cursorTip.spec.ts` is
+what it looks like. A pipeline change is not covered by a green suite.
+
+**And watch a regression test fail before believing it.** Reinstate the defect,
+see red, restore, see green. The first tooltip test passed against the bug it was
+written for — it hovered the SVG's vertical centre, which the margins put below
+every mark, on empty plot that behaves identically whichever order the elements
+are painted in. One minute of reinstating the bug is the only reason that is not
+sitting in the repo as proof the tooltip works.
+

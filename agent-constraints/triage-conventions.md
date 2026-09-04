@@ -40,6 +40,20 @@ this flag.
 service. This repo prefers fewer moving parts and questions new dependencies,
 so one arriving is a thing to research rather than to add.
 
+## And one question the flags do not ask
+
+**Does this change what `build-set-stats` writes?** If it does, the work item is
+not done when the pipeline changes — it is done when the artifacts under
+`packages/backend/data/` are rebuilt with `pnpm new-set <SET> <FORMAT>` and
+COMMITTED, in their own `data:` commit. The deploy runs `seed-set-stats` and
+`ingest-sets` against those committed files and never touches a CSV, so a branch
+that changes the derivation and leaves them alone ships a feature that is dead in
+production and green in CI at the same time. The deck-speed drill did exactly
+that and a human found it by opening the page.
+
+Say so in `rationale` when it applies, so the answer exists before there is an
+interest in it. See the pipeline section of `docs/rulings.md`.
+
 ## The other fields
 
 **`summary`** — what the change is, in a sentence or two. Every reviewer sees

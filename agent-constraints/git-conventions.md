@@ -125,3 +125,53 @@ hole this gate exists to close.
 A fix-up after a review re-enters `implementing` with a new commit, so the
 verdict is stale by construction -- re-run and re-validate. Evidence is
 cycle-scoped and the engine will not carry the old one across.
+
+## Say which layer the evidence covers
+
+A green suite proves the code you tested does what its test says. It does not
+prove the feature works, and the gap between those two is where this repo's
+worst days come from. So `change-summary` names, in a sentence: **the layer the
+evidence reaches, and the layer a person will actually touch.** If they differ,
+that is not a failure — it is a fact the reviewer and the human both need, and
+the one thing nobody can recover later.
+
+The deck-speed drill is the worked example and every step of it passed its own
+check:
+
+- `deckSpeedQuestions` had twenty-four unit tests and `deal` had none, so the
+  query shipped with a pager that dropped 58% of the bank, a false empty-state
+  promise, and a roles read nothing had run.
+- The suite was green while the committed artifacts under `data/` still carried
+  the old shape, so the feature was dead in production and green in CI at the
+  same time.
+- The tooltip was wired and typechecked while its hit target was painted under
+  its own marks, so the three things a reader aims at did nothing.
+
+Each was verified one layer below where it broke. A person opening the page
+found all three.
+
+**The rule that follows: test the seam a person crosses.** A Convex query is not
+covered by testing the function it calls — `convex-test` runs the real query in
+milliseconds. A chart is not covered by typecheck — there is a Playwright
+harness against `/dev`. A pipeline change is not covered by a green suite — the
+deploy reads the committed artifacts, so rebuilding and committing them IS part
+of the work item.
+
+## A regression test that has never failed is not evidence
+
+Before a test counts as proof of a fix, **watch it fail against the defect.**
+Reinstate the bug, see red, restore the fix, see green. Say in the change
+summary that you did.
+
+This is not ceremony. Both tests written for the tooltip bug PASSED against the
+bug: the first hovered the SVG's vertical centre, which with a 20px top and 40px
+bottom margin lands below the marks on empty plot that behaves identically
+either way. It would have gone into the repo as proof the tooltip worked, on a
+chart where hovering anything a reader aims at did nothing. The only thing that
+caught it was reinstating the defect — which took one minute and is the whole of
+this rule.
+
+The same check on the `unrated` empty state passed first try and was worth
+running anyway: a test that goes red for the right reason has told you its shape,
+and one that has never been red has told you nothing.
+
