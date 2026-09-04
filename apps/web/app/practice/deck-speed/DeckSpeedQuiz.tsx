@@ -374,7 +374,9 @@ function Nothing({
   const said =
     run.mute === "unbuilt"
       ? "This set has no statistics yet, so there is nothing to ask about."
-      : run.mute === "untimed"
+      : run.mute === "unrated"
+        ? "17Lands never recorded what colours this set's decks were, so there is nothing to measure a card against here. That will not change."
+        : run.mute === "untimed"
         ? "This set's statistics were built before game length was measured. It comes back the next time this set's data is refreshed."
         : run.mute === "unmeasured"
           ? "No card in this set has enough games behind it to say which way it pulls. That is the set rather than a fault."

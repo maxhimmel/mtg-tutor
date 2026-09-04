@@ -1237,12 +1237,14 @@ export function drillStarted(p: {
    * AN EMPTY STATE SOMEBODY CAN LAND IN AND NOT GET OUT OF, which is what makes
    * this worth an argument rather than an inference from `served: 0`. The three
    * causes want completely different actions -- `untimed` is a re-ingest we owe
-   * them, `unbuilt` is a pipeline failure, and `unmeasured` is a fact about the
-   * set that nobody can fix -- and a zero on its own cannot tell them apart. On
-   * the deploy that introduces this drill EVERY set is `untimed`, so if this
-   * does not fall to zero as sets are re-ingested, the re-ingest did not happen.
+   * them, `unbuilt` is a pipeline failure, `unrated` is 17Lands having never
+   * recorded the set's deck colours, and `unmeasured` is a fact about a thin set
+   * -- and a zero on its own cannot tell them apart. On the deploy that
+   * introduces this drill EVERY set is `untimed`, so if that does not fall to
+   * zero as sets are re-ingested, the re-ingest did not happen. `unrated` should
+   * hold steady at exactly one set; if it grows, a set lost its colour data.
    */
-  mute?: "unbuilt" | "untimed" | "unmeasured";
+  mute?: "unbuilt" | "unrated" | "untimed" | "unmeasured";
   /**
    * What the run was made of, in the drill's own three piles. Misses drill only.
    *

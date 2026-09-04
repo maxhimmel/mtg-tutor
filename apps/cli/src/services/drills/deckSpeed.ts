@@ -118,6 +118,9 @@ export async function runDeckSpeed(
 function nothing(run: Run, setCode: string, skip: number): string {
   const set = setCode.toUpperCase();
   if (run.mute === "unbuilt") return `${set} has no statistics yet. Nothing to ask.`;
+  if (run.mute === "unrated") {
+    return `17Lands never recorded what colours ${set}'s decks were, so there is nothing to measure a card against. That will not change.`;
+  }
   if (run.mute === "untimed") {
     return `${set}'s statistics were built before game length was measured. It comes back the next time this set's data is refreshed.`;
   }

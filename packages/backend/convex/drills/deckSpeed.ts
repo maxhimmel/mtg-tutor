@@ -49,14 +49,20 @@ const READ_BUDGET = 2;
  *
  * - `unbuilt` -- no statistics row at all. A pipeline problem, not a fact about
  *   the set.
+ * - `unrated` -- 17Lands never recorded deck colours for this set, so there are
+ *   no colour baselines to measure a residual against and there never will be.
+ *   STX and only STX (notes issue #8). THIS IS THE ONE A RE-INGEST CANNOT FIX,
+ *   and it was found by running the real pipeline over all 26 sets rather than
+ *   by reasoning: `untimed` promises "it comes back the next time this set's
+ *   data is refreshed", which for STX is a promise that can never be kept.
  * - `untimed` -- statistics, but built before this drill existed or from a game
  *   dataset with no turn column. The fix is a re-ingest and a re-seed, and it is
  *   the state every set is in on the deploy that introduces this.
  * - `unmeasured` -- turns, but no card in the set is measured sharply enough to
- *   be asked about. A real fact about a thin set, and the only one of the three
- *   that is about Magic rather than about us.
+ *   be asked about. A real fact about a thin set, and about Magic rather than
+ *   about us.
  */
-type Mute = "unbuilt" | "untimed" | "unmeasured" | null;
+type Mute = "unbuilt" | "unrated" | "untimed" | "unmeasured" | null;
 
 export const deal = query({
   args: {
@@ -107,14 +113,14 @@ export const deal = query({
     // fixes nothing, forever, and would break the analytics reading that this
     // count falls to zero once the sets are re-ingested.
     if (stats.turnStats == null) {
-      return {
-        questions: [],
-        quizzable: 0,
-        ends: 0,
-        worthSaying: 0,
-        mute: "untimed" as Mute,
-        nextSkip: skip,
-      };
+      // A set with no colour data at all was never going to get baselines, so
+      // the cause is 17Lands rather than our pipeline and the screen must not
+      // promise a refresh. Same test and same word the archetype quiz uses.
+      const cause: Mute =
+        stats.archetypes.length === 0 || (stats.colorWinRates?.length ?? 0) === 0
+          ? "unrated"
+          : "untimed";
+      return { questions: [], quizzable: 0, ends: 0, worthSaying: 0, mute: cause, nextSkip: skip };
     }
 
     // Roles live on the pool document, not in the stats artifact, and the bank
