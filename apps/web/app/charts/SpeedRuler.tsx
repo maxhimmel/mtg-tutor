@@ -180,10 +180,13 @@ export function SpeedRuler({
             />
             <circle cx={x(resid)} cy={mid} r={MARK.dot / 2} fill={INK.yours} />
 
-            {/* Direct-labelled, because the one value a reader cannot infer from
-                position is the value itself. Kept clear of the axis ends. */}
+            {/* Direct-labelled, and the ± is not decoration: the span was the one
+                mark on this chart with no label at all, so a reader saw a gold
+                bar under a dot and nothing said what its width meant. A value
+                and its uncertainty are ONE figure, so they are one label rather
+                than a second mark cluttering the track. */}
             <text
-              x={Math.min(Math.max(x(resid), 22), width - 22)}
+              x={Math.min(Math.max(x(resid), 40), width - 40)}
               y={mid - MARK.dot - 6}
               textAnchor="middle"
               fill={INK.value}
@@ -191,6 +194,10 @@ export function SpeedRuler({
               fontWeight={600}
             >
               {turns(resid)}
+              <tspan fill={INK.label} fontWeight={400}>
+                {" "}
+                ± {half.toFixed(2)}
+              </tspan>
             </text>
 
             <text x={0} y={-8} textAnchor="start" fill={INK.label} fontSize={11}>
