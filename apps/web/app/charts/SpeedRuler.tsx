@@ -133,17 +133,7 @@ export function SpeedRuler({
 
         return (
           <>
-            {/* The hoverable is the whole plot, and it sits FIRST so the marks
-                draw over it. Transparent rather than absent: a pointer between
-                two marks still gets an answer about where it is. */}
-            <rect
-              x={0}
-              y={0}
-              width={width}
-              height={h}
-              fill="transparent"
-              {...tip.follow((e) => describe(e as { clientX: number; currentTarget: Element }))}
-            />
+
             {/* The region this set calls too small to be worth saying. One of
                 the two things that make a card "Neither"; the other is the span
                 below reaching the rule. Both are drawn, and both are named. */}
@@ -209,6 +199,23 @@ export function SpeedRuler({
             <text x={width} y={-8} textAnchor="end" fill={INK.label} fontSize={11}>
               runs longer
             </text>
+
+            {/* THE HIT TARGET GOES LAST, WHICH IS THE WHOLE OF IT. SVG delivers
+                a pointer event to the topmost painted element under it, so this
+                rect drawn first — as it was — meant the band, the span and the
+                dot each swallowed the pointer and none of them carries a
+                handler. Hovering the three things a reader aims at did nothing
+                at all. Last and `pointerEvents="all"`, so every pixel of the
+                plot answers and the marks below stay purely visual. */}
+            <rect
+              x={0}
+              y={0}
+              width={width}
+              height={h}
+              fill="transparent"
+              pointerEvents="all"
+              {...tip.follow((e) => describe(e as { clientX: number; currentTarget: Element }))}
+            />
           </>
         );
       }}

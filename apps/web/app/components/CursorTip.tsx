@@ -250,6 +250,12 @@ export function useCursorTip(options: CursorTipOptions = {}): CursorTip {
     <div
       ref={box}
       role="presentation"
+      // A stable hook for the browser suite. The tip is portalled to body and
+      // has no text, role or class a test can name without pinning styling --
+      // and whether it appears at all is exactly what needs asserting: the
+      // speed ruler shipped with a tip that was wired, typechecked and dead,
+      // because its hit target was painted under the marks.
+      data-cursor-tip=""
       className="pointer-events-none fixed left-0 top-0 z-50 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-xs leading-relaxed text-base-content/80 shadow-lg"
       style={{
         maxWidth,
