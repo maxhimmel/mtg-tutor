@@ -420,14 +420,14 @@ export const VERNACULAR_DOC: VernacularDoc = {
       "category": "framework",
       "short": "A deck trying to end the game early, with cheap creatures and a low curve.",
       "usage": "I'm aggro, so I'll take the two-drop over the card advantage.",
-      "source": 17
+      "sourced": false
     },
     {
       "id": "midrange",
       "category": "framework",
-      "short": "Efficient threats plus some interaction — the deck most Limited decks turn out to be.",
+      "short": "Efficient threats plus interaction, faster than control and slower than aggro.",
       "usage": "It's a midrange deck, so it wants a couple of ways to break a board stall.",
-      "source": 17
+      "source": 18
     },
     {
       "id": "control",

@@ -8,21 +8,38 @@ import {
   scoreDeckSpeedRun,
 } from "./deckSpeed.js";
 
-// Real fdn numbers off the built artifact, not invented ones. The extremes and
-// the middles both come from cards a person can check: Day of Judgment really
-// does sit at +0.698 over 5,471 games, and Prideful Parent really is flat at
-// +0.002 over 24,795.
+// Real fdn numbers off the built artifact, sampled EVENLY BY RANK rather than
+// hand-picked, because the gates are fractions of the set's own spread and a
+// fixture of tails would exercise a spread no set has. This one's sd is 0.135
+// against fdn's real 0.168 -- within a fifth, where an all-extremes fixture ran
+// 2.5x and quietly admitted cards the shipped gate refuses.
+//
+// It also carries Healer's Hawk, which is the card the review found the drill
+// wrong on: -0.085 turns over 28,755 games, where a z test alone called it a
+// card whose decks end early.
 const FDN: DeckSpeedCard[] = [
-  { name: "Boltwave", deckSpeed: -0.516, deckSpeedSe: 0.092, deckSpeedN: 677 },
-  { name: "Adventuring Gear", deckSpeed: -0.481, deckSpeedSe: 0.099, deckSpeedN: 704 },
-  { name: "Leyline Axe", deckSpeed: -0.44, deckSpeedSe: 0.031, deckSpeedN: 8050 },
-  { name: "Frenzied Goblin", deckSpeed: -0.325, deckSpeedSe: 0.042, deckSpeedN: 3892 },
-  { name: "Mocking Sprite", deckSpeed: -0.001, deckSpeedSe: 0.032, deckSpeedN: 8747 },
-  { name: "Prideful Parent", deckSpeed: 0.002, deckSpeedSe: 0.02, deckSpeedN: 24795 },
-  { name: "Dazzling Angel", deckSpeed: 0.003, deckSpeedSe: 0.018, deckSpeedN: 29378 },
-  { name: "Slagstorm", deckSpeed: 0.385, deckSpeedSe: 0.05, deckSpeedN: 3582 },
-  { name: "Blasphemous Edict", deckSpeed: 0.588, deckSpeedSe: 0.037, deckSpeedN: 8108 },
-  { name: "Day of Judgment", deckSpeed: 0.698, deckSpeedSe: 0.046, deckSpeedN: 5471 },
+  { name: "Balmor, Battlemage Captain", deckSpeed: -0.3263, deckSpeedSe: 0.0321, deckSpeedN: 7188 },
+  { name: "Ajani, Caller of the Pride", deckSpeed: -0.2302, deckSpeedSe: 0.0541, deckSpeedN: 3058 },
+  { name: "Diregraf Ghoul", deckSpeed: -0.2, deckSpeedSe: 0.0359, deckSpeedN: 7127 },
+  { name: "Wardens of the Cycle", deckSpeed: -0.1635, deckSpeedSe: 0.0383, deckSpeedN: 5814 },
+  { name: "Dwynen's Elite", deckSpeed: -0.1476, deckSpeedSe: 0.0258, deckSpeedN: 12130 },
+  { name: "Giada, Font of Hope", deckSpeed: -0.1266, deckSpeedSe: 0.0395, deckSpeedN: 6232 },
+  { name: "Twinflame Tyrant", deckSpeed: -0.105, deckSpeedSe: 0.0473, deckSpeedN: 3358 },
+  { name: "Healer's Hawk", deckSpeed: -0.0854, deckSpeedSe: 0.0184, deckSpeedN: 28755 },
+  { name: "Authority of the Consuls", deckSpeed: -0.0682, deckSpeedSe: 0.0847, deckSpeedN: 1408 },
+  { name: "Resolute Reinforcements", deckSpeed: -0.0422, deckSpeedSe: 0.0289, deckSpeedN: 11189 },
+  { name: "Dwynen, Gilt-Leaf Daen", deckSpeed: -0.0259, deckSpeedSe: 0.0376, deckSpeedN: 6019 },
+  { name: "Mocking Sprite", deckSpeed: 0.0012, deckSpeedSe: 0.0315, deckSpeedN: 8747 },
+  { name: "Grappling Kraken", deckSpeed: 0.0129, deckSpeedSe: 0.0415, deckSpeedN: 5241 },
+  { name: "Affectionate Indrik", deckSpeed: 0.0255, deckSpeedSe: 0.0271, deckSpeedN: 11080 },
+  { name: "Icewind Elemental", deckSpeed: 0.0411, deckSpeedSe: 0.0218, deckSpeedN: 19071 },
+  { name: "Cat Collector", deckSpeed: 0.0516, deckSpeedSe: 0.0253, deckSpeedN: 15512 },
+  { name: "Vampire Nighthawk", deckSpeed: 0.0678, deckSpeedSe: 0.0251, deckSpeedN: 15298 },
+  { name: "Reassembling Skeleton", deckSpeed: 0.0933, deckSpeedSe: 0.0298, deckSpeedN: 10640 },
+  { name: "Paradise Druid", deckSpeed: 0.1133, deckSpeedSe: 0.1291, deckSpeedN: 507 },
+  { name: "Secluded Courtyard", deckSpeed: 0.1341, deckSpeedSe: 0.1198, deckSpeedN: 577 },
+  { name: "Banishing Light", deckSpeed: 0.1673, deckSpeedSe: 0.0178, deckSpeedN: 31013 },
+  { name: "Aegis Turtle", deckSpeed: 0.2282, deckSpeedSe: 0.0486, deckSpeedN: 4122 },
 ];
 
 const byName = (qs: readonly { name: string }[], name: string) =>
@@ -31,9 +48,34 @@ const byName = (qs: readonly { name: string }[], name: string) =>
 describe("deckSpeedQuestions", () => {
   it("calls the ends by their sign and the flat cards middle", () => {
     const qs = deckSpeedQuestions(FDN);
-    expect(byName(qs, "Day of Judgment")?.answer).toBe("slow");
-    expect(byName(qs, "Leyline Axe")?.answer).toBe("fast");
-    expect(byName(qs, "Prideful Parent")?.answer).toBe("middle");
+    expect(byName(qs, "Aegis Turtle")?.answer).toBe("slow");
+    expect(byName(qs, "Balmor, Battlemage Captain")?.answer).toBe("fast");
+    expect(byName(qs, "Mocking Sprite")?.answer).toBe("middle");
+  });
+
+  // THE DEFECT THIS DRILL SHIPPED WITH INTO REVIEW. On a z test alone the answer
+  // tracked how much a card gets played: 28,755 games make four hundredths of a
+  // turn clear two error bars. Both cards below are far from flat in error bars
+  // and near it in turns, and both have to come back middle.
+  it("does not call a card fast just because it has a lot of games", () => {
+    const qs = deckSpeedQuestions([
+      ...FDN,
+      // 5.4 error bars out, and four hundredths of a turn.
+      { name: "Much Played", deckSpeed: -0.042, deckSpeedSe: 0.0078, deckSpeedN: 60000 },
+      { name: "Much Played Slow", deckSpeed: 0.043, deckSpeedSe: 0.008, deckSpeedN: 60000 },
+    ]);
+    expect(byName(qs, "Much Played")?.answer).toBe("middle");
+    expect(byName(qs, "Much Played Slow")?.answer).toBe("middle");
+  });
+
+  it("keeps the buckets from overlapping on effect size", () => {
+    const qs = deckSpeedQuestions(FDN);
+    const middles = qs.filter((q) => q.answer === "middle").map((q) => Math.abs(q.resid));
+    const ends = qs.filter((q) => q.answer !== "middle").map((q) => Math.abs(q.resid));
+    // The whole point of the floor: no card called neither may be further from
+    // flat than a card called fast or slow. Before it, middle's largest effect
+    // exceeded the ends' median.
+    expect(Math.max(...middles)).toBeLessThan(Math.min(...ends));
   });
 
   it("gives the middle answer to a card measured flat, not to one barely measured", () => {
@@ -116,6 +158,54 @@ describe("dealDeckSpeedRun", () => {
     const first = dealDeckSpeedRun(qs, 3);
     const later = dealDeckSpeedRun(qs, 3, 2);
     expect(later.map((q) => q.name)).not.toEqual(first.map((q) => q.name));
+  });
+
+  // THE TEST THE PAGER SHIPPED WITHOUT, and the defect it would have caught.
+  // The first version applied `skip` to each bucket pile while `deal` advanced
+  // it across all of them, so the piles ran dry with two thirds of the bank
+  // never asked -- and the assertion above passed over it, because a later page
+  // did differ from the first. Walking to exhaustion is what catches it.
+  it("serves every card in the bank exactly once, walking to the end", () => {
+    const bank = (answer: "fast" | "middle" | "slow", n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => ({
+        name: `${prefix}${i}`,
+        resid: 0,
+        se: 1,
+        n: 9999,
+        answer,
+        sigmas: 0,
+      }));
+    // fdn's real shape: 70 fast, 103 middle, 73 slow.
+    const qs = [...bank("fast", 70, "F"), ...bank("slow", 73, "S"), ...bank("middle", 103, "M")];
+
+    const seen: string[] = [];
+    for (let skip = 0; ; ) {
+      const run = dealDeckSpeedRun(qs, 8, skip);
+      if (run.length === 0) break;
+      seen.push(...run.map((q) => q.name));
+      skip += run.length;
+      if (skip > qs.length * 2) throw new Error("pager did not terminate");
+    }
+
+    expect(seen).toHaveLength(qs.length);
+    expect(new Set(seen).size).toBe(qs.length);
+  });
+
+  it("keeps the set's own proportions rather than an even third", () => {
+    const bank = (answer: "fast" | "middle" | "slow", n: number, prefix: string) =>
+      Array.from({ length: n }, (_, i) => ({
+        name: `${prefix}${i}`,
+        resid: 0,
+        se: 1,
+        n: 9999,
+        answer,
+        sigmas: 0,
+      }));
+    const qs = [...bank("fast", 10, "F"), ...bank("middle", 80, "M"), ...bank("slow", 10, "S")];
+    const run = dealDeckSpeedRun(qs, 30);
+    // A mostly-middle set serves a mostly-middle run: the fact that most cards
+    // pull neither way is the lesson, not something to balance away.
+    expect(run.filter((q) => q.answer === "middle").length).toBeGreaterThan(15);
   });
 });
 

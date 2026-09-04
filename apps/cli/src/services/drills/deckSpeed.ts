@@ -74,7 +74,7 @@ export async function runDeckSpeed(
     const run = await deal(convex, setCode, skip);
     spin.stop(
       run.questions.length > 0
-        ? `${run.questions.length} card${run.questions.length === 1 ? "" : "s"} measured against their own colours`
+        ? `${run.questions.length} card${run.questions.length === 1 ? "" : "s"} measured against their own colors`
         : "",
     );
 
@@ -119,7 +119,7 @@ function nothing(run: Run, setCode: string, skip: number): string {
   const set = setCode.toUpperCase();
   if (run.mute === "unbuilt") return `${set} has no statistics yet. Nothing to ask.`;
   if (run.mute === "untimed") {
-    return `${set}'s statistics were built before game length was measured. A re-ingest fills it in.`;
+    return `${set}'s statistics were built before game length was measured. It comes back the next time this set's data is refreshed.`;
   }
   if (run.mute === "unmeasured") {
     return `No card in ${set} is measured sharply enough to ask about. That is the set, not a bug.`;
@@ -149,7 +149,7 @@ async function play(run: Run): Promise<DeckSpeedResult[] | null> {
     const guess = chosen as DeckSpeedBucket;
     const result = gradeDeckSpeedGuess(question, guess);
     results.push(result);
-    p.note(reveal(question, run.formatTurns), head(result, question));
+    p.note(reveal(question, run.formatTurns, run.worthSaying), head(result, question));
   }
 
   return results;
@@ -182,25 +182,30 @@ const head = (result: DeckSpeedResult, question: Question) => {
  *
  * BOTH ENDS OF THE SCALE ARE PRINTED and the middle band is drawn rather than
  * described, because the whole claim is a comparison: this card's games against
- * the games of decks in the same colours. A bar with no zero on it would be a
+ * the games of decks in the same colors. A bar with no zero on it would be a
  * number floating free of what it is a difference from.
  *
  * The band is the decision band -- `width` error bars either side of flat -- so
  * a card whose bar overlaps it IS the middle answer, and the picture cannot
  * disagree with the verdict.
  */
-function reveal(question: Question, formatTurns: number | undefined): string {
+function reveal(
+  question: Question,
+  formatTurns: number | undefined,
+  worthSaying: number,
+): string {
   const WIDTH = 41;
   const half = DECK_SPEED.width * question.se;
   // One scale for every card in a run, wide enough to hold this card and its
   // error bar and always containing flat.
-  const span = Math.max(Math.abs(question.resid) + half, half * 1.5) * 1.15;
+  const span = Math.max(Math.abs(question.resid) + half, worthSaying, half) * 1.15;
   const at = (v: number) =>
     Math.max(0, Math.min(WIDTH - 1, Math.round(((v + span) / (2 * span)) * (WIDTH - 1))));
 
   const zero = at(0);
-  const lo = at(question.resid - question.se);
-  const hi = at(question.resid + question.se);
+  // The decision width, so "does the span reach the rule" answers the z test.
+  const lo = at(question.resid - half);
+  const hi = at(question.resid + half);
   const mid = at(question.resid);
 
   const track = Array.from({ length: WIDTH }, (_, i) => {
@@ -211,7 +216,7 @@ function reveal(question: Question, formatTurns: number | undefined): string {
   }).join("");
 
   const band = Array.from({ length: WIDTH }, (_, i) =>
-    i >= at(-half) && i <= at(half) ? pc.dim("▁") : " ",
+    i >= at(-worthSaying) && i <= at(worthSaying) ? pc.dim("▁") : " ",
   ).join("");
 
   return [
@@ -219,10 +224,10 @@ function reveal(question: Question, formatTurns: number | undefined): string {
     track,
     band,
     "",
-    `${turns(question.resid)} turns against other ${" "}decks in its colours, ` +
+    `${turns(question.resid)} turns against other decks in its colors, ` +
       `± ${question.se.toFixed(2)} over ${question.n.toLocaleString()} games.`,
     pc.dim(
-      `The shaded band is where the data cannot tell it from flat. ` +
+      `The shaded band is too close to flat for this set to call. ` +
         (formatTurns ? `A game in this set runs ${formatTurns.toFixed(1)} turns.` : ""),
     ),
   ].join("\n");

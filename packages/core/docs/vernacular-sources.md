@@ -23,4 +23,3 @@ have.
 16. [Wilds of Eldraine Limited Set Review (Draftsim)](https://draftsim.com/mtg-woe-limited-set-review/)
 17. [Drafting Control Decks — Ryan Saxe (StarCityGames)](https://articles.starcitygames.com/articles/drafting-control-decks/)
 18. [MTG Control Deck (Draftsim)](https://draftsim.com/mtg-control-deck/)
-19. [Limited Resources 656 — Aggro, Midrange, Control For Current Limited](https://lrcast.com/limited-resources-656-aggro-midrange-control-for-current-limited/)

@@ -356,12 +356,22 @@ terms:
     category: framework
     short: "A deck trying to end the game early, with cheap creatures and a low curve."
     usage: "I'm aggro, so I'll take the two-drop over the card advantage."
-    source: 17
+    # Source 17 names the three categories and defines only control, so it does
+    # not carry this. Nothing reachable defines aggro for LIMITED specifically --
+    # every page found assumes the reader knows it -- so this is admitted rather
+    # than given a citation that does not say it.
+    sourced: false
   - id: midrange
     category: framework
-    short: "Efficient threats plus some interaction — the deck most Limited decks turn out to be."
+    short: "Efficient threats plus interaction, faster than control and slower than aggro."
     usage: "It's a midrange deck, so it wants a couple of ways to break a board stall."
-    source: 17
+    # Source 18 is what actually defines it -- "a little slower than aggressive
+    # decks and a little faster than control decks" -- and the definition above
+    # is that sentence. The claim that midrange is what MOST Limited decks turn
+    # out to be is deliberately not here: it is contested in the sources and the
+    # research recorded it unsettled, so ARCH-03 carries it as a principle where
+    # it can be argued with, not as a definition.
+    source: 18
   - id: control
     category: framework
     short: "A deck that trades early, answers threats, and wins once the other player is out of cards."

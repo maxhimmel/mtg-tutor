@@ -16,7 +16,7 @@ export default function DeckSpeedPage() {
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-base-content/70">
             One card, and whether the decks that played it were trying to end the game
-            early, take it long, or neither. Measured from how long the games actually
+            early, go long, or neither. Measured from how long the games actually
             ran — not from what anyone says the card is for.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">

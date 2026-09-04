@@ -25,8 +25,8 @@ import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics"
  * in the app knows. The honest axis turned out to be how fast the deck wants the
  * game to go, which is measurable from `num_turns` in the game dataset the
  * pipeline already streams -- and the drill grades against a residual, a card's
- * mean game length minus the mean for the colours it was played in, so the
- * format and the colour pair are both divided out.
+ * mean game length minus the mean for the colors it was played in, so the
+ * format and the color pair are both divided out.
  *
  * THE THREE ANSWERS ARE NOT AGGRO, MIDRANGE AND CONTROL. Those name a deck's
  * whole plan; this measures one thing about it, which is when the game ends.
@@ -40,7 +40,7 @@ import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics"
  * it anyway, which is how we find out whether the reveal teaches.
  *
  * NOTHING ON THE CARD ANSWERS THE QUESTION. No win rate, no turn count, no
- * colour cue beyond the card itself. The rules text is the whole of what a
+ * color cue beyond the card itself. The rules text is the whole of what a
  * person reasons from, because "this is a wrath, wraths go long" is the skill.
  */
 
@@ -208,6 +208,7 @@ export function DeckSpeedQuiz() {
               <Question
                 question={current}
                 formatTurns={run.formatTurns}
+                worthSaying={run.worthSaying}
                 guess={answers.get(key(current))}
                 onAnswer={(bucket) => answer(current, bucket)}
                 onNext={() => setStep((s) => s + 1)}
@@ -216,6 +217,7 @@ export function DeckSpeedQuiz() {
             ) : (
               <Finish
                 score={score}
+                served={questions.length}
                 more={run.quizzable > run.nextSkip}
                 onMore={() => {
                   setSkip(run.nextSkip);
@@ -260,6 +262,7 @@ export function DeckSpeedQuiz() {
 function Question({
   question,
   formatTurns,
+  worthSaying,
   guess,
   onAnswer,
   onNext,
@@ -267,6 +270,7 @@ function Question({
 }: {
   question: Question;
   formatTurns?: number;
+  worthSaying: number;
   guess?: DeckSpeedBucket;
   onAnswer: (bucket: DeckSpeedBucket) => void;
   onNext: () => void;
@@ -321,11 +325,15 @@ function Question({
 
         {result && (
           <div className="mt-6">
-            <SpeedRuler resid={question.resid} se={question.se} />
+            <SpeedRuler
+              resid={question.resid}
+              se={question.se}
+              worthSaying={worthSaying}
+            />
             <p className="mt-3 text-sm leading-relaxed text-base-content/70">
               Decks that ran it played games {Math.abs(question.resid).toFixed(2)} turns{" "}
               {question.resid >= 0 ? "longer" : "shorter"} than other decks in the same
-              colours, give or take {question.se.toFixed(2)}, over{" "}
+              colors, give or take {question.se.toFixed(2)}, over{" "}
               {question.n.toLocaleString()} games.
               {formatTurns != null && ` A game in this set runs ${formatTurns.toFixed(1)} turns.`}
             </p>
@@ -366,7 +374,7 @@ function Nothing({
     run.mute === "unbuilt"
       ? "This set has no statistics yet, so there is nothing to ask about."
       : run.mute === "untimed"
-        ? "This set's statistics were built before game length was measured. It comes back with the next ingest."
+        ? "This set's statistics were built before game length was measured. It comes back the next time this set's data is refreshed."
         : run.mute === "unmeasured"
           ? "No card in this set has enough games behind it to say which way it pulls. That is the set rather than a fault."
           : skip > 0
@@ -389,10 +397,13 @@ function Nothing({
 
 function Finish({
   score,
+  served,
   more,
   onMore,
 }: {
   score: { answered: number; read: number; misread: number };
+  /** What this run actually dealt, which near the end of a set is not eight. */
+  served: number;
   more: boolean;
   onMore: () => void;
 }) {
@@ -406,7 +417,7 @@ function Finish({
       </p>
       {more && (
         <button type="button" className="btn btn-primary mt-5" onClick={onMore}>
-          Another eight
+          Another {served}
         </button>
       )}
     </section>

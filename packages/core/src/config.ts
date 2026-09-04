@@ -190,14 +190,45 @@ export const DECK_SPEED = {
   // quiz's range does.
   width: 2,
   // How sharp an estimate must be to be asked about at all, as a fraction of the
-  // set's own spread of residuals. At 0.5, with a width of 2, a card called
-  // middle has its whole interval inside one set-spread of flat -- so the middle
-  // answer is a claim that the card is measurably unlike the ends, rather than a
-  // confession that nobody counted enough games. Against the set's own spread
-  // rather than a turn count, because that spread runs 0.11 to 0.14 between sets
-  // and a fixed threshold would ask about a different fraction of each one.
+  // set's own spread of residuals. Below this the card is not asked about at
+  // all: an estimate vaguer than half the spread cannot support any of the three
+  // answers. Against the set's own spread rather than a turn count, because that
+  // spread runs 0.11 to 0.17 between sets and a fixed threshold would ask about
+  // a different fraction of each one.
+  //
+  // NOTE WHAT `middle` THEREFORE MEANS -- two conditions, not one. A card is
+  // called neither when it sits inside half a set-spread of flat, OR when the
+  // data cannot separate it from flat. Both are honest, and they are different
+  // findings: the first says the difference is too small to matter, the second
+  // says we cannot see it. The screen says "too close to call" for the first and
+  // draws a span touching the rule for the second.
   precision: 0.5,
+  // How far from flat a card must sit before it is called fast or slow, as a
+  // fraction of the set's own spread.
+  //
+  // THIS EXISTS BECAUSE THE Z TEST ALONE MEASURED SAMPLE SIZE. `width` asks
+  // whether the data can SEE a difference, and with 30,000 games it can see four
+  // hundredths of a turn -- so the first version of this graded Healer's Hawk
+  // (-0.042 turns, 28,755 games) as a card whose decks end games early, and
+  // Rite of the Dragoncaller (+0.143 over 1,446 games, three times the effect)
+  // as neither. The middle bucket's largest effect exceeded the ends' median:
+  // the two overlapped outright, and the answer tracked how much a card gets
+  // played rather than how fast its decks were.
+  //
+  // So a card gets an end only when BOTH are true -- the data can see the
+  // difference, and the difference is worth a sentence. Neither implies the
+  // other, which is the whole finding. At half the spread the buckets stop
+  // overlapping on fdn by construction: middle tops out at 0.084 turns and the
+  // ends start at 0.085.
+  floor: 0.5,
   // Games a card needs before its residual is read at all.
+  //
+  // THE PIPELINE'S FLOOR GOVERNS, and this one cannot raise the pool above it.
+  // `MIN_SPEED_GAMES` in build-set-stats.mjs decides which cards get a residual
+  // written at all; that script imports no core, so the two cannot check each
+  // other. This is the reader's floor: it re-filters what the artifact carries,
+  // which matters when an artifact was built under a lower one. Raising this
+  // above the script's is the only edit that does something on its own.
   minGames: 400,
 };
 

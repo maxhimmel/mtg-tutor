@@ -31,6 +31,10 @@ const SECTIONS = [
   "Score breakdown at every width",
   "How you draft",
   "Score plot",
+  // The deck-speed drill's reveal. Added last because the entries above are
+  // ordered by the defect each was added to photograph, and this one is not a
+  // defect -- it is a chart whose band and span have to be read together.
+  "Speed ruler",
 ];
 
 const OUT = "../../.checks/screens";

@@ -728,12 +728,6 @@ export const ingest = action({
         context: {
           ...(archWr && Object.keys(archWr).length > 0 ? { archWr } : {}),
           ...(speed != null ? { speed } : {}),
-          // Both or neither. A residual without its standard error is a number
-          // nobody can refuse, and the drill's whole gate is whether the
-          // difference clears its own error bar.
-          ...(c.deckSpeed != null && c.deckSpeedSe != null
-            ? { deckSpeed: c.deckSpeed, deckSpeedSe: c.deckSpeedSe }
-            : {}),
           ...(c.iwd != null ? { iwd: c.iwd } : {}),
           ...(c.maindeckRate != null ? { maindeckRate: c.maindeckRate } : {}),
           ...(se != null ? { se } : {}),

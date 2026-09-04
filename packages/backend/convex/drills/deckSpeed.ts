@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import {
   DECK_SPEED,
   dealDeckSpeedRun,
-  deckSpeedQuestions,
+  deckSpeedBank,
   hydrateCard,
   normalizeName,
 } from "@mtg-tutor/core";
@@ -86,19 +86,45 @@ export const deal = query({
       .unique();
 
     if (!stats) {
-      return { questions: [], quizzable: 0, ends: 0, mute: "unbuilt" as Mute, nextSkip: skip };
+      return {
+        questions: [],
+        quizzable: 0,
+        ends: 0,
+        worthSaying: 0,
+        mute: "unbuilt" as Mute,
+        nextSkip: skip,
+      };
     }
-    // An artifact built before this pipeline pass existed carries no residuals
+    // An artifact built before this pipeline pass existed carries no baselines
     // at all, which is a different sentence from "this set is thin" and gets its
-    // own word. Checked on the cards rather than on `turnStats`, because the
-    // cards are what the drill actually needs.
-    if (!stats.cards.some((c) => c.deckSpeed != null)) {
-      return { questions: [], quizzable: 0, ends: 0, mute: "untimed" as Mute, nextSkip: skip };
+    // own word. Tested on `turnStats` and NOT on the cards, because the two
+    // floors differ -- a colour needs 200 games to be a baseline and a card
+    // needs 400 -- so a set can be measured and still have no card over the
+    // card floor. Reading that as `untimed` would promise a re-ingest that
+    // fixes nothing, forever, and would break the analytics reading that this
+    // count falls to zero once the sets are re-ingested.
+    if (stats.turnStats == null) {
+      return {
+        questions: [],
+        quizzable: 0,
+        ends: 0,
+        worthSaying: 0,
+        mute: "untimed" as Mute,
+        nextSkip: skip,
+      };
     }
 
-    const ranked = deckSpeedQuestions(stats.cards, DECK_SPEED);
+    const bank = deckSpeedBank(stats.cards, DECK_SPEED);
+    const ranked = bank.questions;
     if (ranked.length === 0) {
-      return { questions: [], quizzable: 0, ends: 0, mute: "unmeasured" as Mute, nextSkip: skip };
+      return {
+        questions: [],
+        quizzable: 0,
+        ends: 0,
+        worthSaying: 0,
+        mute: "unmeasured" as Mute,
+        nextSkip: skip,
+      };
     }
 
     // Over-dealt by the read budget so a card the set has no text for costs a
@@ -153,6 +179,9 @@ export const deal = query({
       // The format's own mean game length, so the reveal can say what the card's
       // residual is a difference FROM. Absent on an artifact built before it.
       formatTurns: stats.turnStats?.mean,
+      // How far from flat this set calls worth saying, in turns. The reveal
+      // draws it, and it is one number per set rather than per card.
+      worthSaying: bank.worthSaying,
       mute: null as Mute,
       // Candidates EXAMINED rather than questions served, so a refused card is
       // not re-dealt on the next page.

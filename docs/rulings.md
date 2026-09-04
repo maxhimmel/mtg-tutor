@@ -895,18 +895,21 @@ The architecture, the data pipeline and the deploy story are all documented in
     floor of about 4.8% at P3 is measuring rather than a success.
 
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
-    is genuinely orthogonal to win rate (corr 0.022). IWD has a sound
+    is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
+    fast the format is, and nothing has measured that. IWD has a sound
     measurement argument and no derivable weight — the first attempt took 0.37
     from `1 - corr^2`, and how redundant a signal is says nothing about how far
     it should move an answer. A term whose magnitude cannot be justified does not
     belong in the score.
 
-    **This entry used to say speed's sign "needs the replay dataset". It does
-    not** (2026-09-04). Format speed is a mean over `num_turns`, which is column
-    17 of the GAME dataset the pipeline already streams, and all 25 cached game
-    files were measured for it without touching replay: MH3 8.29 turns to KTK
-    10.03. The orthogonality half of the ruling survives and was re-confirmed
-    from the other direction at +0.088.
+    **This entry used to say speed's sign needed the REPLAY dataset. Only that
+    half is struck** (2026-09-04). Format speed is a mean over `num_turns`,
+    column 17 of the GAME dataset the pipeline already streams, and all 25 cached
+    game files were measured for it without touching replay: MH3 8.29 turns to
+    KTK 10.03. What is NOT struck is the sign-dependence itself — no work here
+    measured whether speed's sign moves with how fast a format is, and it remains
+    the reason speed is stored and not scored. The dataset was the wrong obstacle;
+    the obstacle is still there.
 
     **And `speed` does not measure what its name suggests, which is the finding
     worth not re-deriving.** It is `ohWr - gdWr` (convex/sets.ts) and asks WHEN
@@ -915,8 +918,14 @@ The architecture, the data pipeline and the deploy story are all documented in
     RUNS when the card is in the deck. Correlated against each other: −0.28 over
     252 fdn cards, −0.29 over 269 woe cards, −0.35 and −0.36 on the cards that
     clear their own error bar. Right sign, about a tenth of the variance shared.
-    Both are orthogonal to win rate and neither substitutes for the other, so
-    anyone reaching for one should check which question they are asking.
+    Neither substitutes for the other, so anyone reaching for one should check
+    which question they are asking.
+
+    **`deckSpeed` is orthogonal to win rate at −0.001 over all 270 measured fdn
+    cards**, which is the population figure. An earlier draft of this entry
+    quoted +0.088; that came from the 39 most extreme cards — selected on the
+    very variable being correlated — and had no business standing for the whole
+    set. The conclusion survives and is stronger than the number it was made on.
 
     **The within-set spread is as large as the between-set spread, and that is
     what made a drill possible.** Colour pairs inside one set differ by about 1.6

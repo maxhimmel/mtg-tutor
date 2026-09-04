@@ -21,23 +21,40 @@
 // than whether the setting is right, so this prints the whole distribution and
 // the gate is chosen by reading it.
 //
-// WHAT THE GATE IS, AND WHY IT IS NOT THE ARCHETYPE QUIZ'S
+// WHAT THE GATES ARE
+//
+// Two, and this script prints the split they produce because that split IS the
+// design argument. PRECISION decides which cards can be asked about at all: an
+// estimate vaguer than half the set's own spread supports none of the three
+// answers. Then the answer needs both of the remaining tests to agree -- the
+// data can SEE the difference (two error bars) and the difference is WORTH
+// SAYING (half the set's spread).
+//
+// The second test is here because the first alone measured sample size. At
+// 28,755 games four hundredths of a turn clears two error bars, so a z test on
+// its own graded Healer's Hawk as a card whose decks end early while grading a
+// card at three times the effect neither.
 //
 // `diagnose-archetype-quiz` gates on a simulated null for the RANGE over k decks,
 // because the widest gap among many noisy numbers is wide even when nothing is
-// there. This drill compares ONE number against a fixed point -- zero, meaning
-// "the same length as other decks in these colours" -- so the ordinary two-sided
-// standard error is the correct test and the simulation would be borrowed rigour
-// rather than the right kind.
+// there. Nothing like that is needed here: this compares one number against a
+// fixed point, so the ordinary two-sided standard error is the right test.
 //
 // THE CHECK THAT NEVER GETS STORED
 //
 // `--pairs` prints the signed statistic: mean turns when a colour pair WINS minus
 // when it loses. Aggro wins faster than it loses and control loses faster than it
 // wins, so the sign is a check that the axis points the way a drafter would
-// expect. It is not the axis and is never written into an artifact: `won` is
-// censored by the very decision being judged, and the drill must not show an
-// outcome at answer time.
+// expect.
+//
+// IT IS NOT THE AXIS, AND THE REASON IS NOT THE ONE THIS COMMENT USED TO GIVE.
+// It said `won` is "censored by the very decision being judged", which is the
+// mulligan trainer's argument and does not transplant: there the population of
+// KEPT hands is selected by the decision under judgement, and here the decision
+// judged is a player's read of a card, which selects no games and censors
+// nothing. The real disqualifier is plainer -- this statistic is per colour pair
+// and the drill asks about a card, so it does not extend to the question being
+// asked. It stays a check on the axis and is never stored.
 
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -63,6 +80,13 @@ const MIN_BASELINE_GAMES = 200;
 // error. Both floors are printed rather than hidden, because moving them is an
 // argument with this table.
 const MIN_CARD_GAMES = 400;
+// The two gates, as fractions of the set's own spread of residuals. These must
+// match DECK_SPEED in packages/core/src/config.ts -- this script imports no core
+// so the pipeline can run against an unbuilt checkout, which means they are kept
+// in step by hand and this comment is the only thing saying so.
+const PRECISION = 0.5;
+const FLOOR = 0.5;
+const WIDTH = 2;
 
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
@@ -151,18 +175,64 @@ function residuals({ games, byCard }) {
     if (xs.length >= MIN_BASELINE_GAMES) baseline.set(colors, mean(xs));
   }
 
+  // Per-colour totals, so a card can be taken OUT of the line it is measured
+  // against. The pooled mean contains the card's own games, so a card in a
+  // fraction p of its colour's games is partly measured against itself and its
+  // residual comes out (1 - p) times too small -- worst for the staples.
+  const totals = new Map();
+  for (const [turns, colors] of games) {
+    const t = totals.get(colors) ?? { n: 0, sum: 0, sq: 0 };
+    t.n++;
+    t.sum += turns;
+    t.sq += turns * turns;
+    totals.set(colors, t);
+  }
+
   const out = [];
   for (const [name, idx] of byCard) {
     if (BASICS.has(name)) continue;
+
+    const own = new Map();
+    for (const g of idx) {
+      const [turns, colors] = games[g];
+      if (!baseline.has(colors)) continue;
+      const o = own.get(colors) ?? { n: 0, sum: 0, sq: 0 };
+      o.n++;
+      o.sum += turns;
+      o.sq += turns * turns;
+      own.set(colors, o);
+    }
+
+    const rest = new Map();
+    for (const [colors, o] of own) {
+      const all = totals.get(colors);
+      const restN = all.n - o.n;
+      if (restN <= 0) continue;
+      const b = (all.sum - o.sum) / restN;
+      rest.set(colors, { b, restN, v: Math.max(0, (all.sq - o.sq) / restN - b * b) });
+    }
+
     const rs = [];
     for (const g of idx) {
-      const base = baseline.get(games[g][1]);
-      if (base != null) rs.push(games[g][0] - base);
+      const r = rest.get(games[g][1]);
+      if (r) rs.push(games[g][0] - r.b);
     }
     if (rs.length < MIN_CARD_GAMES) continue;
     const m = mean(rs);
     const variance = mean(rs.map((r) => (r - m) ** 2));
-    out.push({ name, n: rs.length, resid: m, se: Math.sqrt(variance / rs.length) });
+    // The baselines are estimates too, and at a 200-game floor a thin colour
+    // carries an error bar comparable to the residuals being measured.
+    let bvar = 0;
+    for (const [colors, o] of own) {
+      const r = rest.get(colors);
+      if (r) bvar += o.n * o.n * (r.v / r.restN);
+    }
+    out.push({
+      name,
+      n: rs.length,
+      resid: m,
+      se: Math.sqrt(variance / rs.length + bvar / (rs.length * rs.length)),
+    });
   }
   out.sort((a, b) => a.resid - b.resid);
   return { cards: out, baseline };
@@ -208,7 +278,9 @@ console.log(
     `A colour needs ${MIN_BASELINE_GAMES} games to be a baseline, ` +
     `a card ${MIN_CARD_GAMES} to carry a residual.\n`,
 );
-console.log("set   games    mean  sd(resid)  cards   >=2se        >=3se");
+console.log(
+  "set   games    mean  sd(resid)  measured  askable    fast  middle    slow",
+);
 
 const totals = [];
 for (const file of files) {
@@ -222,25 +294,42 @@ for (const file of files) {
   const m = mean(read.games.map((g) => g[0]));
   const vals = cards.map((c) => c.resid);
   const sd = Math.sqrt(mean(vals.map((v) => (v - mean(vals)) ** 2)));
-  const sep2 = cards.filter((c) => Math.abs(c.resid) >= 2 * c.se).length;
-  const sep3 = cards.filter((c) => Math.abs(c.resid) >= 3 * c.se).length;
-  const pct = (k) => `${((100 * k) / cards.length).toFixed(1)}%`;
+
+  // Exactly the shipped gates, in the order `deckSpeedQuestions` applies them.
+  // The spread is taken over every MEASURED card rather than the askable ones,
+  // because the askable ones are chosen by it -- a threshold fitted to its own
+  // output is not a threshold.
+  const askable = cards.filter((c) => c.se <= PRECISION * sd);
+  const bucket = (c) => {
+    if (Math.abs(c.resid) < FLOOR * sd) return "middle";
+    if (Math.abs(c.resid / c.se) < WIDTH) return "middle";
+    return c.resid < 0 ? "fast" : "slow";
+  };
+  const g = { fast: 0, middle: 0, slow: 0 };
+  for (const c of askable) g[bucket(c)]++;
+  const pct = (k) => (askable.length ? `${((100 * k) / askable.length).toFixed(0)}%` : "--");
 
   console.log(
     `${setCode.toLowerCase().padEnd(5)} ${String(read.games.length).padStart(6)} ` +
       `${m.toFixed(2).padStart(7)} ${sd.toFixed(3).padStart(10)} ` +
-      `${String(cards.length).padStart(6)} ` +
-      `${String(sep2).padStart(5)} ${pct(sep2).padStart(6)} ` +
-      `${String(sep3).padStart(5)} ${pct(sep3).padStart(6)}` +
+      `${String(cards.length).padStart(8)} ${String(askable.length).padStart(8)}  ` +
+      `${String(g.fast).padStart(6)} ${String(g.middle).padStart(7)} ${String(g.slow).padStart(7)}` +
+      `   ${pct(g.middle)} middle` +
       (read.malformed ? `   (${read.malformed} rows misread)` : ""),
   );
-  totals.push({ setCode, cards, sep2, games: read.games });
+  totals.push({ setCode, cards, askable, games: read.games });
 
   if (has("cards")) {
     console.log("\n  the fifteen fastest and the fifteen slowest, residual in turns\n");
+    const sdAll = Math.sqrt(mean(cards.map((c) => (c.resid - mean(cards.map((x) => x.resid))) ** 2)));
     const show = (c) => {
       const z = c.resid / c.se;
-      const gate = Math.abs(z) >= 2 ? " " : "~";
+      const gate =
+        c.se > PRECISION * sdAll
+          ? "?"
+          : Math.abs(c.resid) >= FLOOR * sdAll && Math.abs(z) >= WIDTH
+            ? " "
+            : "~";
       console.log(
         `  ${gate}${c.resid >= 0 ? "+" : ""}${c.resid.toFixed(3)}  ` +
           `n=${String(c.n).padStart(6)}  z=${z >= 0 ? "+" : ""}${z.toFixed(1).padStart(5)}  ${c.name}`,
@@ -249,7 +338,10 @@ for (const file of files) {
     cards.slice(0, 15).forEach(show);
     console.log("  ...");
     cards.slice(-15).forEach(show);
-    console.log("\n  `~` marks a card inside its own error bar -- the drill will not ask about it.\n");
+    console.log(
+      "\n  `?` is too vaguely measured to ask about; `~` is asked about and" +
+        "\n  answered `neither`. A blank is a card with an end.\n",
+    );
   }
 
   if (has("pairs")) {
@@ -267,12 +359,12 @@ for (const file of files) {
 }
 
 if (totals.length > 1) {
-  const asked = totals.reduce((a, t) => a + t.sep2, 0);
+  const asked = totals.reduce((a, t) => a + t.askable.length, 0);
   const measured = totals.reduce((a, t) => a + t.cards.length, 0);
   console.log(
-    `\n${asked} of ${measured} measured cards can be asked about at 2 se, across ${totals.length} sets.`,
+    `\n${asked} of ${measured} measured cards are sharp enough to ask about, across ${totals.length} sets.`,
   );
-  const thin = totals.filter((t) => t.sep2 < 20);
+  const thin = totals.filter((t) => t.askable.length < 20);
   if (thin.length) {
     console.log(
       `${thin.length} set(s) hold fewer than twenty questions and should say so rather than degrade: ` +

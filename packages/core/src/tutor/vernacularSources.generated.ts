@@ -76,9 +76,5 @@ export const VERNACULAR_SOURCES: PrincipleSource[] = [
   {
     "title": "MTG Control Deck (Draftsim)",
     "url": "https://draftsim.com/mtg-control-deck/"
-  },
-  {
-    "title": "Limited Resources 656 — Aggro, Midrange, Control For Current Limited",
-    "url": "https://lrcast.com/limited-resources-656-aggro-midrange-control-for-current-limited/"
   }
 ];

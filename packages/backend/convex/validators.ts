@@ -353,13 +353,13 @@ export const cardContext = v.object({
   // for why it rides this row rather than EngineCard -- it is a read that is
   // already happening, at a nineteenth of the cost.
   se: v.optional(v.number()),
-  // The deck-speed residual and its error bar, denormalised onto the context row
-  // for the drill the way `se` was for the grade. NOT `speed` above, which is
-  // ohWr - gdWr and asks when in a game a card is best for you; this asks how
-  // long the game runs when the card is in the deck. Correlated at -0.28 over
-  // 252 fdn cards, so neither stands in for the other.
-  deckSpeed: v.optional(v.number()),
-  deckSpeedSe: v.optional(v.number()),
+  // The deck-speed residual is deliberately NOT here, though `speed` above is
+  // precedent for parking an unscored axis on this row. The drill reads
+  // `setStats.cards` and nothing on the pick path reads it, so denormalising it
+  // would grow a hot-path read -- ~14 rows a pick, the whole set on a replay --
+  // by about a fifth for bytes nobody opens. It rides the stats document with
+  // `turnStats` instead. If scoring ever earns a weight for it, that is the
+  // change that puts it here, and it costs a re-ingest either way.
 });
 
 // One archetype's own win rate, no card dimension. Same shape setStats stores,

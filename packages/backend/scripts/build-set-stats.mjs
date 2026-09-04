@@ -231,7 +231,12 @@ async function readGameData(localPath, isBasic) {
     // Basics are dropped from the per-card loop below by `isBasic`, and must NOT
     // be dropped here: a baseline is per game rather than per card, and skipping
     // games would change what every residual is taken against.
-    const turns = turnsI < 0 ? NaN : Number(row[turnsI]);
+    // `Number("")` is 0 and `isFinite(0)` is true, so a blank cell would enter
+    // both the baseline and the card sums as a game that ended on turn zero.
+    // Not observed in any of the 26 archived sets, which is what makes it worth
+    // one clause rather than a report -- a latent trap, not a live error.
+    const raw = turnsI < 0 ? "" : row[turnsI];
+    const turns = raw === "" ? NaN : Number(raw);
     const timed = arch !== "" && Number.isFinite(turns);
     if (timed) {
       const t = turnsByColors.get(arch) ?? { n: 0, sum: 0, sq: 0 };
@@ -309,6 +314,11 @@ async function readGameData(localPath, isBasic) {
 // would carry that noise into its own residual.
 const MIN_BASELINE_GAMES = 200;
 // And a card needs this many before its residual is worth a standard error.
+// This is the floor that GOVERNS -- a card under it gets no residual written, so
+// no reader can recover it. `DECK_SPEED.minGames` in core re-filters what does
+// get written and cannot widen the pool past this. The two are kept in step by
+// hand: this script imports no core, deliberately, so the pipeline can run
+// against a checkout whose core is not built.
 const MIN_SPEED_GAMES = 400;
 
 /**
@@ -325,8 +335,11 @@ const MIN_SPEED_GAMES = 400;
  *
  * IT IS NOT WIN RATE WEARING A DIFFERENT HAT, which is the check that matters --
  * an axis that turned out to be the grade again would be worth nothing beside the
- * grade a pick already gets. Correlation against gihWr comes back at +0.088,
- * consistent with the 0.022 already recorded for `speed` in docs/rulings.md.
+ * grade a pick already gets. Correlation against gihWr is -0.001 over all 270
+ * measured fdn cards. Quote that figure and not the +0.088 an earlier draft
+ * carried: that one was taken over the 39 most extreme cards, which are selected
+ * on the variable being correlated, and it overstated the very thing it was
+ * offered as evidence against.
  *
  * AND IT IS NOT `speed`, WHICH ALREADY EXISTS. That field is ohWr - gdWr, set in
  * convex/sets.ts, and it asks when in a game a card is best FOR YOU. This asks
@@ -363,15 +376,45 @@ function deckSpeed(turnsByColors, cardTurns) {
   for (const [key, ct] of cardTurns) {
     const sep = key.lastIndexOf("|");
     const name = key.slice(0, sep);
-    const base = baselines.get(key.slice(sep + 1));
-    if (base == null) continue;
-    const e = perCard.get(name) ?? { n: 0, sum: 0, sq: 0, nb: 0, bs: 0, nbb: 0 };
+    const colors = key.slice(sep + 1);
+    if (!baselines.has(colors)) continue;
+
+    // LEAVE THE CARD OUT OF THE LINE IT IS MEASURED AGAINST.
+    //
+    // The pooled baseline contains the card's own games, and that is not a
+    // rounding error: if the card is in a fraction p of its colour's games, the
+    // pooled mean is p*(with) + (1-p)*(without), so the residual comes out as
+    // (1 - p) times the real contrast -- shrunk hardest for the cards played
+    // most, which are exactly the staples. On fdn the median play share is 0.21
+    // and the maximum 0.56, so a fifth of the effect was being cancelled on a
+    // typical card and better than half on the most played one.
+    //
+    // It also made both clients liars. They say "other decks in the same
+    // colours", which is this quantity and was not what was computed.
+    const all = turnsByColors.get(colors);
+    const restN = all.n - ct.n;
+    // A card in every game of its colour has nothing to be compared against, so
+    // the comparison is refused rather than made against itself.
+    if (restN <= 0) continue;
+    const base = (all.sum - ct.sum) / restN;
+    // The baseline is an ESTIMATE, not a constant, and at the 200-game floor a
+    // thin colour carries an error bar of its own comparable to the residuals
+    // being measured. Holding it fixed understates the card's error bar, and
+    // since one of the two gates is a z test, an understated error bar
+    // manufactures ends. Its variance is carried through with the rest.
+    const restVar = Math.max(0, (all.sq - ct.sq) / restN - base * base);
+
+    const e =
+      perCard.get(name) ?? { n: 0, sum: 0, sq: 0, nb: 0, bs: 0, nbb: 0, bvar: 0 };
     e.n += ct.n;
     e.sum += ct.sum;
     e.sq += ct.sq;
     e.nb += ct.n * base;
     e.bs += base * ct.sum;
     e.nbb += ct.n * base * base;
+    // Weighted by this colour's share of the card's games, squared, because the
+    // residual is a weighted mean of per-colour differences.
+    e.bvar += ct.n * ct.n * (restVar / restN);
     perCard.set(name, e);
   }
 
@@ -381,7 +424,10 @@ function deckSpeed(turnsByColors, cardTurns) {
     const m = (e.sum - e.nb) / e.n;
     const second = (e.sq - 2 * e.bs + e.nbb) / e.n;
     const variance = Math.max(0, second - m * m);
-    out.set(name, { resid: m, se: Math.sqrt(variance / e.n), n: e.n });
+    // Two sources: the spread of this card's own games, and the uncertainty in
+    // the lines they are measured against.
+    const se = Math.sqrt(variance / e.n + e.bvar / (e.n * e.n));
+    out.set(name, { resid: m, se, n: e.n });
   }
 
   return {
