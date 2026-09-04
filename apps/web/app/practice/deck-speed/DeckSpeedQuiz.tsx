@@ -329,6 +329,7 @@ function Question({
               resid={question.resid}
               se={question.se}
               worthSaying={worthSaying}
+              n={question.n}
             />
             <p className="mt-3 text-sm leading-relaxed text-base-content/70">
               Decks that ran it played games {Math.abs(question.resid).toFixed(2)} turns{" "}

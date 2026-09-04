@@ -102,6 +102,15 @@ people who can point — and it stays; visx's `useTooltip` holds position in
 React state and re-renders per pointer move, which is the pathology
 `CursorTip.tsx` was rewritten to fix.
 
+**No legend AND no tip is two guides off, which is a different act from one.**
+Such a chart answers only across the room. It is allowed only when every value
+drawn is printed on the chart — `WinRateAxis` is the case that holds. **Audit
+the `Off` reason rather than reading it**: `SpeedRuler` shipped with "there is
+nothing left for a cursor to add" while its sample size, error bar and band
+width were all absent from the drawing, and a reviewer took the sentence at
+face value. Name the values a reader might want and point at where each is
+printed; if you cannot, that is a finding.
+
 **Rates and differences are different things.** `pct()` for a rate, `points()`
 for a difference of two rates. A delta rendered as a percentage is how a reader
 comes to think a 4pp charge is a 4% one.
@@ -128,7 +137,10 @@ ship**, so calibrate:
   (renormalised bars, a delta shown as a rate).
 - **high** — hue-only encoding; a missing or unlabelled axis or reference; a
   `Plot` missing `needs`/`instead`/`label`; overflow at 375px.
-- **medium** — a legend where a direct label belongs; a role misused.
+- **medium** — a legend where a direct label belongs; a role misused; **a guide
+  switched off with a reason that does not survive being checked** — the escape
+  hatch takes prose, so an unaudited `Off` is how a chart loses a guide it
+  needed.
 - **low** — polish.
 
 Cite the file and the rule. "This looks cluttered" is not a finding; "the

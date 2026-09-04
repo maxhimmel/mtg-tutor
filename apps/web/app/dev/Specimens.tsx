@@ -410,10 +410,10 @@ export const SPECIMENS: Specimen[] = [
             uses it, because it is one number per SET and a specimen that made
             one up per card would draw a band the app never draws. */}
         <Bay label="Day of Judgment — +0.77 turns, far outside the band" width="max-w-[34rem]">
-          <SpeedRuler resid={0.7705} se={0.0461} worthSaying={0.084} />
+          <SpeedRuler resid={0.7705} se={0.0461} worthSaying={0.084} n={5471} />
         </Bay>
         <Bay label="Mocking Sprite — +0.001 over 8,747 games, genuinely flat" width="max-w-[34rem]">
-          <SpeedRuler resid={0.0012} se={0.0315} worthSaying={0.084} />
+          <SpeedRuler resid={0.0012} se={0.0315} worthSaying={0.084} n={8747} />
         </Bay>
 
         {/* THE BAYS THE REVIEW ASKED FOR, and the defect they would have caught.
@@ -445,7 +445,7 @@ export const SPECIMENS: Specimen[] = [
 
         <Bay label="In greyscale — nothing is encoded in hue" width="max-w-[34rem]">
           <div style={{ filter: "grayscale(1)" }}>
-            <SpeedRuler resid={0.7705} se={0.0461} worthSaying={0.084} />
+            <SpeedRuler resid={0.7705} se={0.0461} worthSaying={0.084} n={5471} />
           </div>
         </Bay>
       </div>

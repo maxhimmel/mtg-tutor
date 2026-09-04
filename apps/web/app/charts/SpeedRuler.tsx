@@ -2,6 +2,7 @@
 
 import { scaleLinear } from "@visx/scale";
 import { DECK_SPEED } from "@mtg-tutor/core";
+import { useCursorTip } from "../components/CursorTip";
 import { INK, MARK, NEUTRAL } from "./ink";
 import { Plot, Reference, ValueAxisBottom } from "./Plot";
 
@@ -28,9 +29,13 @@ import { Plot, Reference, ValueAxisBottom } from "./Plot";
  * what flat means. A legend would be taller than the chart and would name the
  * same card four times.
  *
- * AND NOTHING IS HIDDEN IN A HOVER. The format's own mean game length belongs
- * beside this chart and the caller prints it, because `title=` does not exist on
- * touch and a figure a reader needs is a figure that is drawn.
+ * NOTHING NEEDED IS HIDDEN IN A HOVER, AND THERE IS STILL A HOVER. Those are not
+ * the same rule and this chart shipped conflating them: the tip was switched off
+ * with "there is nothing left for a cursor to add", which was simply false --
+ * the games behind the number, the exact error bar and the band's width in turns
+ * are none of them on the drawing, and on /dev there is no sentence beside it
+ * either. Everything required to READ the chart is printed; the cursor carries
+ * the longer form, which is what `useCursorTip` is for.
  *
  * NOTHING IS ENCODED IN HUE. The dot's position carries the answer, the interval
  * carries the precision, and the printed figure carries both again. The single
@@ -41,6 +46,7 @@ export function SpeedRuler({
   resid,
   se,
   worthSaying,
+  n,
   height = 104,
 }: {
   /** Turns longer (+) or shorter (−) than this card's own colors ran. */
@@ -52,6 +58,8 @@ export function SpeedRuler({
    * not per card -- see `DeckSpeedBank.worthSaying`.
    */
   worthSaying: number;
+  /** Games behind the estimate. Absent on a specimen with no set behind it. */
+  n?: number;
   height?: number;
 }) {
   // The interval is drawn at the DECISION width rather than at one error bar, so
@@ -59,6 +67,7 @@ export function SpeedRuler({
   // rule -- gives the right answer here. Drawn at one error bar it did not: a
   // card between one and two error bars out had a span clear of the rule and an
   // answer of "Neither", which is a picture contradicting the words beside it.
+  const tip = useCursorTip();
   const half = DECK_SPEED.width * se;
   // The domain holds the card, its whole interval, and the decision band, and is
   // symmetric about flat so the two directions are never drawn at two scales.
@@ -85,17 +94,56 @@ export function SpeedRuler({
       legend={{
         none: "One number and four marks about it -- an estimate, its interval, the region too small to be worth saying, and the flat it is measured from. Not series. Each is labelled where it is drawn, so a legend would name the same card four times and stand taller than the chart.",
       }}
-      tip={{
-        none: "The one value position cannot give you is printed on the dot, and both ends of the scale are on the axis. There is nothing left for a cursor to add, and half the readers have no cursor.",
-      }}
+      tip={tip.node}
       margin={{ top: 20, right: 12, bottom: 40, left: 12 }}
     >
       {({ width, height: h }) => {
         const x = scaleLinear({ domain, range: [0, width] });
         const mid = h / 2;
 
+        /**
+         * What the pointer is nearest, and what that mark claims.
+         *
+         * Measured in pixels off the plot's own box rather than in turns, the
+         * same shape `HabitTrack.describe` and `DeckBands` use: "am I on the
+         * dot" is a question about the drawing, and the dot is eight pixels
+         * whatever the scale.
+         */
+        const describe = (e: { clientX: number; currentTarget: Element }): string => {
+          const box = e.currentTarget.getBoundingClientRect();
+          const at = e.clientX - box.left;
+          const under = x.invert((at / box.width) * width);
+          const near = (v: number) => Math.abs(at - (x(v) / width) * box.width) < 10;
+
+          if (near(resid)) {
+            return (
+              `${turns(resid)} turns against decks in the same colors` +
+              (n ? `, over ${n.toLocaleString()} games.` : ".")
+            );
+          }
+          if (near(0)) return "Decks in the same colors, which is what this is measured from.";
+          if (Math.abs(under) <= worthSaying) {
+            return `Inside ${worthSaying.toFixed(2)} turns of flat — too close for this set to call either way.`;
+          }
+          if (Math.abs(under - resid) <= half) {
+            return `The slack ${n ? `${n.toLocaleString()} games` : "this sample"} leaves: ±${half.toFixed(2)} turns.`;
+          }
+          return `${turns(under)} turns, which is outside what this card's games can support.`;
+        };
+
         return (
           <>
+            {/* The hoverable is the whole plot, and it sits FIRST so the marks
+                draw over it. Transparent rather than absent: a pointer between
+                two marks still gets an answer about where it is. */}
+            <rect
+              x={0}
+              y={0}
+              width={width}
+              height={h}
+              fill="transparent"
+              {...tip.follow((e) => describe(e as { clientX: number; currentTarget: Element }))}
+            />
             {/* The region this set calls too small to be worth saying. One of
                 the two things that make a card "Neither"; the other is the span
                 below reaching the rule. Both are drawn, and both are named. */}

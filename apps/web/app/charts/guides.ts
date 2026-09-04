@@ -33,6 +33,25 @@
  * one-liner, on purpose: these charts are going to meet cases nobody has
  * imagined yet, and a kit that makes the exception expensive gets worked around
  * rather than used.
+ *
+ * TURNING OFF TWO OF THE THREE IS A DIFFERENT ACT FROM TURNING OFF ONE, and this
+ * is the rule the kit was missing. A chart with no legend AND no tip answers only
+ * at arm's length: everything a reader wants that is not on the axis is
+ * unreachable, on every device. So a chart without a legend needs a tip —
+ * UNLESS every value it draws is printed on it, which is a claim about the
+ * drawing and has to be checked rather than asserted.
+ *
+ * `WinRateAxis` is the version that holds: it labels every value, so a hover
+ * really would repeat what is already there. `SpeedRuler` is the version that
+ * did not, and it shipped: its off-reason said "there is nothing left for a
+ * cursor to add" while the games behind the estimate, the exact error bar and
+ * the band's width in turns were all absent from the drawing. The reason read
+ * plausibly, a reviewer accepted it, and the chart went out answering nothing at
+ * the cursor.
+ *
+ * So the test for an `Off` on `tip` when `legend` is also off: name the values a
+ * reader might want and point at where each one is printed. If you cannot, the
+ * chart needs the tip.
  */
 
 /** A guide, or a stated reason this chart does not need one. */
