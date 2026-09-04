@@ -19,6 +19,7 @@ import {
   llmCall,
   packCard,
   packComposition,
+  turnStats,
   packedCards,
   pickDefense,
   reviewVerdict,
@@ -197,6 +198,11 @@ export default defineSchema({
     // query cannot find. Optional: artifacts built before it existed have none,
     // and ingestion falls back to discovery alone for those.
     packCards: v.optional(v.array(packCard)),
+    // The format's mean game length and the per-colour means each card's
+    // `deckSpeed` was taken against. Optional so the schema push that introduces
+    // it deploys over docs seeded before it existed -- the same ordering decision
+    // #21 cost a production deploy for. A re-seed fills it in.
+    turnStats: v.optional(turnStats),
     builtAt: v.string(),
   }).index("by_code_and_format", ["code", "format"]),
 
