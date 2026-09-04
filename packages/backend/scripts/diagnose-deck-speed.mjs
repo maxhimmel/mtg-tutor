@@ -66,6 +66,12 @@ const MIN_CARD_GAMES = 400;
 
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
+// `build-set-stats` drops basics from its per-card loop, so counting them here
+// would report five questions per set that the drill can never ask. Named rather
+// than resolved through Scryfall, because this script reads archived bytes and
+// never the network -- and these five names do not move.
+const BASICS = new Set(["Plains", "Island", "Swamp", "Mountain", "Forest"]);
+
 /**
  * One pass over a set's game dataset.
  *
@@ -147,6 +153,7 @@ function residuals({ games, byCard }) {
 
   const out = [];
   for (const [name, idx] of byCard) {
+    if (BASICS.has(name)) continue;
     const rs = [];
     for (const g of idx) {
       const base = baseline.get(games[g][1]);

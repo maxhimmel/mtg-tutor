@@ -353,6 +353,13 @@ export const cardContext = v.object({
   // for why it rides this row rather than EngineCard -- it is a read that is
   // already happening, at a nineteenth of the cost.
   se: v.optional(v.number()),
+  // The deck-speed residual and its error bar, denormalised onto the context row
+  // for the drill the way `se` was for the grade. NOT `speed` above, which is
+  // ohWr - gdWr and asks when in a game a card is best for you; this asks how
+  // long the game runs when the card is in the deck. Correlated at -0.28 over
+  // 252 fdn cards, so neither stands in for the other.
+  deckSpeed: v.optional(v.number()),
+  deckSpeedSe: v.optional(v.number()),
 });
 
 // One archetype's own win rate, no card dimension. Same shape setStats stores,
@@ -365,6 +372,16 @@ export const colorWinRate = v.object({
 
 // Observed booster shapes for a set. Optional throughout: a set we have no
 // draft data for keeps the fixed PACK constants.
+// The format's own mean game length and the per-colour means every card's
+// `deckSpeed` was taken against. Stored because a residual whose baseline is not
+// written down cannot be re-read or re-argued later -- and because the baselines
+// are refittable, so a residual stored already-corrected would freeze whichever
+// vintage was current that day.
+export const turnStats = v.object({
+  mean: v.number(),
+  byColors: v.record(v.string(), v.number()),
+});
+
 export const packComposition = v.object({
   size: v.number(),
   shapes: v.array(
@@ -441,6 +458,16 @@ export const cardStats = v.object({
   taken: v.number(),
   maindeckRate: v.optional(v.number()),
   trophyPickRate: v.optional(v.number()),
+  // How much longer or shorter this card's games ran than the games of the
+  // colours it was played in, in turns, and the error bar on that difference.
+  // A residual rather than a mean, because game length is a joint outcome of
+  // both decks and a raw mean says as much about the format and the colour pair
+  // as about the card. Both optional together -- a set whose game data carried
+  // no turns writes neither, and a residual without its standard error is a
+  // number nobody can refuse.
+  deckSpeed: v.optional(v.number()),
+  deckSpeedSe: v.optional(v.number()),
+  deckSpeedN: v.optional(v.number()),
 });
 
 // What one pick scored, with the two cards it names carried as names rather
