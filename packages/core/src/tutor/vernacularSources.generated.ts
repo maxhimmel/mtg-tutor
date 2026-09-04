@@ -76,5 +76,9 @@ export const VERNACULAR_SOURCES: PrincipleSource[] = [
   {
     "title": "MTG Control Deck (Draftsim)",
     "url": "https://draftsim.com/mtg-control-deck/"
+  },
+  {
+    "title": "Edge of Eternities Superlative Awards (17Lands Blog)",
+    "url": "https://blog.17lands.com/posts/eoe-superlatives/"
   }
 ];

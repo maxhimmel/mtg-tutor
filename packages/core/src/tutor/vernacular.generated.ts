@@ -437,6 +437,13 @@ export const VERNACULAR_DOC: VernacularDoc = {
       "source": 18
     },
     {
+      "id": "grindy",
+      "category": "framework",
+      "short": "A deck that expects a long game and is built to still be there at the end of it.",
+      "usage": "It's a grindy format — you want a couple of ways to break a board stall.",
+      "source": 19
+    },
+    {
       "id": "tempo",
       "category": "gameplay",
       "short": "Board position measured against mana spent. GENUINELY CONTESTED — Wizards reduces it to board presence and many players would say that is a different thing. Use it only where the concrete meaning is obvious.",

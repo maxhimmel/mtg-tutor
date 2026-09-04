@@ -68,21 +68,47 @@ export const DECK_SPEED_BUCKETS: readonly DeckSpeedBucket[] = ["fast", "middle",
 /**
  * What each end is called on a screen, and why these words.
  *
- * Not "aggro" / "midrange" / "control". Those name a deck's whole plan, and this
- * measures one thing about it -- when the game ends. A card in the fast bucket is
- * a card whose decks close early, which is most of what aggro means and not all
- * of it, and printing the stronger word would claim the rest. The corpus rule
+ * Not "aggro" / "midrange" / "control". Those name a deck's whole plan and this
+ * measures one thing about it -- when the game ends -- so printing the stronger
+ * word would claim the rest on the strength of a turn count. The corpus rule
  * against inventing a name for something the game already names cuts both ways:
  * it also forbids borrowing a name for something you have not measured.
+ *
+ * AND THE MAPPING ONLY WORKS FOR ONE OF THE THREE, which is the concrete reason.
+ * The fast bucket really is aggro cards -- Leyline Axe, Frenzied Goblin, Overrun.
+ * The slow bucket is wraths AND universal removal like Bake into a Pie, which no
+ * drafter calls a control card. And the middle bucket is Think Twice and Helpful
+ * Hunter: cards with no speed opinion, which is not what midrange means. Those
+ * three words would be right for a drill that asked about a DECK, and this one
+ * asks about a card.
+ *
+ * `Fast` and `Grindy` are what a drafter says about a deck's clock. 17Lands uses
+ * "grindiest" for exactly this quantity -- their Time Vault award goes to the
+ * trophy deck that played the most turns.
  */
 export const BUCKET_LABELS: Readonly<Record<DeckSpeedBucket, string>> = {
-  fast: "Ends it early",
+  fast: "Fast",
   middle: "Neither",
-  slow: "Goes long",
+  slow: "Grindy",
 };
 
 export interface DeckSpeedCard {
   name: string;
+  /**
+   * The card's role, so lands can be dropped.
+   *
+   * DROPPED FOR THE ARCHETYPE QUIZ'S REASON, ONE STEP ALONG. That drill drops
+   * them because "which deck wants this land" is answered by the colours it
+   * makes. Here the question is answerable and worthless: Evolving Wilds is the
+   * SHARPEST `middle` card in fdn, so it would be the first question a player
+   * ever saw, and "what kind of deck plays Evolving Wilds" teaches nobody
+   * anything. A fixing land goes in every deck by definition, which is why it
+   * measures flat -- the answer is on its face.
+   *
+   * Absent means unknown rather than not-a-land, so a caller that cannot supply
+   * roles keeps every card. That is a worse drill, not a broken one.
+   */
+  role?: string;
   /** Turns longer (+) or shorter (-) than this card's own colours ran. */
   deckSpeed?: number;
   /** One standard error on that difference. */
@@ -199,6 +225,7 @@ export function deckSpeedBank(
 ): DeckSpeedBank {
   const measured = cards.filter(
     (c): c is DeckSpeedCard & { deckSpeed: number; deckSpeedSe: number } =>
+      c.role !== "land" &&
       c.deckSpeed != null &&
       c.deckSpeedSe != null &&
       c.deckSpeedSe > 0 &&

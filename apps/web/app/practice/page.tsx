@@ -56,7 +56,7 @@ const DRILLS = [
     // axis, and a name promising types would promise a taxonomy it does not
     // have.
     name: "How fast is this card's deck?",
-    what: "One card, and whether the decks that played it were ending games early, going long, or neither. From how long the games really ran.",
+    what: "One card, and whether the decks that played it were fast, grindy, or neither. From how long the games really ran.",
     length: "8 cards · a couple of minutes",
   },
 ];

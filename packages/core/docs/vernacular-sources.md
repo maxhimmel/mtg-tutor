@@ -23,3 +23,4 @@ have.
 16. [Wilds of Eldraine Limited Set Review (Draftsim)](https://draftsim.com/mtg-woe-limited-set-review/)
 17. [Drafting Control Decks — Ryan Saxe (StarCityGames)](https://articles.starcitygames.com/articles/drafting-control-decks/)
 18. [MTG Control Deck (Draftsim)](https://draftsim.com/mtg-control-deck/)
+19. [Edge of Eternities Superlative Awards (17Lands Blog)](https://blog.17lands.com/posts/eoe-superlatives/)

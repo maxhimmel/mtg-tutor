@@ -98,6 +98,26 @@ describe("deckSpeedQuestions", () => {
     expect(byName(qs, "Too Few Games")).toBeUndefined();
   });
 
+  // Evolving Wilds is the sharpest `middle` card in real fdn, so without this it
+  // is the first question a player ever sees -- and "what kind of deck plays
+  // Evolving Wilds" teaches nothing. A fixing land goes in every deck by
+  // definition, which is why it measures flat.
+  it("drops lands, however sharply they are measured", () => {
+    const qs = deckSpeedQuestions([
+      ...FDN,
+      { name: "Evolving Wilds", deckSpeed: 0.062, deckSpeedSe: 0.014, deckSpeedN: 40780, role: "land" },
+    ]);
+    expect(byName(qs, "Evolving Wilds")).toBeUndefined();
+  });
+
+  it("keeps a card whose role is unknown, because absent is not not-a-land", () => {
+    const qs = deckSpeedQuestions([
+      ...FDN,
+      { name: "No Role Recorded", deckSpeed: 0.3, deckSpeedSe: 0.02, deckSpeedN: 9000 },
+    ]);
+    expect(byName(qs, "No Role Recorded")?.answer).toBe("slow");
+  });
+
   it("drops a card with no residual rather than calling it middle", () => {
     const qs = deckSpeedQuestions([...FDN, { name: "Unmeasured" }]);
     expect(byName(qs, "Unmeasured")).toBeUndefined();

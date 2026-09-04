@@ -17,12 +17,15 @@ import { requireUserId, setCardsFor, setDocFor } from "../sessions.js";
 // be played on a set you have never drafted, on your first day.
 //
 // THE COST IS THE SAME READ THE ARCHETYPE QUIZ ALREADY PAYS, and the bet behind
-// it is the same one. A run reads the set's stats document (~270-412KB) and one
-// text row per card served. Nothing here needs the pool document -- this drill
-// has no colour or role check, because the question is about a card's own games
-// rather than about which decks want it, so a land or a colourless card is a
-// perfectly good question. That is one ~24.7KB read the archetype quiz makes and
-// this one does not.
+// it is the same one. A run reads the set's stats document (~270-412KB), the
+// set's cards (~24.7KB, for roles the stats artifact does not carry), and one
+// text row per card served.
+//
+// The pool read is for ONE thing: dropping lands. A colourless card is a
+// perfectly good question here where it is not in the archetype quiz, so no
+// colour check is needed -- but Evolving Wilds is the sharpest `middle` card in
+// fdn and would be a player's first question, and "what kind of deck plays
+// Evolving Wilds" teaches nothing.
 //
 // If the `drill_*` events say this gets played, the derivation moves to seed
 // time and the stats read goes away. Until then it is a subscription Convex
@@ -114,7 +117,17 @@ export const deal = query({
       };
     }
 
-    const bank = deckSpeedBank(stats.cards, DECK_SPEED);
+    // Roles live on the pool document, not in the stats artifact, and the bank
+    // needs them to drop lands. One read the archetype quiz already makes for
+    // the same reason.
+    const cardsDoc = await setCardsFor(ctx, setDoc);
+    const roles = new Map(
+      cardsDoc.cards.map((c) => [normalizeName(c.name), c.role as string | undefined]),
+    );
+    const bank = deckSpeedBank(
+      stats.cards.map((c) => ({ ...c, role: roles.get(normalizeName(c.name)) })),
+      DECK_SPEED,
+    );
     const ranked = bank.questions;
     if (ranked.length === 0) {
       return {
@@ -131,7 +144,6 @@ export const deal = query({
     // question rather than a hole in the run.
     const candidates = dealDeckSpeedRun(ranked, limit * READ_BUDGET, skip);
 
-    const cardsDoc = await setCardsFor(ctx, setDoc);
     const text = await cardTextFor(
       ctx,
       setDoc.code,

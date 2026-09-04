@@ -339,8 +339,9 @@ function Question({
             </p>
             {question.answer === "middle" && (
               <p className="mt-2 text-sm leading-relaxed text-base-content/70">
-                That is inside the shaded band, so the data cannot tell it from a card
-                that pulls neither way. Most cards are here.
+                Too close to flat for this set to call — the largest group of cards
+                is here. It does not mean the deck was midrange: it means this card
+                pulls the game neither way.
               </p>
             )}
             <button type="button" className="btn btn-primary mt-5" onClick={onNext}>
