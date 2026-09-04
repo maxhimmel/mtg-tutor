@@ -16,6 +16,7 @@ import { PickStrip } from "../glossary/figures/PickStrip";
 import { Braid } from "../challenge/[id]/diff/Braid";
 import { ScoreBreakdown } from "../components/ScoreBreakdown";
 import { GapMark } from "../charts/GapMark";
+import { SpeedRuler } from "../charts/SpeedRuler";
 import { Habits, type HabitsData } from "../components/Habits";
 import { Reasoning } from "../components/Reasoning";
 import { REASON_LIMIT } from "@mtg-tutor/core";
@@ -394,6 +395,47 @@ const FLAT_TERMS: ValueTerm[] = [
 ];
 
 export const SPECIMENS: Specimen[] = [
+  {
+    id: "speed-ruler",
+    title: "Speed ruler",
+    note: "The deck-speed drill's reveal. Real fdn numbers — the question is whether a middle card and an end look different at every width",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        {/* THE BAY THIS EXISTS FOR. A card fifteen error bars out and a card
+            measured flat have to be tellable apart at a glance, and the band
+            has to still be visible on the extreme one -- a domain that scaled
+            only to the dot would squash it to nothing and make every middle
+            card look like a rounding error. */}
+        <Bay label="Day of Judgment — +0.698 turns, 15 error bars out" width="max-w-[34rem]">
+          <SpeedRuler resid={0.698} se={0.046} />
+        </Bay>
+        <Bay label="Prideful Parent — +0.002 turns over 24,795 games, and genuinely flat" width="max-w-[34rem]">
+          <SpeedRuler resid={0.002} se={0.02} />
+        </Bay>
+        <Bay label="Boltwave — fast, and measured on only 677 games" width="max-w-[34rem]">
+          <SpeedRuler resid={-0.516} se={0.092} />
+        </Bay>
+
+        {/* The widths the app actually gives it: the drill's own column on a
+            laptop, and a phone. `needs` is 260, so the last one is the fallback
+            and has to read as a finished sentence rather than a broken chart. */}
+        <Bay label="At the drill's column width — 24rem" width="w-[24rem] max-w-full">
+          <SpeedRuler resid={0.385} se={0.05} />
+        </Bay>
+        <Bay label="At 320px, inside `needs` — the drawing gives way to the sentence" width="w-[16rem] max-w-full">
+          <SpeedRuler resid={0.385} se={0.05} />
+        </Bay>
+
+        {/* Hue is not carrying anything here, so this should be unremarkable --
+            which is the point of looking. */}
+        <Bay label="In greyscale — nothing is encoded in hue" width="max-w-[34rem]">
+          <div style={{ filter: "grayscale(1)" }}>
+            <SpeedRuler resid={0.698} se={0.046} />
+          </div>
+        </Bay>
+      </div>
+    ),
+  },
   {
     id: "pick-track",
     title: "Pick track",

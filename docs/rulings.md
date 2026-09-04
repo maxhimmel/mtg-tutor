@@ -895,12 +895,37 @@ The architecture, the data pipeline and the deploy story are all documented in
     floor of about 4.8% at P3 is measuring rather than a success.
 
     **Speed and IWD are stored and not scored, each for a stated reason.** Speed
-    is genuinely orthogonal to win rate (corr 0.022) but its SIGN depends on how
-    fast the format is, which needs the replay dataset. IWD has a sound
+    is genuinely orthogonal to win rate (corr 0.022). IWD has a sound
     measurement argument and no derivable weight — the first attempt took 0.37
     from `1 - corr^2`, and how redundant a signal is says nothing about how far
     it should move an answer. A term whose magnitude cannot be justified does not
     belong in the score.
+
+    **This entry used to say speed's sign "needs the replay dataset". It does
+    not** (2026-09-04). Format speed is a mean over `num_turns`, which is column
+    17 of the GAME dataset the pipeline already streams, and all 25 cached game
+    files were measured for it without touching replay: MH3 8.29 turns to KTK
+    10.03. The orthogonality half of the ruling survives and was re-confirmed
+    from the other direction at +0.088.
+
+    **And `speed` does not measure what its name suggests, which is the finding
+    worth not re-deriving.** It is `ohWr - gdWr` (convex/sets.ts) and asks WHEN
+    IN A GAME a card is best for you. `deckSpeed` — a card's mean game length
+    minus the mean for the colours it was played in — asks HOW LONG THE GAME
+    RUNS when the card is in the deck. Correlated against each other: −0.28 over
+    252 fdn cards, −0.29 over 269 woe cards, −0.35 and −0.36 on the cards that
+    clear their own error bar. Right sign, about a tenth of the variance shared.
+    Both are orthogonal to win rate and neither substitutes for the other, so
+    anyone reaching for one should check which question they are asking.
+
+    **The within-set spread is as large as the between-set spread, and that is
+    what made a drill possible.** Colour pairs inside one set differ by about 1.6
+    turns, against a 1.74-turn range across all 25 formats — so game length is a
+    fact about the deck at least as much as about the format. But a pair's speed
+    is NOT a property of the pair: the spread between pairs is 0.294 turns and
+    the spread of one pair across sets is 0.250, a ratio of 1.18, and WR runs
+    from −1.09 to +0.24 depending on the set. Folding deck speed into the
+    colour-pair archetype would throw away the half that varies.
 
     **A gap is never reported without its margin, and nothing labels a card
     "better" without one** (2026-08-04). See measurement trap #3: at 17Lands
