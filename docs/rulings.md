@@ -1571,3 +1571,44 @@ The architecture, the data pipeline and the deploy story are all documented in
     only fixed until an ancestor becomes a containing block and any `z-*` on
     one caps it; and it draws mana pips, so a tip that names a colour says it
     the way the rest of the app does.
+
+# Shipping a pipeline change (2026-09-04):
+
+**A change to `build-set-stats` is not shipped until the artifacts under
+`packages/backend/data/` are rebuilt and COMMITTED.** The deploy runs
+`convex deploy && seed-set-stats && ingest-sets`, and both scripts read the
+committed artifacts — never the CSVs. So a branch that changes the pipeline and
+leaves the artifacts alone deploys a pipeline nothing has run: every set carries
+the old shape, forever, and the feature is silently dead in production while
+passing every test and working perfectly on the machine that rebuilt one set by
+hand. The deck-speed drill shipped exactly that way and it was caught by a human
+opening the page, which is the only thing that could have caught it.
+
+**The rebuild is its own `data:` commit**, in the shape of `3d5462f4` — what
+moved, per set, with numbers, and an explicit note on any set deliberately left
+alone. The artifacts are committed precisely so this is a reviewable diff.
+
+**The command is `pnpm new-set <SET> <FORMAT>`.** It orchestrates availability →
+archive → build-set-stats → seed → ingest → validate-pack-model →
+refresh-mechanics for one set, reuses the archived CSVs when both are present,
+and is LOCAL ONLY. Do not hand-roll a loop over `build-set-stats`: the
+orchestrator also runs the two validation steps, and skipping them is how a set
+gets seeded with a pack model nothing checked.
+
+**No revision bump is needed for this case, and that is not an oversight.**
+`POOL_REVISION`, `CRAWL_REVISION` and `META_REVISION` gate ingest's derivation
+FROM an artifact; they cannot put a new field INTO one. The artifact's own hash
+is the fingerprint here — `seed-set-stats` hashes the file and `ingest-sets` keys
+on `POOL_REVISION:sourceHash` — so a rebuilt artifact re-seeds and re-derives on
+deploy and an unchanged one costs one small read. Bump a revision only when the
+stored CARD shape or the crawl changes; see the docblock at `sets.ts:180`, which
+is the actual test.
+
+**And run the query, not the function under it.** Every claim that the drill
+worked came from calling `deckSpeedQuestions` on an artifact, which cannot see
+`deal` at all — not its four refusals, not the roles read, not whether the data
+survived an ingest. `convex-test` runs the real query against a seeded set in
+milliseconds (`test/drillDeckSpeed.test.ts`), and the refusal it did not have is
+the one that shipped wrong: STX was told "it comes back the next time this set's
+data is refreshed" about a set 17Lands will never publish colours for.
+
