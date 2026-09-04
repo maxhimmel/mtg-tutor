@@ -253,7 +253,7 @@ export const PRINCIPLES_DOC: PrinciplesDoc = {
     {
       "id": "ARCH-01",
       "category": "archetypes",
-      "text": "Aggro aims to end the game as fast as possible with a critical mass of cheap creatures; it runs a low curve, a lower land count (~16), and minimal expensive cards or removal. Measured: the fastest color pair in a set ends its games roughly half a turn sooner than the format's average, and wins faster than it loses.",
+      "text": "Aggro aims to end the game as fast as possible with a critical mass of cheap creatures; it runs a low curve, a lower land count (~16), and minimal expensive cards or removal. Measured over 25 sets: the fastest color pair in a set ends its games about six tenths of a turn sooner than that format's average — up to a full turn — and wins faster than it loses.",
       "tags": [
         "aggro"
       ]
@@ -261,7 +261,7 @@ export const PRINCIPLES_DOC: PrinciplesDoc = {
     {
       "id": "ARCH-02",
       "category": "archetypes",
-      "text": "Control uses cheap interaction and removal to prolong the game and win late through card advantage; it runs a higher curve and fewer creatures. Measured: the slowest color pair runs about half a turn longer than the format's average, and — unlike aggro — loses faster than it wins, because a control deck that loses got run over.",
+      "text": "Control uses cheap interaction and removal to prolong the game and win late through card advantage; it runs a higher curve and fewer creatures. Measured over 25 sets: the slowest color pair runs about half a turn longer than that format's average, and — unlike aggro — loses faster than it wins, because a control deck that loses got run over.",
       "tags": [
         "control"
       ]
