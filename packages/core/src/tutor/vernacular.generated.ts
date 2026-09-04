@@ -416,6 +416,27 @@ export const VERNACULAR_DOC: VernacularDoc = {
       "sourced": false
     },
     {
+      "id": "aggro",
+      "category": "framework",
+      "short": "A deck trying to end the game early, with cheap creatures and a low curve.",
+      "usage": "I'm aggro, so I'll take the two-drop over the card advantage.",
+      "source": 17
+    },
+    {
+      "id": "midrange",
+      "category": "framework",
+      "short": "Efficient threats plus some interaction — the deck most Limited decks turn out to be.",
+      "usage": "It's a midrange deck, so it wants a couple of ways to break a board stall.",
+      "source": 17
+    },
+    {
+      "id": "control",
+      "category": "framework",
+      "short": "A deck that trades early, answers threats, and wins once the other player is out of cards.",
+      "usage": "You're the control deck here — you don't need to race, you just need to answer the flier.",
+      "source": 18
+    },
+    {
       "id": "tempo",
       "category": "gameplay",
       "short": "Board position measured against mana spent. GENUINELY CONTESTED — Wizards reduces it to board presence and many players would say that is a different thing. Use it only where the concrete meaning is obvious.",

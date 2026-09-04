@@ -68,5 +68,17 @@ export const VERNACULAR_SOURCES: PrincipleSource[] = [
   {
     "title": "Wilds of Eldraine Limited Set Review (Draftsim)",
     "url": "https://draftsim.com/mtg-woe-limited-set-review/"
+  },
+  {
+    "title": "Drafting Control Decks — Ryan Saxe (StarCityGames)",
+    "url": "https://articles.starcitygames.com/articles/drafting-control-decks/"
+  },
+  {
+    "title": "MTG Control Deck (Draftsim)",
+    "url": "https://draftsim.com/mtg-control-deck/"
+  },
+  {
+    "title": "Limited Resources 656 — Aggro, Midrange, Control For Current Limited",
+    "url": "https://lrcast.com/limited-resources-656-aggro-midrange-control-for-current-limited/"
   }
 ];

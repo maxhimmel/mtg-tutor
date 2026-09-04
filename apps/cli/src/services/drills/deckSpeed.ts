@@ -231,7 +231,7 @@ function reveal(question: Question, formatTurns: number | undefined): string {
 /**
  * What the run said, in the drill's own three mistakes.
  *
- * The tally is the point rather than the score: `saw-speed` dominating means a
+ * The tally is the point rather than the score: `saw-difference` dominating means a
  * person is reading opinions into flat cards, which is a different lesson from
  * `backwards`, and a single percentage would hide which one they are having.
  */
@@ -243,7 +243,7 @@ function report(results: readonly DeckSpeedResult[]): void {
   const lines = [
     `${pc.bold(`${score.read}/${score.answered}`)} read.`,
   ];
-  const sawSpeed = count("saw-speed");
+  const sawSpeed = count("saw-difference");
   const sawNone = count("saw-none");
   const backwards = count("backwards");
   if (sawSpeed) lines.push(`${sawSpeed} × read a plan into a card that has none.`);

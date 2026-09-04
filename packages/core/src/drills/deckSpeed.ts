@@ -246,15 +246,19 @@ export interface DeckSpeedResult {
   /**
    * Which kind of wrong, because the three are three different lessons.
    *
-   * - `saw-speed` -- called a middle card fast or slow. Reading an opinion into
-   *   a card that has none, which the sources say is the standing Limited error
-   *   and which this drill exists to catch.
+   * - `saw-difference` -- called a middle card fast or slow. Reading an opinion
+   *   into a card that has none, which the sources say is the standing Limited
+   *   error and which this drill exists to catch. THE ARCHETYPE QUIZ'S WORD,
+   *   deliberately: there it is calling a coin flip a difference and here it is
+   *   calling a flat card fast, which is the same error about a different
+   *   quantity. Sharing the word is what lets a breakdown pool them without a
+   *   mapping, the way `tookRawBest` already does.
    * - `saw-none` -- called a card with a real end middle. The opposite error. If
    *   it dominates, the middle answer is too tempting and `width` is too wide.
    * - `backwards` -- called a fast card slow, or a slow card fast. The real
    *   misread, and the rarest.
    */
-  mistake: "saw-speed" | "saw-none" | "backwards" | null;
+  mistake: "saw-difference" | "saw-none" | "backwards" | null;
 }
 
 export function gradeDeckSpeedGuess(
@@ -268,7 +272,7 @@ export function gradeDeckSpeedGuess(
     mistake: correct
       ? null
       : question.answer === "middle"
-        ? "saw-speed"
+        ? "saw-difference"
         : guess === "middle"
           ? "saw-none"
           : "backwards",

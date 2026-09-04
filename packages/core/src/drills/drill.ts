@@ -36,7 +36,7 @@
  *
  * It still does not earn a base type, because the part worth sharing is the part
  * that cannot be: `mistake` is a different union in each drill and the unions ARE
- * the value. `stronger-deck` and `saw-speed` are two specific Limited errors, and
+ * the value. `stronger-deck` and `backwards` are two specific Limited errors, and
  * a lifted `mistake: string` would type-check every misuse while teaching
  * nothing. The misses drill has three outcomes rather than two and does not fit
  * either. Ask again if a fourth drill grades to `read`/`misread` -- at three of

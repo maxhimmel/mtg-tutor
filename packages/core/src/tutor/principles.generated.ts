@@ -253,7 +253,7 @@ export const PRINCIPLES_DOC: PrinciplesDoc = {
     {
       "id": "ARCH-01",
       "category": "archetypes",
-      "text": "Aggro aims to end the game as fast as possible with a critical mass of cheap creatures; it runs a low curve, a lower land count (~16), and minimal expensive cards or removal.",
+      "text": "Aggro aims to end the game as fast as possible with a critical mass of cheap creatures; it runs a low curve, a lower land count (~16), and minimal expensive cards or removal. Measured: the fastest colour pair in a set ends its games roughly half a turn sooner than the format's average, and wins faster than it loses.",
       "tags": [
         "aggro"
       ]
@@ -261,7 +261,7 @@ export const PRINCIPLES_DOC: PrinciplesDoc = {
     {
       "id": "ARCH-02",
       "category": "archetypes",
-      "text": "Control uses cheap interaction and removal to prolong the game and win late through card advantage; it runs a higher curve and fewer creatures.",
+      "text": "Control uses cheap interaction and removal to prolong the game and win late through card advantage; it runs a higher curve and fewer creatures. Measured: the slowest colour pair runs about half a turn long, and — unlike aggro — loses faster than it wins, because a control deck that loses got run over.",
       "tags": [
         "control"
       ]
@@ -269,7 +269,7 @@ export const PRINCIPLES_DOC: PrinciplesDoc = {
     {
       "id": "ARCH-03",
       "category": "archetypes",
-      "text": "Midrange blends aggro and control — efficient threats plus interaction — and is the most common Limited archetype.",
+      "text": "Midrange blends aggro and control — efficient threats plus interaction — and is the most common Limited archetype. Measured: most cards pull the game neither way; 103 of the 246 cards a set can be measured on sit inside their own error bars.",
       "tags": [
         "midrange"
       ]

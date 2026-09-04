@@ -125,9 +125,9 @@ describe("gradeDeckSpeedGuess", () => {
     expect(r).toEqual({ outcome: "read", correct: true, mistake: null });
   });
 
-  it("names reading an opinion into a flat card `saw-speed`", () => {
-    expect(gradeDeckSpeedGuess({ answer: "middle" }, "fast").mistake).toBe("saw-speed");
-    expect(gradeDeckSpeedGuess({ answer: "middle" }, "slow").mistake).toBe("saw-speed");
+  it("names reading an opinion into a flat card `saw-difference`", () => {
+    expect(gradeDeckSpeedGuess({ answer: "middle" }, "fast").mistake).toBe("saw-difference");
+    expect(gradeDeckSpeedGuess({ answer: "middle" }, "slow").mistake).toBe("saw-difference");
   });
 
   it("names missing a real end `saw-none`", () => {
