@@ -169,6 +169,38 @@ export const ARCHETYPE_QUIZ = {
   falsePositive: 0.05,
 };
 
+/**
+ * The deck-speed drill: how sharp a measurement has to be to be worth asking
+ * about, and how far from flat a card has to sit before it has an end.
+ *
+ * Its own block beside ARCHETYPE_QUIZ, and both settings are derived rather than
+ * picked -- see `deckSpeedQuestions` for the argument each one comes from.
+ */
+export const DECK_SPEED = {
+  // A run. Eight, matching the archetype quiz, for the same reason: one card and
+  // three words is a couple of minutes at this length. The banks are not the
+  // binding constraint here -- fdn holds 246 askable cards where the archetype
+  // quiz holds a handful -- so the number is set by the sitting rather than by
+  // what a set can fill.
+  runLength: 8,
+  // How many error bars from flat before a card is called fast or slow rather
+  // than middle. Two, the width `gapMargin` and the rest of this codebase use,
+  // and a width rather than a rate because the test is one number against a
+  // fixed point -- nothing here moves with a deck count the way the archetype
+  // quiz's range does.
+  width: 2,
+  // How sharp an estimate must be to be asked about at all, as a fraction of the
+  // set's own spread of residuals. At 0.5, with a width of 2, a card called
+  // middle has its whole interval inside one set-spread of flat -- so the middle
+  // answer is a claim that the card is measurably unlike the ends, rather than a
+  // confession that nobody counted enough games. Against the set's own spread
+  // rather than a turn count, because that spread runs 0.11 to 0.14 between sets
+  // and a fixed threshold would ask about a different fraction of each one.
+  precision: 0.5,
+  // Games a card needs before its residual is read at all.
+  minGames: 400,
+};
+
 export const DRILLS = {
   // How many questions one run of the misses drill deals. Ten because that is
   // what a draft's digest keeps of its own worst picks (DIGEST_MISTAKES), so a
