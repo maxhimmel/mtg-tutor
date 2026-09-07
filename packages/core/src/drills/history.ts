@@ -267,7 +267,7 @@ export function readProgress(answers: readonly DrillAnswerRow[]): ReadProgress {
   let stillWrong = 0;
 
   for (const question of history.values()) {
-    const bin = bins[bandOf(question.first.sigmas)];
+    const bin = bins[sharpnessBand(question.first.sigmas)];
     bin.answers++;
     if (answerRead(question.first)) bin.read++;
 
@@ -306,7 +306,7 @@ export function readProgress(answers: readonly DrillAnswerRow[]): ReadProgress {
  * question as one three above, and banding on the signed number would put every
  * fast card in the bottom band and call it easy.
  */
-export function bandOf(sigmas: number): number {
+export function sharpnessBand(sigmas: number): number {
   const s = Math.abs(sigmas);
   let band = 0;
   for (let i = 1; i < SIGMA_BANDS.length; i++) {

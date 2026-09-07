@@ -23,6 +23,7 @@ import {
   packedCards,
   pickDefense,
   reviewVerdict,
+  setDrillId,
   storedDials,
   storedPickScore,
 } from "./validators.js";
@@ -654,6 +655,83 @@ export default defineSchema({
     // rollup and not a narrower index -- the fold genuinely wants every row,
     // because a pick fixed a year ago is still fixed.
     .index("by_user_and_asked", ["userId", "asked"]),
+
+  // Every answer the two SET-BASED drills have taken from one person, keyed by
+  // the card in the set rather than by a pick in a session.
+  //
+  // WHY IT IS NOT `pickAnswers`, which that table's own docblock predicted and
+  // got half right. It said the archetype quiz was deliberately absent because
+  // its question has "no pick behind it and no history of the player's in it",
+  // and taking it would cost "a second identity shape on this row or a second
+  // table". The identity argument holds and this is the second table. What did
+  // not survive is the conclusion drawn from it -- that being asked again
+  // "corrects no error of theirs" -- because a question with a stable right
+  // answer is a retest whether or not the learner authored the original
+  // mistake. Ideas #9 priced the table against ONE drill; there are two now
+  // dealing the same shape, and the next set-based drill is free.
+  //
+  // AND IT IS NOT PRIMARILY A MEASUREMENT. Both banks are ranked
+  // deterministically and both `deal` queries paged them with a `skip` the
+  // client held for a sitting and reset on reload -- so a returning player was
+  // dealt the identical opening eight of a set, forever. This is what the deal
+  // reads to move forward. See `history.ts` in core.
+  //
+  // ONE INDEX, THREE READERS, and that is the whole reason the columns are in
+  // this order. The mutation's duplicate check takes the full key; `deal` takes
+  // `(userId, drill, setCode, format)` and gets one set's answers, bounded by
+  // that set's own bank at a few hundred rows on a query already reading 270KB
+  // of statistics; `drills.progress` takes `(userId, drill)` and gets the lot.
+  // A second index would be a second thing to keep in step for no read it
+  // cannot already serve.
+  //
+  // RAW ROWS AND NO ROLLUP, which is deferred trade-off #2's call for `llmUsage`
+  // with a number attached. Convex caps a transaction at 32,000 documents
+  // scanned, so at eight questions a sitting the whole-history read has about
+  // four thousand sittings in it before anything has to change -- and the read
+  // on the hot path is bounded by a set's bank whatever the history does. When
+  // it does bind, the fix is a rollup, not a narrower index.
+  drillAnswers: defineTable({
+    // On the row rather than reached through anything, because both readers ask
+    // across every set at once and there is nothing to join to.
+    userId: v.string(),
+    drill: setDrillId,
+    setCode: v.string(),
+    format: v.string(),
+    /** The card, through `normalizeName`, so a DFC's halves cannot miss each other. */
+    key: v.string(),
+    /** What they said: a deck's colours, `same`, or one of three speed buckets. */
+    answered: v.string(),
+    // What the data said, at the moment they were asked -- and not a
+    // correctness flag, which is the same call `pickAnswers` makes and for a
+    // sharper reason here. Both drills' answers come out of `setStats`, which a
+    // re-seed moves: `separated` and `wants` can flip when 17Lands data is
+    // refreshed, and so can a card's residual in turns. A stored verdict would
+    // let that re-seed silently re-decide an answer somebody already gave, and
+    // `answerRead` recomputes the same rule from these two strings anyway.
+    //
+    // It also makes the flat answer legible from the row alone. `same` and
+    // `middle` both mean "the data has no opinion here", which is the pair of
+    // questions worth being able to read apart from the rest without joining
+    // back to a set's statistics to find out.
+    correct: v.string(),
+    // How many error bars the question was worth. Signed in the deck-speed
+    // drill, which is why every reader bands on the absolute value.
+    //
+    // WRITTEN NOW OR GONE, exactly as `gap` is on `pickAnswers`. Both banks deal
+    // their clearest questions first, so first-answer accuracy must fall as
+    // history grows -- somebody improving would watch their percentage drop.
+    // This is what lets a trend be read at matched difficulty instead of
+    // caveated, and recovering it later would mean re-deriving a set's
+    // statistics as they stood on the day.
+    sigmas: v.number(),
+    // Which sitting this answer came from, minted by the client: one id per
+    // question per run. The same contract `pickAnswers` explains at length -- a
+    // row cannot work out for itself whether a second answer is a retry or the
+    // same question coming round again, and inferring it from the card gets it
+    // backwards.
+    attemptId: v.string(),
+    at: v.string(),
+  }).index("by_user_drill_set_and_key", ["userId", "drill", "setCode", "format", "key"]),
 
   // Someone asking to be let in, from the signed-out page. Written by a public
   // mutation -- it has to be, the caller has no account and cannot get one

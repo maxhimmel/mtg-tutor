@@ -3,7 +3,7 @@ import {
   type DrillAnswerRow,
   SIGMA_BANDS,
   answerRead,
-  bandOf,
+  sharpnessBand,
   dueForRepeat,
   historyByQuestion,
   readProgress,
@@ -86,21 +86,21 @@ describe("dueForRepeat", () => {
   });
 });
 
-describe("bandOf", () => {
+describe("sharpnessBand", () => {
   it("puts a question in the band its sharpness falls in", () => {
-    expect(bandOf(0)).toBe(0);
-    expect(bandOf(0.9)).toBe(0);
-    expect(bandOf(1)).toBe(1);
-    expect(bandOf(2.5)).toBe(2);
-    expect(bandOf(3)).toBe(3);
-    expect(bandOf(14)).toBe(3);
+    expect(sharpnessBand(0)).toBe(0);
+    expect(sharpnessBand(0.9)).toBe(0);
+    expect(sharpnessBand(1)).toBe(1);
+    expect(sharpnessBand(2.5)).toBe(2);
+    expect(sharpnessBand(3)).toBe(3);
+    expect(sharpnessBand(14)).toBe(3);
   });
 
   // The deck-speed drill signs its sigmas: a card three error bars BELOW the
   // format's mean length is exactly as sharp a question as one three above.
   it("bands on the absolute value, so a fast card is not called easy", () => {
-    expect(bandOf(-3.4)).toBe(bandOf(3.4));
-    expect(bandOf(-2.2)).toBe(2);
+    expect(sharpnessBand(-3.4)).toBe(sharpnessBand(3.4));
+    expect(sharpnessBand(-2.2)).toBe(2);
   });
 });
 

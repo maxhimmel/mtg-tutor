@@ -663,3 +663,12 @@ export const feedbackAnchor = v.object({
 // tally that pooled the two would be two grading rules under one number, with
 // nothing saying which one produced any given attempt.
 export const answerSurface = v.union(v.literal("review"), v.literal("misses"));
+
+// Which set-based drill an answer came from.
+//
+// The two of them and NOT `misses`, whose `DrillId` in core includes all three.
+// A misses answer's identity is a pick in a session -- it carries the two
+// candidate cards the pick was graded between and a session id, none of which
+// mean anything about a card in a set -- so it lives on `pickAnswers` and this
+// union deliberately cannot hold it. See `drillAnswers` in schema.ts.
+export const setDrillId = v.union(v.literal("archetypes"), v.literal("deckSpeed"));
