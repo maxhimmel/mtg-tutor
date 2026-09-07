@@ -31,11 +31,15 @@ import { serveRun, splitByHistory } from "./history.js";
 // Evolving Wilds" teaches nothing.
 //
 // If the `drill_*` events say this gets played, the derivation moves to seed
-// time and the stats read goes away. Until then it is a subscription Convex
-// serves from its own cache for as long as a sitting lasts -- which is also why
-// `today` is an argument rather than a clock read: a query is not re-run because
-// time advanced, and a full timestamp would change the key on every call and
-// throw that cache away.
+// time and the stats read goes away. Until then it is paid once per hand: an
+// earlier version of this comment called it a cached subscription, which stopped
+// being true when the deal started reading the player's own answers -- a
+// subscribed query re-executes whenever its read set changes, so every answer
+// written re-read this document. Both clients fetch once.
+//
+// `today` is an argument rather than a clock read because a query is not re-run
+// because time advanced, so a `new Date()` here would answer with a stale day
+// for as long as its caller held the result.
 
 /**
  * How many candidates to inspect past the run length.
@@ -84,7 +88,7 @@ export const deal = query({
     // The player's own calendar day, as yyyy-mm-dd. An argument because a query
     // may not read the wall clock -- it is not re-run when time advances, so a
     // clock read here would answer with yesterday's idea of "today" for as long
-    // as the subscription lived.
+    // as its caller held the result.
     today: v.string(),
   },
   handler: async (ctx, args) => {

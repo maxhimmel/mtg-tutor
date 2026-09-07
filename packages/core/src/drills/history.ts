@@ -57,23 +57,34 @@ export interface DrillAnswerRow {
   /** What the data said, at the moment they were asked. */
   correct: string;
   /**
-   * How far past this drill's own gate the question sat, as a multiple of it.
+   * How far past its own drill's gate the question sat, as a multiple of it.
    *
-   * WRITTEN NOW OR GONE, and `sigmas` was the wrong number to write. Each drill
-   * judges a question by a bar that is not a constant -- the archetype quiz's
-   * moves with how many decks a card was measured in, and deck speed's is a
-   * second test against the set's own spread of residuals -- so error bars alone
-   * do not say how hard a question was, and neither the deck count nor the
-   * spread is on this row. `margin` is the ratio each drill computed at deal
-   * time: 1.0 is exactly on the gate, under 1.0 is a question with no answer.
+   * NOTHING READS IT, AND IT IS STORED ANYWAY -- which needs both halves said,
+   * because an unread column that looks meaningful is how a wrong number gets
+   * picked up later (deferred trade-off #3 is that mistake with `synergies`).
    *
-   * Recovering it later would mean rebuilding a set's statistics as they stood
-   * on the day, which is the same reason `gap` rides on every `pickAnswers` row.
+   * Kept because it cannot be recovered: each drill judges by a bar that is not
+   * a constant -- the archetype quiz's moves with the deck count, deck speed's
+   * is a second test against the set's own spread -- and neither the deck count
+   * nor the spread is on this row. Rebuilding it later would mean rebuilding a
+   * set's statistics as they stood on the day.
    *
-   * Optional because rows written before the column existed have none. Absent
-   * means "sharp, and how far past the gate is unknown", which `marginBand`
-   * clamps to the gate's own edge rather than dropping from a count the panel
-   * prints -- there is no honest value to backfill.
+   * AND IT IS NOT COMPARABLE BETWEEN THE TWO DRILLS. Deck speed's is
+   * `min(|z|/width, |resid|/worthSaying)` and is bound by the EFFECT-SIZE leg
+   * 56.2% of the time, measured over 3,351 sharp questions. The archetype
+   * quiz's is `sigmas / rangeThreshold(k)` and has no effect-size leg at all, so
+   * it is confidence rather than difficulty -- a 1.5pp gap off 20,000 games
+   * outranks a 12pp gap off 300, which is precisely the inversion `deckSpeed.ts`
+   * records for Healer's Hawk and built `worthSaying` to stop. Trap #22 adds
+   * that the archetype false positives concentrate on the best-sampled cards.
+   *
+   * The distributions are not alike either: over all 25 sets the archetype
+   * margins run p50 1.13 and max 2.39, where deck speed's run p50 1.81 and max
+   * 9.73. A reader who pools them, bands them, or draws them on one axis is
+   * reading two different quantities. Within ONE drill it is a real ordering;
+   * across both it is not.
+   *
+   * Optional because rows written before the column existed have none.
    */
   margin?: number;
   at: string;
@@ -218,77 +229,6 @@ export function dueForRepeat(
 export const REPEAT_SLOTS = 1;
 
 /**
- * Where the bands fall, as multiples of the drill's OWN gate.
- *
- * NOT ERROR BARS, and the difference is the whole reason this was rebuilt. Raw
- * `sigmas` is not a difficulty in either drill: the archetype quiz's bar moves
- * with how many decks a card was measured in, so at 2.5 error bars a k=3 card
- * has an answer and a k=10 card does not; and deck speed needs a residual floor
- * as well as a z test, so a 5-sigma card with a small effect is `middle`. Two
- * questions with the same `sigmas` could be opposite questions, which makes a
- * band on it a band on nothing.
- *
- * `margin` is what each drill actually judged the question by, divided by the
- * bar it had to clear. 1.0 is exactly on the gate whatever k is; the bands are
- * how far past it a question sat.
- *
- * AND THEY COVER THE SHARP HALF ONLY. Below 1.0 the answer is flat BY
- * CONSTRUCTION -- that is what failing the gate means -- so a band under 1.0
- * would have exactly one possible answer in it, and "always say Neither" would
- * score 100% there. That is not a difficulty level, it is a different question,
- * and it gets its own reading in `discrimination` below rather than a place on
- * this axis.
- *
- * The first band carries a caveat nothing else can: trap #22's sequel measured
- * about a third of what gets SERVED as false positives, and a false positive is
- * just past the gate by definition. So 1.0-1.5 holds most of the bank's own
- * error rate, and a reader must not take a low bar there for a low skill.
- */
-export const MARGIN_BANDS: readonly number[] = [1, 1.5, 2];
-
-export interface ReadBin {
-  /** Multiples of the gate, inclusive. */
-  from: number;
-  /** Exclusive, or null for the last band, which is open. */
-  to: number | null;
-  /** First answers to SHARP questions falling in this band. */
-  answers: number;
-  /** How many of them named the right end. */
-  read: number;
-  /** The share, and the interval around it. Both null at zero answers. */
-  rate: number | null;
-  low: number | null;
-  high: number | null;
-}
-
-/**
- * A Wilson score interval at 95%.
- *
- * WHY THE CONVENTIONAL INTERVAL IS RIGHT HERE, when ruling #26 says a band
- * beside a decision must be sized by the decision. That ruling is about the
- * archetype quiz's reveal, where the reader measures two bands against a
- * threshold and a 95% interval visibly disagrees with the verdict printed
- * underneath. Nothing is read off a threshold on this chart: the band says how
- * firmly one band's rate is known, and the only line is a guessing rate. Wilson
- * rather than the normal approximation because these counts are small by
- * construction -- a band with four answers in it is the ordinary case for weeks
- * -- and the approximation puts its interval outside [0, 1] there.
- */
-function wilson(read: number, answers: number): { rate: number; low: number; high: number } {
-  const z = 1.96;
-  const p = read / answers;
-  const denom = 1 + (z * z) / answers;
-  const centre = (p + (z * z) / (2 * answers)) / denom;
-  const spread =
-    (z * Math.sqrt((p * (1 - p)) / answers + (z * z) / (4 * answers * answers))) / denom;
-  return {
-    rate: p,
-    low: Math.max(0, centre - spread),
-    high: Math.min(1, centre + spread),
-  };
-}
-
-/**
  * The first reading: can you tell an opinion from no opinion?
  *
  * TWO RATES AND NOT ONE ACCURACY, because one number cannot separate a player
@@ -320,13 +260,10 @@ export interface ReadProgress {
   asked: number;
   /** Attempts, so a reader can weigh how much is behind the rest. */
   answers: number;
-  /** The first reading, over first answers. */
+  /** Distinct sets the questions came out of, so a count has a scope. */
+  sets: number;
+  /** The reading, over first answers. */
   discrimination: Discrimination;
-  /**
-   * The second reading: among questions that DID have an answer, how often the
-   * right end was named, banded by how far past its gate the question sat.
-   */
-  bins: ReadBin[];
   /** Distinct questions put more than once. */
   askedAgain: number;
   /** Misread first, read by the latest. */
@@ -371,16 +308,6 @@ export interface ReadProgress {
 export function readProgress(answers: readonly DrillAnswerRow[]): ReadProgress {
   const history = historyByQuestion(answers);
 
-  const bins: ReadBin[] = MARGIN_BANDS.map((from, i) => ({
-    from,
-    to: i === MARGIN_BANDS.length - 1 ? null : MARGIN_BANDS[i + 1],
-    answers: 0,
-    read: 0,
-    rate: null,
-    low: null,
-    high: null,
-  }));
-
   const discrimination: Discrimination = { flat: 0, calledSharp: 0, sharp: 0, calledFlat: 0 };
   let askedAgain = 0;
   let tookBack = 0;
@@ -396,12 +323,6 @@ export function readProgress(answers: readonly DrillAnswerRow[]): ReadProgress {
     } else {
       discrimination.sharp++;
       if (saidFlat(first)) discrimination.calledFlat++;
-      // The bands hold the sharp half only. A flat question has one possible
-      // answer, so a band containing it would report willingness rather than
-      // reading -- see MARGIN_BANDS.
-      const bin = bins[marginBand(first.margin ?? 0)];
-      bin.answers++;
-      if (answerRead(first)) bin.read++;
     }
 
     if (question.attempts < 2) continue;
@@ -415,16 +336,11 @@ export function readProgress(answers: readonly DrillAnswerRow[]): ReadProgress {
     else stillWrong++;
   }
 
-  for (const bin of bins) {
-    if (bin.answers === 0) continue;
-    Object.assign(bin, wilson(bin.read, bin.answers));
-  }
-
   return {
     asked: history.size,
     answers: answers.length,
+    sets: new Set(answers.map((a) => `${a.setCode}/${a.format}`)).size,
     discrimination,
-    bins,
     askedAgain,
     tookBack,
     stillWrong,
@@ -434,21 +350,4 @@ export function readProgress(answers: readonly DrillAnswerRow[]): ReadProgress {
       undefined,
     ),
   };
-}
-
-/**
- * Which band a sharp question falls in.
- *
- * Clamped at the bottom rather than guarded: a sharp question has `margin >= 1`
- * by construction, and a row from before that column existed carries 0. Putting
- * those in the first band is the honest default -- they are known to be sharp
- * and their distance past the gate is unknown, so they belong at its edge rather
- * than dropped from a count the panel prints.
- */
-export function marginBand(margin: number): number {
-  let band = 0;
-  for (let i = 1; i < MARGIN_BANDS.length; i++) {
-    if (margin >= MARGIN_BANDS[i]) band = i;
-  }
-  return band;
 }

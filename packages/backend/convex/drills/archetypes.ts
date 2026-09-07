@@ -38,13 +38,17 @@ import { serveRun, splitByHistory } from "./history.js";
 // the `drill_*` events are what settle it. If the quiz is played, the
 // derivation moves to seed time and this read goes away.
 //
-// SO THE CACHE IS THE SUBSCRIPTION. A run is dealt once and frozen by the
-// client, and Convex serves an unchanged query from its own cache rather than
-// re-reading the document. `today` is an argument rather than a clock read for
-// that reason as much as for correctness: a query is not re-run because time
-// advanced, so a `new Date()` in here would go stale, and a full timestamp would
-// change the query key on every call and throw the cache away. A day changes
-// once a day, which is exactly the resolution `dueForRepeat` needs.
+// AND NOBODY SUBSCRIBES TO IT. An earlier version of this comment said the
+// opposite -- that a run was frozen by the client while Convex served the
+// unchanged query from its own cache -- and that stopped being true the moment
+// the deal started reading the player's own answers: a subscribed query is
+// re-executed whenever anything in its read set changes, so every answer written
+// re-read this document. Both clients fetch once instead.
+//
+// `today` is still an argument rather than a clock read, and now for one reason
+// rather than two: a query is not re-run because time advanced, so a
+// `new Date()` in here would answer with a stale day for as long as its caller
+// held the result.
 
 /**
  * How many candidates to inspect past the run length.
@@ -92,7 +96,7 @@ export const deal = query({
     // The player's own calendar day, as yyyy-mm-dd. An argument because a query
     // may not read the wall clock -- it is not re-run when time advances, so a
     // clock read in here would answer with yesterday's idea of "today" for as
-    // long as the subscription lived.
+    // long as its caller held the result.
     today: v.string(),
   },
   handler: async (ctx, args) => {

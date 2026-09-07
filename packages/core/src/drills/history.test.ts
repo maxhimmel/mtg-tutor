@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   type DrillAnswerRow,
-  MARGIN_BANDS,
   answerRead,
   dueForRepeat,
   historyByQuestion,
-  marginBand,
   readProgress,
   saidFlat,
   wasFlat,
@@ -99,24 +97,6 @@ describe("dueForRepeat", () => {
   });
 });
 
-describe("marginBand", () => {
-  it("puts a question in the band its margin over the gate falls in", () => {
-    expect(marginBand(1)).toBe(0);
-    expect(marginBand(1.4)).toBe(0);
-    expect(marginBand(1.5)).toBe(1);
-    expect(marginBand(1.9)).toBe(1);
-    expect(marginBand(2)).toBe(2);
-    expect(marginBand(9)).toBe(2);
-  });
-
-  // A row written before the column existed carries 0. It is known to be sharp,
-  // and its distance past the gate is unknown, so it belongs at the gate's edge
-  // rather than dropped from a count the panel prints.
-  it("clamps a missing margin into the first band rather than dropping it", () => {
-    expect(marginBand(0)).toBe(0);
-  });
-});
-
 describe("wasFlat / saidFlat", () => {
   // One set of words for both drills, because "these decks want it the same"
   // and "neither fast nor grindy" are the same statement about the data.
@@ -133,8 +113,6 @@ describe("readProgress", () => {
   it("counts nothing out of nothing", () => {
     const progress = readProgress([]);
     expect(progress).toMatchObject({ asked: 0, answers: 0, askedAgain: 0, moved: 0 });
-    expect(progress.bins).toHaveLength(MARGIN_BANDS.length);
-    expect(progress.bins.every((b) => b.answers === 0 && b.rate === null)).toBe(true);
     expect(progress.discrimination).toEqual({
       flat: 0,
       calledSharp: 0,
@@ -174,17 +152,6 @@ describe("readProgress", () => {
     expect(d.calledFlat).toBe(d.sharp);
   });
 
-  // Below the gate the answer is flat by construction, so a band holding one
-  // would report willingness to say Neither rather than a read.
-  it("keeps flat questions out of the bands entirely", () => {
-    const progress = readProgress([
-      flatRight("a", "2026-09-01T10:00:00Z"),
-      flatWrong("b", "2026-09-01T10:00:00Z"),
-    ]);
-    expect(progress.bins.every((b) => b.answers === 0)).toBe(true);
-    expect(progress.asked).toBe(2);
-  });
-
   // A reprint is the same name in two sets with two different answers.
   it("tells one card in two sets apart", () => {
     const progress = readProgress([
@@ -193,7 +160,7 @@ describe("readProgress", () => {
     ]);
     expect(progress.asked).toBe(2);
     expect(progress.askedAgain).toBe(0);
-    expect(progress.bins[0]).toMatchObject({ answers: 2, read: 1 });
+    expect(progress.sets).toBe(2);
   });
 
   it("counts questions, not attempts", () => {
@@ -208,31 +175,13 @@ describe("readProgress", () => {
 
   // The whole reason the chart exists: a headline over everything would move
   // with the difficulty mix, so the bands have to hold FIRST answers only.
-  it("bands first answers, and ignores the later ones", () => {
+  // The two rows read FIRST answers, so a retry must not move them.
+  it("reads the first answer even when the retry was right", () => {
     const progress = readProgress([
-      misread("a", "2026-09-01T10:00:00Z", 1.1),
-      // The retry is right, and must not turn the first band into a win.
-      read("a", "2026-09-05T10:00:00Z", 1.1),
-      read("b", "2026-09-02T10:00:00Z", 3.9),
+      sawNone("a", "2026-09-01T10:00:00Z"),
+      read("a", "2026-09-05T10:00:00Z"),
     ]);
-    expect(progress.bins[0]).toMatchObject({ answers: 1, read: 0 });
-    expect(progress.bins[2]).toMatchObject({ answers: 1, read: 1 });
-  });
-
-  it("puts an interval around a band's rate", () => {
-    const progress = readProgress([
-      read("a", "2026-09-01T10:00:00Z", 3.5),
-      read("b", "2026-09-01T10:00:00Z", 3.5),
-      misread("c", "2026-09-01T10:00:00Z", 3.5),
-    ]);
-    const bin = progress.bins[2];
-    expect(bin.rate).toBeCloseTo(2 / 3, 5);
-    // Wilson rather than the normal approximation, which at n = 3 would put the
-    // top of this interval past 1.
-    expect(bin.low).toBeGreaterThan(0);
-    expect(bin.high).toBeLessThanOrEqual(1);
-    expect(bin.low).toBeLessThan(bin.rate as number);
-    expect(bin.high).toBeGreaterThan(bin.rate as number);
+    expect(progress.discrimination).toMatchObject({ sharp: 1, calledFlat: 1 });
   });
 
   // Two arms and not four, and that is the selection rule rather than a

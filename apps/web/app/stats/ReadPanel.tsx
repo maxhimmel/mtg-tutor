@@ -3,7 +3,6 @@
 import Link from "next/link";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@mtg-tutor/backend";
-import { ReadRate } from "../charts/ReadRate";
 import { Panel } from "../components/Panel";
 import { pct, releaseDate } from "../lib/format";
 
@@ -25,12 +24,23 @@ type OneDrill = DrillProgress["archetypes"];
 // (`saw-difference` and `saw-none`), so the panel counts those against their own
 // denominators first, and only then asks how well the real answers were read.
 //
-// AND IT DRAWS, WHERE `ProgressPanel` DELIBERATELY DOES NOT. That panel argues
-// its four-way split is a tally of counts that start at zero and reach double
-// figures slowly, so a bar at n = 4 would state a scale it cannot support. The
-// difference here is that there IS a distribution: every answer carries how far
-// past its own bar the question sat, and the interval on each band is what keeps
-// a rate off three answers from being read as a rate.
+// AND IT DRAWS NOTHING, WHICH IS THE SECOND THING REVIEW CHANGED. There was a
+// chart here: how often the right end was named, banded by how far past its own
+// bar each question sat. It worked for one drill and not the other. Measured
+// over all 25 sets, the archetype quiz has 242 separable questions with a median
+// margin of 1.13 and a maximum of 2.39 -- 226 of them in the first band, one in
+// the last -- so the chart was one dot beside two permanent zeroes, forever.
+// Deck speed spreads properly (33/26/41), and the two are not the same quantity
+// anyway: 56% of deck-speed margins are bound by its effect-size floor and the
+// archetype quiz has no effect-size floor at all. Drawn side by side under one
+// axis label, that is two different numbers wearing one scale.
+//
+// So the rows are the whole panel. They need no cut points, no cross-drill
+// comparison and no borrowed noise figure, and they answer the question somebody
+// opens this page with. `ProgressPanel` beside it draws nothing either, for its
+// own reason -- a tally of small counts states a scale it cannot support -- and
+// two panels declining to chart is not a house style, it is two numbers that are
+// legible as numbers.
 
 export function ReadPanel({ progress }: { progress: DrillProgress }) {
   const total = progress.archetypes.asked + progress.deckSpeed.asked;
@@ -109,18 +119,11 @@ function Drill({ title, drill }: { title: string; drill: OneDrill }) {
             />
           </dl>
 
-          <div className="border-t border-base-300 pt-3">
-            <p className="mb-1 text-xs text-base-content/50">
-              On the cards with a real answer, by how far each question sat past its own bar.
-            </p>
-            <ReadRate bins={drill.bins} />
-          </div>
-
-          <p className="text-xs leading-relaxed text-base-content/50">
-            {drill.asked} {drill.asked === 1 ? "card" : "cards"} asked, first answers only —
-            the first time a card comes up is the only time you have not already been shown
-            the answer. About a third of what clears the bar only just clears it, by chance,
-            so the leftmost band reads lower than the player behind it.{" "}
+          <p className="border-t border-base-300 pt-3 text-xs leading-relaxed text-base-content/50">
+            {drill.asked} {drill.asked === 1 ? "card" : "cards"} asked
+            {drill.sets > 1 ? ` across ${drill.sets} sets` : ""}, first answers only — the
+            first time a card comes up is the only time you have not already been shown the
+            answer.{" "}
             {drill.askedAgain === 0
               ? "Nothing has come back yet: a card returns a day after you misread it, and the drill leads with what you have never seen."
               : `Of the ${drill.askedAgain} that came back, you got ${drill.tookBack} right this time — and that counts only cards you had already got wrong, so it starts from the bottom rather than from how you normally do.`}

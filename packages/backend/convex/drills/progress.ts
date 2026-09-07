@@ -5,20 +5,31 @@ import { requireUserId } from "../sessions.js";
 // How somebody is reading the two set-based drills, banded by how hard the
 // question was.
 //
-// WHY THE BANDS RATHER THAN A PERCENTAGE, which is the whole design of this
-// query and not a presentation choice. Both banks deal their clearest questions
-// first, so the questions somebody meets get harder the longer they play -- and
-// a raw accuracy figure over everything therefore FALLS as a player improves.
-// It measures the difficulty mix, not the person. Banding on `sigmas` is the one
-// cut where that confound stops being a caveat and becomes the x-axis: at four
-// error bars everybody is right, at half a one nobody should be, and the middle
-// of the axis is where a read is worth having.
+// WHY TWO RATES RATHER THAN ONE, which is the whole design of this query and
+// not a presentation choice. Most questions in both drills are flat -- the data
+// has no opinion about most cards -- so a single accuracy figure mostly measures
+// how willing somebody is to answer "the same", and a player who answers it
+// every time looks competent. Both drills already name the two mistakes that
+// separates, so this counts those against their own denominators: `calledSharp`
+// out of the questions with no answer, `calledFlat` out of the ones with one.
 //
-// FIRST ANSWERS ONLY IN THE BANDS, because the first time a card is put to
-// somebody is the only time memory of its reveal cannot be what answered it.
-// `askedAgain` beside them is the other half -- what happened when a card came
-// back -- and it has two arms rather than the misses drill's four, which is a
-// property of the selection rule: only a misread card is ever put back.
+// AND NOT BANDED BY DIFFICULTY, which two earlier versions of this were. The
+// first banded on `sigmas`, which neither drill judges by -- the archetype
+// quiz's bar moves with the deck count and deck speed needs a residual floor as
+// well as a z test -- so two answers with the same value could be opposite
+// questions, and below each gate the answer is fixed by construction. The second
+// banded on `margin`, the ratio against each drill's own bar, which is right
+// within a drill and wrong across them: over all 25 sets the archetype quiz's
+// margins run p50 1.13 and max 2.39 against deck speed's p50 1.81 and max 9.73,
+// and 226 of its 242 questions land in one band. A chart of that is one dot and
+// two zeroes. `margin` is still stored -- it cannot be recovered later -- and
+// `history.ts` says what it is and what it is not.
+//
+// FIRST ANSWERS ONLY, because the first time a card is put to somebody is the
+// only time memory of its reveal cannot be what answered it. `askedAgain` is the
+// other half -- what happened when a card came back -- and it has two arms
+// rather than the misses drill's four, which is a property of the selection
+// rule: only a misread card is ever put back.
 //
 // A SEPARATE QUERY FROM `stats.progress`, and separate for the reason that one
 // is separate from `stats.overview`: they read different tables and answer

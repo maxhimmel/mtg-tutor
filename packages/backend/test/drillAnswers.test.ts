@@ -184,49 +184,6 @@ describe("drills.progress", () => {
     });
   });
 
-  it("bands the sharp questions by how far past their gate they sat", async () => {
-    const t = harness();
-    await record(t, "alice", {
-      name: "Just Past",
-      answered: "WB",
-      correct: "WB",
-      margin: 1.1,
-      attemptId: "run-1:0",
-    });
-    await record(t, "alice", {
-      name: "Miles Past",
-      answered: "WU",
-      correct: "WB",
-      margin: 4.2,
-      attemptId: "run-1:1",
-    });
-
-    const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
-    expect(archetypes.asked).toBe(2);
-    // Multiples of the drill's OWN gate -- 1-1.5, 1.5-2, 2+ -- and not error
-    // bars, because the archetype quiz's bar moves with the deck count and deck
-    // speed's has a second test against the set's own spread.
-    expect(archetypes.bins[0]).toMatchObject({ answers: 1, read: 1 });
-    expect(archetypes.bins[2]).toMatchObject({ answers: 1, read: 0 });
-  });
-
-  // Below the gate the answer is flat by construction, so a band holding one
-  // would report willingness to say "the same" rather than a read.
-  it("keeps flat questions out of the bands", async () => {
-    const t = harness();
-    await record(t, "alice", {
-      name: "Flat",
-      answered: "same",
-      correct: "same",
-      margin: 0.6,
-      attemptId: "run-1:0",
-    });
-
-    const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
-    expect(archetypes.asked).toBe(1);
-    expect(archetypes.bins.every((b) => b.answers === 0)).toBe(true);
-  });
-
   // A reprint is the same name in two sets with two different answers, and the
   // deal is set-scoped so nothing there would ever notice the merge.
   it("tells one card in two sets apart", async () => {
@@ -247,7 +204,8 @@ describe("drills.progress", () => {
     const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
     expect(archetypes.asked).toBe(2);
     expect(archetypes.askedAgain).toBe(0);
-    expect(archetypes.bins[2]).toMatchObject({ answers: 2, read: 2 });
+    // Counted as two sets, which is what the panel prints beside the number.
+    expect(archetypes.sets).toBe(2);
   });
 
   // The half core cannot prove on its own: rows written by the real mutation,
@@ -292,12 +250,12 @@ describe("drills.progress", () => {
   });
 
   // A first answer is the half memory of a reveal cannot reach, so a retry must
-  // not turn a band it was wrong in into a band it was right in.
-  it("bands the first answer even when the retry was right", async () => {
+  // not move the rows it feeds.
+  it("reads the first answer even when the retry was right", async () => {
     const t = harness();
     await record(t, "alice", {
       name: "Took Back",
-      answered: "WU",
+      answered: "same",
       correct: "WB",
       margin: 2.5,
       attemptId: "run-1:0",
@@ -311,7 +269,7 @@ describe("drills.progress", () => {
     });
 
     const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
-    expect(archetypes.bins[2]).toMatchObject({ answers: 1, read: 0 });
+    expect(archetypes.discrimination).toMatchObject({ sharp: 1, calledFlat: 1 });
   });
 
   // A re-seed can change what a card's decks wanted. Two attempts graded against

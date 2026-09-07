@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { tally } from "@mtg-tutor/core";
-import type { Card, DiffRow, DiffTally, PoolCard, ReadBin, ValueTerm } from "@mtg-tutor/core";
+import type { Card, DiffRow, DiffTally, PoolCard, ValueTerm } from "@mtg-tutor/core";
 import { CardPlacard, CardPlacardList } from "../components/CardPlacard";
 import { CardFace, CardTile } from "../components/CardTile";
 import { CardStats, hasStats } from "../components/CardStats";
@@ -33,7 +33,6 @@ import { WinRateAxis } from "../glossary/figures/WinRateAxis";
 import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
 import { ProgressPanel } from "../stats/Progress";
 import { ReadPanel } from "../stats/ReadPanel";
-import { ReadRate } from "../charts/ReadRate";
 import { pct } from "../lib/format";
 import {
   DeckBands,
@@ -41,39 +40,7 @@ import {
   type RevealQuestion,
 } from "../practice/archetypes/ArchetypeQuiz";
 
-/**
- * Real bands, and where they came from.
- *
- * A week of fdn on both drills. NOT a rounded fixture, because small counts are
- * the whole subject of this chart -- a band off four answers has to look like a
- * band off four answers. The bands hold only questions that HAD an answer, which
- * on a real set is about a tenth of what gets asked, so these are deliberately
- * thinner than the flat side beside them.
- */
-const READ_BINS: ReadBin[] = [
-  { from: 1, to: 1.5, answers: 11, read: 5, rate: 5 / 11, low: 0.211, high: 0.723 },
-  { from: 1.5, to: 2, answers: 6, read: 4, rate: 4 / 6, low: 0.3, high: 0.903 },
-  { from: 2, to: null, answers: 4, read: 4, rate: 1, low: 0.51, high: 1 },
-];
-
-/** One band answered and the rest untouched -- a first sitting. */
-const READ_BINS_THIN: ReadBin[] = [
-  { from: 1, to: 1.5, answers: 2, read: 1, rate: 0.5, low: 0.095, high: 0.905 },
-  { from: 1.5, to: 2, answers: 0, read: 0, rate: null, low: null, high: null },
-  { from: 2, to: null, answers: 0, read: 0, rate: null, low: null, high: null },
-];
-
-const EMPTY_BINS: ReadBin[] = READ_BINS.map((b) => ({
-  ...b,
-  answers: 0,
-  read: 0,
-  rate: null,
-  low: null,
-  high: null,
-}));
-
 const readProgress = (
-  bins: ReadBin[],
   over: {
     asked: number;
     answers: number;
@@ -81,21 +48,21 @@ const readProgress = (
     tookBack: number;
     flat: number;
     calledSharp: number;
+    sharp: number;
     /** The second mistake. Never left at zero in a fixture: a row that is always
         0.0% is a row nobody has looked at. */
     calledFlat: number;
+    sets: number;
     since?: string;
   },
 ) => ({
-  bins,
   discrimination: {
     flat: over.flat,
     calledSharp: over.calledSharp,
-    // The bands hold the sharp questions that were ANSWERED as sharp, so the
-    // ones called flat sit outside them -- exactly as the fold counts it.
-    sharp: bins.reduce((n, b) => n + b.answers, 0) + over.calledFlat,
+    sharp: over.sharp,
     calledFlat: over.calledFlat,
   },
+  sets: over.sets,
   stillWrong: over.askedAgain - over.tookBack,
   moved: 0,
   asked: over.asked,
@@ -1020,61 +987,6 @@ export const SPECIMENS: Specimen[] = [
     ),
   },
   {
-    id: "read-rate",
-    title: "Reading a set, by how far past its bar the question sat",
-    note: "A week of fdn. The counts are deliberately small — that is the case this chart exists to survive, and the y-axis is the case it failed",
-    // THE THREE STATES AND THE THREE WIDTHS. The state this ships in is the thin
-    // one and the width it lives at is a half-column on /stats, so a single
-    // comfortable copy would have shown none of what went wrong the first time:
-    // a y-axis whose labels were clipped to "0.0%" at every tick, and counts
-    // stamped through the band names.
-    renderBare: () => (
-      <div className="flex flex-col gap-8">
-        <Bay
-          label="A real week — read the y-axis first; it used to say 0.0% three times"
-          width="max-w-[26rem]"
-        >
-          <ReadRate bins={READ_BINS} />
-        </Bay>
-        <Bay
-          label="A first sitting — two bands nobody has reached, each printing its own zero"
-          width="max-w-[26rem]"
-        >
-          <ReadRate bins={READ_BINS_THIN} />
-        </Bay>
-        <Bay label="Nothing answered — the scale still says what it would show" width="max-w-[26rem]">
-          <ReadRate bins={EMPTY_BINS} />
-        </Bay>
-
-        <div className="flex flex-wrap items-start gap-8">
-          {/* WHERE IT ACTUALLY LIVES. /stats puts two of these side by side in
-              one panel, so each gets half the column on a desktop and the full
-              one on a phone. Both are narrower than the bays above, and the
-              "guessing" label used to sit on the first band's dot at exactly
-              this width. */}
-          <Bay label="327px — half the panel on a desktop" width="w-[327px] shrink-0">
-            <ReadRate bins={READ_BINS} />
-          </Bay>
-          <Bay
-            label="279px — a 375px phone, where the drawing gives way to the list"
-            width="w-[279px] shrink-0"
-          >
-            <ReadRate bins={READ_BINS} />
-          </Bay>
-        </div>
-
-        {/* Hue removed. Nothing here is encoded in color: the rate is a
-            position, the interval is a length, the count is a printed digit and
-            the rule is labelled. */}
-        <Bay label="In greyscale — nothing is encoded in hue" width="max-w-[26rem]">
-          <div style={{ filter: "grayscale(1)" }}>
-            <ReadRate bins={READ_BINS} />
-          </div>
-        </Bay>
-      </div>
-    ),
-  },
-  {
     id: "read-panel",
     title: "Reading a set",
     note: "The /stats panel through the states it has, including the one it spends its first week in",
@@ -1083,23 +995,27 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="Never played — the branch that ships unlooked-at">
           <ReadPanel
             progress={{
-              archetypes: readProgress(EMPTY_BINS, {
+              archetypes: readProgress({
                 asked: 0,
                 answers: 0,
                 askedAgain: 0,
                 tookBack: 0,
                 flat: 0,
                 calledSharp: 0,
+                sharp: 0,
                 calledFlat: 0,
+                sets: 0,
               }),
-              deckSpeed: readProgress(EMPTY_BINS, {
+              deckSpeed: readProgress({
                 asked: 0,
                 answers: 0,
                 askedAgain: 0,
                 tookBack: 0,
                 flat: 0,
                 calledSharp: 0,
+                sharp: 0,
                 calledFlat: 0,
+                sets: 0,
               }),
             }}
           />
@@ -1107,24 +1023,28 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="One drill played, the other not — a real state and an easy one to draw badly">
           <ReadPanel
             progress={{
-              archetypes: readProgress(READ_BINS_THIN, {
+              archetypes: readProgress({
                 asked: 8,
                 answers: 8,
                 askedAgain: 0,
                 tookBack: 0,
                 flat: 6,
                 calledSharp: 2,
+                sharp: 2,
                 calledFlat: 1,
+                sets: 1,
                 since: "2026-09-01T18:40:00.000Z",
               }),
-              deckSpeed: readProgress(EMPTY_BINS, {
+              deckSpeed: readProgress({
                 asked: 0,
                 answers: 0,
                 askedAgain: 0,
                 tookBack: 0,
                 flat: 0,
                 calledSharp: 0,
+                sharp: 0,
                 calledFlat: 0,
+                sets: 0,
               }),
             }}
           />
@@ -1132,24 +1052,28 @@ export const SPECIMENS: Specimen[] = [
         <Bay label="A week of both, with cards that came back">
           <ReadPanel
             progress={{
-              archetypes: readProgress(READ_BINS, {
+              archetypes: readProgress({
                 asked: 40,
                 answers: 47,
                 askedAgain: 7,
                 tookBack: 4,
                 flat: 19,
                 calledSharp: 6,
+                sharp: 21,
                 calledFlat: 5,
+                sets: 3,
                 since: "2026-08-29T18:40:00.000Z",
               }),
-              deckSpeed: readProgress(READ_BINS_THIN, {
+              deckSpeed: readProgress({
                 asked: 8,
                 answers: 8,
                 askedAgain: 0,
                 tookBack: 0,
                 flat: 6,
                 calledSharp: 1,
+                sharp: 2,
                 calledFlat: 2,
+                sets: 1,
                 since: "2026-09-04T18:40:00.000Z",
               }),
             }}
