@@ -9,73 +9,96 @@ import { Baseline, Dot } from "./marks";
 import { Plot, ValueAxisBottom, ValueAxisLeft } from "./Plot";
 
 /**
- * How often a drill was read right, against how hard the question was.
+ * How often the right end was named, among questions that HAD one.
  *
- * WHY THIS AXIS AND NOT A DATE. The obvious progress chart is accuracy over
- * time, and here it would be worse than nothing. Both drills rank their banks
- * clearest-first and deal forward, so the questions somebody meets get harder
- * the longer they play -- a raw percentage therefore FALLS as a player improves,
- * and a line of it going down would be the app telling somebody they were
- * getting worse at the thing they were getting better at. The confound is real
- * and it is not correctable by a caveat under the chart.
+ * WHY THIS IS ONLY HALF THE PANEL. The first version banded every answer by how
+ * many error bars separated it, and two of its four bands could only be answered
+ * one way: both drills refuse to name an end until a question clears their gate,
+ * so everything below it has "the same" or "Neither" as its correct answer BY
+ * CONSTRUCTION. Somebody who always answered Neither scored 100% in those bands,
+ * under a rule labelled "chance" drawn flat across the lot. So the flat
+ * questions are not on this chart at all -- they are the discrimination reading
+ * beside it, which is a different question with a different denominator.
  *
- * Putting sharpness on the x-axis makes the confound the subject. At four error
- * bars everybody is right and the bar is not a compliment; below one there is
- * nothing to see and the answer is "the same" or "neither", which is the whole
- * lesson of both drills. The middle of the axis is where a read is worth
- * anything, and that is where a person should look to see themselves move.
+ * AND THE AXIS IS NOT ERROR BARS. Neither drill judges a question by its z score
+ * alone. The archetype quiz's bar moves with how many decks a card was measured
+ * in -- 2.34 at three, 3.16 at ten -- so at 2.5 error bars a card in three decks
+ * has an answer and a card in ten does not, and a band on raw sigmas would hold
+ * opposite questions. Deck speed needs a residual floor against the set's own
+ * spread as well as a z test, so a five-sigma card can still be flat. `margin`
+ * is what each drill actually judged the question by, over the bar it had to
+ * clear: 1.0 is exactly on the gate whatever k is.
  *
- * FIRST ANSWERS ONLY, decided in `readProgress` rather than here. The first time
- * a card is dealt is the only time memory of its reveal cannot be what answered
- * it.
+ * THE FIRST BAND CARRIES THE BANK'S OWN ERROR RATE, and the panel says so rather
+ * than leaving it to be read as the player. Trap #22's sequel measured about a
+ * third of what gets served as a false positive, and a false positive sits just
+ * past the gate by definition.
  *
- * THE BAND IS A CONFIDENCE INTERVAL, WHICH RULING #26 SAYS TO BE CAREFUL ABOUT.
- * That ruling is about the archetype quiz's reveal, where a reader measures two
- * bands against a threshold and a 95% interval visibly disagrees with the
- * verdict printed underneath. Nothing is read off a threshold here: there is no
- * gate a band clears or fails, the only rule on the chart is chance, and what a
- * reader wants to know is how firmly one band's rate is pinned. So the
- * conventional interval is the right one -- Wilson rather than the normal
- * approximation, because these counts are small by construction and a band with
- * four answers in it is the ordinary case for weeks.
+ * FIRST ANSWERS ONLY, decided in `readProgress`. The first time a card is dealt
+ * is the only time the reveal has not already shown its answer.
  *
  * ONE SERIES, SO NO LEGEND. A dot, its band and a rule are three claims about
- * one number rather than three series, and naming them in a key would cost four
- * lines under a chart this size. The count rides under each band instead, which
- * is what stops the pointer being load-bearing: a bin drawn from three answers
- * says "3" on the page.
+ * one number rather than three series. The count rides under each band, which is
+ * what stops the pointer being load-bearing.
+ *
+ * THE BAND IS A PLAIN WILSON INTERVAL, which is the one place this departs from
+ * ruling #26. That ruling is about a band a reader measures against a threshold,
+ * where a 95% interval visibly disagrees with the verdict printed under it.
+ * Nothing is read off a threshold here: there is no gate a band clears, the only
+ * line is a guessing rate, and what a reader wants is how firmly the rate is
+ * pinned. Wilson rather than the normal approximation because these counts are
+ * small by construction.
  */
-
-/** Chance, and it is one third in both drills -- each offers exactly three answers. */
-const CHANCE = 1 / 3;
-
-const AXIS_L = 34;
-const AXIS_B = 34;
-const TOP = 12;
 
 /**
- * The narrowest width at which four bands and their counts still read.
+ * Guessing, among questions that have an answer.
  *
- * Below it the same numbers as a list, which is what a reader on a phone wanted
- * anyway -- and NOT a squeezed version of the drawing, because a chart squeezed
- * past its minimum is a wrong chart rather than a small one.
+ * A THIRD, BECAUSE EACH DRILL OFFERS EXACTLY THREE ANSWERS -- two ends and the
+ * flat one -- and this chart holds only the questions where one of the ends is
+ * right. Somebody answering uniformly at random lands here. It is NOT the rate
+ * for a player who never reaches for the flat answer; that person is guessing
+ * between two and sits at a half. Which is why the rule is labelled with what it
+ * is rather than left to be read as a zero.
  */
+const CHANCE = 1 / 3;
+
+/**
+ * Room for the y labels, which is what the first version got wrong.
+ *
+ * `pct` emits "100.0%", and at 34px the leading digits fell outside the SVG, so
+ * every tick rendered as "0.0%" -- a chart whose own accessible label promised
+ * "0% to 100%" while drawing a false scale. `Plot`'s `edgeAnchor` guards the
+ * bottom axis only; there is no equivalent on the left, so the margin is the
+ * guard and it is measured against the widest label rather than guessed.
+ */
+const AXIS_L = 46;
+/**
+ * Room for TWO rows under the axis: the band's name, and its count.
+ *
+ * 34 held one, so the counts were stamped through the band labels and neither
+ * could be read -- which took down both the no-legend argument and the claim
+ * that nothing here needs a hover.
+ */
+const AXIS_B = 46;
+const TOP = 12;
+
+/** The narrowest width at which three bands and their counts still read. */
 const NEEDS = 300;
 
-/** "0–1", "1–2", "2–3", "3+" -- the band a question's sharpness fell in. */
+/** "1–1.5", "1.5–2", "2+" -- multiples of the drill's own gate. */
 export const bandLabel = (bin: ReadBin): string =>
   bin.to == null ? `${bin.from}+` : `${bin.from}–${bin.to}`;
 
 export function ReadRate({
   bins,
-  height = 190,
+  height = 200,
 }: {
   bins: ReadBin[];
   /** Fixed, like every chart here. */
   height?: number;
 }) {
   const tip = useCursorTip();
-  const filled = bins.filter((b) => b.answers > 0);
+  const answered = bins.reduce((n, b) => n + b.answers, 0);
 
   return (
     <Plot
@@ -86,7 +109,7 @@ export function ReadRate({
           {bins.map((bin) => (
             <li key={bandLabel(bin)} className="flex justify-between gap-4 tabular-nums">
               <span className="text-base-content/60">
-                {bandLabel(bin)} error bars
+                {bandLabel(bin)}× the bar
                 <span className="ml-2 text-xs text-base-content/40">
                   {bin.answers} {bin.answers === 1 ? "card" : "cards"}
                 </span>
@@ -97,20 +120,18 @@ export function ReadRate({
         </ul>
       }
       label={
-        `How often you read a card right, 0% to 100%, against how many error bars ` +
-        `separated its answer — from under one, where the data has no opinion, to ` +
-        `more than three, where it is not close. Chance is ${pct(CHANCE)}.`
+        `How often you named the right end, 0% to 100%, against how far past its ` +
+        `own bar the question sat — from just over it to more than twice it. ` +
+        `Guessing is ${pct(CHANCE)}.`
       }
       legend={{
-        none: "One series. The dot is your rate, the band is how firmly the cards behind it pin that rate, and the only rule is chance — three claims about one number, not three series.",
+        none: "One series. The dot is your rate, the band is how firmly the cards behind it pin that rate, and the only rule is guessing — three claims about one number, not three series.",
       }}
-      // The interval in words, which is the one thing on this chart that is not
-      // printed: the rate is on the y-axis, the count under each band, and the
-      // band's own ends are a length nobody reads off a 190px plot. `Plot`
-      // renders this outside its labelled picture, where a box that follows the
-      // pointer belongs.
+      // The interval in words, which is the one thing here that is not printed:
+      // the rate is on the y-axis and the count under each band, but a band's
+      // own ends are a length nobody reads off a 200px plot.
       tip={tip.node}
-      margin={{ left: AXIS_L, bottom: AXIS_B, top: TOP, right: 8 }}
+      margin={{ left: AXIS_L, bottom: AXIS_B, top: TOP, right: 10 }}
     >
       {({ width, height: h }) => {
         // Each band owns one unit of the domain and its mark sits at the middle
@@ -121,7 +142,10 @@ export function ReadRate({
 
         return (
           <>
-            <ValueAxisLeft scale={y} numTicks={3} format={(v) => pct(v)} />
+            {/* No decimal. "100%" is what the scale says; the tenth of a percent
+                `pct` prints is a precision this chart does not have, and it is
+                what made the labels too wide to fit inside their own margin. */}
+            <ValueAxisLeft scale={y} numTicks={3} format={(v) => `${Math.round(v * 100)}%`} />
             <ValueAxisBottom
               scale={x}
               top={h}
@@ -129,76 +153,61 @@ export function ReadRate({
               format={(v) => bandLabel(bins[Math.floor(v)])}
             />
 
-            {/* Named, because an unlabelled rule reads as zero and this one is
-                at a third. It is also the only line on the chart a reader can
-                measure a claim against: a band sitting on it is somebody
-                guessing. */}
-            <Baseline x1={0} x2={width} y={y(CHANCE)} label="chance" />
+            {/* Named, because an unlabelled rule reads as zero and this one is at
+                a third. It is the only line a reader can measure a claim
+                against: a band sitting on it is somebody guessing.
+
+                Labelled at the RIGHT-hand end. At the left it sat on the first
+                band's dot at the width /stats gives this chart, and the first
+                band is exactly where a rate near the rule lands. */}
+            <Baseline x1={0} x2={width} y={y(CHANCE)} label="guessing" labelAt="end" />
 
             {bins.map((bin, i) => {
-              if (bin.rate == null || bin.low == null || bin.high == null) {
-                // A band nobody has answered in. Drawn as a hollow tick on the
-                // axis rather than skipped, so the scale keeps all four of its
-                // positions and a reader can see which end they have not
-                // reached yet.
-                return (
-                  <line
-                    key={bandLabel(bin)}
-                    x1={at(i)}
-                    x2={at(i)}
-                    y1={h}
-                    y2={h - 4}
-                    stroke={NEUTRAL.rule}
-                    strokeWidth={1}
-                  />
-                );
-              }
+              const empty = bin.rate == null || bin.low == null || bin.high == null;
 
               return (
                 <g
                   key={bandLabel(bin)}
-                  {...tip.follow(
-                    () =>
-                      `${bin.read} of ${bin.answers} read right in this band — ` +
-                      `somewhere between ${pct(bin.low)} and ${pct(bin.high)} of the time.`,
+                  {...tip.follow(() =>
+                    empty
+                      ? "Nothing in this band yet — no question this far past its bar has come up."
+                      : `${bin.read} of ${bin.answers} read right in this band — ` +
+                        `somewhere between ${pct(bin.low ?? 0)} and ${pct(bin.high ?? 0)} of the time.`,
                   )}
                 >
                   {/* The whole column takes the pointer. The dot is eight pixels
                       and the band six wide; a reader aiming at either would
                       spend the hover missing. */}
-                  <rect
-                    x={x(i)}
-                    y={0}
-                    width={x(i + 1) - x(i)}
-                    height={h}
-                    fill="transparent"
-                  />
-                  <line
-                    x1={at(i)}
-                    x2={at(i)}
-                    y1={y(bin.low)}
-                    y2={y(bin.high)}
-                    stroke={INK.yours}
-                    strokeOpacity={0.35}
-                    strokeWidth={MARK.band}
-                    strokeLinecap="round"
-                  />
-                  <Dot cx={at(i)} cy={y(bin.rate)} ink={INK.yours} />
-                  {/* Printed, so nothing on this chart needs a hover to be
-                      read, and so a rate off three answers cannot be mistaken
-                      for one off thirty.
+                  <rect x={x(i)} y={0} width={x(i + 1) - x(i)} height={h} fill="transparent" />
 
-                      `plain` and not `quiet`, which is the axis's ink: this is a
-                      VALUE a reader has to read rather than a tick naming a
-                      position, and `ink.ts` draws exactly that line -- quiet is
-                      "present, deliberately second" and plain is the floor for
-                      something legible. */}
+                  {!empty && (
+                    <>
+                      <line
+                        x1={at(i)}
+                        x2={at(i)}
+                        y1={y(bin.low ?? 0)}
+                        y2={y(bin.high ?? 0)}
+                        stroke={INK.yours}
+                        strokeOpacity={0.35}
+                        strokeWidth={MARK.band}
+                        strokeLinecap="round"
+                      />
+                      <Dot cx={at(i)} cy={y(bin.rate ?? 0)} ink={INK.yours} />
+                    </>
+                  )}
+
+                  {/* The count, on its own row under the band's name. Printed for
+                      an EMPTY band too, as a zero: the drawing has to be able to
+                      say "nothing here yet" where its own fallback list says
+                      "0 cards". The first version drew a hollow tick for that
+                      instead, which landed underneath the axis's own tick in the
+                      same ink and was invisible. */}
                   <text
                     x={at(i)}
-                    y={h + 22}
+                    y={h + 34}
                     textAnchor="middle"
                     fontSize={10}
-                    fill={NEUTRAL.plain}
+                    fill={empty ? NEUTRAL.quiet : NEUTRAL.plain}
                     fontFamily="inherit"
                   >
                     {bin.answers}
@@ -207,7 +216,7 @@ export function ReadRate({
               );
             })}
 
-            {filled.length === 0 && (
+            {answered === 0 && (
               <text
                 x={width / 2}
                 y={h / 2}
@@ -216,7 +225,7 @@ export function ReadRate({
                 fill={NEUTRAL.quiet}
                 fontFamily="inherit"
               >
-                Nothing answered yet.
+                No card with an answer yet.
               </text>
             )}
           </>

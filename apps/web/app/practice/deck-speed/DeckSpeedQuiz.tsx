@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "@mtg-tutor/backend";
 import {
   BUCKET_LABELS,
@@ -45,18 +46,115 @@ import { today } from "../../lib/day";
  * person reasons from, because "this is a wrath, wraths go long" is the skill.
  */
 
-type Run = NonNullable<ReturnType<typeof useDeal>>;
+// Off the query rather than off the hook. `useDeal` holds a hand in state, so
+// deriving the type from its return value made the alias reference itself the
+// moment the subscription was dropped.
+type Run = FunctionReturnType<typeof api.drills.deckSpeed.deal>;
 type Question = Run["questions"][number];
 
-function useDeal(setCode: string | undefined, run: number) {
-  // `today` is read once per RUN rather than per render, which is what `run`
-  // marks. A date recomputed every render would change the query key whenever
-  // React re-ran this component and throw away Convex's cache; it also has to
-  // move when the player asks for another run, so that somebody drilling past
-  // midnight is dealt against the day they are actually in.
-  const day = useMemo(() => today(), [run]);
-  return useQuery(api.drills.deckSpeed.deal, setCode ? { setCode, today: day } : "skip");
+/**
+ * A hand, fetched once.
+ *
+ * NOT A SUBSCRIPTION, AND THE REASON IS BANDWIDTH. `deal` reads a set's whole
+ * statistics document -- 270 to 412KB -- and, since it started reading this
+ * player's answers too, that read set includes a table they write to eight times
+ * a run. Held open as a `useQuery`, every recorded answer invalidated the
+ * subscription and re-executed the query, so a run of eight cost about 3MB
+ * instead of 350KB, per drill, per player. This app has already had a plan
+ * drained once by a query re-reading a document it did not need.
+ *
+ * A one-shot read is also the honest shape. The run was already frozen in state
+ * the moment it arrived -- a live hand would re-shuffle under somebody
+ * mid-answer -- so the subscription was being paid for and then discarded.
+ *
+ * AND IT WAITS FOR THE WRITES. The answers are fired unawaited so a reveal never
+ * waits on a round trip, but the NEXT deal must not be dealt from a history that
+ * has not landed: with a subscription the query arguments changed between runs
+ * and the stale hand was visible for a frame; without one, re-dealing early
+ * would simply hand back the run just played. So the fetch awaits whatever
+ * writes are in flight, where the reveal does not.
+ */
+function useDeal(setCode: string | undefined, runNo: number, settled: () => Promise<unknown>) {
+  const convex = useConvex();
+  const [run, setRun] = useState<Run>();
+
+  useEffect(() => {
+    if (!setCode) return;
+    let live = true;
+    // Cleared first, so the screen shows its loading state rather than the hand
+    // it just finished -- which is what the query arguments used to do for free.
+    setRun(undefined);
+    void settled()
+      .then(() =>
+        convex.query(api.drills.deckSpeed.deal, {
+          setCode,
+          // Read once per RUN. A date recomputed every render would move the day
+          // under a sitting; asking again per run is what lets somebody drilling
+          // past midnight be dealt against the day they are actually in.
+          today: today(),
+        }),
+      )
+      .then((dealt) => {
+        if (live) setRun(dealt);
+      });
+    return () => {
+      live = false;
+    };
+    // `settled` is a ref-backed callback and never changes identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [convex, setCode, runNo]);
+
+  return run;
 }
+
+
+/**
+ * What this hand is made of, said before it is played.
+ *
+ * THE BUTTON USED TO PROMISE A COUNT IT COULD NOT KEEP. "Another 8" is right
+ * until a set runs short of cards nobody has seen, and then it is a number the
+ * next run will not honour -- and every rule about how many slots a repeat may
+ * take was really an attempt to make the deal fit that label. Naming the hand
+ * instead means the deal can be whatever is honest and the screen still says so
+ * up front: the run that is all cards you got wrong is announced rather than
+ * noticed.
+ *
+ * It also names the case nobody would otherwise see coming. Somebody with three
+ * cards they keep misreading gets those three back, day after day, until they
+ * read them -- which is the drill working, and reads as a treadmill if the
+ * screen never says it is happening.
+ */
+function madeOf(questions: readonly { repeat: boolean }[]): string {
+  const back = questions.filter((q) => q.repeat).length;
+  const fresh = questions.length - back;
+  const cards = (n: number) => `${n} ${n === 1 ? "card" : "cards"}`;
+  if (back === 0) return `${cards(fresh)} you have not seen.`;
+  if (fresh === 0) return `${cards(back)} you missed before, back again.`;
+  return `${cards(fresh)} you have not seen, and ${back} you missed before.`;
+}
+
+/**
+ * Every answer still on its way to the server.
+ *
+ * The writes are deliberately not awaited at the point of answering -- see
+ * `record` below -- so something has to hold them for the one caller that does
+ * care, which is the next deal. Settled rather than resolved: a write that
+ * failed has already reported itself to `answer_unrecorded`, and blocking the
+ * next hand on it would turn a lost row into a stuck screen.
+ */
+function useInFlight() {
+  const writes = useRef<Promise<unknown>[]>([]);
+  const track = (p: Promise<unknown>) => {
+    writes.current.push(p);
+  };
+  const settled = async () => {
+    const pending = writes.current;
+    writes.current = [];
+    await Promise.allSettled(pending);
+  };
+  return { track, settled };
+}
+
 
 /**
  * Which set to open on: the one you drafted last, else the newest.
@@ -80,51 +178,59 @@ export function DeckSpeedQuiz() {
   const setCode = chosen ?? suggested;
 
   // Which run of this sitting. Not a cursor -- the server deals from what you
-  // have answered now, so this only exists to re-ask for a hand and to give the
-  // attempt ids of one run a prefix nothing else can collide with.
+  // have answered now, so this only exists to ask for another hand.
   const [runNo, setRunNo] = useState(0);
+  // WHAT MAKES AN ATTEMPT ID UNIQUE, and the reason it is not the set and the
+  // run number. `runNo` resets to zero on every page load, so a card answered at
+  // step 0 of run 0 today and re-served at step 0 of run 0 tomorrow minted the
+  // same id -- and `answers.record` refuses a row whose id matches the newest
+  // one for that card, silently, with no rejection for `answer_unrecorded` to
+  // report. The card's latest answer stayed the old misread, so it stayed due
+  // every day forever, on exactly the repeat path this feature adds.
+  //
+  // Minted once per mount, which is the sitting. The CLI has always done this
+  // (`cli:${Date.now()}`); the browser had a counter that looked like an id.
+  const [sitting] = useState(() => `web:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<ReadonlyMap<string, DeckSpeedBucket>>(new Map());
 
-  const live = useDeal(setCode, runNo);
-  const [run, setRun] = useState<Run>();
+  const inFlight = useInFlight();
+  const run = useDeal(setCode, runNo, inFlight.settled);
   const record = useMutation(api.drills.answers.record);
 
-  // A run is a hand you were dealt. `deal` is a live subscription, so without
-  // the freeze the questions would re-shuffle under somebody mid-answer the
-  // moment a set was re-ingested. Frozen and reported in one place so the two
-  // cannot disagree about which run was served.
-  const dealt = useRef<string | undefined>(undefined);
+  // Reported once per hand. `useDeal` clears the run before it fetches, so a
+  // hand arriving is the edge -- there is no live value to guard against and no
+  // freeze to keep, which is what dropping the subscription bought.
+  const reported = useRef<string | undefined>(undefined);
   useEffect(() => {
     const token = `${setCode}:${runNo}`;
-    if (!live || !setCode || dealt.current === token) return;
-    dealt.current = token;
-    setRun(live);
+    if (!run || !setCode || reported.current === token) return;
+    reported.current = token;
     setStep(0);
     drillStarted({
       drill: "deckSpeed",
-      served: live.questions.length,
+      served: run.questions.length,
       // The misses drill's three counts in this drill's terms: no drafts behind
       // a question, the set's whole bank as candidates, and a mute set as the
       // only way a question becomes unservable.
       drafts: 0,
-      candidates: live.quizzable,
-      unavailable: live.mute ? 1 : 0,
+      candidates: run.quizzable,
+      unavailable: run.mute ? 1 : 0,
       // How much of the set has an end rather than the flat answer, so a run out
       // of a mostly-middle set is not pooled with one that is mostly ends.
-      ends: live.ends ?? 0,
+      ends: run.ends ?? 0,
       // WHY A RUN WAS EMPTY, which `served: 0` cannot say. On the deploy that
       // introduces this drill every set is `untimed`; if this does not fall to
       // zero as sets are re-ingested, the re-ingest did not happen and nothing
       // else would report it.
-      mute: live.mute ?? undefined,
+      mute: run.mute ?? undefined,
       // Whether the reserved slot was filled. Each set holds hundreds of cards
       // nobody has seen, so if this stays at zero across real play then nobody
       // is coming back inside a bank's depth.
-      repeats: live.questions.filter((q) => q.repeat).length,
-      asked: live.asked,
+      repeats: run.questions.filter((q) => q.repeat).length,
+      asked: run.asked,
     });
-  }, [live, setCode, runNo]);
+  }, [run, setCode, runNo]);
 
   const questions = run?.questions ?? [];
   const key = (q: Question) => `${setCode}:${q.card.name}`;
@@ -141,12 +247,12 @@ export function DeckSpeedQuiz() {
 
   const score = useMemo(() => scoreDeckSpeedRun([...graded.values()]), [graded]);
 
-  const reported = useRef<string | undefined>(undefined);
+  const finished = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!run || questions.length === 0 || step < questions.length) return;
     const token = `${setCode}:${runNo}:${questions.length}`;
-    if (reported.current === token) return;
-    reported.current = token;
+    if (finished.current === token) return;
+    finished.current = token;
     drillFinished({
       drill: "deckSpeed",
       served: questions.length,
@@ -191,16 +297,20 @@ export function DeckSpeedQuiz() {
     // forgets. What a silent failure costs is the measurement AND the next run
     // -- an unwritten answer is a card dealt back tomorrow -- which is why
     // `answer_unrecorded` is the only thing that can say the store went lossy.
-    void record({
+    inFlight.track(
+      record({
       drill: "deckSpeed",
       setCode: setCode ?? "",
       name: question.card.name,
       answered: guess,
       correct: question.answer,
       sigmas: question.sigmas,
-      attemptId: `${setCode}:${runNo}:${step}`,
-    }).catch((e: unknown) =>
-      answerUnrecorded({ asked: "deckSpeed", reason: String(e) }),
+      // How far past its gate the question sat, which is what a band is drawn
+      // on. `sigmas` cannot stand in for it -- each drill's bar moves, and
+      // neither the deck count nor the set's spread is on a stored answer.
+      margin: question.margin,
+      attemptId: `${sitting}:${runNo}:${step}`,
+      }).catch((e: unknown) => answerUnrecorded({ asked: "deckSpeed", reason: String(e) })),
     );
   }
 
@@ -254,10 +364,8 @@ export function DeckSpeedQuiz() {
             ) : (
               <Finish
                 score={score}
-                served={questions.length}
-                asked={run.asked}
+                asked={run.asked + questions.length}
                 quizzable={run.quizzable}
-                more={run.asked < run.quizzable}
                 onMore={() => {
                   setRunNo((n) => n + 1);
                   setAnswers(new Map());
@@ -275,9 +383,11 @@ export function DeckSpeedQuiz() {
                   here={step}
                   onSelect={(i) => setStep(i)}
                 />
+                {/* What the hand is, said before it is played rather than
+                    discovered on the third card. */}
                 <p className="mt-4 text-sm leading-relaxed text-base-content/70">
                   {score.answered === 0
-                    ? "Nothing answered yet."
+                    ? madeOf(questions)
                     : `You read ${score.read} of ${score.answered} right so far.`}
                 </p>
               </div>
@@ -439,20 +549,15 @@ function Nothing({ run }: { run: Run }) {
 
 function Finish({
   score,
-  served,
   asked,
   quizzable,
-  more,
   onMore,
 }: {
   score: { answered: number; read: number; misread: number };
-  /** What this run actually dealt, which near the end of a set is not eight. */
-  served: number;
-  /** Cards of this set behind them, counting this run. */
+  /** Cards of this set behind them, this run included. */
   asked: number;
   /** Cards this set can ask about at all. */
   quizzable: number;
-  more: boolean;
   onMore: () => void;
 }) {
   return (
@@ -465,17 +570,19 @@ function Finish({
       </p>
       {/* Coverage, which is the one progress reading that is true whatever the
           difficulty mix is doing -- it counts questions asked rather than
-          questions read. `asked` lags this run by however long the writes take,
-          so it is the count BEFORE this run rather than after it, and saying
-          "so far" rather than a total is what keeps that honest. */}
+          questions read. The deal's own count is from BEFORE this run, so this
+          run is added back here rather than the sentence hedging with "so far". */}
       <p className="mt-2 text-sm text-base-content/55">
-        {asked} of this set&apos;s {quizzable} cards behind you so far.
+        {asked} of this set&apos;s {quizzable} cards behind you.
       </p>
-      {more && (
-        <button type="button" className="btn btn-primary mt-5" onClick={onMore}>
-          Another {served}
-        </button>
-      )}
+      {/* NAMES NO COUNT, which is the point. It used to say "Another 8" and that
+          is a promise the next deal cannot keep once a set runs short -- and if
+          there is nothing left at all, the next hand is the played-out screen,
+          which is a better place to be told than a button that quietly
+          disappeared. */}
+      <button type="button" className="btn btn-primary mt-5" onClick={onMore}>
+        Keep going
+      </button>
     </section>
   );
 }

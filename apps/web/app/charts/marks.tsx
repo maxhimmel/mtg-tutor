@@ -191,19 +191,42 @@ export function Baseline({
   x2,
   y,
   label,
+  labelAt = "start",
   ink = INK.zero,
 }: {
   x1: number;
   x2: number;
   y: number;
   label?: ReactNode;
+  /**
+   * Which end of the rule the label hangs from.
+   *
+   * IT EXISTS BECAUSE A LABEL AT x1 IS NOT ALWAYS SOMEWHERE THERE IS ROOM. The
+   * left end of a rule is where a low value's mark sits, so on a chart whose
+   * first band is near the baseline the label and the dot land on each other --
+   * and moving the RULE to dodge the label would move the thing being measured.
+   * Anchoring the text at the other end instead costs nothing and moves nothing.
+   *
+   * `end` anchors the text itself, so it reads inward from x2 rather than
+   * starting there and running off the drawing.
+   */
+  labelAt?: "start" | "end";
   ink?: string;
 }) {
+  const from = Math.min(x1, x2);
+  const to = Math.max(x1, x2);
   return (
     <Group>
       <line x1={x1} x2={x2} y1={y} y2={y} stroke={ink} strokeWidth={MARK.axis} />
       {label != null && (
-        <text x={x1} y={y - 4} fontSize={10} fill={NEUTRAL.quiet} fontFamily="inherit">
+        <text
+          x={labelAt === "end" ? to : from}
+          y={y - 4}
+          textAnchor={labelAt === "end" ? "end" : "start"}
+          fontSize={10}
+          fill={NEUTRAL.quiet}
+          fontFamily="inherit"
+        >
           {label}
         </text>
       )}

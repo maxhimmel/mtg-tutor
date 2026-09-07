@@ -105,7 +105,7 @@ export async function runArchetypes(
     // cannot keep, and the kind of line that survives a change by not being
     // read.
     if (!results) {
-      p.cancel("Left mid-run. What you answered before that is kept.");
+      p.cancel("Left mid-run. The answers you gave are kept.");
       return;
     }
 
@@ -174,6 +174,10 @@ async function play(
         // whether there is a deck to name at all.
         correct: question.separated ? question.wants : SAME,
         sigmas: question.sigmas,
+        // How far past its gate the question sat, which is what a band is drawn
+        // on. Error bars alone cannot say it: each drill's bar moves, and
+        // neither the deck count nor the set's spread is on a stored answer.
+        margin: question.margin,
         attemptId: `${sitting}:${i}`,
       })
       .catch(() => p.log.warn("That answer was not recorded, so the card may come back."));
