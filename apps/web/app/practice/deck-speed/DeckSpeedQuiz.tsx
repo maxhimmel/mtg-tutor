@@ -345,7 +345,7 @@ export function DeckSpeedQuiz() {
     return (
       <section className="max-w-xl py-6">
         <p className="text-lg leading-relaxed text-base-content/70">
-          That set would not deal. Pick another above, or try again in a moment.
+          That hand would not deal. Pick another set above, or try again in a moment.
         </p>
       </section>
     );
@@ -565,7 +565,7 @@ function Nothing({ run }: { run: Run }) {
     : run.mute === "unbuilt"
       ? "This set has no statistics yet, so there is nothing to ask about."
       : run.mute === "unrated"
-        ? "17Lands never recorded what colours this set's decks were, so there is nothing to measure a card against here. That will not change."
+        ? "17Lands never recorded what colors this set's decks were, so there is nothing to measure a card against here. That will not change."
         : run.mute === "untimed"
           ? "This set's statistics were built before game length was measured. It comes back the next time this set's data is refreshed."
           : run.mute === "unmeasured"

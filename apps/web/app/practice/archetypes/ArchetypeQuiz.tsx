@@ -374,7 +374,7 @@ export function ArchetypeQuiz() {
     return (
       <section className="max-w-xl py-6">
         <p className="text-lg leading-relaxed text-base-content/70">
-          That set would not deal. Pick another above, or try again in a moment.
+          That hand would not deal. Pick another set above, or try again in a moment.
         </p>
       </section>
     );
@@ -1204,7 +1204,7 @@ function Nothing({ run }: { run: Pick<Run, "mute" | "quizzable"> }) {
             This set never recorded what its decks were.
           </h2>
           <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
-            17Lands' data for it does not say which colours a deck was playing, so
+            17Lands' data for it does not say which colors a deck was playing, so
             there is no way to know which deck wanted a card. It is the only set
             with that hole. Pick another above.
           </p>

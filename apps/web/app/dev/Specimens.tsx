@@ -1049,7 +1049,7 @@ export const SPECIMENS: Specimen[] = [
             }}
           />
         </Bay>
-        <Bay label="A week of both, with cards that came back">
+        <Bay label="A week of both — each drill in its own words, which is the thing that was wrong">
           <ReadPanel
             progress={{
               archetypes: readProgress({
