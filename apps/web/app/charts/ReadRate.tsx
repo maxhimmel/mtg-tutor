@@ -120,8 +120,8 @@ export function ReadRate({
         </ul>
       }
       label={
-        `How often you named the right end, 0% to 100%, against how far past its ` +
-        `own bar the question sat — from just over it to more than twice it. ` +
+        `How often you named the right end, 0% to 100%, against how far each ` +
+        `question sat past its own bar — from just over it to more than twice it. ` +
         `Guessing is ${pct(CHANCE)}.`
       }
       legend={{

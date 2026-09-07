@@ -27,6 +27,7 @@ import { Panel } from "../../components/Panel";
 import { PickTrack, type Tick } from "../../components/PickTrack";
 import {
   answerUnrecorded,
+  dealFailed,
   drillAnswered,
   drillFinished,
   drillStarted,
@@ -110,10 +111,12 @@ export type RevealQuestion = Pick<
 function useDeal(setCode: string | undefined, runNo: number, settled: () => Promise<unknown>) {
   const convex = useConvex();
   const [run, setRun] = useState<Run>();
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!setCode) return;
     let live = true;
+    setFailed(false);
     // Cleared first, so the screen shows its loading state rather than the hand
     // it just finished -- which is what the query arguments used to do for free.
     setRun(undefined);
@@ -129,6 +132,17 @@ function useDeal(setCode: string | undefined, runNo: number, settled: () => Prom
       )
       .then((dealt) => {
         if (live) setRun(dealt);
+      })
+      // CAUGHT, BECAUSE A ONE-SHOT READ HAS NO ERROR BOUNDARY BEHIND IT.
+      // `useQuery` re-threw and React showed something; a rejected promise
+      // leaves the loading line up forever and says nothing anywhere. `deal`
+      // throws on states a person can reach -- a set with no stored row, a pool
+      // never ingested, an expired session -- so this is the difference between
+      // a screen that explains itself and a spinner.
+      .catch((e: unknown) => {
+        if (!live) return;
+        setFailed(true);
+        dealFailed({ drill: "archetypes", setCode, reason: String(e) });
       });
     return () => {
       live = false;
@@ -137,7 +151,7 @@ function useDeal(setCode: string | undefined, runNo: number, settled: () => Prom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [convex, setCode, runNo]);
 
-  return run;
+  return { run, failed };
 }
 
 
@@ -176,15 +190,19 @@ function madeOf(questions: readonly { repeat: boolean }[]): string {
  * next hand on it would turn a lost row into a stuck screen.
  */
 function useInFlight() {
-  const writes = useRef<Promise<unknown>[]>([]);
+  // A CHAIN RATHER THAN A DRAINED ARRAY. The array version emptied the ref
+  // before awaiting it, so a second caller arriving inside that window -- a set
+  // changed, another hand asked for while a write was still going -- saw nothing
+  // pending and dealt from a history that had not landed. A tail promise cannot
+  // be drained out from under a caller: everyone waiting waits on the same one.
+  const tail = useRef<Promise<unknown>>(Promise.resolve());
   const track = (p: Promise<unknown>) => {
-    writes.current.push(p);
+    // Swallowed here, not ignored: the write already reported its own rejection
+    // to `answer_unrecorded`, and a rejected tail would block every later deal
+    // on a row that is not coming.
+    tail.current = tail.current.then(() => p).catch(() => undefined);
   };
-  const settled = async () => {
-    const pending = writes.current;
-    writes.current = [];
-    await Promise.allSettled(pending);
-  };
+  const settled = () => tail.current;
   return { track, settled };
 }
 
@@ -231,7 +249,7 @@ export function ArchetypeQuiz() {
   const [answers, setAnswers] = useState<ReadonlyMap<string, string>>(new Map());
 
   const inFlight = useInFlight();
-  const run = useDeal(setCode, runNo, inFlight.settled);
+  const { run, failed } = useDeal(setCode, runNo, inFlight.settled);
   const record = useMutation(api.drills.answers.record);
 
   // Reported once per hand. `useDeal` clears the run before it fetches, so a
@@ -345,6 +363,20 @@ export function ArchetypeQuiz() {
       margin: question.margin,
       attemptId: `${sitting}:${runNo}:${step}`,
       }).catch((e: unknown) => answerUnrecorded({ asked: "archetypes", reason: String(e) })),
+    );
+  }
+
+  // SAID, RATHER THAN SPUN AT. A deal can genuinely fail -- a set with no stored
+  // row, a pool never ingested, a session that expired mid-sitting -- and the
+  // one-shot read has no error boundary behind it, so this is the only thing
+  // between a person and a loading line that never resolves.
+  if (failed) {
+    return (
+      <section className="max-w-xl py-6">
+        <p className="text-lg leading-relaxed text-base-content/70">
+          That set would not deal. Pick another above, or try again in a moment.
+        </p>
+      </section>
     );
   }
 

@@ -191,6 +191,58 @@ describe("drills/deckSpeed.deal", () => {
     expect(new Set(run.questions.map((q) => q.card.name)).size).toBe(run.questions.length);
   });
 
+  // THE SLOT DEFECT, IN THIS DRILL'S COPY -- and the reason this test exists
+  // separately from the one below it. The archetype quiz got a regression for
+  // this and deck speed got one that could not fail: on the nine-card SPREAD
+  // fixture the fresh pile has nothing left to over-spend after one run, so the
+  // old concatenated version passed it. That is trap #4 committed inside the fix
+  // for trap #4. This seeds thirty fresh cards, which is what every real set
+  // looks like, so the fresh half alone can fill the run twice over.
+  it("still serves a repeat when the fresh pile could fill the whole run", async () => {
+    const t = harness();
+    const many = [
+      statCard("Missed One", -0.45),
+      ...Array.from({ length: 30 }, (_, i) => statCard(`Fresh ${i}`, 0.2 + i * 0.01)),
+    ];
+    await seed(t, { cards: many });
+
+    const alice = as(t, "alice");
+    const first = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: TODAY,
+    });
+    const missed = first.questions.find((q) => q.card.name === "Missed One");
+    expect(missed).toBeDefined();
+
+    // Every card of the run answered, and the one card misread on purpose, so
+    // exactly one thing is due back.
+    for (const q of first.questions) {
+      await alice.mutation(api.drills.answers.record, {
+        drill: "deckSpeed",
+        setCode: SET.code,
+        name: q.card.name,
+        answered: q === missed ? wrongly(q.answer) : q.answer,
+        correct: q.answer,
+        sigmas: q.sigmas,
+        margin: q.margin,
+        attemptId: `run-1:${q.card.name}`,
+      });
+    }
+    const wrote = await writtenOn(t);
+
+    const back = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: dayAfter(wrote),
+    });
+
+    // A full run, and the repeat is in it -- which the concatenated version
+    // could not manage, because the fresh over-deal reached the run length
+    // before the appended repeat was ever examined.
+    expect(back.questions).toHaveLength(8);
+    expect(back.questions.filter((q) => q.repeat)).toHaveLength(1);
+    expect(back.questions.at(-1)?.card.name).toBe("Missed One");
+  });
+
   // THE DEFECT THIS TABLE WAS ADDED FOR, in this drill's version. `servingOrder`
   // ranks the whole bank once and `dealDeckSpeedRun` slices it, so a run used to
   // be paged by a `skip` the client reset on reload -- and a second sitting on a

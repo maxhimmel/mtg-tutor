@@ -78,3 +78,52 @@ export async function splitByHistory<T extends { name: string }>(
 
   return { fresh, repeats: due.slice(0, Math.max(0, slots)), asked: history.size };
 }
+
+/**
+ * Fill a run from the two piles, each to its own quota.
+ *
+ * WHY THIS IS A FUNCTION AND NOT A LOOP IN EACH DEAL. It was a loop in each
+ * deal, byte-identical in both, and the first version of it had a defect that
+ * made every repeat unreachable: the fresh pile is over-dealt by a read budget
+ * so a card with no text row costs a candidate rather than a hole, and
+ * concatenating that over-deal ahead of the repeats let it spend every slot in
+ * the run before the repeat at index 14 was ever examined. The archetype copy
+ * got a regression test that seeds more fresh cards than the budget can deal;
+ * the deck-speed copy got one that could not fail, on a nine-card fixture where
+ * the over-deal has nothing to over-spend. Duplicated logic with one tested copy
+ * is one tested copy.
+ *
+ * THE BUDGET IS FOR THE TEXT CHECK, NOT FOR SLOTS. `servable` returns null for a
+ * card the set has no text row for -- a card a re-ingest dropped that the
+ * statistics still name -- and those cost a candidate. So each pile is walked
+ * until it has taken its quota or run out of candidates, and neither pile can
+ * spend the other's.
+ *
+ * The give-back is one-directional and deliberately so: fresh goes first, so a
+ * thin fresh pile leaves slots the repeats can take, and a run that is all
+ * repeats is a set played through rather than a bug. Repeats cannot take slots
+ * from fresh, because there are only ever REPEAT_SLOTS of them offered while a
+ * set still has anything new.
+ */
+export function serveRun<T, S>(
+  fresh: readonly T[],
+  repeats: readonly T[],
+  limit: number,
+  servable: (question: T) => S | null,
+): S[] {
+  const out: S[] = [];
+  const fill = (pile: readonly T[], quota: number) => {
+    let taken = 0;
+    for (const question of pile) {
+      if (taken >= quota || out.length >= limit) break;
+      const shaped = servable(question);
+      if (shaped === null) continue;
+      out.push(shaped);
+      taken++;
+    }
+  };
+
+  fill(fresh, Math.max(0, limit - repeats.length));
+  fill(repeats, limit - out.length);
+  return out;
+}

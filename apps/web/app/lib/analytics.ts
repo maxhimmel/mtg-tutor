@@ -1494,6 +1494,31 @@ export function drillFinished(p: {
  * an event name is permanent and a whole new family for a screen with none is a
  * lot to spend on a divisor. A nonzero count there is the finding on its own.
  */
+/**
+ * A drill could not be dealt at all.
+ *
+ * IT EXISTS BECAUSE DROPPING THE SUBSCRIPTION TOOK THE ERROR PATH WITH IT.
+ * `useQuery` re-throws into React's error boundary, so a `deal` that threw was
+ * at least visible; a one-shot `convex.query` rejects a promise instead, and an
+ * unhandled rejection leaves the screen on its loading line forever with
+ * nothing anywhere saying why. `drill_started` cannot cover it either -- it
+ * fires when a hand ARRIVES, so a run that never arrives is simply absent from
+ * the funnel, which reads identically to nobody opening the drill.
+ *
+ * The reachable causes are real rather than theoretical: a set with no stored
+ * row, a pool that was never ingested, an expired session. Each throws inside
+ * `deal`, and each is a person staring at a spinner.
+ */
+export function dealFailed(p: {
+  drill: DrillId;
+  setCode: string;
+  /** The rejection, as the client saw it. */
+  reason: string;
+}): void {
+  if (!on()) return;
+  posthog.capture("drill_deal_failed", p);
+}
+
 export function answerUnrecorded(p: {
   // The two set drills join the review and the misses drill here rather than
   // minting an event of their own, because it is the same failure with the same

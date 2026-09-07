@@ -11,7 +11,7 @@ import type { EngineCard } from "@mtg-tutor/core";
 import { query } from "../_generated/server.js";
 import { cardTextFor } from "../cardText.js";
 import { requireUserId, setCardsFor, setDocFor } from "../sessions.js";
-import { splitByHistory } from "./history.js";
+import { serveRun, splitByHistory } from "./history.js";
 
 // The archetype quiz, dealt.
 //
@@ -181,8 +181,7 @@ export const deal = query({
     // The budget is an over-deal for the TEXT CHECK, not a slot count, so it
     // must never be able to spend another pile's slots. Each pile is filled to
     // its own quota out of its own candidates.
-    const wantFresh = Math.max(0, limit - repeats.length);
-    const freshCandidates = dealArchetypeRun(fresh, wantFresh * READ_BUDGET, 0);
+    const freshCandidates = dealArchetypeRun(fresh, Math.max(0, limit - repeats.length) * READ_BUDGET, 0);
     const repeated = new Set(repeats.map((q) => normalizeName(q.name)));
 
     // One read per distinct name, the same shape `misses.deal` uses. The whole
@@ -197,17 +196,10 @@ export const deal = query({
     const engine = new Map(cardsDoc.cards.map((c) => [normalizeName(c.name), c]));
 
     // Fresh first so a run opens on something you have not seen, then the
-    // repeats into the slots reserved for them. `serve` returns how many it
-    // managed, so a pile that runs short of text rows gives its slots back
-    // rather than leaving a hole.
-    // Typed off the shape rather than annotated, so the return type of `deal`
-    // stays the one the clients read and nothing has to restate it.
-    const questions: ReturnType<typeof shape>[] = [];
-    const serve = (pile: readonly ArchetypeQuestion[], quota: number) => {
-      let taken = 0;
-      for (const question of pile) {
-        if (taken >= quota || questions.length >= limit) break;
-
+    // repeats into the slots kept for them. The quota arithmetic lives in
+    // `serveRun` because it was byte-identical in both deals and only one copy
+    // had a test that could fail against the defect it was written for.
+    const questions = serveRun(freshCandidates, repeats, limit, (question) => {
       // Checked rather than caught, for the reason the misses drill checks: a
       // set re-ingested since the artifact was built can have dropped a card
       // the statistics still name, and `hydrateCard` throws on that by design.
@@ -216,17 +208,10 @@ export const deal = query({
       const key = normalizeName(question.name);
       const card = engine.get(key);
       const rows = text.get(key);
-      if (!card || !rows) continue;
+      if (!card || !rows) return null;
 
-      questions.push(shape(question, card, key));
-      taken++;
-      }
-    };
-
-    serve(freshCandidates, wantFresh);
-    // The repeats take whatever the fresh pile could not fill as well as their
-    // own slots, so a set running short of new material still deals a full run.
-    serve(repeats, limit - questions.length);
+      return shape(question, card, key);
+    });
 
     /** One question as a client reads it. */
     function shape(question: ArchetypeQuestion, card: EngineCard, key: string) {

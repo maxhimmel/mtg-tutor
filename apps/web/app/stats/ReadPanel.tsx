@@ -63,9 +63,9 @@ export function ReadPanel({ progress }: { progress: DrillProgress }) {
       bodyClassName="gap-5"
     >
       <p className="max-w-prose text-sm leading-relaxed text-base-content/70">
-        Most cards have no deck that wants them more and no clock of their own, so the first
-        thing worth knowing is whether you can tell those apart from the ones that do. Then,
-        on the cards with a real answer, whether you name the right end.
+        Most cards have no deck that wants them more, and pull the game neither shorter nor
+        longer. So the first thing worth knowing is whether you can tell those from the cards
+        that do. Then, on the ones with a real answer, whether you name the right end.
       </p>
 
       <div className="grid gap-8 sm:grid-cols-2">
@@ -111,7 +111,7 @@ function Drill({ title, drill }: { title: string; drill: OneDrill }) {
 
           <div className="border-t border-base-300 pt-3">
             <p className="mb-1 text-xs text-base-content/50">
-              On the cards with a real answer, by how far past its own bar the question sat.
+              On the cards with a real answer, by how far each question sat past its own bar.
             </p>
             <ReadRate bins={drill.bins} />
           </div>
@@ -119,11 +119,11 @@ function Drill({ title, drill }: { title: string; drill: OneDrill }) {
           <p className="text-xs leading-relaxed text-base-content/50">
             {drill.asked} {drill.asked === 1 ? "card" : "cards"} asked, first answers only —
             the first time a card comes up is the only time you have not already been shown
-            the answer. About a third of the cards that clear the bar only just clear it by
-            chance, so the leftmost band sits lower than a reader does.{" "}
+            the answer. About a third of what clears the bar only just clears it, by chance,
+            so the leftmost band reads lower than the player behind it.{" "}
             {drill.askedAgain === 0
-              ? "None has come back yet: a card returns a day after you misread it, and the drill leads with what you have never seen."
-              : `Of the ${drill.askedAgain} that came back, you took ${drill.tookBack} back — and that number counts only cards you had already got wrong, so it starts from the bottom rather than from your standing.`}
+              ? "Nothing has come back yet: a card returns a day after you misread it, and the drill leads with what you have never seen."
+              : `Of the ${drill.askedAgain} that came back, you got ${drill.tookBack} right this time — and that counts only cards you had already got wrong, so it starts from the bottom rather than from how you normally do.`}
             {drill.moved > 0 &&
               ` ${drill.moved} more came back after their answer had moved, and are left out of that count.`}
           </p>
