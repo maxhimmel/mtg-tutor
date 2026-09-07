@@ -52,7 +52,7 @@
  * in turns and share nothing at all.
  *
  * The test that keeps the line where it is: nothing in `history.ts` names a
- * deck, a colour, a turn count or a card's text, and nothing in it would have
+ * deck, a color, a turn count or a card's text, and nothing in it would have
  * to change to serve a fourth drill about mana curves. The moment something
  * there needs to know which drill it is holding, the lift has gone too far.
  */

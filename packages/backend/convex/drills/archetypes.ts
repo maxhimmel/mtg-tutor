@@ -1,11 +1,13 @@
 import { v } from "convex/values";
 import {
   ARCHETYPE_QUIZ,
+  type ArchetypeQuestion,
   archetypeQuestions,
   dealArchetypeRun,
   hydrateCard,
   normalizeName,
 } from "@mtg-tutor/core";
+import type { EngineCard } from "@mtg-tutor/core";
 import { query } from "../_generated/server.js";
 import { cardTextFor } from "../cardText.js";
 import { requireUserId, setCardsFor, setDocFor } from "../sessions.js";
@@ -165,18 +167,22 @@ export const deal = query({
       return { questions: [], quizzable: ranked.length, asked, mute: "answered" as Mute };
     }
 
-    // Half separable, half not -- see `dealArchetypeRun`, which is where the
-    // half is derived. Over-dealt by the read budget so a card the set has no
-    // text for costs a question rather than a hole in the run.
+    // WHY THE TWO PILES ARE SERVED SEPARATELY RATHER THAN CONCATENATED. The
+    // first version of this built one `candidates` list -- the fresh run
+    // over-dealt by READ_BUDGET, then the repeats appended -- and the serving
+    // loop below stopped at `limit`. With a budget of 2 and a run of 8 the fresh
+    // half alone is 14 candidates, so the loop filled all 8 slots before it ever
+    // reached the repeat at index 14, and the repeat was served only on a set so
+    // played out that six of the fourteen had no text row. Every reader of a
+    // repeat -- `dueForRepeat`, the `repeat` flag, the panel's took-back split --
+    // was dead in production, and the test that covered it passed because it
+    // seeded four cards.
     //
-    // The repeats go LAST, so a run opens on something you have not seen, and
-    // they are appended rather than passed through `dealArchetypeRun` because
-    // that function's job is the separable/inseparable alternation and a
-    // re-asked card was already chosen by a different rule.
-    const candidates = [
-      ...dealArchetypeRun(fresh, Math.max(0, limit - repeats.length) * READ_BUDGET, 0),
-      ...repeats,
-    ];
+    // The budget is an over-deal for the TEXT CHECK, not a slot count, so it
+    // must never be able to spend another pile's slots. Each pile is filled to
+    // its own quota out of its own candidates.
+    const wantFresh = Math.max(0, limit - repeats.length);
+    const freshCandidates = dealArchetypeRun(fresh, wantFresh * READ_BUDGET, 0);
     const repeated = new Set(repeats.map((q) => normalizeName(q.name)));
 
     // One read per distinct name, the same shape `misses.deal` uses. The whole
@@ -186,13 +192,21 @@ export const deal = query({
       ctx,
       setDoc.code,
       setDoc.format,
-      candidates.map((q) => q.name),
+      [...freshCandidates, ...repeats].map((q) => q.name),
     );
     const engine = new Map(cardsDoc.cards.map((c) => [normalizeName(c.name), c]));
 
-    const questions = [];
-    for (const question of candidates) {
-      if (questions.length >= limit) break;
+    // Fresh first so a run opens on something you have not seen, then the
+    // repeats into the slots reserved for them. `serve` returns how many it
+    // managed, so a pile that runs short of text rows gives its slots back
+    // rather than leaving a hole.
+    // Typed off the shape rather than annotated, so the return type of `deal`
+    // stays the one the clients read and nothing has to restate it.
+    const questions: ReturnType<typeof shape>[] = [];
+    const serve = (pile: readonly ArchetypeQuestion[], quota: number) => {
+      let taken = 0;
+      for (const question of pile) {
+        if (taken >= quota || questions.length >= limit) break;
 
       // Checked rather than caught, for the reason the misses drill checks: a
       // set re-ingested since the artifact was built can have dropped a card
@@ -204,7 +218,19 @@ export const deal = query({
       const rows = text.get(key);
       if (!card || !rows) continue;
 
-      questions.push({
+      questions.push(shape(question, card, key));
+      taken++;
+      }
+    };
+
+    serve(freshCandidates, wantFresh);
+    // The repeats take whatever the fresh pile could not fill as well as their
+    // own slots, so a set running short of new material still deals a full run.
+    serve(repeats, limit - questions.length);
+
+    /** One question as a client reads it. */
+    function shape(question: ArchetypeQuestion, card: EngineCard, key: string) {
+      return {
         card: hydrateCard(card, text),
         color: question.color,
         // The two decks the question is about, and the whole table behind it.
@@ -223,6 +249,13 @@ export const deal = query({
         // read, and the property cannot be recovered afterwards -- the answer
         // that would say so is the row the event is about.
         repeat: repeated.has(key),
+        // How far past this drill's own gate the question sat, so the client can
+        // store it with the answer. `sigmas` cannot stand in for it: each drill
+        // judges by a bar that moves -- with the deck count here, with the set's
+        // own spread of residuals there -- so error bars alone do not say how
+        // hard a question was, and neither the deck count nor the spread is on a
+        // stored answer.
+        margin: question.margin,
         // `sd` rather than `variance`, because the only reader is the reveal's
         // band and a band is drawn in the units the lift is in. It is what lets
         // the screen show that a figure off 300 games is a wider claim than one
@@ -234,7 +267,7 @@ export const deal = query({
           deckWr: d.deckWr,
           sd: Math.sqrt(d.variance),
         })),
-      });
+      };
     }
 
     return {

@@ -58,7 +58,13 @@ export async function splitByHistory<T extends { name: string }>(
   const history = historyByQuestion(rows);
   const byKey = new Map(ranked.map((q) => [normalizeName(q.name), q]));
 
-  const fresh = ranked.filter((q) => !history.has(normalizeName(q.name)));
+  // Off the ROWS rather than off the fold's keys. `historyByQuestion` identifies
+  // a question as a card IN A SET, because a reprint is the same name in two
+  // sets with two different answers -- so its keys are composite and a bare card
+  // key never matches one. This read is already scoped to one set by the index
+  // range, so the rows' own keys are the right thing to ask.
+  const answered = new Set(rows.map((r) => r.key));
+  const fresh = ranked.filter((q) => !answered.has(normalizeName(q.name)));
 
   // A due card the bank no longer holds is simply not served. `deal` already
   // drops cards the statistics name and the pool has lost; this is the same

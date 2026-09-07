@@ -699,7 +699,7 @@ export default defineSchema({
     format: v.string(),
     /** The card, through `normalizeName`, so a DFC's halves cannot miss each other. */
     key: v.string(),
-    /** What they said: a deck's colours, `same`, or one of three speed buckets. */
+    /** What they said: a deck's colors, `same`, or one of three speed buckets. */
     answered: v.string(),
     // What the data said, at the moment they were asked -- and not a
     // correctness flag, which is the same call `pickAnswers` makes and for a
@@ -715,15 +715,31 @@ export default defineSchema({
     // back to a set's statistics to find out.
     correct: v.string(),
     // How many error bars the question was worth. Signed in the deck-speed
-    // drill, which is why every reader bands on the absolute value.
-    //
-    // WRITTEN NOW OR GONE, exactly as `gap` is on `pickAnswers`. Both banks deal
-    // their clearest questions first, so first-answer accuracy must fall as
-    // history grows -- somebody improving would watch their percentage drop.
-    // This is what lets a trend be read at matched difficulty instead of
-    // caveated, and recovering it later would mean re-deriving a set's
-    // statistics as they stood on the day.
+    // drill. Kept as the raw measurement a reveal already prints, and NOT as the
+    // difficulty -- see `margin` below for why it cannot be one.
     sigmas: v.number(),
+    // How far past its own gate the question sat, as a multiple of that gate.
+    //
+    // WRITTEN NOW OR GONE, exactly as `gap` is on `pickAnswers` -- and `sigmas`
+    // alone was the wrong number to write, which is the finding that put this
+    // here. Neither drill judges a question by error bars alone. The archetype
+    // quiz's bar moves with how many decks a card was measured in (2.34 at
+    // three, 3.16 at ten), so at 2.5 error bars a card in three decks HAS an
+    // answer and a card in ten does not; deck speed needs a residual floor
+    // against the set's own spread as well as a z test, so a five-sigma card can
+    // still be `middle`. Two rows with the same `sigmas` can therefore be
+    // opposite questions.
+    //
+    // Neither the deck count nor the set's spread is on this row, and putting
+    // them here would store two shapes for one idea. `margin` is the ratio each
+    // drill computed at deal time with both in hand: 1.0 is exactly on the gate
+    // whatever k is, and under 1.0 is a question the data has no answer to.
+    //
+    // Optional because rows written on 7 Sep 2026, before it existed, have none.
+    // Absence means "sharp, distance past the gate unknown", which the fold
+    // clamps into the first band rather than dropping -- there is no honest
+    // value to backfill, for the same reason `gap` has none.
+    margin: v.optional(v.number()),
     // Which sitting this answer came from, minted by the client: one id per
     // question per run. The same contract `pickAnswers` explains at length -- a
     // row cannot work out for itself whether a second answer is a retry or the

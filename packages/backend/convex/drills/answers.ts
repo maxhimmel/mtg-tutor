@@ -42,6 +42,8 @@ export const record = mutation({
     // that record, which is the whole reason `correct` is stored at all.
     correct: v.string(),
     sigmas: v.number(),
+    /** How far past its gate the question sat. See schema.ts. */
+    margin: v.number(),
     // Which sitting this is, minted by the client: one id per question per run.
     attemptId: v.string(),
   },
@@ -85,6 +87,7 @@ export const record = mutation({
       answered: args.answered,
       correct: args.correct,
       sigmas: args.sigmas,
+      margin: args.margin,
       attemptId: args.attemptId,
       at: new Date().toISOString(),
     });

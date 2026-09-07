@@ -32,6 +32,7 @@ const record = (
     answered: string;
     correct: string;
     sigmas?: number;
+    margin?: number;
     attemptId: string;
   },
 ) =>
@@ -42,6 +43,7 @@ const record = (
     answered: args.answered,
     correct: args.correct,
     sigmas: args.sigmas ?? 2.5,
+    margin: args.margin ?? 1.2,
     attemptId: args.attemptId,
   });
 
@@ -130,6 +132,7 @@ describe("drills/answers.record", () => {
         answered: "WB",
         correct: "WB",
         sigmas: 2,
+        margin: 1.2,
         attemptId: "run-1:0",
       }),
     ).rejects.toThrow();
@@ -144,31 +147,107 @@ describe("drills.progress", () => {
     expect(progress.deckSpeed).toMatchObject({ asked: 0, answers: 0 });
   });
 
-  it("bands first answers by how sharp the question was", async () => {
+
+  // The reading a single accuracy figure cannot give, through the real store:
+  // the two mistakes have different denominators, and a player who always
+  // answers "the same" scores perfectly on one side and blind on the other.
+  it("counts the two mistakes against their own denominators", async () => {
     const t = harness();
     await record(t, "alice", {
-      name: "Obvious",
-      answered: "WB",
-      correct: "WB",
-      sigmas: 4.2,
+      name: "Flat One",
+      answered: "same",
+      correct: "same",
+      margin: 0.4,
       attemptId: "run-1:0",
     });
     await record(t, "alice", {
-      name: "Close",
+      name: "Flat Two",
       answered: "WU",
       correct: "same",
-      sigmas: 0.4,
+      margin: 0.4,
+      attemptId: "run-1:1",
+    });
+    await record(t, "alice", {
+      name: "Sharp One",
+      answered: "same",
+      correct: "WB",
+      margin: 2.5,
+      attemptId: "run-1:2",
+    });
+
+    const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
+    expect(archetypes.discrimination).toEqual({
+      flat: 2,
+      calledSharp: 1,
+      sharp: 1,
+      calledFlat: 1,
+    });
+  });
+
+  it("bands the sharp questions by how far past their gate they sat", async () => {
+    const t = harness();
+    await record(t, "alice", {
+      name: "Just Past",
+      answered: "WB",
+      correct: "WB",
+      margin: 1.1,
+      attemptId: "run-1:0",
+    });
+    await record(t, "alice", {
+      name: "Miles Past",
+      answered: "WU",
+      correct: "WB",
+      margin: 4.2,
       attemptId: "run-1:1",
     });
 
     const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
     expect(archetypes.asked).toBe(2);
-    // Bands are [0,1), [1,2), [2,3), [3,∞) in error bars -- one error bar is the
-    // margin `gapMargin` uses, two and three bracket the archetype quiz's own
-    // threshold across every deck count it can have.
-    expect(archetypes.bins[0]).toMatchObject({ answers: 1, read: 0 });
-    expect(archetypes.bins[3]).toMatchObject({ answers: 1, read: 1 });
-    expect(archetypes.bins[3].rate).toBe(1);
+    // Multiples of the drill's OWN gate -- 1-1.5, 1.5-2, 2+ -- and not error
+    // bars, because the archetype quiz's bar moves with the deck count and deck
+    // speed's has a second test against the set's own spread.
+    expect(archetypes.bins[0]).toMatchObject({ answers: 1, read: 1 });
+    expect(archetypes.bins[2]).toMatchObject({ answers: 1, read: 0 });
+  });
+
+  // Below the gate the answer is flat by construction, so a band holding one
+  // would report willingness to say "the same" rather than a read.
+  it("keeps flat questions out of the bands", async () => {
+    const t = harness();
+    await record(t, "alice", {
+      name: "Flat",
+      answered: "same",
+      correct: "same",
+      margin: 0.6,
+      attemptId: "run-1:0",
+    });
+
+    const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
+    expect(archetypes.asked).toBe(1);
+    expect(archetypes.bins.every((b) => b.answers === 0)).toBe(true);
+  });
+
+  // A reprint is the same name in two sets with two different answers, and the
+  // deal is set-scoped so nothing there would ever notice the merge.
+  it("tells one card in two sets apart", async () => {
+    const t = harness();
+    for (const setCode of ["fdn", "blb"]) {
+      await as(t, "alice").mutation(api.drills.answers.record, {
+        drill: "archetypes",
+        setCode,
+        name: "Shock",
+        answered: "WB",
+        correct: "WB",
+        sigmas: 3,
+        margin: 2.5,
+        attemptId: `run-1:${setCode}`,
+      });
+    }
+
+    const { archetypes } = await as(t, "alice").query(api.drills.progress.progress, {});
+    expect(archetypes.asked).toBe(2);
+    expect(archetypes.askedAgain).toBe(0);
+    expect(archetypes.bins[2]).toMatchObject({ answers: 2, read: 2 });
   });
 
   // The half core cannot prove on its own: rows written by the real mutation,
@@ -220,14 +299,14 @@ describe("drills.progress", () => {
       name: "Took Back",
       answered: "WU",
       correct: "WB",
-      sigmas: 2.5,
+      margin: 2.5,
       attemptId: "run-1:0",
     });
     await record(t, "alice", {
       name: "Took Back",
       answered: "WB",
       correct: "WB",
-      sigmas: 2.5,
+      margin: 2.5,
       attemptId: "run-2:0",
     });
 
@@ -278,7 +357,7 @@ describe("drills.progress", () => {
     const progress = await as(t, "alice").query(api.drills.progress.progress, {});
     expect(progress.archetypes).toMatchObject({ asked: 1 });
     expect(progress.deckSpeed).toMatchObject({ asked: 1 });
-    expect(progress.deckSpeed.bins.reduce((n, b) => n + b.read, 0)).toBe(0);
+    expect(progress.deckSpeed.discrimination).toMatchObject({ sharp: 1, calledFlat: 0 });
   });
 
   it("reads only the caller's own answers", async () => {

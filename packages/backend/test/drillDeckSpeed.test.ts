@@ -215,6 +215,7 @@ describe("drills/deckSpeed.deal", () => {
         answered: q.answer,
         correct: q.answer,
         sigmas: q.sigmas,
+        margin: q.margin,
         attemptId: `run-1:${q.card.name}`,
       });
     }
@@ -250,6 +251,7 @@ describe("drills/deckSpeed.deal", () => {
         answered: q === missed ? wrongly(q.answer) : q.answer,
         correct: q.answer,
         sigmas: q.sigmas,
+        margin: q.margin,
         attemptId: `run-1:${q.card.name}`,
       });
     }

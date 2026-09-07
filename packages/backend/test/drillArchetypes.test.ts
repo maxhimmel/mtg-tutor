@@ -336,6 +336,7 @@ describe("drills/archetypes.deal", () => {
       answered: first.questions[0].wants,
       correct: first.questions[0].wants,
       sigmas: first.questions[0].sigmas,
+      margin: first.questions[0].margin,
       attemptId: "run-1:0",
     });
 
@@ -361,6 +362,7 @@ describe("drills/archetypes.deal", () => {
       answered: "WB",
       correct: "WB",
       sigmas: 3,
+      margin: 1.4,
       attemptId: "run-1:0",
     });
 
@@ -385,6 +387,7 @@ describe("drills/archetypes.deal", () => {
       answered: "WB",
       correct: "WB",
       sigmas: 3,
+      margin: 1.4,
       attemptId: "run-1:0",
     });
 
@@ -413,6 +416,7 @@ describe("drills/archetypes.deal", () => {
       answered: "WU",
       correct: "WB",
       sigmas: 3,
+      margin: 1.4,
       attemptId: "run-1:0",
     });
     // The row is written with the server's clock, so "the same day" is asked by
@@ -437,6 +441,48 @@ describe("drills/archetypes.deal", () => {
     // Flagged, so the client can send it to `drill_answered` and a first answer
     // is never pooled with a later one.
     expect(nextDay.questions[0].repeat).toBe(true);
+  });
+
+  // THE FINDING THIS TEST EXISTS FOR, and the one the old version of it hid.
+  // The fresh pile is over-dealt by READ_BUDGET so a card with no text row costs
+  // a candidate rather than a hole -- and the first version concatenated that
+  // over-deal with the repeats and stopped at `limit`, so on a run of 8 the
+  // fourteen fresh candidates filled every slot and the repeat at index 14 was
+  // never examined. The old test passed because it seeded four cards at limit 3,
+  // where 2 * 2 = 4 candidates cannot crowd anything out. This one seeds MORE
+  // fresh cards than the budget can deal, which is every real set.
+  it("still serves a repeat when the fresh pile could fill the whole run", async () => {
+    const t = harness();
+    const fresh = Array.from({ length: 30 }, (_, i) => `Fresh ${i}`);
+    await seed(t, {
+      archetypes: [...wanted("Missed One"), ...fresh.flatMap((n) => wanted(n))],
+      cards: [...["Missed One", ...fresh].map((name) => ({ name, colors: ["W"] }))],
+    });
+
+    const alice = as(t, "alice");
+    await alice.mutation(api.drills.answers.record, {
+      drill: "archetypes",
+      setCode: SET.code,
+      name: "Missed One",
+      answered: "WU",
+      correct: "WB",
+      sigmas: 3,
+      margin: 1.4,
+      attemptId: "run-1:0",
+    });
+    const wrote = (await t.run(async (ctx) => ctx.db.query("drillAnswers").first()))!.at.slice(
+      0,
+      10,
+    );
+
+    const run = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: dayAfter(wrote),
+    });
+
+    expect(run.questions).toHaveLength(8);
+    expect(run.questions.filter((q) => q.repeat)).toHaveLength(1);
+    expect(run.questions.at(-1)?.card.name).toBe("Missed One");
   });
 
   // While there is new material a repeat gets ONE slot and it goes last, so a
@@ -467,6 +513,7 @@ describe("drills/archetypes.deal", () => {
         answered: "WU",
         correct: "WB",
         sigmas: 3,
+        margin: 1.4,
         attemptId: `run-1:${name}`,
       });
     }
@@ -509,6 +556,7 @@ describe("drills/archetypes.deal", () => {
         answered: "WU",
         correct: "WB",
         sigmas: 3,
+        margin: 1.4,
         attemptId: `run-1:${name}`,
       });
     }

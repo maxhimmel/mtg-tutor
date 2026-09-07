@@ -115,6 +115,23 @@ export interface ArchetypeQuestion {
   spurns: string;
   /** How many error bars separate those two. */
   sigmas: number;
+  /**
+   * How far past this drill's own gate the question sits, as a multiple of it.
+   *
+   * `sigmas` ALONE IS NOT A DIFFICULTY, which is the finding that put this here.
+   * `separated` is a p-value against a k-dependent null, so the bar moves with
+   * how many decks a card was measured in -- 2.34 at three, 3.16 at ten. At 2.5
+   * error bars a card in three decks has an answer and a card in ten does not,
+   * so two questions with the same `sigmas` can be opposite questions and a
+   * chart banding on it is banding on nothing.
+   *
+   * Dividing by the bar the question was actually judged against fixes that:
+   * 1.0 is exactly on the gate whatever k is, 2.0 is twice as far past it as it
+   * needed to be, and under 1.0 is a card the decks agree about. The deck-speed
+   * drill computes the same quantity against ITS two gates, which is what lets
+   * one axis hold both drills.
+   */
+  margin: number;
   /** The chance k decks that all wanted it equally would look this far apart. */
   pValue: number;
   /**
@@ -413,6 +430,11 @@ export function archetypeQuestions(
       spurns: spurns.colors,
       sigmas,
       pValue,
+      // The gate this question was actually judged against, which moves with the
+      // deck count. Computed here rather than at read time because the deck
+      // count is not on a stored answer and re-deriving it later would mean
+      // rebuilding a set's statistics as they stood on the day.
+      margin: sigmas / rangeThreshold(lifts.length, options.falsePositive),
       separated: pValue < options.falsePositive,
     });
   }
