@@ -47,6 +47,7 @@ export * from "./tutor/reviewPrompt.js";
 export * from "./drills/archetypes.js";
 export * from "./drills/deckSpeed.js";
 export * from "./drills/drill.js";
+export * from "./drills/history.js";
 export * from "./drills/misses.js";
 
 export * from "./draft/engine.js";
