@@ -370,6 +370,9 @@ describe("dealArchetypeRun", () => {
     name,
     color: "W",
     decks: [],
+    // On the gate. These fixtures are about the run's composition, not about
+    // how far past its bar any one question sat.
+    margin: 1,
     wants: "WB",
     spurns: "WU",
     sigmas: separated ? 4 : 1,

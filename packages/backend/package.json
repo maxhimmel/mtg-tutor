@@ -16,8 +16,8 @@
     }
   },
   "scripts": {
-    "backtest-scoring": "node scripts/backtest-scoring.mjs",
     "archive-datasets": "node scripts/archive-datasets.mjs",
+    "backtest-scoring": "node scripts/backtest-scoring.mjs",
     "bench-backfill-draft": "node scripts/bench-backfill-draft.mjs",
     "bench-bots": "node scripts/bench-bots.mjs",
     "bench-io": "node scripts/bench-io.mjs",
@@ -36,6 +36,7 @@
     "dev:only": "convex dev",
     "diagnose-archetype-quiz": "node scripts/diagnose-archetype-quiz.mjs",
     "diagnose-deck-speed": "node scripts/diagnose-deck-speed.mjs",
+    "diagnose-drill-margin": "node scripts/diagnose-drill-margin.mjs",
     "diagnose-offcolour": "node scripts/diagnose-offcolour.mjs",
     "env:pull": "convex env list > .env.convex && echo 'wrote .env.convex (gitignored)'",
     "env:push": "convex env set --force --from-file .env.convex",

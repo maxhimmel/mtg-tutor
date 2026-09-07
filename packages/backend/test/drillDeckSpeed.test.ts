@@ -26,6 +26,23 @@ const as = (t: ReturnType<typeof harness>, subject: string) =>
 
 const SET = { code: "tst", format: "TradDraft" };
 
+/** The day every deal is asked on, unless a test is about the day changing. */
+const TODAY = "2026-09-07";
+
+/** The next calendar day, so a test never has to hard-code the clock's answer. */
+const dayAfter = (day: string) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Any answer but the right one, so a test can miss on purpose. */
+const wrongly = (answer: string) => (answer === "middle" ? "fast" : "middle");
+
+/** The day the store actually wrote its rows on, which is the server's clock. */
+const writtenOn = async (t: ReturnType<typeof harness>) =>
+  (await t.run(async (ctx) => ctx.db.query("drillAnswers").first()))!.at.slice(0, 10);
+
 const DECKS = [
   { colors: "WU", n: 20000, wr: 0.6 },
   { colors: "WB", n: 20000, wr: 0.5 },
@@ -148,7 +165,7 @@ describe("drills/deckSpeed.deal", () => {
     const t = harness();
     await seed(t);
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.mute).toBeNull();
     expect(run.questions.length).toBeGreaterThan(0);
@@ -167,24 +184,146 @@ describe("drills/deckSpeed.deal", () => {
     const t = harness();
     await seed(t);
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
     const answers = new Set(run.questions.map((q) => q.answer));
     expect(answers.has("middle")).toBe(true);
     expect(answers.size).toBeGreaterThan(1);
     expect(new Set(run.questions.map((q) => q.card.name)).size).toBe(run.questions.length);
   });
 
-  it("pages without re-serving or stranding cards", async () => {
+  // THE SLOT DEFECT, IN THIS DRILL'S COPY -- and the reason this test exists
+  // separately from the one below it. The archetype quiz got a regression for
+  // this and deck speed got one that could not fail: on the nine-card SPREAD
+  // fixture the fresh pile has nothing left to over-spend after one run, so the
+  // old concatenated version passed it. That is trap #4 committed inside the fix
+  // for trap #4. This seeds thirty fresh cards, which is what every real set
+  // looks like, so the fresh half alone can fill the run twice over.
+  it("still serves a repeat when the fresh pile could fill the whole run", async () => {
+    const t = harness();
+    const many = [
+      statCard("Missed One", -0.45),
+      ...Array.from({ length: 30 }, (_, i) => statCard(`Fresh ${i}`, 0.2 + i * 0.01)),
+    ];
+    await seed(t, { cards: many });
+
+    const alice = as(t, "alice");
+    const first = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: TODAY,
+    });
+    const missed = first.questions.find((q) => q.card.name === "Missed One");
+    expect(missed).toBeDefined();
+
+    // Every card of the run answered, and the one card misread on purpose, so
+    // exactly one thing is due back.
+    for (const q of first.questions) {
+      await alice.mutation(api.drills.answers.record, {
+        drill: "deckSpeed",
+        setCode: SET.code,
+        name: q.card.name,
+        answered: q === missed ? wrongly(q.answer) : q.answer,
+        correct: q.answer,
+        sigmas: q.sigmas,
+        margin: q.margin,
+        attemptId: `run-1:${q.card.name}`,
+      });
+    }
+    const wrote = await writtenOn(t);
+
+    const back = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: dayAfter(wrote),
+    });
+
+    // A full run, and the repeat is in it -- which the concatenated version
+    // could not manage, because the fresh over-deal reached the run length
+    // before the appended repeat was ever examined.
+    expect(back.questions).toHaveLength(8);
+    expect(back.questions.filter((q) => q.repeat)).toHaveLength(1);
+    expect(back.questions.at(-1)?.card.name).toBe("Missed One");
+  });
+
+  // THE DEFECT THIS TABLE WAS ADDED FOR, in this drill's version. `servingOrder`
+  // ranks the whole bank once and `dealDeckSpeedRun` slices it, so a run used to
+  // be paged by a `skip` the client reset on reload -- and a second sitting on a
+  // set dealt the same eight cards as the first, forever.
+  it("does not deal a card back once it has been answered", async () => {
     const t = harness();
     await seed(t);
 
-    const first = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
-    const second = await as(t, "alice").query(api.drills.deckSpeed.deal, {
+    const alice = as(t, "alice");
+    const first = await alice.query(api.drills.deckSpeed.deal, {
       setCode: SET.code,
-      skip: first.nextSkip,
+      today: TODAY,
     });
-    const overlap = new Set(first.questions.map((q) => q.card.name));
-    for (const q of second.questions) expect(overlap.has(q.card.name)).toBe(false);
+    expect(first.questions.length).toBeGreaterThan(0);
+
+    for (const q of first.questions) {
+      await alice.mutation(api.drills.answers.record, {
+        drill: "deckSpeed",
+        setCode: SET.code,
+        name: q.card.name,
+        // Read right, so nothing is due back either.
+        answered: q.answer,
+        correct: q.answer,
+        sigmas: q.sigmas,
+        margin: q.margin,
+        attemptId: `run-1:${q.card.name}`,
+      });
+    }
+
+    const second = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: TODAY,
+    });
+    const seen = new Set(first.questions.map((q) => q.card.name));
+    for (const q of second.questions) expect(seen.has(q.card.name)).toBe(false);
+    expect(second.asked).toBe(first.questions.length);
+  });
+
+  // The floor. Roediger & Karpicke measured restudy beating testing at an
+  // immediate check, so a card re-asked in the sitting that revealed its answer
+  // is testing memory of the reveal rather than a read.
+  it("puts a misread card back the next day and not the same day", async () => {
+    const t = harness();
+    await seed(t);
+
+    const alice = as(t, "alice");
+    const first = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: TODAY,
+    });
+    const missed = first.questions[0];
+    // Every card of the run answered, so only the misread one can come back.
+    for (const q of first.questions) {
+      await alice.mutation(api.drills.answers.record, {
+        drill: "deckSpeed",
+        setCode: SET.code,
+        name: q.card.name,
+        answered: q === missed ? wrongly(q.answer) : q.answer,
+        correct: q.answer,
+        sigmas: q.sigmas,
+        margin: q.margin,
+        attemptId: `run-1:${q.card.name}`,
+      });
+    }
+    const wrote = await writtenOn(t);
+
+    const sameDay = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: wrote,
+    });
+    for (const q of sameDay.questions) expect(q.card.name).not.toBe(missed.card.name);
+
+    const nextDay = await alice.query(api.drills.deckSpeed.deal, {
+      setCode: SET.code,
+      today: dayAfter(wrote),
+    });
+    const back = nextDay.questions.find((q) => q.card.name === missed.card.name);
+    expect(back).toBeDefined();
+    expect(back?.repeat).toBe(true);
+    // One slot while the set still has cards nobody has seen.
+    expect(nextDay.questions.filter((q) => q.repeat)).toHaveLength(1);
   });
 
   // THE FOUR REFUSALS. Each puts a different sentence in front of a player, and
@@ -193,7 +332,7 @@ describe("drills/deckSpeed.deal", () => {
     const t = harness();
     await seed(t, { omitStats: true });
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
     expect(run.mute).toBe("unbuilt");
     expect(run.questions).toHaveLength(0);
     expect(run.worthSaying).toBe(0);
@@ -203,7 +342,7 @@ describe("drills/deckSpeed.deal", () => {
     const t = harness();
     await seed(t, { turnStats: undefined });
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
     // The state every set was in until the artifacts were rebuilt, and the one
     // that promises a refresh will fix it. It must only be said when that is true.
     expect(run.mute).toBe("untimed");
@@ -217,7 +356,7 @@ describe("drills/deckSpeed.deal", () => {
     const t = harness();
     await seed(t, { turnStats: undefined, archetypes: [], colorWinRates: [] });
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
     expect(run.mute).toBe("unrated");
   });
 
@@ -233,7 +372,7 @@ describe("drills/deckSpeed.deal", () => {
       ],
     });
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
     expect(run.mute).toBe("unmeasured");
     expect(run.quizzable).toBe(0);
   });
@@ -242,7 +381,7 @@ describe("drills/deckSpeed.deal", () => {
     const t = harness();
     await seed(t, { roles: { "Slow Three": "land" } });
 
-    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY });
     expect(run.questions.map((q) => q.card.name)).not.toContain("Slow Three");
   });
 
@@ -251,7 +390,7 @@ describe("drills/deckSpeed.deal", () => {
     await seed(t);
 
     await expect(
-      t.query(api.drills.deckSpeed.deal, { setCode: SET.code }),
+      t.query(api.drills.deckSpeed.deal, { setCode: SET.code, today: TODAY }),
     ).rejects.toThrow();
   });
 });

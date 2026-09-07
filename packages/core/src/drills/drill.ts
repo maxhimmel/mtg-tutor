@@ -41,5 +41,19 @@
  * nothing. The misses drill has three outcomes rather than two and does not fit
  * either. Ask again if a fourth drill grades to `read`/`misread` -- at three of
  * four, a generic over the mistake union starts to pay for its import.
+ *
+ * AND `history.ts` IS NOT THAT ABSTRACTION ARRIVING BY THE BACK DOOR, which is
+ * the thing to be clear about before somebody reads it as licence. What it
+ * lifts is the ANSWER, not the question: a card in a set, the short string
+ * somebody said, the short string the data said, and how sharp the question
+ * was. That really is one shape across the two set-based drills, because both
+ * grade a single string against a single string -- `wants` or `same`, one of
+ * three buckets -- where their QUESTIONS remain a table of decks and a residual
+ * in turns and share nothing at all.
+ *
+ * The test that keeps the line where it is: nothing in `history.ts` names a
+ * deck, a color, a turn count or a card's text, and nothing in it would have
+ * to change to serve a fourth drill about mana curves. The moment something
+ * there needs to know which drill it is holding, the lift has gone too far.
  */
 export type DrillId = "misses" | "archetypes" | "deckSpeed";

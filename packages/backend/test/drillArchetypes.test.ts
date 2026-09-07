@@ -17,6 +17,16 @@ const as = (t: ReturnType<typeof harness>, subject: string) =>
 
 const SET = { code: "tst", format: "TradDraft" };
 
+/** The day every deal is asked on, unless a test is about the day changing. */
+const TODAY = "2026-09-07";
+
+/** The next calendar day, so a test never has to hard-code the clock's answer. */
+const dayAfter = (day: string) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
 // Five decks with rates far apart, so a lift is never at the mercy of a
 // baseline and only the card rows decide anything.
 const DECKS = [
@@ -116,7 +126,7 @@ describe("drills/archetypes.deal", () => {
     const t = harness();
     await seed(t, { archetypes: wanted("Cathar Commando") });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.mute).toBeNull();
     expect(run.questions).toHaveLength(1);
@@ -143,7 +153,7 @@ describe("drills/archetypes.deal", () => {
     const t = harness();
     await seed(t, { archetypes: [], cards: [{ name: "Cathar Commando", colors: ["W"] }] });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run).toMatchObject({ mute: "unrated", quizzable: 0, questions: [] });
   });
@@ -170,7 +180,7 @@ describe("drills/archetypes.deal", () => {
       });
     });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run).toMatchObject({ mute: "unbuilt", quizzable: 0, questions: [] });
   });
@@ -181,7 +191,7 @@ describe("drills/archetypes.deal", () => {
     const t = harness();
     await seed(t, { archetypes: wanted("Cathar Commando"), colorWinRates: [] });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.mute).toBe("unrated");
   });
@@ -193,7 +203,7 @@ describe("drills/archetypes.deal", () => {
     const t = harness();
     await seed(t, { archetypes: wanted("Cathar Commando") });
 
-    await expect(t.query(api.drills.archetypes.deal, { setCode: SET.code })).rejects.toThrow();
+    await expect(t.query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY })).rejects.toThrow();
   });
 
   // A mono-coloured LAND passes every colour check there is, because a land is
@@ -206,7 +216,7 @@ describe("drills/archetypes.deal", () => {
       cards: [{ name: "Boseiju, Who Endures", colors: ["W"], role: "land" }],
     });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.questions).toEqual([]);
   });
@@ -224,7 +234,7 @@ describe("drills/archetypes.deal", () => {
       ],
     });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run).toMatchObject({ mute: null, separable: 0 });
     expect(run.questions).toHaveLength(1);
@@ -240,7 +250,7 @@ describe("drills/archetypes.deal", () => {
       cards: [{ name: "Prophetic Prism", colors: [] }],
     });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.questions).toEqual([]);
   });
@@ -259,11 +269,15 @@ describe("drills/archetypes.deal", () => {
       text: ["Cathar Commando"],
     });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.questions.map((q) => q.card.name)).toEqual(["Cathar Commando"]);
-    // Counted as examined, so paging does not deal it again.
-    expect(run.nextSkip).toBe(2);
+    // Still counted in the bank, and still unasked. A card with no text row is
+    // one a re-ingest dropped, so it stays a candidate rather than being retired
+    // -- if the row comes back the card is askable again, and until then it
+    // costs one slot of the read budget and nothing else.
+    expect(run.quizzable).toBe(2);
+    expect(run.asked).toBe(0);
   });
 
   // Three-colour decks are first-class answers, and in ktk, snc, sos and tdm
@@ -278,12 +292,17 @@ describe("drills/archetypes.deal", () => {
       ],
     });
 
-    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code });
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, { setCode: SET.code, today: TODAY });
 
     expect(run.questions[0]).toMatchObject({ wants: "WUB" });
   });
 
-  it("pages past a run without re-dealing it", async () => {
+  // THE DEFECT THIS TABLE WAS ADDED FOR. The bank is ranked deterministically
+  // and `dealArchetypeRun` slices it, so a run used to be paged by a `skip` the
+  // client held for a sitting and reset on reload -- which meant a second
+  // sitting on a set dealt the same cards as the first, forever. The history is
+  // what moves a run forward now, and nothing the client holds does.
+  it("does not deal a card back once it has been answered", async () => {
     const t = harness();
     await seed(t, {
       archetypes: [
@@ -301,17 +320,256 @@ describe("drills/archetypes.deal", () => {
       ],
     });
 
-    const first = await as(t, "alice").query(api.drills.archetypes.deal, {
+    const alice = as(t, "alice");
+    const first = await alice.query(api.drills.archetypes.deal, {
       setCode: SET.code,
+      today: TODAY,
       limit: 1,
     });
     expect(first.questions.map((q) => q.card.name)).toEqual(["Sharper"]);
 
-    const second = await as(t, "alice").query(api.drills.archetypes.deal, {
+    // Read right, so it is answered and not due back either.
+    await alice.mutation(api.drills.answers.record, {
+      drill: "archetypes",
       setCode: SET.code,
+      name: "Sharper",
+      answered: first.questions[0].wants,
+      correct: first.questions[0].wants,
+      sigmas: first.questions[0].sigmas,
+      margin: first.questions[0].margin,
+      attemptId: "run-1:0",
+    });
+
+    const second = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: TODAY,
       limit: 1,
-      skip: first.nextSkip,
     });
     expect(second.questions.map((q) => q.card.name)).toEqual(["Sharp"]);
+    expect(second.asked).toBe(1);
+  });
+
+  // One person's history is one person's. Two friends on the same set must not
+  // page each other forward.
+  it("reads only the caller's own answers", async () => {
+    const t = harness();
+    await seed(t, { archetypes: wanted("Cathar Commando") });
+
+    await as(t, "alice").mutation(api.drills.answers.record, {
+      drill: "archetypes",
+      setCode: SET.code,
+      name: "Cathar Commando",
+      answered: "WB",
+      correct: "WB",
+      sigmas: 3,
+      margin: 1.4,
+      attemptId: "run-1:0",
+    });
+
+    const bob = await as(t, "bob").query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: TODAY,
+    });
+    expect(bob.questions.map((q) => q.card.name)).toEqual(["Cathar Commando"]);
+    expect(bob.asked).toBe(0);
+  });
+
+  // The fourth `mute`, and the only good news in the enum. Unreachable before
+  // the drill had a memory, which is why the vocabulary had no word for it.
+  it("says a set has been played out rather than going quiet", async () => {
+    const t = harness();
+    await seed(t, { archetypes: wanted("Cathar Commando") });
+
+    await as(t, "alice").mutation(api.drills.answers.record, {
+      drill: "archetypes",
+      setCode: SET.code,
+      name: "Cathar Commando",
+      answered: "WB",
+      correct: "WB",
+      sigmas: 3,
+      margin: 1.4,
+      attemptId: "run-1:0",
+    });
+
+    const run = await as(t, "alice").query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: TODAY,
+    });
+    expect(run).toMatchObject({ mute: "answered", questions: [], asked: 1 });
+    // The bank is still reported, so the screen can say what it played out OF.
+    expect(run.quizzable).toBe(1);
+  });
+
+  // Misread, and it comes back -- but not in the sitting that revealed the
+  // answer. Roediger & Karpicke measured restudy beating testing at an
+  // immediate check; the floor is a calendar day and there is no interval
+  // beyond it, because nothing measured here derives one.
+  it("puts a misread card back the next day and not the same day", async () => {
+    const t = harness();
+    await seed(t, { archetypes: wanted("Cathar Commando") });
+
+    const alice = as(t, "alice");
+    await alice.mutation(api.drills.answers.record, {
+      drill: "archetypes",
+      setCode: SET.code,
+      name: "Cathar Commando",
+      answered: "WU",
+      correct: "WB",
+      sigmas: 3,
+      margin: 1.4,
+      attemptId: "run-1:0",
+    });
+    // The row is written with the server's clock, so "the same day" is asked by
+    // dealing against the day the write actually happened.
+    const writtenOn = (await t.run(async (ctx) => ctx.db.query("drillAnswers").first()))!.at.slice(
+      0,
+      10,
+    );
+
+    const sameDay = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: writtenOn,
+    });
+    expect(sameDay).toMatchObject({ mute: "answered", questions: [] });
+
+    const nextDay = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: dayAfter(writtenOn),
+    });
+    expect(nextDay.mute).toBeNull();
+    expect(nextDay.questions.map((q) => q.card.name)).toEqual(["Cathar Commando"]);
+    // Flagged, so the client can send it to `drill_answered` and a first answer
+    // is never pooled with a later one.
+    expect(nextDay.questions[0].repeat).toBe(true);
+  });
+
+  // THE FINDING THIS TEST EXISTS FOR, and the one the old version of it hid.
+  // The fresh pile is over-dealt by READ_BUDGET so a card with no text row costs
+  // a candidate rather than a hole -- and the first version concatenated that
+  // over-deal with the repeats and stopped at `limit`, so on a run of 8 the
+  // fourteen fresh candidates filled every slot and the repeat at index 14 was
+  // never examined. The old test passed because it seeded four cards at limit 3,
+  // where 2 * 2 = 4 candidates cannot crowd anything out. This one seeds MORE
+  // fresh cards than the budget can deal, which is every real set.
+  it("still serves a repeat when the fresh pile could fill the whole run", async () => {
+    const t = harness();
+    const fresh = Array.from({ length: 30 }, (_, i) => `Fresh ${i}`);
+    await seed(t, {
+      archetypes: [...wanted("Missed One"), ...fresh.flatMap((n) => wanted(n))],
+      cards: [...["Missed One", ...fresh].map((name) => ({ name, colors: ["W"] }))],
+    });
+
+    const alice = as(t, "alice");
+    await alice.mutation(api.drills.answers.record, {
+      drill: "archetypes",
+      setCode: SET.code,
+      name: "Missed One",
+      answered: "WU",
+      correct: "WB",
+      sigmas: 3,
+      margin: 1.4,
+      attemptId: "run-1:0",
+    });
+    const wrote = (await t.run(async (ctx) => ctx.db.query("drillAnswers").first()))!.at.slice(
+      0,
+      10,
+    );
+
+    const run = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: dayAfter(wrote),
+    });
+
+    expect(run.questions).toHaveLength(8);
+    expect(run.questions.filter((q) => q.repeat)).toHaveLength(1);
+    expect(run.questions.at(-1)?.card.name).toBe("Missed One");
+  });
+
+  // While there is new material a repeat gets ONE slot and it goes last, so a
+  // run opens on something you have not seen.
+  it("reserves the last slot of a run for a repeat, and no more", async () => {
+    const t = harness();
+    await seed(t, {
+      archetypes: [
+        ...wanted("Missed One"),
+        ...wanted("Missed Two"),
+        ...wanted("Fresh One"),
+        ...wanted("Fresh Two"),
+      ],
+      cards: [
+        { name: "Missed One", colors: ["W"] },
+        { name: "Missed Two", colors: ["W"] },
+        { name: "Fresh One", colors: ["W"] },
+        { name: "Fresh Two", colors: ["W"] },
+      ],
+    });
+
+    const alice = as(t, "alice");
+    for (const name of ["Missed One", "Missed Two"]) {
+      await alice.mutation(api.drills.answers.record, {
+        drill: "archetypes",
+        setCode: SET.code,
+        name,
+        answered: "WU",
+        correct: "WB",
+        sigmas: 3,
+        margin: 1.4,
+        attemptId: `run-1:${name}`,
+      });
+    }
+    const writtenOn = (await t.run(async (ctx) => ctx.db.query("drillAnswers").first()))!.at.slice(
+      0,
+      10,
+    );
+
+    const run = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: dayAfter(writtenOn),
+      limit: 3,
+    });
+
+    const names = run.questions.map((q) => q.card.name);
+    expect(names).toHaveLength(3);
+    expect(run.questions.filter((q) => q.repeat)).toHaveLength(1);
+    expect(run.questions[2].repeat).toBe(true);
+    expect(names.slice(0, 2).sort()).toEqual(["Fresh One", "Fresh Two"]);
+  });
+
+  // Once nothing is left unseen, review IS the drill -- the alternative is a
+  // one-question run on a set somebody has played through.
+  it("gives the repeats the whole run once the set has no fresh cards left", async () => {
+    const t = harness();
+    await seed(t, {
+      archetypes: [...wanted("Missed One"), ...wanted("Missed Two")],
+      cards: [
+        { name: "Missed One", colors: ["W"] },
+        { name: "Missed Two", colors: ["W"] },
+      ],
+    });
+
+    const alice = as(t, "alice");
+    for (const name of ["Missed One", "Missed Two"]) {
+      await alice.mutation(api.drills.answers.record, {
+        drill: "archetypes",
+        setCode: SET.code,
+        name,
+        answered: "WU",
+        correct: "WB",
+        sigmas: 3,
+        margin: 1.4,
+        attemptId: `run-1:${name}`,
+      });
+    }
+    const writtenOn = (await t.run(async (ctx) => ctx.db.query("drillAnswers").first()))!.at.slice(
+      0,
+      10,
+    );
+
+    const run = await alice.query(api.drills.archetypes.deal, {
+      setCode: SET.code,
+      today: dayAfter(writtenOn),
+    });
+    expect(run.questions).toHaveLength(2);
+    expect(run.questions.every((q) => q.repeat)).toBe(true);
   });
 });

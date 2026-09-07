@@ -35,6 +35,13 @@ const SECTIONS = [
   // ordered by the defect each was added to photograph, and this one is not a
   // defect -- it is a chart whose band and span have to be read together.
   "Speed ruler",
+  // The set drills' progress panel. Listed because being absent from here is
+  // how the chart that used to sit in it shipped a y-axis reading "0.0%" at
+  // every tick and counts stamped through the band names: it had bays on /dev
+  // and no cropped shot anybody looked at. The chart is gone -- it worked for
+  // one drill and drew one dot for the other -- and the panel stays listed,
+  // because a specimen nobody photographs is a specimen nobody checks.
+  "Reading a set",
 ];
 
 const OUT = "../../.checks/screens";

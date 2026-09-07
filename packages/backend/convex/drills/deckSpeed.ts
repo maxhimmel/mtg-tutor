@@ -1,14 +1,17 @@
 import { v } from "convex/values";
 import {
   DECK_SPEED,
+  type DeckSpeedQuestion,
   dealDeckSpeedRun,
   deckSpeedBank,
   hydrateCard,
   normalizeName,
 } from "@mtg-tutor/core";
+import type { EngineCard } from "@mtg-tutor/core";
 import { query } from "../_generated/server.js";
 import { cardTextFor } from "../cardText.js";
 import { requireUserId, setCardsFor, setDocFor } from "../sessions.js";
+import { serveRun, splitByHistory } from "./history.js";
 
 // The deck-speed drill, dealt.
 //
@@ -28,8 +31,15 @@ import { requireUserId, setCardsFor, setDocFor } from "../sessions.js";
 // Evolving Wilds" teaches nothing.
 //
 // If the `drill_*` events say this gets played, the derivation moves to seed
-// time and the stats read goes away. Until then it is a subscription Convex
-// serves from its own cache while a sitting pages through it.
+// time and the stats read goes away. Until then it is paid once per hand: an
+// earlier version of this comment called it a cached subscription, which stopped
+// being true when the deal started reading the player's own answers -- a
+// subscribed query re-executes whenever its read set changes, so every answer
+// written re-read this document. Both clients fetch once.
+//
+// `today` is an argument rather than a clock read because a query is not re-run
+// because time advanced, so a `new Date()` here would answer with a stale day
+// for as long as its caller held the result.
 
 /**
  * How many candidates to inspect past the run length.
@@ -61,30 +71,37 @@ const READ_BUDGET = 2;
  * - `unmeasured` -- turns, but no card in the set is measured sharply enough to
  *   be asked about. A real fact about a thin set, and about Magic rather than
  *   about us.
+ * - `answered` -- every card this set can ask has been asked, and nothing is
+ *   waiting to come back. THE ONLY GOOD NEWS IN THIS ENUM, and the reason it
+ *   gets its own word rather than sharing `unmeasured`: those four are facts
+ *   about the data and this one is a fact about the player. "There is nothing
+ *   here to ask" and "you have finished it" read the same on a screen and are
+ *   opposite news. It could not be reached before the drill had a memory.
  */
-type Mute = "unbuilt" | "unrated" | "untimed" | "unmeasured" | null;
+type Mute = "unbuilt" | "unrated" | "untimed" | "unmeasured" | "answered" | null;
 
 export const deal = query({
   args: {
     setCode: v.string(),
     format: v.optional(v.string()),
     limit: v.optional(v.number()),
-    // Where in the ranked list to start. The client holds it for a sitting, it
-    // resets on reload, and nothing is stored.
-    skip: v.optional(v.number()),
+    // The player's own calendar day, as yyyy-mm-dd. An argument because a query
+    // may not read the wall clock -- it is not re-run when time advances, so a
+    // clock read here would answer with yesterday's idea of "today" for as long
+    // as its caller held the result.
+    today: v.string(),
   },
   handler: async (ctx, args) => {
     const limit = Math.max(
       1,
       Math.min(args.limit ?? DECK_SPEED.runLength, DECK_SPEED.runLength),
     );
-    const skip = Math.max(0, args.skip ?? 0);
 
     // Not about disclosure -- it is 17Lands data and a set's own cards -- but
     // about bandwidth: this read is 270KB to 412KB, the deployment URL ships in
     // the browser bundle, and an unauthenticated query that size is a shape of
     // problem this codebase has had once already.
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
 
     const setDoc = await setDocFor(ctx, args.setCode, args.format ?? "TradDraft");
     const stats = await ctx.db
@@ -100,8 +117,8 @@ export const deal = query({
         quizzable: 0,
         ends: 0,
         worthSaying: 0,
+        asked: 0,
         mute: "unbuilt" as Mute,
-        nextSkip: skip,
       };
     }
     // An artifact built before this pipeline pass existed carries no baselines
@@ -120,7 +137,7 @@ export const deal = query({
         stats.archetypes.length === 0 || (stats.colorWinRates?.length ?? 0) === 0
           ? "unrated"
           : "untimed";
-      return { questions: [], quizzable: 0, ends: 0, worthSaying: 0, mute: cause, nextSkip: skip };
+      return { questions: [], quizzable: 0, ends: 0, worthSaying: 0, asked: 0, mute: cause };
     }
 
     // Roles live on the pool document, not in the stats artifact, and the bank
@@ -141,38 +158,79 @@ export const deal = query({
         quizzable: 0,
         ends: 0,
         worthSaying: 0,
+        asked: 0,
         mute: "unmeasured" as Mute,
-        nextSkip: skip,
       };
     }
 
-    // Over-dealt by the read budget so a card the set has no text for costs a
-    // question rather than a hole in the run.
-    const candidates = dealDeckSpeedRun(ranked, limit * READ_BUDGET, skip);
+    // What is left of the bank once this person's own history is taken out of
+    // it. THIS IS WHY THE TABLE EXISTS: `servingOrder` ranks the whole bank once
+    // and `dealDeckSpeedRun` slices it, so before there was a history to read, a
+    // second sitting on a set dealt the same eight cards as the first.
+    const { fresh, repeats, asked } = await splitByHistory(
+      ctx,
+      userId,
+      "deckSpeed",
+      setDoc,
+      args.today,
+      ranked,
+      limit,
+    );
+    if (fresh.length === 0 && repeats.length === 0) {
+      return {
+        questions: [],
+        quizzable: ranked.length,
+        ends: 0,
+        worthSaying: bank.worthSaying,
+        asked,
+        mute: "answered" as Mute,
+      };
+    }
+
+    // WHY THE TWO PILES ARE SERVED SEPARATELY RATHER THAN CONCATENATED. The
+    // first version of this built one `candidates` list -- the fresh run
+    // over-dealt by READ_BUDGET, then the repeats appended -- and the serving
+    // loop below stopped at `limit`. With a budget of 2 and a run of 8 the fresh
+    // half alone is 14 candidates, so the loop filled all 8 slots before it ever
+    // reached the repeat at index 14, and the repeat was served only on a set so
+    // played out that six of the fourteen had no text row. Every reader of a
+    // repeat -- `dueForRepeat`, the `repeat` flag, the panel's took-back split --
+    // was dead in production, and the test that covered it passed because it
+    // seeded four cards.
+    //
+    // The budget is an over-deal for the TEXT CHECK, not a slot count, so it
+    // must never be able to spend another pile's slots. Each pile is filled to
+    // its own quota out of its own candidates.
+    const freshCandidates = dealDeckSpeedRun(fresh, Math.max(0, limit - repeats.length) * READ_BUDGET, 0);
+    const repeated = new Set(repeats.map((q) => normalizeName(q.name)));
 
     const text = await cardTextFor(
       ctx,
       setDoc.code,
       setDoc.format,
-      candidates.map((q) => q.name),
+      [...freshCandidates, ...repeats].map((q) => q.name),
     );
     const engine = new Map(cardsDoc.cards.map((c) => [normalizeName(c.name), c]));
 
-    const questions = [];
-    let examined = 0;
-    for (const question of candidates) {
-      if (questions.length >= limit) break;
-      examined++;
-
+    // Fresh first so a run opens on something you have not seen, then the
+    // repeats into the slots kept for them. The quota arithmetic lives in
+    // `serveRun` because it was byte-identical in both deals and only one copy
+    // had a test that could fail against the defect it was written for.
+    const questions = serveRun(freshCandidates, repeats, limit, (question) => {
       // A set re-ingested since the artifact was built can have dropped a card
       // the statistics still name, and the card IS the question here -- so an
       // unservable one is not asked rather than shown in part.
       const key = normalizeName(question.name);
       const card = engine.get(key);
       const rows = text.get(key);
-      if (!card || !rows) continue;
+      if (!card || !rows) return null;
 
-      questions.push({
+      return shape(question, card, key);
+    });
+
+    /** One question as a client reads it. */
+    function shape(question: DeckSpeedQuestion, card: EngineCard, key: string) {
+      return {
         card: hydrateCard(card, text),
         // The answer, and the three numbers the reveal draws it from. `sigmas`
         // is what the screen says in words -- "fifteen error bars from flat" --
@@ -182,7 +240,20 @@ export const deal = query({
         se: question.se,
         n: question.n,
         sigmas: question.sigmas,
-      });
+        // Whether this card has been put to them before, so the client can say
+        // so and send it to `drill_answered`. Pooling a first answer with a
+        // later one is how memory of a reveal gets reported as a read, and the
+        // property cannot be recovered afterwards -- the answer that would say
+        // so is the row the event is about.
+        repeat: repeated.has(key),
+        // How far past this drill's own gate the question sat, so the client can
+        // store it with the answer. `sigmas` cannot stand in for it: each drill
+        // judges by a bar that moves -- with the deck count here, with the set's
+        // own spread of residuals there -- so error bars alone do not say how
+        // hard a question was, and neither the deck count nor the spread is on a
+        // stored answer.
+        margin: question.margin,
+      };
     }
 
     return {
@@ -200,10 +271,11 @@ export const deal = query({
       // How far from flat this set calls worth saying, in turns. The reveal
       // draws it, and it is one number per set rather than per card.
       worthSaying: bank.worthSaying,
+      // How much of the set is behind them. Beside `quizzable` so a screen can
+      // say "47 of 246" without a second query -- the one progress reading that
+      // is true whatever the difficulty mix is doing.
+      asked,
       mute: null as Mute,
-      // Candidates EXAMINED rather than questions served, so a refused card is
-      // not re-dealt on the next page.
-      nextSkip: skip + examined,
     };
   },
 });

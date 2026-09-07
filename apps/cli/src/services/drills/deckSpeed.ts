@@ -23,15 +23,27 @@ import { spinner } from "../../core/ui/spinner.js";
 // WHAT A TERMINAL DOES WELL HERE is the reveal's ruler. It is one number on one
 // axis with an error bar, which is four lines of monospace and needs no layout.
 //
-// Like the other two drills this sends no `drill_*` event: a run writes nothing,
-// so there is no mutation for a capture to ride on, and the web's numbers are
-// the whole measurement. Stated rather than quietly true.
+// It sends no `drill_*` event, because there is no PostHog in this process and
+// never has been -- so a run taken here is invisible to the funnels, exactly as
+// the CLI's review quiz is. What it is NOT invisible to is the measurement those
+// runs are for: every answer is written through `drills.answers.record`, so a
+// run here moves the same history the web reads, deals the same cards forward
+// and feeds the same panel on /stats.
 
 type Run = Awaited<ReturnType<typeof deal>>;
 type Question = Run["questions"][number];
 
-const deal = (convex: ConvexHttpClient, setCode: string, skip: number) =>
-  convex.query(api.drills.deckSpeed.deal, { setCode, skip });
+const deal = (convex: ConvexHttpClient, setCode: string) =>
+  convex.query(api.drills.deckSpeed.deal, { setCode, today: today() });
+
+/**
+ * The calendar day, which the query takes rather than reads.
+ *
+ * A Convex query may not read the wall clock -- it is not re-run when time
+ * advances -- so the caller sends it. UTC, matching the day the answer rows are
+ * stamped with, so "an earlier day" means the same thing on both sides.
+ */
+const today = () => new Date().toISOString().slice(0, 10);
 
 /** Turns, signed, in the direction a reader thinks about them. */
 const turns = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}`;
@@ -67,11 +79,10 @@ export async function runDeckSpeed(
     return;
   }
 
-  let skip = 0;
   for (;;) {
     const spin = spinner();
     spin.start(`Reading how long ${setCode.toUpperCase()} games ran`);
-    const run = await deal(convex, setCode, skip);
+    const run = await deal(convex, setCode);
     spin.stop(
       run.questions.length > 0
         ? `${run.questions.length} card${run.questions.length === 1 ? "" : "s"} measured against their own colors`
@@ -79,29 +90,28 @@ export async function runDeckSpeed(
     );
 
     if (run.questions.length === 0) {
-      p.outro(nothing(run, setCode, skip));
+      p.outro(nothing(run, setCode));
       return;
     }
 
-    const results = await play(run);
+    const results = await play(convex, setCode, run);
+    // "Nothing is recorded" used to be true and is not: every question answered
+    // before the walk-away is already written, which is the point -- it will not
+    // be dealt back tomorrow. Saying otherwise would be a promise the store
+    // cannot keep, and the kind of line that survives a change by not being
+    // read.
     if (!results) {
-      p.cancel("Left mid-run. Nothing is recorded either way.");
+      p.cancel("Left mid-run. The answers you gave are kept.");
       return;
     }
 
     report(results);
-
-    if (run.nextSkip >= run.quizzable) {
-      p.outro(`That is every card ${setCode.toUpperCase()} can be asked about. Try --set on another.`);
-      return;
-    }
 
     const again = await p.confirm({
       message: `Another ${run.questions.length}?`,
       initialValue: false,
     });
     if (p.isCancel(again) || !again) break;
-    skip = run.nextSkip;
   }
 
   p.outro(pc.green("That is the run."));
@@ -115,8 +125,14 @@ export async function runDeckSpeed(
  * been re-ingested, and saying "this set is thin" about it would be a lie the
  * player could act on.
  */
-function nothing(run: Run, setCode: string, skip: number): string {
+function nothing(run: Run, setCode: string): string {
   const set = setCode.toUpperCase();
+  // The one that is not bad news, and it gets its own sentence for that reason:
+  // "nothing to ask" and "you have been through all of it" read the same and are
+  // opposite things to be told.
+  if (run.mute === "answered") {
+    return `You have been through all ${run.quizzable} cards ${set} can ask about, and nothing is waiting to come back. Try --set on another; anything you misread here returns a day later.`;
+  }
   if (run.mute === "unbuilt") return `${set} has no statistics yet. Nothing to ask.`;
   if (run.mute === "unrated") {
     return `17Lands never recorded what colours ${set}'s decks were, so there is nothing to measure a card against. That will not change.`;
@@ -127,14 +143,19 @@ function nothing(run: Run, setCode: string, skip: number): string {
   if (run.mute === "unmeasured") {
     return `No card in ${set} is measured sharply enough to ask about. That is the set, not a bug.`;
   }
-  return skip > 0
-    ? `That is every card ${set} can be asked about.`
-    : `${set} has nothing to ask.`;
+  return `${set} has nothing to ask.`;
 }
 
 /** Null when the player walked away, which is not a score of zero. */
-async function play(run: Run): Promise<DeckSpeedResult[] | null> {
+async function play(
+  convex: ConvexHttpClient,
+  setCode: string,
+  run: Run,
+): Promise<DeckSpeedResult[] | null> {
   const results: DeckSpeedResult[] = [];
+  // One id per question per run, which is what lets a row say whether a second
+  // answer is a retry or the same card coming round again. See schema.ts.
+  const sitting = `cli:${Date.now()}`;
 
   for (const [i, question] of run.questions.entries()) {
     p.note(card(question), `${i + 1}/${run.questions.length}`);
@@ -152,6 +173,28 @@ async function play(run: Run): Promise<DeckSpeedResult[] | null> {
     const guess = chosen as DeckSpeedBucket;
     const result = gradeDeckSpeedGuess(question, guess);
     results.push(result);
+
+    // Awaited here where the web fires and forgets, and the difference is what
+    // each client can do about a failure. The browser has a reveal on screen
+    // already and must not blank it; a terminal has nothing rendered yet and can
+    // simply say the answer was not kept, which is better than dealing the card
+    // back tomorrow with no explanation.
+    await convex
+      .mutation(api.drills.answers.record, {
+        drill: "deckSpeed",
+        setCode,
+        name: question.card.name,
+        answered: guess,
+        correct: question.answer,
+        sigmas: question.sigmas,
+        // How far past its gate the question sat, which is what a band is drawn
+        // on. Error bars alone cannot say it: each drill's bar moves, and
+        // neither the deck count nor the set's spread is on a stored answer.
+        margin: question.margin,
+        attemptId: `${sitting}:${i}`,
+      })
+      .catch(() => p.log.warn("That answer was not recorded, so the card may come back."));
+
     p.note(reveal(question, run.formatTurns, run.worthSaying), head(result, question));
   }
 

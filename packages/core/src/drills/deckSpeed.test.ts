@@ -42,7 +42,7 @@ const FDN: DeckSpeedCard[] = [
   { name: "Aegis Turtle", deckSpeed: 0.2282, deckSpeedSe: 0.0486, deckSpeedN: 4122 },
 ];
 
-const byName = (qs: readonly { name: string }[], name: string) =>
+const byName = <T extends { name: string }>(qs: readonly T[], name: string): T | undefined =>
   qs.find((q) => q.name === name);
 
 describe("deckSpeedQuestions", () => {
@@ -194,6 +194,8 @@ describe("dealDeckSpeedRun", () => {
         n: 9999,
         answer,
         sigmas: 0,
+        // On the gate. These fixtures are about serving order, not difficulty.
+        margin: 1,
       }));
     // fdn's real shape: 70 fast, 103 middle, 73 slow.
     const qs = [...bank("fast", 70, "F"), ...bank("slow", 73, "S"), ...bank("middle", 103, "M")];
@@ -220,6 +222,8 @@ describe("dealDeckSpeedRun", () => {
         n: 9999,
         answer,
         sigmas: 0,
+        // On the gate. These fixtures are about serving order, not difficulty.
+        margin: 1,
       }));
     const qs = [...bank("fast", 10, "F"), ...bank("middle", 80, "M"), ...bank("slow", 10, "S")];
     const run = dealDeckSpeedRun(qs, 30);

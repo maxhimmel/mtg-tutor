@@ -32,12 +32,45 @@ import { GradeRuler } from "../glossary/figures/GradeRuler";
 import { WinRateAxis } from "../glossary/figures/WinRateAxis";
 import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
 import { ProgressPanel } from "../stats/Progress";
+import { ReadPanel } from "../stats/ReadPanel";
 import { pct } from "../lib/format";
 import {
   DeckBands,
   Verdict,
   type RevealQuestion,
 } from "../practice/archetypes/ArchetypeQuiz";
+
+const readProgress = (
+  over: {
+    asked: number;
+    answers: number;
+    askedAgain: number;
+    tookBack: number;
+    flat: number;
+    calledSharp: number;
+    sharp: number;
+    /** The second mistake. Never left at zero in a fixture: a row that is always
+        0.0% is a row nobody has looked at. */
+    calledFlat: number;
+    sets: number;
+    since?: string;
+  },
+) => ({
+  discrimination: {
+    flat: over.flat,
+    calledSharp: over.calledSharp,
+    sharp: over.sharp,
+    calledFlat: over.calledFlat,
+  },
+  sets: over.sets,
+  stillWrong: over.askedAgain - over.tookBack,
+  moved: 0,
+  asked: over.asked,
+  answers: over.answers,
+  askedAgain: over.askedAgain,
+  tookBack: over.tookBack,
+  since: over.since,
+});
 
 // One entry per component worth looking at with a real card in it. Adding the
 // next one is an append to the list at the bottom, which is the whole point of
@@ -947,6 +980,102 @@ export const SPECIMENS: Specimen[] = [
               stillWrong: 1,
               answers: 47,
               since: "2026-06-02T18:40:00.000Z",
+            }}
+          />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "read-panel",
+    title: "Reading a set",
+    note: "The /stats panel through the states it has, including the one it spends its first week in",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Never played — the branch that ships unlooked-at">
+          <ReadPanel
+            progress={{
+              archetypes: readProgress({
+                asked: 0,
+                answers: 0,
+                askedAgain: 0,
+                tookBack: 0,
+                flat: 0,
+                calledSharp: 0,
+                sharp: 0,
+                calledFlat: 0,
+                sets: 0,
+              }),
+              deckSpeed: readProgress({
+                asked: 0,
+                answers: 0,
+                askedAgain: 0,
+                tookBack: 0,
+                flat: 0,
+                calledSharp: 0,
+                sharp: 0,
+                calledFlat: 0,
+                sets: 0,
+              }),
+            }}
+          />
+        </Bay>
+        <Bay label="One drill played, the other not — a real state and an easy one to draw badly">
+          <ReadPanel
+            progress={{
+              archetypes: readProgress({
+                asked: 8,
+                answers: 8,
+                askedAgain: 0,
+                tookBack: 0,
+                flat: 6,
+                calledSharp: 2,
+                sharp: 2,
+                calledFlat: 1,
+                sets: 1,
+                since: "2026-09-01T18:40:00.000Z",
+              }),
+              deckSpeed: readProgress({
+                asked: 0,
+                answers: 0,
+                askedAgain: 0,
+                tookBack: 0,
+                flat: 0,
+                calledSharp: 0,
+                sharp: 0,
+                calledFlat: 0,
+                sets: 0,
+              }),
+            }}
+          />
+        </Bay>
+        <Bay label="A week of both — each drill in its own words, which is the thing that was wrong">
+          <ReadPanel
+            progress={{
+              archetypes: readProgress({
+                asked: 40,
+                answers: 47,
+                askedAgain: 7,
+                tookBack: 4,
+                flat: 19,
+                calledSharp: 6,
+                sharp: 21,
+                calledFlat: 5,
+                sets: 3,
+                since: "2026-08-29T18:40:00.000Z",
+              }),
+              deckSpeed: readProgress({
+                asked: 8,
+                answers: 8,
+                askedAgain: 0,
+                tookBack: 0,
+                flat: 6,
+                calledSharp: 1,
+                sharp: 2,
+                calledFlat: 2,
+                sets: 1,
+                since: "2026-09-04T18:40:00.000Z",
+              }),
             }}
           />
         </Bay>

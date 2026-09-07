@@ -130,6 +130,29 @@ export interface DeckSpeedQuestion {
   answer: DeckSpeedBucket;
   /** How many error bars from zero. Under the width, the answer is `middle`. */
   sigmas: number;
+  /**
+   * How far past this drill's own gates the question sits, as a multiple of them.
+   *
+   * TWO GATES, SO THE BINDING ONE DECIDES. A card gets an end only when the data
+   * can SEE the difference (`|sigmas| >= width`) and the difference is worth
+   * saying (`|resid| >= worthSaying`), and neither implies the other -- that is
+   * the defect this drill shipped with in review. So the margin is the smaller
+   * of the two ratios: 1.0 is a card sitting exactly on whichever gate it only
+   * just cleared, and under 1.0 is a card that failed one of them and is
+   * therefore `middle`.
+   *
+   * `sigmas` alone is not a difficulty here for the same reason it is not one in
+   * the archetype quiz: a 5-sigma card with a small residual is `middle`, so
+   * banding on error bars would put a flat answer at the sharp end of the axis.
+   *
+   * IT IS NOT THE ARCHETYPE QUIZ'S MARGIN, and an earlier version of this
+   * comment claimed the two shared an axis. That drill's has no effect-size leg,
+   * where this one is bound by its effect-size leg 56% of the time -- so the two
+   * are not the same statistical event and their distributions do not overlap
+   * (p50 1.81 and max 9.73 here against 1.13 and 2.39 there).
+   * `DrillAnswerRow.margin` in history.ts carries the measurements.
+   */
+  margin: number;
 }
 
 export interface DeckSpeedOptions {
@@ -260,6 +283,13 @@ export function deckSpeedBank(
       se: c.deckSpeedSe,
       n: c.deckSpeedN ?? 0,
       sigmas,
+      // The binding gate, as a multiple of itself. `worthSaying` is the set's
+      // own spread times a floor, so it is not recoverable from a stored answer
+      // either -- both halves of this have to be settled here.
+      margin: Math.min(
+        Math.abs(sigmas) / options.width,
+        worthSaying > 0 ? Math.abs(c.deckSpeed) / worthSaying : 0,
+      ),
       answer: !seen || !big ? "middle" : c.deckSpeed < 0 ? "fast" : "slow",
     });
   }
