@@ -1243,8 +1243,14 @@ export function drillStarted(p: {
    * introduces this drill EVERY set is `untimed`, so if that does not fall to
    * zero as sets are re-ingested, the re-ingest did not happen. `unrated` should
    * hold steady at exactly one set; if it grows, a set lost its colour data.
+   *
+   * `answered` IS THE ONE THAT IS NOT A COMPLAINT: every card the set can ask
+   * has been asked and nothing is due back. It is also the counter to a quiet
+   * failure in the history read -- if it starts firing on sets nobody has played
+   * eight runs of, the deal is matching too much and retiring cards that were
+   * never answered.
    */
-  mute?: "unbuilt" | "unrated" | "untimed" | "unmeasured";
+  mute?: "unbuilt" | "unrated" | "untimed" | "unmeasured" | "answered";
   /**
    * What the run was made of, in the drill's own three piles. Misses drill only.
    *
@@ -1264,8 +1270,34 @@ export function drillStarted(p: {
   unasked?: number;
   unfixed?: number;
   fixed?: number;
-  /** Which page of the ranked list -- 0 is the first run of a sitting. */
-  skip: number;
+  /**
+   * How many questions in the run are cards this person has already answered.
+   * Set drills only.
+   *
+   * WHETHER THE RESERVED SLOT IS EVER FILLED, which is the thing to learn before
+   * a panel is built on repeats. `dueForRepeat` only offers a card misread on an
+   * earlier day, and each set holds hundreds of cards nobody has seen -- so if
+   * this stays at zero across real play, nobody is coming back inside a bank's
+   * depth and the first-versus-latest split will never have anything in it.
+   */
+  repeats?: number;
+  /**
+   * How much of the set is behind them. Set drills only.
+   *
+   * Against `candidates`, which is the whole bank, this is the coverage reading
+   * -- and it is the one progress number that is true whatever the difficulty
+   * mix is doing, because it counts questions asked rather than questions read.
+   */
+  asked?: number;
+  /**
+   * Which page of the ranked list -- 0 is the first run of a sitting.
+   *
+   * MISSES DRILL ONLY NOW. The two set drills no longer page: they read what
+   * you have answered and deal what is left, so there is no cursor to report.
+   * The property stays rather than being renamed, because an event's history
+   * cannot be repaired and a property that stops being sent simply stops.
+   */
+  skip?: number;
 }): void {
   if (!on()) return;
   posthog.capture("drill_started", p);
@@ -1376,6 +1408,17 @@ export function drillAnswered(p: {
    * lets it be played on day one -- and means there is no age to report.
    */
   ageDays?: number;
+  /**
+   * Whether this card had been put to them before. Set drills only.
+   *
+   * THE PROPERTY THE READOUT'S HONESTY RESTS ON, and it cannot be recovered
+   * later -- the answer that would say so is the row this event is about.
+   * Pooling a first answer with a later one is how memory of a reveal gets
+   * reported as a read: the first time a card is dealt, the reveal names the
+   * answer, so every attempt after it is a different measurement. `false` is
+   * a first answer, which is the half of the history nothing can inflate.
+   */
+  repeat?: boolean;
   setCode: string;
   /** Position in the run, so a drop-off shows as a shape rather than a total. */
   index: number;
@@ -1408,6 +1451,16 @@ export function drillFinished(p: {
   missed?: number;
   read?: number;
   misread?: number;
+  /**
+   * How many of the run were cards they had answered before. Set drills only.
+   *
+   * The pair with `drill_started`'s own `repeats`: started says the slot was
+   * filled, finished says it was played. A gap between them, split by `repeat`
+   * on `drill_answered`, is people abandoning a run at the question they have
+   * already been beaten by, which is the one way the reserved slot could be
+   * doing harm.
+   */
+  repeats?: number;
 }): void {
   if (!on()) return;
   posthog.capture("drill_finished", p);
@@ -1431,7 +1484,11 @@ export function drillFinished(p: {
  * lot to spend on a divisor. A nonzero count there is the finding on its own.
  */
 export function answerUnrecorded(p: {
-  asked: "review" | "misses";
+  // The two set drills join the review and the misses drill here rather than
+  // minting an event of their own, because it is the same failure with the same
+  // consequence: a store that silently drops rows reports improvement that is
+  // really attrition, and here it also re-deals cards somebody has answered.
+  asked: "review" | "misses" | "archetypes" | "deckSpeed";
   /** The rejection, as the client saw it. */
   reason: string;
 }): void {

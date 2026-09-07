@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@mtg-tutor/backend";
 import {
   ARCHETYPE_QUIZ,
@@ -24,7 +24,13 @@ import { useCursorTip } from "../../components/CursorTip";
 import { PageHeading } from "../../components/PageHeading";
 import { Panel } from "../../components/Panel";
 import { PickTrack, type Tick } from "../../components/PickTrack";
-import { drillAnswered, drillFinished, drillStarted } from "../../lib/analytics";
+import {
+  answerUnrecorded,
+  drillAnswered,
+  drillFinished,
+  drillStarted,
+} from "../../lib/analytics";
+import { today } from "../../lib/day";
 import { points } from "../../lib/format";
 
 /**
@@ -75,8 +81,14 @@ export type RevealQuestion = Pick<
   "decks" | "wants" | "spurns" | "sigmas" | "separated"
 >;
 
-function useDeal(setCode: string | undefined, skip: number) {
-  return useQuery(api.drills.archetypes.deal, setCode ? { setCode, skip } : "skip");
+function useDeal(setCode: string | undefined, run: number) {
+  // `today` is read once per RUN rather than per render, which is what `run`
+  // marks. A date recomputed every render would change the query key whenever
+  // React re-ran this component and throw away Convex's cache; it also has to
+  // move when the player asks for another run, so that somebody drilling past
+  // midnight is dealt against the day they are actually in.
+  const day = useMemo(() => today(), [run]);
+  return useQuery(api.drills.archetypes.deal, setCode ? { setCode, today: day } : "skip");
 }
 
 const deckName = (colors: string) => DECK_NAMES[colors] ?? colors;
@@ -103,12 +115,16 @@ export function ArchetypeQuiz() {
   const [chosen, setChosen] = useState<string>();
   const setCode = chosen ?? suggested;
 
-  const [skip, setSkip] = useState(0);
+  // Which run of this sitting. Not a cursor -- the server deals from what you
+  // have answered now, so this only exists to re-ask for a hand and to give the
+  // attempt ids of one run a prefix nothing else can collide with.
+  const [runNo, setRunNo] = useState(0);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<ReadonlyMap<string, string>>(new Map());
 
-  const live = useDeal(setCode, skip);
+  const live = useDeal(setCode, runNo);
   const [run, setRun] = useState<Run>();
+  const record = useMutation(api.drills.answers.record);
 
   // A run is a hand you were dealt. `deal` is a live subscription, so without
   // this the questions would re-shuffle under somebody mid-answer the moment a
@@ -117,7 +133,7 @@ export function ArchetypeQuiz() {
   // which run was served.
   const dealt = useRef<string | undefined>(undefined);
   useEffect(() => {
-    const token = `${setCode}:${skip}`;
+    const token = `${setCode}:${runNo}`;
     if (!live || !setCode || dealt.current === token) return;
     dealt.current = token;
     setRun(live);
@@ -135,9 +151,14 @@ export function ArchetypeQuiz() {
       // separable cards is a different run from one out of blb's thirty-six,
       // and pooling their completion rates would hide that.
       separable: live.separable ?? 0,
-      skip,
+      // Whether the reserved slot was filled. Each set holds hundreds of cards
+      // nobody has seen, so if this stays at zero across real play then nobody
+      // is coming back inside a bank's depth.
+      repeats: live.questions.filter((q) => q.repeat).length,
+      asked: live.asked,
+      mute: live.mute ?? undefined,
     });
-  }, [live, setCode, skip]);
+  }, [live, setCode, runNo]);
 
   const questions = run?.questions ?? [];
   const key = (q: Question) => `${setCode}:${q.card.name}`;
@@ -157,7 +178,7 @@ export function ArchetypeQuiz() {
   const reported = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!run || questions.length === 0 || step < questions.length) return;
-    const token = `${setCode}:${skip}:${questions.length}`;
+    const token = `${setCode}:${runNo}:${questions.length}`;
     if (reported.current === token) return;
     reported.current = token;
     drillFinished({
@@ -166,8 +187,9 @@ export function ArchetypeQuiz() {
       answered: score.answered,
       read: score.read,
       misread: score.misread,
+      repeats: questions.filter((q) => q.repeat).length,
     });
-  }, [run, questions.length, step, score, setCode, skip]);
+  }, [run, questions.length, step, score, setCode, runNo]);
 
   function answer(question: Question, guess: string) {
     const k = key(question);
@@ -189,9 +211,32 @@ export function ArchetypeQuiz() {
       // with nothing on the row to say which is a chart that is wrong from the
       // first day and cannot be repaired.
       sigmas: question.sigmas,
+      // A first answer is the half memory of a reveal cannot reach. Pooling it
+      // with a later one is how memory gets reported as a read.
+      repeat: question.repeat,
       setCode: setCode ?? "",
       index: step,
     });
+
+    // Fired and not awaited, and a rejection reported rather than shown. The
+    // reveal is already on screen; making it wait on a round trip, or blanking
+    // it when the round trip fails, would be a worse drill than one that
+    // forgets. What a silent failure costs is the measurement AND the next run
+    // -- an unwritten answer is a card dealt back tomorrow -- which is why
+    // `answer_unrecorded` is the only thing that can say the store went lossy.
+    void record({
+      drill: "archetypes",
+      setCode: setCode ?? "",
+      name: question.card.name,
+      answered: guess,
+      // The answer as this question was asked, which is what the drill graded
+      // against -- `separated` is what decides whether there is a deck to name.
+      correct: question.separated ? question.wants : SAME,
+      sigmas: question.sigmas,
+      attemptId: `${setCode}:${runNo}:${step}`,
+    }).catch((e: unknown) =>
+      answerUnrecorded({ asked: "archetypes", reason: String(e) }),
+    );
   }
 
   if (!setCode || run === undefined) {
@@ -219,7 +264,7 @@ export function ArchetypeQuiz() {
             value={setCode}
             onChange={(code) => {
               setChosen(code);
-              setSkip(0);
+              setRunNo(0);
               setAnswers(new Map());
             }}
           />
@@ -227,7 +272,7 @@ export function ArchetypeQuiz() {
       />
 
       {run.mute != null || questions.length === 0 ? (
-        <Nothing run={run} skip={skip} onRestart={() => setSkip(0)} />
+        <Nothing run={run} />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19.5rem]">
           <div>
@@ -243,9 +288,11 @@ export function ArchetypeQuiz() {
               <Finish
                 score={score}
                 served={questions.length}
-                more={run.quizzable > run.nextSkip}
+                asked={run.asked}
+                quizzable={run.quizzable}
+                more={run.asked < run.quizzable}
                 onMore={() => {
-                  setSkip(run.nextSkip);
+                  setRunNo((n) => n + 1);
                   setAnswers(new Map());
                 }}
               />
@@ -950,11 +997,17 @@ export function Verdict({ question }: { question: RevealQuestion }) {
 function Finish({
   score,
   served,
+  asked,
+  quizzable,
   more,
   onMore,
 }: {
   score: { answered: number; read: number; misread: number };
   served: number;
+  /** Cards of this set behind them, as the deal counted them BEFORE this run. */
+  asked: number;
+  /** Cards this set can ask about at all. */
+  quizzable: number;
   more: boolean;
   onMore: () => void;
 }) {
@@ -970,6 +1023,14 @@ function Finish({
           {score.misread === 0
             ? "Nothing left to say — you knew which deck wanted every card."
             : `The ${score.misread === 1 ? "one you missed is" : `${score.misread} you missed are`} still on the track above, with the numbers on them.`}
+        </p>
+        {/* Coverage, which is the one progress reading that is true whatever
+            the difficulty mix is doing -- it counts questions asked rather than
+            questions read. `asked` is the count the deal made before this run,
+            so it lags by however long the writes take, and "so far" is what
+            keeps that honest. */}
+        <p className="mt-2 text-sm text-base-content/55">
+          {asked} of this set&apos;s {quizzable} cards behind you so far.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           {more && (
@@ -995,15 +1056,7 @@ function Finish({
  * it out loud. A set with a bank and no questions left is somebody who has
  * played it out. A set with a bank of zero never had decks that disagreed.
  */
-function Nothing({
-  run,
-  skip,
-  onRestart,
-}: {
-  run: { mute: "unrated" | "unbuilt" | null; quizzable: number };
-  skip: number;
-  onRestart: () => void;
-}) {
+function Nothing({ run }: { run: Pick<Run, "mute" | "quizzable"> }) {
   if (run.mute === "unrated") {
     return (
       <Panel>
@@ -1040,18 +1093,21 @@ function Nothing({
     );
   }
 
-  if (skip > 0) {
+  // The one state here that is not bad news, and it must not borrow a sentence
+  // from the two above -- "there is nothing here to ask" and "you have been
+  // through all of it" read the same on a screen and are opposite things to be
+  // told. So it names what you did, says what is left, and points somewhere.
+  if (run.mute === "answered") {
     return (
       <Panel>
         <div className="p-6">
           <h2 className="font-display text-xl font-semibold">That is all of them.</h2>
           <p className="mt-3 max-w-prose leading-relaxed text-base-content/70">
             You have been through every card in this set whose decks disagree by
-            enough to be worth asking about — {run.quizzable} of them.
+            enough to be worth asking about — {run.quizzable} of them — and
+            nothing is waiting to come back. Pick another set above; anything you
+            misread here returns a day later.
           </p>
-          <button type="button" className="btn btn-outline mt-5" onClick={onRestart}>
-            Start again
-          </button>
         </div>
       </Panel>
     );

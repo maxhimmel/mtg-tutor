@@ -28,13 +28,25 @@ import { spinner } from "../../core/ui/spinner.js";
 //
 // Like the misses drill, this sends no `drill_*` event: a run writes nothing,
 // so there is no mutation for a capture to ride, and the web's numbers are the
-// whole measurement. Stated rather than quietly true.
+// whole funnel. What this is NOT invisible to is the measurement those runs are
+// for: every answer is written through `drills.answers.record`, so a run here
+// moves the same history the web reads, deals the same cards forward and feeds
+// the same panel on /stats.
 
 type Run = Awaited<ReturnType<typeof deal>>;
 type Question = Run["questions"][number];
 
-const deal = (convex: ConvexHttpClient, setCode: string, skip: number) =>
-  convex.query(api.drills.archetypes.deal, { setCode, skip });
+const deal = (convex: ConvexHttpClient, setCode: string) =>
+  convex.query(api.drills.archetypes.deal, { setCode, today: today() });
+
+/**
+ * The calendar day, which the query takes rather than reads.
+ *
+ * A Convex query may not read the wall clock -- it is not re-run when time
+ * advances -- so the caller sends it. UTC, matching the day the answer rows are
+ * stamped with, so "an earlier day" means the same thing on both sides.
+ */
+const today = () => new Date().toISOString().slice(0, 10);
 
 const points = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(1)}pp`;
 const deckName = (colors: string) => `${DECK_NAMES[colors] ?? colors} (${colors})`;
@@ -71,11 +83,10 @@ export async function runArchetypes(
     return;
   }
 
-  let skip = 0;
   for (;;) {
     const spin = spinner();
     spin.start(`Reading what ${setCode.toUpperCase()} decks did`);
-    const run = await deal(convex, setCode, skip);
+    const run = await deal(convex, setCode);
     spin.stop(
       run.questions.length > 0
         ? `${run.questions.length} card${run.questions.length === 1 ? "" : "s"} the decks disagree about`
@@ -83,37 +94,43 @@ export async function runArchetypes(
     );
 
     if (run.questions.length === 0) {
-      p.outro(nothing(run, setCode, skip));
+      p.outro(nothing(run, setCode));
       return;
     }
 
-    const results = await play(run);
+    const results = await play(convex, setCode, run);
+    // "Nothing is recorded" used to be true and is not: every question answered
+    // before the walk-away is already written, which is the point -- it will not
+    // be dealt back tomorrow. Saying otherwise would be a promise the store
+    // cannot keep, and the kind of line that survives a change by not being
+    // read.
     if (!results) {
-      p.cancel("Left mid-run. Nothing is recorded either way.");
+      p.cancel("Left mid-run. What you answered before that is kept.");
       return;
     }
 
     report(results, run.questions.length);
-
-    if (run.nextSkip >= run.quizzable) {
-      p.outro(`That is every question ${setCode.toUpperCase()} has. Try --set on another.`);
-      return;
-    }
 
     const again = await p.confirm({
       message: `Another ${run.questions.length}?`,
       initialValue: false,
     });
     if (p.isCancel(again) || !again) break;
-    skip = run.nextSkip;
   }
 
   p.outro(pc.green("That is the run."));
 }
 
 /** Null when the player walked away, which is not a score of zero. */
-async function play(run: Run): Promise<ArchetypeResult[] | null> {
+async function play(
+  convex: ConvexHttpClient,
+  setCode: string,
+  run: Run,
+): Promise<ArchetypeResult[] | null> {
   const results: ArchetypeResult[] = [];
+  // One id per question per run, which is what lets a row say whether a second
+  // answer is a retry or the same card coming round again. See schema.ts.
+  const sitting = `cli:${Date.now()}`;
 
   for (const [i, question] of run.questions.entries()) {
     p.note(card(question), `${i + 1}/${run.questions.length}`);
@@ -141,6 +158,26 @@ async function play(run: Run): Promise<ArchetypeResult[] | null> {
 
     const result = gradeArchetypeGuess(question, guess);
     results.push(result);
+
+    // Awaited here where the web fires and forgets, and the difference is what
+    // each client can do about a failure. The browser has a reveal on screen
+    // already and must not blank it; a terminal has nothing rendered yet and can
+    // simply say the answer was not kept, which is better than dealing the card
+    // back tomorrow with no explanation.
+    await convex
+      .mutation(api.drills.answers.record, {
+        drill: "archetypes",
+        setCode,
+        name: question.card.name,
+        answered: guess,
+        // The answer as this question was asked. `separated` is what decides
+        // whether there is a deck to name at all.
+        correct: question.separated ? question.wants : SAME,
+        sigmas: question.sigmas,
+        attemptId: `${sitting}:${i}`,
+      })
+      .catch(() => p.log.warn("That answer was not recorded, so the card may come back."));
+
     p.note(reveal(question, result, guess), head(result, question));
   }
 
@@ -270,8 +307,17 @@ function report(results: ArchetypeResult[], served: number): void {
  * wrong. The first is notes issue #8 and is the whole reason this says the set
  * code out loud.
  */
-function nothing(run: Run, setCode: string, skip: number): string {
+function nothing(run: Run, setCode: string): string {
   const code = setCode.toUpperCase();
+  // The one that is not bad news, and it gets its own sentence for that reason:
+  // "nothing to ask" and "you have been through all of it" read the same and are
+  // opposite things to be told.
+  if (run.mute === "answered") {
+    return (
+      `You have been through all ${run.quizzable} of ${code}'s questions, and nothing is\n` +
+      "waiting to come back. Try --set on another; anything you misread here returns a day later."
+    );
+  }
   if (run.mute === "unrated") {
     return (
       `${code} never recorded what colours its decks were, so there is no way to know\n` +
@@ -285,9 +331,6 @@ function nothing(run: Run, setCode: string, skip: number): string {
       `${code} has no statistics stored yet. Nothing is wrong with the set; the\n` +
       "numbers this drill reads have not been built for it. Try --set on another."
     );
-  }
-  if (skip > 0) {
-    return `That is all ${run.quizzable} of ${code}'s questions. Try --set on another.`;
   }
   return `${code} has no mono-coloured cards with enough games to ask about. Try --set on another.`;
 }
