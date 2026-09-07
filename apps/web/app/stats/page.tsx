@@ -15,6 +15,7 @@ import { pct, points, releaseDate } from "../lib/format";
 import { statsViewed } from "../lib/analytics";
 import { ScorePlot, type ScoreColumn } from "./ScorePlot";
 import { ProgressPanel } from "./Progress";
+import { ReadPanel } from "./ReadPanel";
 
 export default function StatsIndex() {
   return (
@@ -57,6 +58,11 @@ function Overview() {
   // drafts have not loaded still fills this panel in, and so the drill writing a
   // row does not re-run the hundred-session average above.
   const progress = useQuery(api.stats.progress, {});
+  // Its own subscription again, on its own table. The two panels answer
+  // different questions off different rows -- picks coming back, and reading a
+  // set -- so a drill writing an answer must not re-run the hundred-session
+  // average above, and neither must wait on the other.
+  const reading = useQuery(api.drills.progress.progress, {});
   const icons = useSetIcons();
 
   // Once per visit, not once per render, the way the review list counts itself:
@@ -77,12 +83,18 @@ function Overview() {
       asked: progress?.asked,
       askedAgain: progress?.askedAgain,
       tookBack: progress?.tookBack,
+      // The set drills' half, so the panel that draws can be told apart from
+      // the one that tallies. `readAsked` at zero with `asked` above it moving
+      // is somebody who plays the misses drill and not the other two, which is
+      // the reading that decides whether this panel earns its place.
+      readAsked: reading && reading.archetypes.asked + reading.deckSpeed.asked,
+      readAgain: reading && reading.archetypes.askedAgain + reading.deckSpeed.askedAgain,
       habitsDrafts: data.habits?.drafts,
       habitsCalled: data.habits?.dials.filter((d) => d.called).length,
       habitsSharp: data.habits?.sharpness.called,
       habitsNewSet: data.habits?.skipped.newSet,
     });
-  }, [data, progress]);
+  }, [data, progress, reading]);
 
   if (data === undefined) {
     return <p className="text-base-content/60">Tallying up…</p>;
@@ -168,6 +180,7 @@ function Overview() {
           describes a HABIT rather than a standing or a direction. */}
       <Habits habits={data.habits} />
       {progress && <ProgressPanel progress={progress} />}
+      {reading && <ReadPanel progress={reading} />}
       <Breakdowns data={data} />
       <Mistakes data={data} icons={icons} />
     </div>

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { tally } from "@mtg-tutor/core";
-import type { Card, DiffRow, DiffTally, PoolCard, ValueTerm } from "@mtg-tutor/core";
+import type { Card, DiffRow, DiffTally, PoolCard, ReadBin, ValueTerm } from "@mtg-tutor/core";
 import { CardPlacard, CardPlacardList } from "../components/CardPlacard";
 import { CardFace, CardTile } from "../components/CardTile";
 import { CardStats, hasStats } from "../components/CardStats";
@@ -32,12 +32,58 @@ import { GradeRuler } from "../glossary/figures/GradeRuler";
 import { WinRateAxis } from "../glossary/figures/WinRateAxis";
 import { ScorePlot, type ScoreColumn } from "../stats/ScorePlot";
 import { ProgressPanel } from "../stats/Progress";
+import { ReadPanel } from "../stats/ReadPanel";
+import { ReadRate } from "../charts/ReadRate";
 import { pct } from "../lib/format";
 import {
   DeckBands,
   Verdict,
   type RevealQuestion,
 } from "../practice/archetypes/ArchetypeQuiz";
+
+/**
+ * Real bands, and where they came from.
+ *
+ * A week of fdn on both drills, which is what this panel looks like for anybody
+ * who has actually played it -- and NOT a rounded fixture, because the whole
+ * subject of this chart is small counts. The bottom band is where both drills
+ * live: 103 of fdn's 246 deck-speed cards answer `middle`, and about nine in ten
+ * archetype candidates have no deck that wants them more. A fixture with forty
+ * answers evenly spread would draw four tight bands and hide the one thing this
+ * chart has to survive.
+ */
+const READ_BINS: ReadBin[] = [
+  { from: 0, to: 1, answers: 19, read: 8, rate: 8 / 19, low: 0.245, high: 0.652 },
+  { from: 1, to: 2, answers: 11, read: 6, rate: 6 / 11, low: 0.28, high: 0.787 },
+  { from: 2, to: 3, answers: 4, read: 3, rate: 0.75, low: 0.301, high: 0.954 },
+  { from: 3, to: null, answers: 6, read: 6, rate: 1, low: 0.61, high: 1 },
+];
+
+/** One band answered and the rest untouched -- a first sitting. */
+const READ_BINS_THIN: ReadBin[] = [
+  { from: 0, to: 1, answers: 3, read: 1, rate: 1 / 3, low: 0.061, high: 0.792 },
+  { from: 1, to: 2, answers: 0, read: 0, rate: null, low: null, high: null },
+  { from: 2, to: 3, answers: 0, read: 0, rate: null, low: null, high: null },
+  { from: 3, to: null, answers: 5, read: 5, rate: 1, low: 0.566, high: 1 },
+];
+
+const EMPTY_BINS: ReadBin[] = READ_BINS.map((b) => ({
+  ...b,
+  answers: 0,
+  read: 0,
+  rate: null,
+  low: null,
+  high: null,
+}));
+
+const readProgress = (
+  bins: ReadBin[],
+  over: { asked: number; answers: number; askedAgain: number; tookBack: number; since?: string },
+) => ({
+  bins,
+  stillWrong: over.askedAgain - over.tookBack,
+  ...over,
+});
 
 // One entry per component worth looking at with a real card in it. Adding the
 // next one is an append to the list at the bottom, which is the whole point of
@@ -947,6 +993,125 @@ export const SPECIMENS: Specimen[] = [
               stillWrong: 1,
               answers: 47,
               since: "2026-06-02T18:40:00.000Z",
+            }}
+          />
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "read-rate",
+    title: "Reading a set, by how hard the question was",
+    note: "A week of fdn on both drills. The counts are deliberately small — that is the case this chart exists to survive",
+    // THE THREE STATES AND THE THREE WIDTHS, because the state this ships in is
+    // the thin one and the width it lives at is a half-column on /stats. A
+    // chart looked at once, full, at a comfortable width, is a chart whose
+    // first month nobody has seen.
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay
+          label="A real week — a band off four answers is as wide as its own claim"
+          width="max-w-[26rem]"
+        >
+          <ReadRate bins={READ_BINS} />
+        </Bay>
+        <Bay
+          label="A first sitting — two bands nobody has reached, drawn as ticks rather than dropped"
+          width="max-w-[26rem]"
+        >
+          <ReadRate bins={READ_BINS_THIN} />
+        </Bay>
+        <Bay label="Nothing answered — the scale still says what it would show" width="max-w-[26rem]">
+          <ReadRate bins={EMPTY_BINS} />
+        </Bay>
+
+        <div className="flex flex-wrap items-start gap-8">
+          {/* WHERE IT ACTUALLY LIVES. /stats puts two of these side by side in a
+              panel, so on a 375px phone each gets the full column and on a
+              desktop each gets half of it. Both are narrower than the bays
+              above. */}
+          <Bay label="327px — half the panel on a desktop" width="w-[327px] shrink-0">
+            <ReadRate bins={READ_BINS} />
+          </Bay>
+          <Bay
+            label="279px — a 375px phone, where the drawing gives way to the list"
+            width="w-[279px] shrink-0"
+          >
+            <ReadRate bins={READ_BINS} />
+          </Bay>
+        </div>
+
+        {/* Hue removed. Nothing here is encoded in colour: the rate is a
+            position, the interval is a length, the count is a printed digit and
+            the rule is labelled. */}
+        <Bay label="In greyscale — nothing is encoded in hue" width="max-w-[26rem]">
+          <div style={{ filter: "grayscale(1)" }}>
+            <ReadRate bins={READ_BINS} />
+          </div>
+        </Bay>
+      </div>
+    ),
+  },
+  {
+    id: "read-panel",
+    title: "Reading a set",
+    note: "The /stats panel through the states it has, including the one it spends its first week in",
+    renderBare: () => (
+      <div className="flex flex-col gap-8">
+        <Bay label="Never played — the branch that ships unlooked-at">
+          <ReadPanel
+            progress={{
+              archetypes: readProgress(EMPTY_BINS, {
+                asked: 0,
+                answers: 0,
+                askedAgain: 0,
+                tookBack: 0,
+              }),
+              deckSpeed: readProgress(EMPTY_BINS, {
+                asked: 0,
+                answers: 0,
+                askedAgain: 0,
+                tookBack: 0,
+              }),
+            }}
+          />
+        </Bay>
+        <Bay label="One drill played, the other not — a real state and an easy one to draw badly">
+          <ReadPanel
+            progress={{
+              archetypes: readProgress(READ_BINS_THIN, {
+                asked: 8,
+                answers: 8,
+                askedAgain: 0,
+                tookBack: 0,
+                since: "2026-09-01T18:40:00.000Z",
+              }),
+              deckSpeed: readProgress(EMPTY_BINS, {
+                asked: 0,
+                answers: 0,
+                askedAgain: 0,
+                tookBack: 0,
+              }),
+            }}
+          />
+        </Bay>
+        <Bay label="A week of both, with cards that came back">
+          <ReadPanel
+            progress={{
+              archetypes: readProgress(READ_BINS, {
+                asked: 40,
+                answers: 47,
+                askedAgain: 7,
+                tookBack: 4,
+                since: "2026-08-29T18:40:00.000Z",
+              }),
+              deckSpeed: readProgress(READ_BINS_THIN, {
+                asked: 8,
+                answers: 8,
+                askedAgain: 0,
+                tookBack: 0,
+                since: "2026-09-04T18:40:00.000Z",
+              }),
             }}
           />
         </Bay>

@@ -880,6 +880,17 @@ export function statsViewed(p: {
   askedAgain?: number;
   tookBack?: number;
   /**
+   * The same three states for the panel BESIDE it, which reads the set drills.
+   *
+   * `readAsked` at zero while `asked` above it moves is somebody who plays the
+   * misses drill and neither of the other two, which is the one reading that
+   * decides whether that panel earns its place on the page. `readAgain` at zero
+   * across everybody says the day-old repeat never comes round, and the chart's
+   * caveat about first answers is the whole of what it can say.
+   */
+  readAsked?: number;
+  readAgain?: number;
+  /**
    * What the habits panel had, and whether it had anything to SAY.
    *
    * Fields here rather than a `habits_shown` of its own, for the reason the
