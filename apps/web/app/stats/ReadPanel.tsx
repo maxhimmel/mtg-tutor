@@ -101,32 +101,66 @@ export function ReadPanel({ progress }: { progress: DrillProgress }) {
  * data, two things to say about it.
  */
 interface Words {
-  /** Saying there was something to read when there was not. */
+  /** Saying there was something to read when the data could not see one. */
   sawDifference: { term: string; means: string };
-  /** Saying there was nothing to read when there was. */
+  /** Saying there was nothing to read when the data could see one. */
   sawNone: { term: string; means: string };
+  /**
+   * What this drill's own bank does to the second number, where that has been
+   * measured. Absent where it has not, which is not the same as zero.
+   */
+  noise?: string;
 }
 
+/**
+ * WHAT `flat` ACTUALLY MEANS, WHICH IS WEAKER THAN THE FIRST WORDING CLAIMED.
+ * These rows said "when the decks wanted it the same" and "when it pulled the
+ * game neither way" -- proven-equal, which the data does not say. A flat
+ * question is one that FAILED its drill's gate, and the archetype quiz's own
+ * docblock has always been clear that this is an answer rather than a rejection.
+ *
+ * It matters most on the first runs. `archetypeQuestions` sorts descending by
+ * sigmas and `dealArchetypeRun` takes the inseparable pile in that order, so the
+ * flat questions somebody meets first are the bank's NEAR-MISSES: measured over
+ * the 25 committed artifacts, flat margins served in run one sit at p50 0.95
+ * against p50 0.58 for the whole flat bank, and three quarters of them are
+ * within a tenth of the gate. "The decks wanted it the same" is not what the
+ * data says about a card that missed a 5% test by a hair. Deck speed has no such
+ * skew, and gets the honest wording anyway because the claim is the same size.
+ */
 const ARCHETYPES: Words = {
   sawDifference: {
     term: "Called it a difference",
-    means: "when the decks wanted it the same",
+    means: "when the data could not separate the decks",
   },
   sawNone: {
     term: "Called it the same",
-    means: "when one deck really did want it",
+    means: "when one deck did measurably want it",
   },
+  // Trap #22's sequel, measured for THIS bank: 5% per test with no multiplicity
+  // correction leaves roughly a third of what gets served without a real answer.
+  // A player giving the honest "the same" to one of those is scored as the
+  // mistake, so a perfect reader still shows a rate here and the number has a
+  // floor it cannot go under. Cycle 2 removed this sentence from both drills
+  // because it was unmeasured under deck speed; it was measured under this one.
+  noise:
+    "About a third of the cards that clear the bar do so by chance, so this number has a floor it cannot beat.",
 };
 
 const DECK_SPEED: Words = {
   sawDifference: {
     term: "Called it fast or grindy",
-    means: "when it pulled the game neither way",
+    means: "when the data could not tell it from flat",
   },
   sawNone: {
     term: "Called it neither",
-    means: "when it really did pull one way",
+    means: "when it measurably did pull one way",
   },
+  // No equivalent figure, and deliberately none. This drill's gate is a width
+  // and an effect floor rather than a false-positive rate -- `deckSpeed.ts` says
+  // borrowing the archetype quiz's machinery would be borrowed rigour -- so
+  // nothing here has ever been measured for noise, and asserting a third would
+  // be exactly that borrowing.
 };
 
 function Drill({ title, drill, words }: { title: string; drill: OneDrill; words: Words }) {
@@ -156,7 +190,7 @@ function Drill({ title, drill, words }: { title: string; drill: OneDrill; words:
             {drill.asked} {drill.asked === 1 ? "card" : "cards"} asked
             {drill.sets > 1 ? ` across ${drill.sets} sets` : ""}, first answers only — the
             first time a card comes up is the only time you have not already been shown the
-            answer.{" "}
+            answer. {words.noise ? `${words.noise} ` : ""}
             {drill.askedAgain === 0
               ? "Nothing has come back yet: a card returns a day after you misread it, and the drill leads with what you have never seen."
               : `Of the ${drill.askedAgain} that came back, you got ${drill.tookBack} right this time — and that counts only cards you had already got wrong, so it starts from the bottom rather than from how you normally do.`}

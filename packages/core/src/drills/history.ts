@@ -73,16 +73,20 @@ export interface DrillAnswerRow {
    * `min(|z|/width, |resid|/worthSaying)` and is bound by the EFFECT-SIZE leg
    * 56.2% of the time, measured over 3,351 sharp questions. The archetype
    * quiz's is `sigmas / rangeThreshold(k)` and has no effect-size leg at all, so
-   * it is confidence rather than difficulty -- a 1.5pp gap off 20,000 games
-   * outranks a 12pp gap off 300, which is precisely the inversion `deckSpeed.ts`
-   * records for Healer's Hawk and built `worthSaying` to stop. Trap #22 adds
-   * that the archetype false positives concentrate on the best-sampled cards.
+   * it ranks by CONFIDENCE rather than by size of effect: a small gap measured
+   * over many games can outrank a large one measured over few, which is the
+   * inversion `deckSpeed.ts` records for Healer's Hawk and built `worthSaying`
+   * to stop. Trap #22 adds that the archetype false positives concentrate on the
+   * best-sampled cards, which pushes the same way. (An earlier version of this
+   * comment illustrated it with a made-up pair of numbers that did not survive
+   * arithmetic; `pnpm diagnose-drill-margin` prints the real distributions.)
    *
    * The distributions are not alike either: over all 25 sets the archetype
    * margins run p50 1.13 and max 2.39, where deck speed's run p50 1.81 and max
    * 9.73. A reader who pools them, bands them, or draws them on one axis is
    * reading two different quantities. Within ONE drill it is a real ordering;
-   * across both it is not.
+   * across both it is not. `pnpm diagnose-drill-margin` re-runs every figure in
+   * this docblock off the committed artifacts.
    *
    * Optional because rows written before the column existed have none.
    */
