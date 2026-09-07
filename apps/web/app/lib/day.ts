@@ -8,9 +8,11 @@
  * actually needs; a timestamp would carry a precision the rule does not use.
  *
  * UTC, matching the day the rows are stamped with, so that "an earlier day"
- * means the same thing on both sides of the comparison. Somebody drilling near
- * midnight in their own timezone can be handed a repeat they have not slept on;
- * that is the cost, it is at most a few hours at one boundary, and the
- * alternative is a timezone the server does not have.
+ * means the same thing on both sides of the comparison. The seam is NOT midnight
+ * where the player is -- it is 16:00 at UTC-8 and 13:00 at UTC+13 -- so two
+ * sittings twenty minutes apart mid-afternoon can count as different days, which
+ * is the massed case the floor exists to exclude. `dueForRepeat` in core carries
+ * the full argument for taking that cost rather than adding a timezone the
+ * server does not have.
  */
 export const today = (): string => new Date().toISOString().slice(0, 10);

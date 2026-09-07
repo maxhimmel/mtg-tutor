@@ -144,8 +144,13 @@ export interface DeckSpeedQuestion {
    * `sigmas` alone is not a difficulty here for the same reason it is not one in
    * the archetype quiz: a 5-sigma card with a small residual is `middle`, so
    * banding on error bars would put a flat answer at the sharp end of the axis.
-   * The archetype quiz computes the same quantity against ITS k-dependent gate,
-   * which is what lets one axis hold both drills.
+   *
+   * IT IS NOT THE ARCHETYPE QUIZ'S MARGIN, and an earlier version of this
+   * comment claimed the two shared an axis. That drill's has no effect-size leg,
+   * where this one is bound by its effect-size leg 56% of the time -- so the two
+   * are not the same statistical event and their distributions do not overlap
+   * (p50 1.81 and max 9.73 here against 1.13 and 2.39 there).
+   * `DrillAnswerRow.margin` in history.ts carries the measurements.
    */
   margin: number;
 }

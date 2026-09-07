@@ -735,10 +735,15 @@ export default defineSchema({
     // drill computed at deal time with both in hand: 1.0 is exactly on the gate
     // whatever k is, and under 1.0 is a question the data has no answer to.
     //
+    // NOTHING READS IT. It is stored because it cannot be recovered -- neither
+    // the deck count nor the set's spread is on this row -- and because it is a
+    // real ordering WITHIN one drill. It is not one across both: the archetype
+    // quiz's has no effect-size leg and deck speed's is bound by one 56% of the
+    // time, and a readout that banded them on one axis was deleted for it.
+    // `DrillAnswerRow.margin` in core's history.ts carries the argument.
+    //
     // Optional because rows written on 7 Sep 2026, before it existed, have none.
-    // Absence means "sharp, distance past the gate unknown", which the fold
-    // clamps into the first band rather than dropping -- there is no honest
-    // value to backfill, for the same reason `gap` has none.
+    // There is no honest value to backfill, for the same reason `gap` has none.
     margin: v.optional(v.number()),
     // Which sitting this answer came from, minted by the client: one id per
     // question per run. The same contract `pickAnswers` explains at length -- a

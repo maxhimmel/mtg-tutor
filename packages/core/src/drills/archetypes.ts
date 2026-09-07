@@ -127,9 +127,15 @@ export interface ArchetypeQuestion {
    *
    * Dividing by the bar the question was actually judged against fixes that:
    * 1.0 is exactly on the gate whatever k is, 2.0 is twice as far past it as it
-   * needed to be, and under 1.0 is a card the decks agree about. The deck-speed
-   * drill computes the same quantity against ITS two gates, which is what lets
-   * one axis hold both drills.
+   * needed to be, and under 1.0 is a card the decks agree about.
+   *
+   * IT IS NOT THE DECK-SPEED DRILL'S MARGIN, and an earlier version of this
+   * comment said it was -- "which is what lets one axis hold both drills". That
+   * was wrong and it cost a chart. This one is a significance ratio with no
+   * effect-size leg at all, so a 1.5pp gap off 20,000 games outranks a 12pp gap
+   * off 300; deck speed's is bound by its effect-size leg 56% of the time,
+   * precisely to stop that. `DrillAnswerRow.margin` in history.ts carries the
+   * measurements and the warning.
    */
   margin: number;
   /** The chance k decks that all wanted it equally would look this far apart. */

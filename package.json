@@ -23,10 +23,12 @@
     "challenge": "pnpm --filter @mtg-tutor/cli challenge",
     "challenge-fixture": "pnpm --filter @mtg-tutor/backend challenge-fixture",
     "check-availability": "pnpm --filter @mtg-tutor/backend check-availability",
+    "check-charts": "pnpm --filter @mtg-tutor/web test:browser",
     "claude-bridge": "pnpm --filter @mtg-tutor/backend claude-bridge",
     "dev": "pnpm --filter @mtg-tutor/cli dev",
     "dev:web": "turbo run dev --filter=@mtg-tutor/backend... --filter=@mtg-tutor/web...",
     "diagnose-archetype-quiz": "pnpm --filter @mtg-tutor/backend diagnose-archetype-quiz",
+    "diagnose-drill-margin": "pnpm --filter @mtg-tutor/backend diagnose-drill-margin",
     "diagnose-offcolour": "pnpm --filter @mtg-tutor/backend diagnose-offcolour",
     "draft": "pnpm --filter @mtg-tutor/cli draft",
     "feedback": "pnpm --filter @mtg-tutor/backend feedback",
@@ -47,8 +49,7 @@
     "validate-set-stats": "pnpm --filter @mtg-tutor/backend validate-set-stats",
     "verify-data": "pnpm --filter @mtg-tutor/cli verify-data",
     "verify-table-value": "pnpm --filter @mtg-tutor/backend verify-table-value",
-    "wipe-drafts": "pnpm --filter @mtg-tutor/backend wipe-drafts",
-    "check-charts": "pnpm --filter @mtg-tutor/web test:browser"
+    "wipe-drafts": "pnpm --filter @mtg-tutor/backend wipe-drafts"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
